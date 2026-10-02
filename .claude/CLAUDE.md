@@ -72,6 +72,35 @@ Antes de realizar tareas de implementación, modificación o revisión significa
 
 No crear una implementación paralela que ignore al agente `senior-fullstack`.
 
+### Orquestación del flujo de requisitos
+
+Los subagentes no pueden invocar a otros subagentes ni esperar respuestas del usuario: cada invocación ejecuta **una fase**, devuelve un estado y termina. La **sesión principal** es la orquestadora:
+
+1. Invoca al agente que corresponde al estado actual del ticket.
+2. Presenta al usuario el resultado devuelto y, si el estado es una aprobación pendiente, le pregunta.
+3. Vuelve a invocar al agente correspondiente, incluyendo en el prompt la decisión del usuario (cita textual) y la ruta del ticket.
+4. Nunca salta un punto de aprobación ni aprueba en nombre del usuario.
+
+| Estado                          | Carpeta        | Lo asigna          | Siguiente paso (sesión principal)                       |
+| ------------------------------- | -------------- | ------------------ | ------------------------------------------------------- |
+| `NEEDS_CLARIFICATION`           | —              | business-analyst   | Preguntar al usuario y reinvocar al BA                  |
+| `NEEDS_USER_VALIDATION`         | —              | business-analyst   | Pedir aprobación; si aprueba, reinvocar al BA para persistir |
+| `APPROVED`                      | `backlog/`     | business-analyst   | Invocar a senior-fullstack (revisión técnica)           |
+| `NEEDS_TECHNICAL_CLARIFICATION` | `backlog/`     | senior-fullstack   | Preguntar al usuario y reinvocar a senior-fullstack     |
+| `NEEDS_TECHNICAL_PLAN_APPROVAL` | `backlog/`     | senior-fullstack   | Pedir aprobación; si aprueba, reinvocar para implementar |
+| `IN_PROGRESS`                   | `in-progress/` | senior-fullstack   | (transitorio durante la implementación)                 |
+| `NEEDS_IMPLEMENTATION_APPROVAL` | `in-progress/` | senior-fullstack   | Pedir aprobación; si aprueba, invocar a senior-qa       |
+| `NEEDS_QA_PLAN_APPROVAL`        | `in-progress/` | senior-qa          | Pedir aprobación; si aprueba, reinvocar a senior-qa     |
+| `NEEDS_USER_DECISION`           | `in-progress/` | senior-qa          | Preguntar al usuario (p. ej. defecto MAJOR) y reinvocar a senior-qa |
+| `QA_REJECTED`                   | `in-progress/` | senior-qa          | Reinvocar a senior-fullstack con el QA Report           |
+| `QA_APPROVED`                   | `in-progress/` | senior-qa          | Reinvocar a senior-fullstack para commit y Pull Request |
+| `READY_FOR_MERGE`               | `in-progress/` | senior-fullstack   | El usuario revisa y hace merge del PR                   |
+| `DONE`                          | `done/`        | senior-fullstack   | Solo cuando el usuario confirma que el PR fue mergeado  |
+
+Los tickets viven en `.claude/docs/{backlog,in-progress,done}/` como `REQ-F-<NNN>-<slug>.md`. Un ticket existe en una sola carpeta a la vez.
+
+Los cambios pequeños que no provienen de un ticket (correcciones puntuales, ajustes menores) se delegan directamente a `senior-fullstack` sin el ciclo completo, respetando igualmente `CLAUDE.md` y `.claude/rules/`.
+
 ## 5. Comportamiento de las landing pages
 
 La aplicación tendrá dos experiencias dentro del mismo proyecto.

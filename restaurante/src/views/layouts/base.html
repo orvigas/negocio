@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="{{ common.lang }}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ seo.title }}</title>
+    <meta name="description" content="{{ seo.description }}" />
+    <link rel="canonical" href="{{ seo.canonical }}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="{{ common.ogLocale }}" />
+    <meta property="og:site_name" content="{{ siteName }}" />
+    <meta property="og:title" content="{{ seo.title }}" />
+    <meta property="og:description" content="{{ seo.description }}" />
+    {{{ seoAbsoluteTags }}}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="{{ fontsHref }}" />
+    <link rel="stylesheet" href="/css/{{ businessId }}/main.css" />
+    <script type="module" src="/js/{{ businessId }}/main.js"></script>
+  </head>
+  <body class="landing landing--{{ businessId }}" data-business="{{ businessId }}">
+    <a class="landing__skip-link" href="#main-content">{{ common.skipLink }}</a>
+    {{{ body }}}
+  </body>
+</html>

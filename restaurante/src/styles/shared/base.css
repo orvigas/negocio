@@ -1,0 +1,74 @@
+/*
+ * Base común a ambas landings.
+ * Fuente: bloque <style> idéntico en los dos code.html de _stich_source_.
+ * Se importa desde src/styles/<negocio>/main.css (no se compila por sí solo).
+ */
+@layer base {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    overscroll-behavior: none;
+  }
+
+  /*
+   * Navegación por anclas (no forma parte del diseño fuente; requisito del negocio):
+   * desplazamiento suave nativo solo si el usuario no pide reducir movimiento, y
+   * scroll-padding para que el header fijo no tape el destino. Cada landing define
+   * --landing-header-height en su main.css con el alto real de su header.
+   */
+  html {
+    scroll-padding-top: var(--landing-header-height, 0px);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
+  main > :first-child {
+    margin-top: 0 !important;
+  }
+
+  main > :last-child {
+    margin-bottom: 0 !important;
+  }
+}
+
+/* Diseño fuente: oculta la barra de desplazamiento en navegadores WebKit/Blink. */
+::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * Componentes comunes (no forman parte del diseño fuente; requisitos de accesibilidad):
+ * enlace "Saltar al contenido" visible solo con foco, por encima del header fijo.
+ */
+@layer components {
+  .landing__skip-link {
+    position: absolute;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 100;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    background-color: #fff;
+    color: #081830;
+    font-weight: 700;
+    transform: translateY(-200%);
+  }
+
+  .landing__skip-link:focus {
+    transform: none;
+    outline: 3px solid currentColor;
+    outline-offset: 2px;
+  }
+
+  .landing__main:focus {
+    outline: none;
+  }
+}

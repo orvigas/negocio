@@ -1,0 +1,385 @@
+<header class="site-header fixed top-0 left-0 z-50 w-full border-b border-[#a81c1c]/40 bg-[#490808]/95 shadow-[0_4px_25px_rgba(40,4,4,0.6)] backdrop-blur-xl">
+  <div class="site-header__bar mx-auto flex h-20 max-w-7xl items-center justify-between gap-4 px-4 py-2 sm:px-8">
+    <a class="site-header__brand group flex items-center gap-3.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-amber-glow" href="#inicio">
+      <span class="site-header__logo relative flex items-center justify-center rounded-full border border-amber-glow/60 bg-[#580b0b]/90 p-1 shadow-lg drop-shadow-md">
+        <img class="h-14 w-auto object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.6)] transition-transform duration-500 group-hover:scale-105 sm:h-16" src="{{ img.logo.src }}" alt="{{ img.logo.alt }}" width="{{ img.logo.width }}" height="{{ img.logo.height }}" />
+      </span>
+      <span class="site-header__name flex flex-col justify-center">
+        <span class="bg-linear-to-r from-amber-light via-amber-glow to-amber-300 -my-1 bg-clip-text py-1 font-headline text-2xl leading-none font-black tracking-wider text-transparent uppercase drop-shadow-md">{{ c.brand.shortName }}</span>
+        <span class="mt-1 flex items-center gap-1.5">
+          <span class="h-0.5 w-3 rounded-full bg-amber-400/80" aria-hidden="true"></span>
+          <span class="font-label text-xs leading-none font-extrabold tracking-widest text-amber-200 uppercase">{{ c.brand.tagline }}</span>
+        </span>
+      </span>
+    </a>
+    <nav class="site-nav hidden items-center gap-6 font-label text-sm tracking-wider uppercase lg:flex" aria-label="{{ common.navLabel }}">
+      <a class="site-nav__link site-nav__link--active rounded-lg bg-linear-to-r from-amber-glow to-amber-500 px-3.5 py-1.5 font-bold text-[#4a0808] shadow-md shadow-amber-900/40" href="{{ c.nav.0.href }}" aria-current="page">{{ c.nav.0.label }}</a>
+      <a class="site-nav__link text-[#ffd8cf] transition-colors hover:text-white" href="{{ c.nav.1.href }}">{{ c.nav.1.label }}</a>
+      <a class="site-nav__link text-[#ffd8cf] transition-colors hover:text-white" href="{{ c.nav.2.href }}">{{ c.nav.2.label }}</a>
+      <a class="site-nav__link text-[#ffd8cf] transition-colors hover:text-white" href="{{ c.nav.3.href }}">{{ c.nav.3.label }}</a>
+      <a class="site-nav__link text-[#ffd8cf] transition-colors hover:text-white" href="{{ c.nav.4.href }}">{{ c.nav.4.label }}</a>
+      <a class="whatsapp-cta whatsapp-cta--header flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3.5 py-1.5 font-bold text-white shadow-md transition-all hover:bg-[#20ba59] active:scale-95" href="{{ whatsapp.href }}" target="_blank" rel="noopener noreferrer" data-action="whatsapp-order" data-business="{{ businessId }}">
+        <span class="size-4 shrink-0">{{{ whatsappIcon }}}</span><span>{{ c.cta.label }}</span><span class="sr-only"> {{ whatsapp.assistiveText }}</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="main-content" class="landing__main min-h-screen w-full bg-[#650e0e] pt-20" tabindex="-1">
+  <div class="flex w-full flex-col">
+    <!-- HERO -->
+    <section id="inicio" class="hero relative w-full overflow-hidden border-b border-[#a81c1c]/40 bg-linear-to-b from-[#7d1111] via-[#8c1414] to-[#6c0f0f] focus:outline-hidden" tabindex="-1" aria-labelledby="hero-title">
+      <div class="hero__texture pointer-events-none absolute inset-0 bg-repeat opacity-15 mix-blend-color-dodge bg-size-[300px]" style="background-image: url('{{ img.fondo.src }}')" aria-hidden="true"></div>
+      <div class="pointer-events-none absolute -top-24 -left-12 h-[34rem] w-[34rem] rounded-full bg-[#c4281b]/35 blur-3xl" aria-hidden="true"></div>
+      <div class="pointer-events-none absolute top-1/3 -right-20 h-[36rem] w-[36rem] rounded-full bg-amber-500/25 blur-[110px]" aria-hidden="true"></div>
+      <div class="relative mx-auto max-w-7xl px-4 py-12 sm:px-8 lg:py-20">
+        <div class="grid grid-cols-1 items-center gap-8 lg:grid-cols-12 lg:gap-12">
+          <div class="hero__content z-10 flex flex-col items-start space-y-6 lg:col-span-7">
+            <p class="hero__eyebrow flex items-center gap-3 rounded-full border border-amber-glow/40 bg-[#520909]/90 px-4 py-1.5 shadow-lg backdrop-blur-sm">
+              <img class="h-8 w-8 object-contain" src="{{ img.emblem.src }}" alt="{{ img.emblem.alt }}" width="{{ img.emblem.width }}" height="{{ img.emblem.height }}" />
+              <span class="font-label text-xs font-bold tracking-widest text-amber-300 uppercase">{{ c.hero.eyebrow }}</span>
+              <span class="h-2 w-2 rounded-full bg-amber-400 motion-safe:animate-pulse" aria-hidden="true"></span>
+            </p>
+            <h1 id="hero-title" class="hero__title font-display text-4xl leading-[1.08] font-black tracking-tight text-white uppercase drop-shadow-md sm:text-5xl lg:text-6xl">
+              {{ c.hero.titleLead }} <span class="bg-linear-to-r from-amber-light via-amber-glow to-amber-300 bg-clip-text text-transparent drop-shadow-sm">{{ c.hero.titleHighlight }}</span>
+            </h1>
+            <p class="hero__description max-w-2xl font-body text-base leading-relaxed text-cream-muted sm:text-lg">{{ c.hero.description }}</p>
+            <div class="hero__actions flex w-full flex-wrap items-center gap-4 pt-1 sm:w-auto">
+              <a class="whatsapp-cta whatsapp-cta--hero inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] px-7 py-3.5 text-center font-label text-sm font-bold tracking-wider text-white uppercase shadow-[0_4px_20px_rgba(37,211,102,0.4)] transition-all hover:bg-[#20ba59] active:scale-95 sm:w-auto" href="{{ whatsapp.href }}" target="_blank" rel="noopener noreferrer" data-action="whatsapp-order" data-business="{{ businessId }}">
+                <span class="size-5 shrink-0">{{{ whatsappIcon }}}</span><span>{{ c.cta.label }}</span><span class="sr-only"> {{ whatsapp.assistiveText }}</span>
+              </a>
+              <a class="hero__secondary-cta inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-light/30 bg-[#520909]/90 px-6 py-3.5 text-center font-label text-sm font-semibold tracking-wider text-cream uppercase transition-all hover:border-amber-light/60 hover:bg-[#6c0f0f] sm:w-auto" href="{{ c.hero.secondaryCta.href }}">
+                <span class="material-symbols-outlined text-[20px] text-amber-glow" aria-hidden="true">local_fire_department</span>
+                <span>{{ c.hero.secondaryCta.label }}</span>
+              </a>
+            </div>
+            <ul class="hero__badges grid w-full max-w-xl grid-cols-3 gap-3 pt-2">
+              <li class="trust-badge flex flex-col rounded-xl border border-[#ab2215]/50 bg-[#550c0c]/85 p-3.5 shadow-md backdrop-blur-sm">
+                <span class="material-symbols-outlined text-[24px] text-amber-light" aria-hidden="true">{{ c.hero.badges.0.icon }}</span>
+                <span class="mt-1 font-headline text-xl font-bold text-white">{{ c.hero.badges.0.value }}</span>
+                <span class="font-label text-[11px] text-[#ffd1c7] uppercase">{{ c.hero.badges.0.label }}</span>
+              </li>
+              <li class="trust-badge flex flex-col rounded-xl border border-[#ab2215]/50 bg-[#550c0c]/85 p-3.5 shadow-md backdrop-blur-sm">
+                <span class="material-symbols-outlined text-[24px] text-amber-glow" aria-hidden="true">{{ c.hero.badges.1.icon }}</span>
+                <span class="mt-1 font-headline text-xl font-bold text-white">{{ c.hero.badges.1.value }}</span>
+                <span class="font-label text-[11px] text-[#ffd1c7] uppercase">{{ c.hero.badges.1.label }}</span>
+              </li>
+              <li class="trust-badge flex flex-col rounded-xl border border-[#ab2215]/50 bg-[#550c0c]/85 p-3.5 shadow-md backdrop-blur-sm">
+                <span class="material-symbols-outlined text-[24px] text-amber-300" aria-hidden="true">{{ c.hero.badges.2.icon }}</span>
+                <span class="mt-1 font-headline text-xl font-bold text-white">{{ c.hero.badges.2.value }}</span>
+                <span class="font-label text-[11px] text-[#ffd1c7] uppercase">{{ c.hero.badges.2.label }}</span>
+              </li>
+            </ul>
+          </div>
+          <div class="hero__visual relative mt-6 flex items-center justify-center lg:col-span-5 lg:mt-0">
+            <div class="relative aspect-square w-full max-w-lg">
+              <div class="absolute inset-0 rounded-full bg-linear-to-tr from-amber-500/40 via-adobo-bright/40 to-amber-300/30 blur-2xl motion-safe:animate-pulse" aria-hidden="true"></div>
+              <figure class="hero__frame relative h-full w-full overflow-hidden rounded-2xl border-2 border-amber-glow/40 bg-[#4a0808] shadow-[0_20px_50px_rgba(40,4,4,0.7)]">
+                <img class="h-full w-full object-cover transition-transform duration-700 hover:scale-105" src="{{ img.hero.src }}" alt="{{ img.hero.alt }}" width="{{ img.hero.width }}" height="{{ img.hero.height }}" fetchpriority="high" />
+                <figcaption class="absolute right-4 bottom-4 left-4 flex items-center justify-between rounded-xl border border-amber-glow/40 bg-[#4a0808]/90 p-3.5 shadow-xl backdrop-blur-md">
+                  <span class="flex items-center gap-3">
+                    <span class="relative flex h-3.5 w-3.5" aria-hidden="true">
+                      <span class="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75 motion-safe:animate-ping"></span>
+                      <span class="relative inline-flex h-3.5 w-3.5 rounded-full bg-amber-500"></span>
+                    </span>
+                    <span class="flex flex-col">
+                      <span class="font-label text-xs font-bold tracking-wide text-white uppercase">{{ c.hero.showcase.title }}</span>
+                      <span class="font-body text-xs text-cream-muted">{{ c.hero.showcase.description }}</span>
+                    </span>
+                  </span>
+                  <span class="font-headline text-xl font-bold text-amber-glow">{{ c.hero.showcase.price }}</span>
+                </figcaption>
+              </figure>
+              <div class="hero__insignia absolute -top-6 -right-6 hidden h-28 w-28 rounded-full border-2 border-amber-glow/60 bg-[#580b0b] p-2 shadow-2xl sm:block">
+                <img class="h-full w-full object-contain" src="{{ img.emblem.src }}" alt="{{ img.emblem.alt }}" width="{{ img.emblem.width }}" height="{{ img.emblem.height }}" loading="lazy" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MENÚ / ESPECIALIDADES -->
+    <section id="menu-especialidades" class="menu relative w-full bg-linear-to-b from-[#6c0f0f] via-[#7a1212] to-[#600d0d] py-16 focus:outline-hidden" tabindex="-1" aria-labelledby="menu-title">
+      <div class="menu__texture pointer-events-none absolute inset-0 bg-repeat opacity-10 mix-blend-color-dodge bg-size-[280px]" style="background-image: url('{{ img.fondo.src }}')" aria-hidden="true"></div>
+      <div class="relative mx-auto max-w-7xl space-y-12 px-4 sm:px-8">
+        <div class="menu__header flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div class="space-y-2">
+            <p class="section-eyebrow flex items-center gap-2 font-label text-sm font-bold tracking-widest text-amber-glow uppercase">
+              <span class="material-symbols-outlined text-[20px]" aria-hidden="true">local_fire_department</span>
+              <span>{{ c.menu.eyebrow }}</span>
+            </p>
+            <h2 id="menu-title" class="font-headline text-3xl font-black tracking-tight text-white uppercase sm:text-4xl">{{ c.menu.title }}</h2>
+          </div>
+          <p class="max-w-md font-body text-base text-cream-muted">{{ c.menu.description }}</p>
+        </div>
+        <div class="order-banner flex flex-col items-center justify-between gap-4 rounded-2xl border border-[#25D366]/50 bg-[#520909]/90 p-4 shadow-xl sm:flex-row sm:p-5">
+          <div class="flex items-center gap-3.5">
+            <div class="order-banner__icon flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg">
+              <span class="size-7">{{{ whatsappIcon }}}</span>
+            </div>
+            <div>
+              <h3 class="font-headline text-lg font-bold text-white">{{ c.menu.orderBanner.title }}</h3>
+              <p class="mt-0.5 font-body text-xs text-cream-muted">{{ c.menu.orderBanner.description }}</p>
+            </div>
+          </div>
+          <a class="whatsapp-cta whatsapp-cta--banner flex shrink-0 items-center gap-2 rounded-xl bg-[#25D366] px-6 py-3 font-label text-xs font-bold tracking-wider text-white uppercase shadow-lg transition-transform hover:bg-[#20ba59] active:scale-95" href="{{ whatsapp.href }}" target="_blank" rel="noopener noreferrer" data-action="whatsapp-order" data-business="{{ businessId }}">
+            <span class="size-4 shrink-0">{{{ whatsappIcon }}}</span><span>{{ c.cta.label }}</span><span class="sr-only"> {{ whatsapp.assistiveText }}</span>
+          </a>
+        </div>
+        <div class="menu__grid grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+          {{{ menuCards }}}
+        </div>
+      </div>
+    </section>
+
+    <!-- EL RITUAL Y LA RECETA -->
+    <section id="el-ritual" class="ritual relative w-full overflow-hidden border-y border-[#a81c1c]/40 bg-linear-to-b from-[#5f0c0c] via-[#731111] to-[#5a0b0b] py-16 focus:outline-hidden" tabindex="-1" aria-labelledby="ritual-title">
+      <div class="ritual__texture pointer-events-none absolute inset-0 bg-repeat opacity-10 mix-blend-color-dodge bg-size-[260px]" style="background-image: url('{{ img.fondo.src }}')" aria-hidden="true"></div>
+      <div class="relative mx-auto max-w-7xl px-4 sm:px-8">
+        <div class="grid grid-cols-1 items-center gap-10 lg:grid-cols-12">
+          <div class="relative lg:col-span-6">
+            <div class="ritual__panel relative overflow-hidden rounded-2xl border border-[#b83528]/60 bg-linear-to-b from-[#7a1313] to-[#500909] p-6 shadow-2xl">
+              <div class="relative z-10 flex flex-col space-y-5">
+                <div class="flex items-center justify-between">
+                  <img class="h-20 w-auto object-contain drop-shadow-sm" src="{{ img.emblem.src }}" alt="{{ img.emblem.alt }}" width="{{ img.emblem.width }}" height="{{ img.emblem.height }}" loading="lazy" />
+                  <p class="text-right">
+                    <span class="block font-label text-xs font-bold text-amber-300 uppercase">{{ c.ritual.method.label }}</span>
+                    <span class="font-headline text-xl font-bold text-white">{{ c.ritual.method.title }}</span>
+                  </p>
+                </div>
+                <div class="h-72 w-full overflow-hidden rounded-xl border border-[#a81c1c]/50 bg-[#420606] shadow-lg">
+                  <img class="h-full w-full object-cover" src="{{ img.ritual.src }}" alt="{{ img.ritual.alt }}" width="{{ img.ritual.width }}" height="{{ img.ritual.height }}" loading="lazy" />
+                </div>
+                <ol class="ritual__steps grid grid-cols-2 gap-3">
+                  <li class="rounded-xl border border-[#9b1f1f] bg-[#610d0d] p-3.5 shadow-inner">
+                    <p class="flex items-center gap-1.5 font-label text-xs font-bold text-amber-300 uppercase">
+                      <span class="material-symbols-outlined text-[18px]" aria-hidden="true">{{ c.ritual.steps.0.icon }}</span>
+                      <span>{{ c.ritual.steps.0.title }}</span>
+                    </p>
+                    <p class="mt-1 font-body text-xs leading-snug text-cream-muted">{{ c.ritual.steps.0.text }}</p>
+                  </li>
+                  <li class="rounded-xl border border-[#9b1f1f] bg-[#610d0d] p-3.5 shadow-inner">
+                    <p class="flex items-center gap-1.5 font-label text-xs font-bold text-amber-glow uppercase">
+                      <span class="material-symbols-outlined text-[18px]" aria-hidden="true">{{ c.ritual.steps.1.icon }}</span>
+                      <span>{{ c.ritual.steps.1.title }}</span>
+                    </p>
+                    <p class="mt-1 font-body text-xs leading-snug text-cream-muted">{{ c.ritual.steps.1.text }}</p>
+                  </li>
+                </ol>
+              </div>
+            </div>
+          </div>
+          <div class="ritual__story flex flex-col space-y-6 lg:col-span-6">
+            <p class="section-eyebrow flex items-center gap-2 font-label text-sm font-bold tracking-widest text-amber-glow uppercase">
+              <span class="material-symbols-outlined text-[20px]" aria-hidden="true">history_edu</span>
+              <span>{{ c.ritual.eyebrow }}</span>
+            </p>
+            <h2 id="ritual-title" class="font-headline text-3xl font-black tracking-tight text-white uppercase sm:text-4xl">{{ c.ritual.title }}</h2>
+            <p class="font-body text-base leading-relaxed text-cream-muted">{{ c.ritual.intro.before }}<strong class="font-bold text-white">{{ c.ritual.intro.strong }}</strong>{{ c.ritual.intro.after }}</p>
+            <p class="font-body text-base leading-relaxed text-cream-muted">{{ c.ritual.body }}</p>
+            <dl class="ritual__metrics grid grid-cols-3 gap-3.5 pt-2">
+              <div class="flex flex-col-reverse rounded-xl border border-amber-glow/40 bg-[#781515] p-4 text-center shadow-lg">
+                <dt class="mt-2 block font-label text-xs font-bold text-cream uppercase">{{ c.ritual.metrics.0.label }}</dt>
+                <dd class="block font-headline text-3xl leading-none font-black text-amber-glow sm:text-4xl">{{ c.ritual.metrics.0.value }}</dd>
+              </div>
+              <div class="flex flex-col-reverse rounded-xl border border-amber-glow/40 bg-[#781515] p-4 text-center shadow-lg">
+                <dt class="mt-2 block font-label text-xs font-bold text-cream uppercase">{{ c.ritual.metrics.1.label }}</dt>
+                <dd class="block font-headline text-3xl leading-none font-black text-amber-light sm:text-4xl">{{ c.ritual.metrics.1.value }}</dd>
+              </div>
+              <div class="flex flex-col-reverse rounded-xl border border-amber-glow/40 bg-[#781515] p-4 text-center shadow-lg">
+                <dt class="mt-2 block font-label text-xs font-bold text-cream uppercase">{{ c.ritual.metrics.2.label }}</dt>
+                <dd class="block font-headline text-3xl leading-none font-black text-amber-300 sm:text-4xl">{{ c.ritual.metrics.2.value }}</dd>
+              </div>
+            </dl>
+            <div class="ritual__quote flex items-start gap-3 rounded-r-xl border-l-4 border-amber-glow bg-[#6b1010] p-5 shadow-md">
+              <span class="material-symbols-outlined shrink-0 text-[30px] text-amber-glow" aria-hidden="true">format_quote</span>
+              <blockquote class="font-body text-sm leading-relaxed text-cream italic">
+                <p>{{ c.ritual.quote.text }}</p>
+                <footer class="mt-2 block font-label text-xs font-bold text-amber-300 uppercase not-italic">{{ c.ritual.quote.author }}</footer>
+              </blockquote>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- UBICACIONES, HORARIOS Y PEDIDOS -->
+    <section id="ubicaciones-pedidos" class="locations relative w-full bg-linear-to-b from-[#600d0d] via-[#741313] to-[#520909] py-16 focus:outline-hidden" tabindex="-1" aria-labelledby="locations-title">
+      <div class="mx-auto max-w-7xl space-y-12 px-4 sm:px-8">
+        <div class="mx-auto max-w-2xl space-y-2 text-center">
+          <p class="block font-label text-xs font-bold tracking-widest text-amber-300 uppercase">{{ c.locations.eyebrow }}</p>
+          <h2 id="locations-title" class="font-headline text-3xl font-black tracking-tight text-white uppercase sm:text-4xl">{{ c.locations.title }}</h2>
+          <p class="font-body text-base text-cream-muted">{{ c.locations.description }}</p>
+        </div>
+        <div class="grid grid-cols-1 gap-8 lg:grid-cols-12">
+          <div class="space-y-6 lg:col-span-7">
+            <div class="schedule-card space-y-4 rounded-2xl border border-[#a82519] bg-[#701212] p-6 shadow-xl">
+              <div class="flex items-center gap-2 text-amber-glow">
+                <span class="material-symbols-outlined text-[26px]" aria-hidden="true">schedule</span>
+                <h3 class="font-headline text-xl font-bold text-white uppercase">{{ c.locations.schedule.title }}</h3>
+              </div>
+              <div class="grid grid-cols-1 gap-3.5 pt-1 sm:grid-cols-2">
+                <div class="flex flex-col justify-between rounded-xl border border-[#8e1919] bg-[#590d0d] p-4">
+                  <div>
+                    <p class="font-label text-xs font-bold text-amber-300 uppercase">{{ c.locations.schedule.slots.0.days }}</p>
+                    <p class="mt-1 font-headline text-xl font-bold text-white">{{ c.locations.schedule.slots.0.hours }}</p>
+                  </div>
+                  <p class="mt-2 font-body text-xs text-cream-muted">{{ c.locations.schedule.slots.0.note }}</p>
+                </div>
+                <div class="flex flex-col justify-between rounded-xl border border-[#8e1919] bg-[#590d0d] p-4">
+                  <div>
+                    <p class="font-label text-xs font-bold text-amber-200 uppercase">{{ c.locations.schedule.slots.1.days }}</p>
+                    <p class="mt-1 font-headline text-xl font-bold text-white">{{ c.locations.schedule.slots.1.hours }}</p>
+                  </div>
+                  <p class="mt-2 font-body text-xs text-cream-muted">{{ c.locations.schedule.slots.1.note }}</p>
+                </div>
+              </div>
+            </div>
+            <div class="branches-card space-y-5 rounded-2xl border border-[#a82519] bg-[#701212] p-6 shadow-xl">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2 text-amber-light">
+                  <span class="material-symbols-outlined text-[26px]" aria-hidden="true">storefront</span>
+                  <h3 class="font-headline text-xl font-bold text-white uppercase">{{ c.locations.branches.title }}</h3>
+                </div>
+                <span class="rounded-md border border-amber-500/30 bg-amber-500/20 px-2.5 py-1 font-label text-xs font-bold text-amber-300 uppercase">{{ c.locations.branches.badge }}</span>
+              </div>
+              <ol class="space-y-3">
+                {{{ branches }}}
+              </ol>
+              <a class="branches-card__map relative block h-44 w-full overflow-hidden rounded-xl border border-[#9b1e1e] bg-cover bg-center shadow-inner focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-glow" style="background-image: url('{{ img.fondo.src }}')" href="{{ location.mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">
+                <span class="pointer-events-none absolute inset-0 bg-[#871414]/25" aria-hidden="true"></span>
+                <span class="absolute bottom-3 left-3 flex items-center gap-2 rounded-lg border border-amber-glow/40 bg-[#4a0808]/95 px-3 py-1.5 backdrop-blur-sm">
+                  <span class="material-symbols-outlined text-[18px] text-amber-glow" aria-hidden="true">pin_drop</span>
+                  <span class="font-label text-xs font-semibold text-white uppercase">{{ c.locations.branches.mapLabel }}</span>
+                  <span class="sr-only"> {{ location.assistiveText }}</span>
+                </span>
+              </a>
+            </div>
+          </div>
+          <div class="flex flex-col space-y-6 lg:col-span-5">
+            <div class="delivery-card space-y-4 rounded-2xl border border-[#a82519] bg-[#701212] p-6 shadow-xl">
+              <h3 class="font-headline text-xl font-bold text-white uppercase">{{ c.locations.delivery.title }}</h3>
+              <p class="font-body text-sm text-cream-muted">{{ c.locations.delivery.description }}</p>
+              <ul class="grid grid-cols-2 gap-3 pt-1">
+                <li>
+                  <a class="platform flex h-full items-center gap-2.5 rounded-xl border border-[#8e1919] bg-[#590d0d] p-3.5 shadow-xs transition-all hover:border-green-400/60 hover:bg-[#781515]" href="{{ whatsapp.href }}" target="_blank" rel="noopener noreferrer" data-action="whatsapp-order" data-business="{{ businessId }}">
+                    <span class="material-symbols-outlined text-[26px] text-green-400" aria-hidden="true">chat</span>
+                    <span class="flex flex-col">
+                      <span class="font-label text-xs font-bold text-white">{{ c.locations.delivery.platforms.0.name }}</span>
+                      <span class="font-body text-[11px] text-cream-muted">{{ c.locations.delivery.platforms.0.note }}</span>
+                      <span class="sr-only"> {{ whatsapp.assistiveText }}</span>
+                    </span>
+                  </a>
+                </li>
+                <li class="platform flex items-center gap-2.5 rounded-xl border border-[#8e1919] bg-[#590d0d] p-3.5 shadow-xs">
+                  <span class="material-symbols-outlined text-[26px] text-amber-glow" aria-hidden="true">delivery_dining</span>
+                  <span class="flex flex-col">
+                    <span class="font-label text-xs font-bold text-white">{{ c.locations.delivery.platforms.1.name }}</span>
+                    <span class="font-body text-[11px] text-cream-muted">{{ c.locations.delivery.platforms.1.note }}</span>
+                  </span>
+                </li>
+                <li class="platform flex items-center gap-2.5 rounded-xl border border-[#8e1919] bg-[#590d0d] p-3.5 shadow-xs">
+                  <span class="material-symbols-outlined text-[26px] text-orange-400" aria-hidden="true">moped</span>
+                  <span class="flex flex-col">
+                    <span class="font-label text-xs font-bold text-white">{{ c.locations.delivery.platforms.2.name }}</span>
+                    <span class="font-body text-[11px] text-cream-muted">{{ c.locations.delivery.platforms.2.note }}</span>
+                  </span>
+                </li>
+                <li>
+                  <a class="platform flex h-full items-center gap-2.5 rounded-xl border border-[#8e1919] bg-[#590d0d] p-3.5 shadow-xs transition-all hover:border-amber-light/60 hover:bg-[#781515]" href="{{ location.mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">
+                    <span class="material-symbols-outlined text-[26px] text-amber-300" aria-hidden="true">shopping_bag</span>
+                    <span class="flex flex-col">
+                      <span class="font-label text-xs font-bold text-white">{{ c.locations.delivery.platforms.3.name }}</span>
+                      <span class="font-body text-[11px] text-cream-muted">{{ c.locations.delivery.platforms.3.note }}</span>
+                      <span class="sr-only"> {{ location.assistiveText }}</span>
+                    </span>
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <div class="club-card relative flex grow flex-col justify-between space-y-4 overflow-hidden rounded-2xl border border-amber-glow/50 bg-linear-to-br from-[#7d1414] via-[#6d1010] to-[#520909] p-6 shadow-2xl">
+              <div class="space-y-3">
+                <p class="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/20 px-3 py-1 font-label text-xs font-bold text-amber-300 uppercase">
+                  <span class="material-symbols-outlined text-[16px]" aria-hidden="true">celebration</span>
+                  <span>{{ c.locations.club.badge }}</span>
+                </p>
+                <h3 class="font-headline text-2xl font-bold text-white uppercase">{{ c.locations.club.title }}</h3>
+                <p class="font-body text-sm leading-relaxed text-cream-muted">{{ c.locations.club.description }}</p>
+              </div>
+              <form class="promo-form space-y-3 pt-2" data-promo-form data-promo-status="promo-status">
+                <div class="flex flex-col gap-2 sm:flex-row">
+                  <label class="sr-only" for="promo-contact">{{ c.locations.club.inputLabel }}</label>
+                  <input id="promo-contact" name="contact" class="w-full rounded-xl border border-[#a82519] bg-[#4a0808] px-4 py-2.5 font-body text-sm text-white placeholder:text-[#d38b82] focus:border-amber-glow focus:ring-2 focus:ring-amber-glow/60 focus:outline-hidden" type="text" autocomplete="email" placeholder="{{ c.locations.club.placeholder }}" required minlength="6" maxlength="120" />
+                  <button class="cursor-pointer rounded-xl bg-linear-to-r from-amber-glow to-amber-500 px-5 py-2.5 font-label text-xs font-bold tracking-wider whitespace-nowrap text-[#400606] uppercase shadow-md transition-all hover:from-amber-400 hover:to-amber-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-light" type="submit">{{ c.locations.club.submit }}</button>
+                </div>
+                <p id="promo-status" class="font-label text-xs font-bold text-amber-300" role="status" hidden>{{ c.locations.club.success }}</p>
+              </form>
+              <p class="flex items-center gap-2 pt-2 font-body text-xs text-cream-muted">
+                <span class="material-symbols-outlined text-[17px] text-amber-400" aria-hidden="true">verified_user</span>
+                <span>{{ c.locations.club.disclaimer }}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="site-footer w-full border-t border-[#8e1919] bg-[#450707] text-cream-muted shadow-[0_-8px_32px_rgba(40,4,4,0.7)]">
+  <div class="mx-auto max-w-7xl px-4 py-14 sm:px-8">
+    <div class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+      <div class="space-y-4">
+        <p class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-[30px] text-amber-glow" aria-hidden="true">skillet</span>
+          <span class="font-headline text-xl font-bold text-amber-light uppercase">{{ c.brand.shortName }}</span>
+        </p>
+        <p class="font-body text-sm leading-relaxed text-cream-muted">{{ c.footer.about.text }}</p>
+        <p class="flex items-center gap-1.5 font-label text-xs font-bold text-amber-300 uppercase">
+          <span class="material-symbols-outlined text-[19px]" aria-hidden="true">verified</span>
+          <span>{{ c.footer.about.guarantee }}</span>
+        </p>
+      </div>
+      <div class="space-y-3">
+        <h2 class="font-headline text-base font-bold text-amber-light uppercase">{{ c.footer.hours.title }}</h2>
+        <ul class="space-y-2 font-body text-sm">
+          <li class="flex justify-between border-b border-[#600e0e] py-1"><span class="text-white">{{ c.footer.hours.rows.0.days }}</span><span class="text-cream-muted">{{ c.footer.hours.rows.0.hours }}</span></li>
+          <li class="flex justify-between border-b border-[#600e0e] py-1"><span class="text-white">{{ c.footer.hours.rows.1.days }}</span><span class="font-bold text-amber-glow">{{ c.footer.hours.rows.1.hours }}</span></li>
+          <li class="flex justify-between py-1"><span class="text-white">{{ c.footer.hours.rows.2.days }}</span><span class="text-cream-muted">{{ c.footer.hours.rows.2.hours }}</span></li>
+        </ul>
+      </div>
+      <div class="space-y-3">
+        <h2 class="font-headline text-base font-bold text-amber-light uppercase">{{ c.footer.contact.title }}</h2>
+        <address class="not-italic">
+          <ul class="space-y-2 font-body text-sm">
+            <li class="flex items-center gap-2"><span class="material-symbols-outlined text-[19px] text-amber-glow" aria-hidden="true">call</span><a class="text-white hover:underline" href="{{ c.footer.contact.phone.href }}">{{ c.footer.contact.phone.label }}</a></li>
+            <li class="flex items-center gap-2"><span class="material-symbols-outlined text-[19px] text-amber-glow" aria-hidden="true">mail</span><a class="text-white hover:underline" href="{{ c.footer.contact.email.href }}">{{ c.footer.contact.email.label }}</a></li>
+            <li class="flex items-center gap-2"><span class="material-symbols-outlined text-[19px] text-amber-glow" aria-hidden="true">location_on</span><a class="text-white hover:underline" href="{{ location.mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">{{ c.footer.contact.address }}<span class="sr-only"> {{ location.assistiveText }}</span></a></li>
+          </ul>
+        </address>
+      </div>
+      <div class="space-y-3">
+        <h2 class="font-headline text-base font-bold text-amber-light uppercase">{{ c.footer.secret.title }}</h2>
+        <p class="font-body text-sm leading-relaxed text-cream-muted">{{ c.footer.secret.text }}</p>
+        <p class="rounded-xl border border-[#8e1919] bg-[#590d0d] p-3">
+          <span class="block font-label text-xs font-bold text-amber-300 uppercase">{{ c.footer.secret.badgeTitle }}</span>
+          <span class="font-body text-xs text-white">{{ c.footer.secret.badgeText }}</span>
+        </p>
+      </div>
+    </div>
+    <div class="mt-12 flex flex-col items-center justify-between gap-4 border-t border-[#6b1010] pt-6 md:flex-row">
+      <p class="font-label text-xs text-cream-muted">{{ c.footer.copyright }}</p>
+      <p class="flex items-center gap-6 font-label text-xs text-cream-muted">
+        <span>{{ c.footer.legal.0 }}</span>
+        <span>{{ c.footer.legal.1 }}</span>
+      </p>
+    </div>
+  </div>
+</footer>
+
+<div class="floating-cta fixed right-6 bottom-6 z-50 flex items-center gap-2">
+  <a class="whatsapp-cta whatsapp-cta--floating flex items-center gap-2.5 rounded-full border border-white/20 bg-[#25D366] px-5 py-3 font-label text-sm font-bold tracking-wider text-white uppercase shadow-[0_6px_25px_rgba(0,0,0,0.5)] transition-all hover:scale-105 hover:bg-[#20ba59] active:scale-95" href="{{ whatsapp.href }}" target="_blank" rel="noopener noreferrer" data-action="whatsapp-order" data-business="{{ businessId }}">
+    <span class="size-6 shrink-0">{{{ whatsappIcon }}}</span><span>{{ c.cta.label }}</span><span class="sr-only"> {{ whatsapp.assistiveText }}</span>
+  </a>
+</div>

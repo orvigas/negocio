@@ -1,0 +1,167 @@
+/*
+ * Landing: Moloteando (molotes), lunes a viernes.
+ * Compila a public/css/molotes/main.css (`npm run build:css`).
+ * Fuente: _stich_source_/moloteando_aut_nticos_molotes_artesanales/code.html
+ *   - tailwind.config (CDN v3) convertido a tokens @theme de Tailwind v4.
+ *   - Estilos en línea de <body> movidos a la capa base.
+ */
+@import "tailwindcss" source(none);
+@import "../shared/base.css";
+
+/* Solo las vistas de esta landing (evita incluir las clases del otro negocio). */
+@source "../../views/layouts";
+@source "../../views/partials/icons";
+@source "../../views/pages/molotes.html";
+@source "../../views/partials/molotes";
+@source "../../views/landings/molotes.js";
+@source "../../../public/js/molotes";
+@source "../../../public/js/modules";
+
+@theme {
+  /* Colores */
+  --color-background: #03132b;
+  --color-error: #ffb4ab;
+  --color-error-container: #93000a;
+  --color-inverse-on-surface: #22314a;
+  --color-inverse-primary: #185cb6;
+  --color-inverse-surface: #d6e3ff;
+  --color-on-background: #d6e3ff;
+  --color-on-error: #690005;
+  --color-on-error-container: #ffdad6;
+  --color-on-primary: #002f67;
+  --color-on-primary-container: #ccdbff;
+  --color-on-primary-fixed: #001a40;
+  --color-on-primary-fixed-variant: #004591;
+  --color-on-secondary: #452b00;
+  --color-on-secondary-container: #613e00;
+  --color-on-secondary-fixed: #291800;
+  --color-on-secondary-fixed-variant: #633f00;
+  --color-on-surface: #d6e3ff;
+  --color-on-surface-variant: #c2c6d4;
+  --color-on-tertiary: #003919;
+  --color-on-tertiary-container: #7ff2a0;
+  --color-on-tertiary-fixed: #00210c;
+  --color-on-tertiary-fixed-variant: #005228;
+  --color-outline: #8c909d;
+  --color-outline-variant: #424752;
+  --color-primary: #acc7ff;
+  --color-primary-container: #1b5eb8;
+  --color-primary-fixed: #d7e2ff;
+  --color-primary-fixed-dim: #acc7ff;
+  --color-secondary: #ffc472;
+  --color-secondary-container: #f3a300;
+  --color-secondary-fixed: #ffddb3;
+  --color-secondary-fixed-dim: #ffb951;
+  --color-surface: #03132b;
+  --color-surface-bright: #2b3953;
+  --color-surface-container: #102038;
+  --color-surface-container-high: #1c2a43;
+  --color-surface-container-highest: #27354e;
+  --color-surface-container-low: #0c1b34;
+  --color-surface-container-lowest: #000e26;
+  --color-surface-dim: #03132b;
+  --color-surface-tint: #acc7ff;
+  --color-surface-variant: #27354e;
+  --color-tertiary: #6add8d;
+  --color-tertiary-container: #006f38;
+  --color-tertiary-fixed: #86faa7;
+  --color-tertiary-fixed-dim: #6add8d;
+
+  /* Radios */
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  /* Espaciado con nombre (p-space-md, gap-gutter, mx-margin-md, ...) */
+  --spacing-space-xl: 2rem;
+  --spacing-margin: 1rem;
+  --spacing-gutter: 1rem;
+  --spacing-space-xs: 0.25rem;
+  --spacing-space-lg: 1.5rem;
+  --spacing-space-sm: 0.5rem;
+  --spacing-gutter-lg: 2rem;
+  --spacing-gutter-md: 1.5rem;
+  --spacing-space-md: 1rem;
+  --spacing-margin-md: 2rem;
+  --spacing-margin-lg: 3rem;
+
+  /* Familias tipográficas */
+  --font-label-sm: "Epilogue", sans-serif;
+  --font-label-lg: "Epilogue", sans-serif;
+  --font-label-md: "Epilogue", sans-serif;
+  --font-headline-lg-mobile: "Epilogue", sans-serif;
+  --font-body-md: "Epilogue", sans-serif;
+  --font-display-lg-mobile: "Epilogue", sans-serif;
+  --font-headline-lg: "Epilogue", sans-serif;
+  --font-display-lg: "Epilogue", sans-serif;
+  --font-headline-sm: "Epilogue", sans-serif;
+  --font-body-lg: "Epilogue", sans-serif;
+  --font-title-md: "Epilogue", sans-serif;
+  --font-headline-md: "Epilogue", sans-serif;
+
+  /* Escala tipográfica (text-display-lg, text-body-md, ...) */
+  --text-label-sm: 10px;
+  --text-label-sm--line-height: 14px;
+  --text-label-sm--letter-spacing: 0.06em;
+  --text-label-sm--font-weight: 700;
+  --text-label-lg: 14px;
+  --text-label-lg--line-height: 20px;
+  --text-label-lg--letter-spacing: 0.04em;
+  --text-label-lg--font-weight: 700;
+  --text-label-md: 12px;
+  --text-label-md--line-height: 16px;
+  --text-label-md--letter-spacing: 0.02em;
+  --text-label-md--font-weight: 600;
+  --text-headline-lg-mobile: 26px;
+  --text-headline-lg-mobile--line-height: 34px;
+  --text-headline-lg-mobile--letter-spacing: 0em;
+  --text-headline-lg-mobile--font-weight: 700;
+  --text-body-md: 14px;
+  --text-body-md--line-height: 22px;
+  --text-body-md--font-weight: 400;
+  --text-display-lg-mobile: 34px;
+  --text-display-lg-mobile--line-height: 42px;
+  --text-display-lg-mobile--letter-spacing: -0.01em;
+  --text-display-lg-mobile--font-weight: 800;
+  --text-headline-lg: 32px;
+  --text-headline-lg--line-height: 40px;
+  --text-headline-lg--letter-spacing: -0.01em;
+  --text-headline-lg--font-weight: 700;
+  --text-display-lg: 48px;
+  --text-display-lg--line-height: 56px;
+  --text-display-lg--letter-spacing: -0.02em;
+  --text-display-lg--font-weight: 800;
+  --text-headline-sm: 20px;
+  --text-headline-sm--line-height: 28px;
+  --text-headline-sm--font-weight: 600;
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 26px;
+  --text-body-lg--font-weight: 400;
+  --text-title-md: 18px;
+  --text-title-md--line-height: 24px;
+  --text-title-md--font-weight: 600;
+  --text-headline-md: 24px;
+  --text-headline-md--line-height: 32px;
+  --text-headline-md--font-weight: 700;
+}
+
+@layer base {
+  /* Alto del header fijo para scroll-padding-top (ver shared/base.css): ~113-117 px medidos (barra de anuncio + h-20) más margen. */
+  :root {
+    --landing-header-height: 7.5rem;
+  }
+
+  /* <body class="bg-surface font-body-md text-on-surface antialiased" style="..."> */
+  .landing {
+    min-height: 100vh;
+    background: linear-gradient(
+      rgb(18 130 196) 0%,
+      rgb(216 233 252) 20%,
+      rgb(244 248 253) 60%,
+      rgb(234 241 250) 100%
+    );
+    color: rgb(8 24 48);
+    font-family: var(--font-body-md);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}

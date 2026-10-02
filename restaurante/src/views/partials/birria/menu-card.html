@@ -1,0 +1,14 @@
+<article id="card-{{ id }}" class="menu-card group flex flex-col overflow-hidden rounded-2xl border border-[#ab291b] bg-linear-to-b from-[#781515] to-[#590d0d] shadow-[0_8px_30px_rgba(40,4,4,0.5)] transition-all hover:border-amber-glow/60 hover:shadow-[0_12px_36px_rgba(245,158,11,0.25)]" aria-labelledby="title-{{ id }}">
+  <div class="menu-card__media relative h-60 w-full overflow-hidden bg-[#450808]">
+    <img class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" src="{{ image.src }}" alt="{{ image.alt }}" width="{{ image.width }}" height="{{ image.height }}" loading="lazy" />
+    <p id="price-{{ id }}" class="menu-card__price absolute top-3 right-3 rounded-full bg-amber-glow px-3.5 py-1 font-label text-sm font-bold text-[#400606] shadow-lg">{{ price }}</p>
+    <p class="menu-card__tag absolute bottom-3 left-3 rounded-md border border-amber-light/30 bg-[#4a0808]/90 px-2.5 py-1 font-label text-xs font-semibold text-amber-200 uppercase backdrop-blur-xs">{{ tag }}</p>
+  </div>
+  <div class="menu-card__body flex grow flex-col justify-between space-y-5 p-6">
+    <div>
+      <h3 id="title-{{ id }}" class="font-headline text-xl font-bold tracking-tight text-white uppercase">{{ name }}</h3>
+      <p id="desc-{{ id }}" class="mt-2 font-body text-sm leading-relaxed text-cream-muted">{{ description }}</p>
+    </div>
+    {{{ details }}}
+  </div>
+</article>

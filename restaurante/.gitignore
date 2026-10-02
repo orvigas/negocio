@@ -1,0 +1,21 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno (usar .env.example como plantilla)
+.env
+.env.*
+!.env.example
+
+# Build de CSS (generado por Tailwind desde src/styles/)
+public/css/*
+!public/css/.gitkeep
+
+# Logs y cobertura
+*.log
+npm-debug.log*
+coverage/
+
+# Sistema / editores
+.DS_Store
+.vscode/
+.idea/

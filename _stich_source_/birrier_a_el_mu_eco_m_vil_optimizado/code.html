@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="es" style=""><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;600;700;800;900&amp;family=Space+Grotesk:wght@600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "adobo-dark": "#4a0808", "adobo": "#871414", "adobo-deep": "#6b0f0f", "adobo-bright": "#a81c1c", "adobo-card": "#611010", "adobo-border": "#b83528", "amber-glow": "#f59e0b", "amber-light": "#fbbf24", "cream": "#fff8f0", "cream-muted": "#fce7db" }, "fontFamily": { "headline": [ "Epilogue", "sans-serif" ], "display": [ "Epilogue", "sans-serif" ], "body": [ "Plus Jakarta Sans", "sans-serif" ], "label": [ "Space Grotesk", "sans-serif" ] } } } };</script></head><body class="bg-[#5c0d0d] font-body text-[#fff1ee] antialiased selection:bg-amber-glow selection:text-[#4a0808]">
+<!-- HEADER -->
+<header class="fixed top-0 left-0 w-full z-50 bg-[#490808]/95 backdrop-blur-xl border-b border-[#a81c1c]/40 shadow-[0_4px_25px_rgba(40,4,4,0.6)]">
+<div class="h-16 sm:h-20 max-w-7xl mx-auto px-3 sm:px-8 flex items-center justify-between gap-2 py-2"><div class="flex items-center gap-2.5 sm:gap-3.5 group cursor-pointer"><div class="relative flex items-center justify-center p-1 rounded-full bg-[#580b0b]/90 border border-amber-glow/60 shadow-lg drop-shadow-md shrink-0"><img alt="logo-birria.png" class="h-11 sm:h-16 w-auto object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.6)] transform group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuABnhhCD6OIpYrjheosoB9zEM264cWldbaBv_dq94m-mXBKK1UZ-LfR_d7EVsAYfxBzt3hD0NIkO5YiY640XJafDQ0WK1N2L6vIKaYykIzH0QVQ2APqnaRT0Ye28TvYG_MG1sCOA9-ce-ACvnpriKFgHA729Ck4xQKkSOuOK5VnO5mC16Tr9Dms9VQYvHXYQ8OtM2w6hMk40v2ORHxnlkP2k5HRSfGLGwzXqqwUgC_WHT814SEoAWEEhTbKEidOjzjczw"/></div><div class="flex flex-col justify-center min-w-0"><span class="font-headline font-black text-lg sm:text-2xl uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-light via-amber-glow to-amber-300 drop-shadow-md leading-none truncate">El Muñeco</span><div class="flex items-center gap-1 mt-0.5 sm:mt-1"><span class="h-0.5 w-2 sm:w-3 bg-amber-400/80 rounded-full shrink-0"></span><span class="font-label text-[10px] sm:text-xs uppercase text-amber-200 font-extrabold tracking-wider leading-none truncate">Auténtica Birria de Res</span></div></div></div><div class="flex items-center gap-2"><nav class="hidden lg:flex items-center gap-6 font-label text-sm uppercase tracking-wider"><a aria-current="page" class="bg-gradient-to-r from-amber-glow to-amber-500 text-[#4a0808] font-bold rounded-lg px-3.5 py-1.5 shadow-md shadow-amber-900/40" data-path="inicio" href="#">Inicio</a><a class="text-[#ffd8cf] hover:text-white transition-colors" data-path="menu-de-birria" href="#menu-especialidades">Menú de Birria</a><a class="text-[#ffd8cf] hover:text-white transition-colors" data-path="quesabirrias-y-consome" href="#menu-especialidades">Quesabirrias &amp; Consomé</a><a class="text-[#ffd8cf] hover:text-white transition-colors" data-path="nuestra-receta" href="#el-ritual">Nuestra Receta</a><a class="text-[#ffd8cf] hover:text-white transition-colors" data-path="ubicaciones" href="#ubicaciones-pedidos">Ubicaciones</a></nav><a class="bg-[#25D366] hover:bg-[#20ba59] text-white font-bold rounded-lg px-2.5 sm:px-3.5 py-1.5 shadow-md flex items-center gap-1.5 transition-all active:scale-95 text-xs sm:text-sm font-label uppercase" href="https://wa.me/525541239080?text=Hola%20Birrier%C3%ADa%20El%20Mu%C3%B1eco,%20deseo%20hacer%20un%20pedido" target="_blank"><svg class="w-4 h-4 fill-current shrink-0" viewbox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19.01L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 14.99 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67ZM8.53 7.33C8.37 7.33 8.1 7.39 7.87 7.64C7.65 7.89 7.02 8.48 7.02 9.69C7.02 10.9 7.9 12.07 8.02 12.23C8.14 12.39 9.73 14.85 12.18 15.91C12.76 16.16 13.22 16.31 13.57 16.42C14.16 16.61 14.7 16.58 15.12 16.52C15.6 16.45 16.59 15.92 16.8 15.34C17 14.75 17 14.25 16.94 14.15C16.88 14.04 16.71 13.98 16.46 13.85C16.21 13.73 14.98 13.12 14.75 13.04C14.52 12.95 14.36 12.91 14.19 13.16C14.03 13.41 13.56 13.98 13.41 14.15C13.27 14.31 13.12 14.33 12.87 14.21C12.62 14.08 11.82 13.82 10.88 12.98C10.15 12.33 9.65 11.52 9.51 11.27C9.36 11.02 9.49 10.89 9.62 10.76C9.73 10.65 9.87 10.47 10 10.32C10.12 10.17 10.17 10.06 10.25 9.9C10.33 9.73 10.29 9.59 10.23 9.46C10.17 9.34 9.71 8.21 9.52 7.75C9.33 7.3 9.14 7.36 8.99 7.35C8.86 7.34 8.7 7.33 8.53 7.33Z"></path></svg><span>Ordenar</span></a></div></div>
+</header>
+<main class="w-full pt-16 sm:pt-20 bg-[#650e0e] min-h-screen">
+<div class="flex flex-col w-full">
+<!-- HERO SECTION CON FONDO ADOBO VIBRANTE -->
+<section class="relative w-full overflow-hidden bg-gradient-to-b from-[#7d1111] via-[#8c1414] to-[#6c0f0f] border-b border-[#a81c1c]/40">
+<!-- Sutil textura de fondo-birria.jpg repetida en overlay adobo cálido -->
+<div class="absolute inset-0 opacity-15 pointer-events-none mix-blend-color-dodge bg-repeat" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAyDyWlrdQQBWOGRY_RWmGncRgCV4MLQqu9kIpiEqc5Qnud25-JigVg6kYb3XKYynv-YM8lYhJmhbg-fzr7Qq0RaLpOOldYUyNvdxC1o8BE-rbFqdzSvmmN-NHbXi-tcP3NPST3c8JGTYkMib8ecTikXMSIXYkqJgp9Rco-xjs0QiRtNpp2b1EXhfiewNQ9dYLbRMX66TCxhRzss_zWgoM-ObNBv4EMlKRT5OjHwcHRJQnC7NmA5sOfb9ozSS3UnkW1bg'); background-size: 300px;"></div>
+<!-- Resplandor Cálido Ámbar y Fuego de Horno -->
+<div class="absolute -top-24 -left-12 w-[34rem] h-[34rem] bg-[#c4281b]/35 rounded-full blur-3xl pointer-events-none"></div>
+<div class="absolute top-1/3 -right-20 w-[36rem] h-[36rem] bg-amber-500/25 rounded-full blur-[110px] pointer-events-none"></div>
+<div class="relative max-w-7xl mx-auto px-4 sm:px-8 py-12 lg:py-20">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+<!-- Left Hero Column -->
+<div class="lg:col-span-7 flex flex-col items-start space-y-6 z-10">
+<!-- Identity Badge with Emblem -->
+<div class="flex items-center gap-3 bg-[#520909]/90 border border-amber-glow/40 px-4 py-1.5 rounded-full shadow-lg backdrop-blur">
+<img alt="Logo Birriería El Muñeco" class="w-8 h-8 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7o87hzAUpevRZtBYXI1OKF2xmlCzKG3B53e31lyJVsG-9ygHNoUPLj7wtFz6fEe8B1X5AO3z86ANOazCWIOt7br-wP7XE4XorC16cEoIV8wGUzX4c-kuJwbWVbGyIcRODbyecmi6glpZ2f-8JRVkWuWnoe7kDA3xtK0lPI2U8gttONhHxOFn1IQNxney4GCdLB5OjmMvUfp4-PzV3yPBfEWAcXU3FLCgOCcNkRAlRPe-rgLm4c7lpGAOwKJRO1fwTzQ"/>
+<span class="font-label text-xs uppercase tracking-widest text-amber-300 font-bold">Tradición Tapatía de Res</span>
+<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+</div>
+<h1 class="font-display font-black text-3xl sm:text-5xl lg:text-6xl text-white uppercase tracking-tight leading-[1.1] drop-shadow-md">
+          Auténtica Birria de Res y <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-light via-amber-glow to-amber-300 drop-shadow">Quesabirrias al Horno</span>
+</h1>
+<p class="font-body text-base sm:text-lg text-cream-muted max-w-2xl leading-relaxed">
+          Carne tatemada con chiles secos, especias de Jalisco y cocción lenta de 14 horas. Servida con consomé hirviendo, tortillas doradas en grasa de adobo y queso hebra derretido.
+        </p>
+<!-- Twin CTAs -->
+<div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1 w-full sm:w-auto">
+<a class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20ba59] text-white font-label text-sm uppercase tracking-wider px-7 py-3.5 rounded-xl shadow-[0_4px_20px_rgba(37,211,102,0.4)] transition-all font-bold active:scale-95 text-center" href="https://wa.me/525541239080?text=Hola%20Birrier%C3%ADa%20El%20Mu%C3%B1eco,%20deseo%20hacer%20un%20pedido" target="_blank"><svg class="w-5 h-5 fill-current shrink-0" viewbox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19.01L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 14.99 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67ZM8.53 7.33C8.37 7.33 8.1 7.39 7.87 7.64C7.65 7.89 7.02 8.48 7.02 9.69C7.02 10.9 7.9 12.07 8.02 12.23C8.14 12.39 9.73 14.85 12.18 15.91C12.76 16.16 13.22 16.31 13.57 16.42C14.16 16.61 14.7 16.58 15.12 16.52C15.6 16.45 16.59 15.92 16.8 15.34C17 14.75 17 14.25 16.94 14.15C16.88 14.04 16.71 13.98 16.46 13.85C16.21 13.73 14.98 13.12 14.75 13.04C14.52 12.95 14.36 12.91 14.19 13.16C14.03 13.41 13.56 13.98 13.41 14.15C13.27 14.31 13.12 14.33 12.87 14.21C12.62 14.08 11.82 13.82 10.88 12.98C10.15 12.33 9.65 11.52 9.51 11.27C9.36 11.02 9.49 10.89 9.62 10.76C9.73 10.65 9.87 10.47 10 10.32C10.12 10.17 10.17 10.06 10.25 9.9C10.33 9.73 10.29 9.59 10.23 9.46C10.17 9.34 9.71 8.21 9.52 7.75C9.33 7.3 9.14 7.36 8.99 7.35C8.86 7.34 8.7 7.33 8.53 7.33Z"></path></svg><span class="">Ordenar ya!</span></a>
+<a class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#520909]/90 border border-amber-light/30 text-cream font-label text-sm uppercase tracking-wider px-6 py-3.5 rounded-xl hover:bg-[#6c0f0f] hover:border-amber-light/60 transition-all font-semibold text-center" href="#el-ritual">
+<span class="material-symbols-outlined text-[20px] text-amber-glow">local_fire_department</span>
+<span class="">Conoce Nuestra Tradición</span>
+</a>
+</div>
+<!-- Trust Badges en Rojo Adobo Rico -->
+<div class="grid grid-cols-3 gap-2 sm:gap-3 pt-2 w-full max-w-xl">
+<div class="bg-[#550c0c]/85 border border-[#ab2215]/50 backdrop-blur p-3.5 rounded-xl flex flex-col shadow-md">
+<span class="material-symbols-outlined text-amber-light text-[24px]">timer</span>
+<span class="font-headline font-bold text-xl text-white mt-1">14 Horas</span>
+<span class="font-label text-[11px] uppercase text-[#ffd1c7]">A Fuego Lento</span>
+</div>
+<div class="bg-[#550c0c]/85 border border-[#ab2215]/50 backdrop-blur p-3.5 rounded-xl flex flex-col shadow-md">
+<span class="material-symbols-outlined text-amber-glow text-[24px]">soup_kitchen</span>
+<span class="font-headline font-bold text-xl text-white mt-1">100% Puro</span>
+<span class="font-label text-[11px] uppercase text-[#ffd1c7]">Consomé de Res</span>
+</div>
+<div class="bg-[#550c0c]/85 border border-[#ab2215]/50 backdrop-blur p-3.5 rounded-xl flex flex-col shadow-md">
+<span class="material-symbols-outlined text-amber-300 text-[24px]">star</span>
+<span class="font-headline font-bold text-xl text-white mt-1">4.9 ★</span>
+<span class="font-label text-[11px] uppercase text-[#ffd1c7]">+3,400 Opiniones</span>
+</div>
+</div>
+</div>
+<!-- Right Hero Visual Showcase -->
+<div class="lg:col-span-5 relative flex justify-center items-center mt-6 lg:mt-0">
+<div class="relative w-full max-w-lg aspect-square">
+<div class="absolute inset-0 rounded-full bg-gradient-to-tr from-amber-500/40 via-adobo-bright/40 to-amber-300/30 animate-pulse blur-2xl"></div>
+<!-- Frame Principal de Imagen -->
+<div class="relative w-full h-full rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(40,4,4,0.7)] border-2 border-amber-glow/40 bg-[#4a0808]">
+<img alt="Crispy red Birria de Res QuesaTacos con consomé" class="w-full h-full object-cover transform hover:scale-105 transition-transform duration-700" src="https://lh3.googleusercontent.com/aida/AEtjO1VKq96Y3XsS06WUc_ephHazVm4FQvAYJQUCNcWP68DaiUOGNrsK0F_VLaVsEdDcHwQG-ujFRf9l6aOlzRtFUU3EKctCw80PLOov6mh-crH95ENYgNVAJte_hrOSeYTP5PVy4giXMOudEeyPpxWPCsK8jxdVZ52Y8LSnYhkmg5FcsBnv8CquQFKrVdcdyuq8vvuyIkNqj2OoemXP3Iabqwd1b5ave-5kd3sCjs87bcEr7KAD-2SfX4hpmbo"/>
+<!-- Glass Badge Overlay Cálido -->
+<div class="absolute bottom-4 left-4 right-4 bg-[#4a0808]/90 border border-amber-glow/40 backdrop-blur-md p-3.5 rounded-xl flex items-center justify-between shadow-xl">
+<div class="flex items-center gap-3">
+<span class="flex h-3.5 w-3.5 relative">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500"></span>
+</span>
+<div class="flex flex-col">
+<span class="font-label text-xs uppercase font-bold text-white tracking-wide">Tostado de Comal</span>
+<span class="font-body text-xs text-cream-muted">Con costra de queso fundido &amp; adobo</span>
+</div>
+</div>
+<span class="font-headline font-bold text-xl text-amber-glow">$195 MXN</span>
+</div>
+</div>
+<!-- Insignia El Muñeco -->
+<div class="absolute -top-6 -right-6 w-28 h-28 hidden sm:block bg-[#580b0b] border-2 border-amber-glow/60 rounded-full p-2 shadow-2xl">
+<img alt="Insignia El Muñeco" class="w-full h-full object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7o87hzAUpevRZtBYXI1OKF2xmlCzKG3B53e31lyJVsG-9ygHNoUPLj7wtFz6fEe8B1X5AO3z86ANOazCWIOt7br-wP7XE4XorC16cEoIV8wGUzX4c-kuJwbWVbGyIcRODbyecmi6glpZ2f-8JRVkWuWnoe7kDA3xtK0lPI2U8gttONhHxOFn1IQNxney4GCdLB5OjmMvUfp4-PzV3yPBfEWAcXU3FLCgOCcNkRAlRPe-rgLm4c7lpGAOwKJRO1fwTzQ"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- SPECIALTIES / MENU SECTION EN ROJO ADOBO APETITOSO -->
+<section class="w-full bg-gradient-to-b from-[#6c0f0f] via-[#7a1212] to-[#600d0d] py-16 relative" id="menu-especialidades">
+<!-- Subtle motifs texture overlay -->
+<div class="absolute inset-0 opacity-10 pointer-events-none mix-blend-color-dodge bg-repeat" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAyDyWlrdQQBWOGRY_RWmGncRgCV4MLQqu9kIpiEqc5Qnud25-JigVg6kYb3XKYynv-YM8lYhJmhbg-fzr7Qq0RaLpOOldYUyNvdxC1o8BE-rbFqdzSvmmN-NHbXi-tcP3NPST3c8JGTYkMib8ecTikXMSIXYkqJgp9Rco-xjs0QiRtNpp2b1EXhfiewNQ9dYLbRMX66TCxhRzss_zWgoM-ObNBv4EMlKRT5OjHwcHRJQnC7NmA5sOfb9ozSS3UnkW1bg'); background-size: 280px;"></div>
+<div class="relative max-w-7xl mx-auto px-4 sm:px-8 space-y-12">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div class="space-y-2">
+<div class="flex items-center gap-2 text-amber-glow font-label text-sm uppercase tracking-widest font-bold">
+<span class="material-symbols-outlined text-[20px]">local_fire_department</span>
+<span class="">Especialidades del Comal</span>
+</div>
+<h2 class="font-headline font-black text-3xl sm:text-4xl text-white uppercase tracking-tight">Nuestro Menú de Birria Artesanal</h2>
+</div>
+<p class="font-body text-base text-cream-muted max-w-md">Tradición tapatía con carne de res tatemada a fuego lento de 14 horas, tortillas hechas a mano y consomé servido hirviendo.</p>
+</div><div class="bg-[#520909]/90 border border-[#25D366]/50 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 shadow-xl"><div class="flex items-center gap-3.5"><div class="w-12 h-12 rounded-full bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-lg"><svg class="w-7 h-7 fill-current" viewbox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19.01L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 14.99 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67ZM8.53 7.33C8.37 7.33 8.1 7.39 7.87 7.64C7.65 7.89 7.02 8.48 7.02 9.69C7.02 10.9 7.9 12.07 8.02 12.23C8.14 12.39 9.73 14.85 12.18 15.91C12.76 16.16 13.22 16.31 13.57 16.42C14.16 16.61 14.7 16.58 15.12 16.52C15.6 16.45 16.59 15.92 16.8 15.34C17 14.75 17 14.25 16.94 14.15C16.88 14.04 16.71 13.98 16.46 13.85C16.21 13.73 14.98 13.12 14.75 13.04C14.52 12.95 14.36 12.91 14.19 13.16C14.03 13.41 13.56 13.98 13.41 14.15C13.27 14.31 13.12 14.33 12.87 14.21C12.62 14.08 11.82 13.82 10.88 12.98C10.15 12.33 9.65 11.52 9.51 11.27C9.36 11.02 9.49 10.89 9.62 10.76C9.73 10.65 9.87 10.47 10 10.32C10.12 10.17 10.17 10.06 10.25 9.9C10.33 9.73 10.29 9.59 10.23 9.46C10.17 9.34 9.71 8.21 9.52 7.75C9.33 7.3 9.14 7.36 8.99 7.35C8.86 7.34 8.7 7.33 8.53 7.33Z"></path></svg></div><div><h4 class="font-headline font-bold text-lg text-white">Haz tu pedido directamente con nuestro asistente de WhatsApp</h4><p class="font-body text-xs text-cream-muted mt-0.5">Menú interactivo, cotización instantánea y confirmación automática sin comisiones ni registros.</p></div></div><a class="bg-[#25D366] hover:bg-[#20ba59] text-white font-label text-xs uppercase tracking-wider font-bold px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 shrink-0 transition-transform active:scale-95" href="https://wa.me/525541239080?text=Hola%20Birrier%C3%ADa%20El%20Mu%C3%B1eco,%20deseo%20hacer%20un%20pedido" target="_blank"><svg class="w-4 h-4 fill-current shrink-0" viewbox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19.01L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 14.99 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67ZM8.53 7.33C8.37 7.33 8.1 7.39 7.87 7.64C7.65 7.89 7.02 8.48 7.02 9.69C7.02 10.9 7.9 12.07 8.02 12.23C8.14 12.39 9.73 14.85 12.18 15.91C12.76 16.16 13.22 16.31 13.57 16.42C14.16 16.61 14.7 16.58 15.12 16.52C15.6 16.45 16.59 15.92 16.8 15.34C17 14.75 17 14.25 16.94 14.15C16.88 14.04 16.71 13.98 16.46 13.85C16.21 13.73 14.98 13.12 14.75 13.04C14.52 12.95 14.36 12.91 14.19 13.16C14.03 13.41 13.56 13.98 13.41 14.15C13.27 14.31 13.12 14.33 12.87 14.21C12.62 14.08 11.82 13.82 10.88 12.98C10.15 12.33 9.65 11.52 9.51 11.27C9.36 11.02 9.49 10.89 9.62 10.76C9.73 10.65 9.87 10.47 10 10.32C10.12 10.17 10.17 10.06 10.25 9.9C10.33 9.73 10.29 9.59 10.23 9.46C10.17 9.34 9.71 8.21 9.52 7.75C9.33 7.3 9.14 7.36 8.99 7.35C8.86 7.34 8.7 7.33 8.53 7.33Z"></path></svg><span class="">Ordenar ya!</span></a></div>
+<!-- CARDS GRID EN TONOS ROJO ADOBO ENRIQUECIDOS -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+<!-- Card 1: Quesabirria -->
+<article class="bg-gradient-to-b from-[#781515] to-[#590d0d] rounded-2xl overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(40,4,4,0.5)] hover:shadow-[0_12px_36px_rgba(245,158,11,0.25)] transition-all border border-[#ab291b] hover:border-amber-glow/60 group">
+<div class="relative h-60 w-full overflow-hidden bg-[#450808]">
+<img alt="Quesabirria con tortilla de mano y queso asadero" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida/AEtjO1VKq96Y3XsS06WUc_ephHazVm4FQvAYJQUCNcWP68DaiUOGNrsK0F_VLaVsEdDcHwQG-ujFRf9l6aOlzRtFUU3EKctCw80PLOov6mh-crH95ENYgNVAJte_hrOSeYTP5PVy4giXMOudEeyPpxWPCsK8jxdVZ52Y8LSnYhkmg5FcsBnv8CquQFKrVdcdyuq8vvuyIkNqj2OoemXP3Iabqwd1b5ave-5kd3sCjs87bcEr7KAD-2SfX4hpmbo"/>
+<div class="absolute top-3 right-3 bg-amber-glow text-[#400606] font-label text-sm px-3.5 py-1 rounded-full font-bold shadow-lg">$65 MXN c/u</div>
+<div class="absolute bottom-3 left-3 bg-[#4a0808]/90 border border-amber-light/30 backdrop-blur-sm px-2.5 py-1 rounded-md font-label text-xs text-amber-200 uppercase font-semibold">La Favorita del Comal</div>
+</div>
+<div class="p-6 flex flex-col flex-grow justify-between space-y-5">
+<div>
+<h3 class="font-headline font-bold text-xl text-white uppercase tracking-tight">Quesabirria con Tortilla de Mano</h3>
+<p class="font-body text-sm text-cream-muted mt-2 leading-relaxed">Tortilla hecha a mano dorada en grasa de adobo, abundante queso asadero fundido y carne deshebrada de birria. Crujiente por fuera y jugosa por dentro con caldo para chopear.</p>
+</div>
+<div class="bg-[#4d0b0b] border border-[#8e1919] p-3.5 rounded-xl space-y-1.5">
+<span class="font-label text-xs uppercase text-amber-300 font-semibold block">Preparación:</span>
+<div class="flex flex-wrap gap-1.5">
+<span class="bg-[#6b1010] text-[#ffd6cc] text-xs font-label px-2.5 py-1 rounded-md border border-[#8f1919]">Tortilla a mano</span>
+<span class="bg-[#6b1010] text-[#ffd6cc] text-xs font-label px-2.5 py-1 rounded-md border border-[#8f1919]">Queso asadero fundido</span>
+<span class="bg-amber-500/20 text-amber-300 text-xs font-label px-2.5 py-1 rounded-md border border-amber-500/40 font-bold">Consomé para chopear</span>
+</div>
+</div>
+</div>
+</article>
+<!-- Card 2: Taco de Birria -->
+<article class="bg-gradient-to-b from-[#781515] to-[#590d0d] rounded-2xl overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(40,4,4,0.5)] hover:shadow-[0_12px_36px_rgba(245,158,11,0.25)] transition-all border border-[#ab291b] hover:border-amber-glow/60 group">
+<div class="relative h-60 w-full overflow-hidden bg-[#450808]">
+<img alt="Taco de birria con tortilla de maíz hecha a mano" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD54Erku9_jRBoj2M1m6OvZBnOwbzNb4Sc81Sl4lGs1mLy2QfEwSK4G-hSgV6QDf3rpWdrxHbZP1idpDJJYJSRU_V_40K6w29XYhERUHh-WRQBP34JaS-W8EgNLh-FO0NfXxEQpMol22W0s_ncbOy8vQqbSZKFaohuiMZrT3SCGIAuZyOSP1KdnN1O-V6GTH_Q22n0VDWj2AUSBUiYeJuwn43yGTgzXg7KXzqvekeBX5a5RBw3proRG"/>
+<div class="absolute top-3 right-3 bg-amber-glow text-[#400606] font-label text-sm px-3.5 py-1 rounded-full font-bold shadow-lg">$40 MXN c/u</div>
+<div class="absolute bottom-3 left-3 bg-[#4a0808]/90 border border-amber-light/30 backdrop-blur-sm px-2.5 py-1 rounded-md font-label text-xs text-amber-200 uppercase font-semibold">Sabor Tradicional</div>
+</div>
+<div class="p-6 flex flex-col flex-grow justify-between space-y-5">
+<div>
+<h3 class="font-headline font-bold text-xl text-white uppercase tracking-tight">Taco de Birria con Tortilla de Mano</h3>
+<p class="font-body text-sm text-cream-muted mt-2 leading-relaxed">Carne jugosa de birria tatemada sobre tortilla de maíz recién echada a mano en comal, cilantro criollo, cebolla y limón fresco, acompañado de vasito de consomé para sopear.</p>
+</div>
+<div class="bg-[#4d0b0b] border border-[#8e1919] p-3.5 rounded-xl space-y-1.5">
+<span class="font-label text-xs uppercase text-amber-300 font-semibold block">Incluye:</span>
+<div class="flex flex-wrap gap-1.5">
+<span class="bg-[#6b1010] text-[#ffd6cc] text-xs font-label px-2.5 py-1 rounded-md border border-[#8f1919]">Cilantro criollo</span>
+<span class="bg-[#6b1010] text-[#ffd6cc] text-xs font-label px-2.5 py-1 rounded-md border border-[#8f1919]">Cebolla picada</span>
+<span class="bg-[#6b1010] text-[#ffd6cc] text-xs font-label px-2.5 py-1 rounded-md border border-[#8f1919]">Limón fresco</span>
+<span class="bg-amber-500/20 text-amber-300 text-xs font-label px-2.5 py-1 rounded-md border border-amber-500/40 font-bold">Caldito para sopear</span>
+</div>
+</div>
+</div>
+</article>
+<!-- Card 3: Tazón Grande -->
+<article class="bg-gradient-to-b from-[#781515] to-[#590d0d] rounded-2xl overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(40,4,4,0.5)] hover:shadow-[0_12px_36px_rgba(245,158,11,0.25)] transition-all border border-[#ab291b] hover:border-amber-glow/60 group">
+<div class="relative h-60 w-full overflow-hidden bg-[#450808]">
+<img alt="Tazón de consomé con carne grande humeante" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJXowzGVjvo68wtiOBAg3PLMcJTvnv8IL40UysUwapwWkEy9TrHf05ppdjfn9xqQLsnQVNP0yMROl-OYS5hu6-0GKnbQtMhJZnWuu6GSe6WBSwI1EU1I4S6Dth31X1ic_5lr2tYvzujzGuWk6d-jkt89bvJMxDs85A8Rg1GcdxcQSecBfFlqOmMj0eCcVbqfapZDw8X1kTffCldcw_p9MhupB0rH8DAOUB4re9dC13z9lWx9XJc10S"/>
+<div class="absolute top-3 right-3 bg-amber-glow text-[#400606] font-label text-sm px-3.5 py-1 rounded-full font-bold shadow-lg">$140 MXN</div>
+<div class="absolute bottom-3 left-3 bg-[#4a0808]/90 border border-amber-light/30 backdrop-blur-sm px-2.5 py-1 rounded-md font-label text-xs text-amber-200 uppercase font-semibold">Porción Grande</div>
+</div>
+<div class="p-6 flex flex-col flex-grow justify-between space-y-5">
+<div>
+<h3 class="font-headline font-bold text-xl text-white uppercase tracking-tight">Tazón de Consomé Grande</h3>
+<p class="font-body text-sm text-cream-muted mt-2 leading-relaxed">500ml de consomé de cocción lenta con 150g de carne maciza y surtida, tuétano a la brasa, cilantro, cebolla picada y orden de tortillas a mano recién hechas en comal.</p>
+</div>
+<div class="bg-[#4d0b0b] border border-[#8e1919] p-3.5 rounded-xl space-y-1.5">
+<span class="font-label text-xs uppercase text-amber-300 font-semibold block">Porción &amp; Gramaje:</span>
+<div class="flex items-center justify-between text-xs text-[#ffd6cc]">
+<span class="">500ml caldo + 150g carne</span>
+<span class="text-amber-glow font-bold bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/40">Con Tuétano</span>
+</div>
+</div>
+</div>
+</article>
+<!-- Card 4: Consomé Chico -->
+<article class="bg-gradient-to-b from-[#781515] to-[#590d0d] rounded-2xl overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(40,4,4,0.5)] hover:shadow-[0_12px_36px_rgba(245,158,11,0.25)] transition-all border border-[#ab291b] hover:border-amber-glow/60 group" id="card-consome-chico">
+<div class="relative h-60 w-full overflow-hidden bg-[#450808]">
+<img alt="Tazón de consomé chico con y sin carne" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB48sV1oTbgcBC44Ee1xNQcprTtIVEL2VUicVF5rnZX4ayhVxDfiFkfi6CDFqWYSACcX_nM1gamjRTgnsFhf8qFeIWGTtgz-mtzI4fbx1LKFXIHvLkdt2x4HSuSqPGF3QQjugERMPK-SHpR9SPWLUpMGeYFbJ8Sy0qPUxBBf4FPruCdWbO6SMYQM3SJ03-pRgrAE9YeupnmeGWmD-RY6-cBtEpvtNVdgzgEk5B6N-GyL1e8S872K_Yc"/>
+<div class="absolute top-3 right-3 bg-amber-glow text-[#400606] font-label text-sm px-3.5 py-1 rounded-full font-bold shadow-lg" id="price-consome-chico">$80 MXN</div>
+<div class="absolute bottom-3 left-3 bg-[#4a0808]/90 border border-amber-light/30 backdrop-blur-sm px-2.5 py-1 rounded-md font-label text-xs text-amber-200 uppercase font-semibold">Individual</div>
+</div>
+<div class="p-6 flex flex-col flex-grow justify-between space-y-5">
+<div>
+<h3 class="font-headline font-bold text-xl text-white uppercase tracking-tight">Tazón de Consomé Chico</h3>
+<p class="font-body text-sm text-cream-muted mt-2 leading-relaxed" id="desc-consome-chico">250ml de consomé concentrado + 80g de carne de res maciza deshebrada, acompañado de cebollitas y orégano.</p>
+</div>
+<div class="bg-[#4d0b0b] border border-[#8e1919] p-3.5 rounded-xl space-y-1.5">
+<span class="font-label text-xs uppercase text-amber-300 font-semibold block">Selecciona Variante:</span>
+<div class="grid grid-cols-2 gap-2">
+<button class="bg-gradient-to-r from-amber-glow to-amber-500 text-[#400606] text-xs font-label py-1.5 px-2 rounded-lg font-bold text-center shadow-md focus:outline-none" onclick="document.getElementById('price-consome-chico').innerText='$80 MXN'; document.getElementById('desc-consome-chico').innerText='250ml de consomé concentrado + 80g de carne de res maciza deshebrada, acompañado de cebollitas y orégano.'; this.className='bg-gradient-to-r from-amber-glow to-amber-500 text-[#400606] text-xs font-label py-1.5 px-2 rounded-lg font-bold text-center shadow-md focus:outline-none'; this.nextElementSibling.className='bg-[#611010] text-[#ffd6cc] text-xs font-label py-1.5 px-2 rounded-lg text-center hover:bg-[#781616] focus:outline-none border border-[#8f1919]';" type="button">Con Carne ($80)</button>
+<button class="bg-[#611010] text-[#ffd6cc] text-xs font-label py-1.5 px-2 rounded-lg text-center hover:bg-[#781616] focus:outline-none border border-[#8f1919]" onclick="document.getElementById('price-consome-chico').innerText='$45 MXN'; document.getElementById('desc-consome-chico').innerText='Solo caldito hirviendo con especias tradicionales, hierbas de olor, cilantro y cebolla al gusto.'; this.className='bg-gradient-to-r from-amber-glow to-amber-500 text-[#400606] text-xs font-label py-1.5 px-2 rounded-lg font-bold text-center shadow-md focus:outline-none'; this.previousElementSibling.className='bg-[#611010] text-[#ffd6cc] text-xs font-label py-1.5 px-2 rounded-lg text-center hover:bg-[#781616] focus:outline-none border border-[#8f1919]';" type="button">Sin Carne ($45)</button>
+</div>
+</div>
+</div>
+</article>
+<!-- Card 5: Birriamen -->
+<article class="bg-gradient-to-b from-[#781515] to-[#590d0d] rounded-2xl overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(40,4,4,0.5)] hover:shadow-[0_12px_36px_rgba(245,158,11,0.25)] transition-all border border-[#ab291b] hover:border-amber-glow/60 group" id="card-birriamen">
+<div class="relative h-60 w-full overflow-hidden bg-[#450808]">
+<img alt="Steaming bowl of Birriamen" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAk1SL_LC--Ie0h_zSnKEnqEXVs2Ziq2y3iNfk-IFZSZodPUhIUwrT4eK20dm4_oALoH0UZC41v-PgYHB7NNs2VQKBBuKMqcKGkcp9W72o_HfpS7FFcwCAAEFNGRr1DLPSFwt1-dMflD2ft5yOpUEHa0ImYT0-TCEDnU2oX2NGfNjK5mfKPcgFjHbRGOo8RUf6dk-pq7EMmGuv_0Uwn1CaKiImCWISfwZWnl_3Ij6Wq7zDa44e7Z_Iq"/>
+<div class="absolute top-3 right-3 bg-amber-glow text-[#400606] font-label text-sm px-3.5 py-1 rounded-full font-bold shadow-lg" id="price-birriamen">$155 MXN</div>
+<div class="absolute bottom-3 left-3 bg-[#4a0808]/90 border border-amber-light/30 backdrop-blur-sm px-2.5 py-1 rounded-md font-label text-xs text-amber-200 uppercase font-semibold">Fusión Japonesa-Mexicana</div>
+</div>
+<div class="p-6 flex flex-col flex-grow justify-between space-y-5">
+<div>
+<h3 class="font-headline font-bold text-xl text-white uppercase tracking-tight">Birriamen Artesanal</h3>
+<p class="font-body text-sm text-cream-muted mt-2 leading-relaxed" id="desc-birriamen">Fusión japonesa-mexicana en tazón hondo, fideos ramen artesanales sumergidos en rico consomé concentrado de birria, carne deshebrada, huevo cocido marinado, rábano, cilantro y toque de salsa macha.</p>
+</div>
+<div class="bg-[#4d0b0b] border border-[#8e1919] p-3.5 rounded-xl space-y-1.5">
+<span class="font-label text-xs uppercase text-amber-300 font-semibold block">Tamaño de Porción:</span>
+<div class="grid grid-cols-2 gap-2">
+<button class="bg-gradient-to-r from-amber-glow to-amber-500 text-[#400606] text-xs font-label py-1.5 px-2 rounded-lg font-bold text-center shadow-md focus:outline-none" onclick="document.getElementById('price-birriamen').innerText='$155 MXN'; document.getElementById('desc-birriamen').innerText='Fusión japonesa-mexicana en tazón hondo, fideos ramen artesanales sumergidos en rico consomé concentrado de birria, carne deshebrada, huevo cocido marinado, rábano, cilantro y toque de salsa macha.'; this.className='bg-gradient-to-r from-amber-glow to-amber-500 text-[#400606] text-xs font-label py-1.5 px-2 rounded-lg font-bold text-center shadow-md focus:outline-none'; this.nextElementSibling.className='bg-[#611010] text-[#ffd6cc] text-xs font-label py-1.5 px-2 rounded-lg text-center hover:bg-[#781616] focus:outline-none border border-[#8f1919]';" type="button">Grande ($155)</button>
+<button class="bg-[#611010] text-[#ffd6cc] text-xs font-label py-1.5 px-2 rounded-lg text-center hover:bg-[#781616] focus:outline-none border border-[#8f1919]" onclick="document.getElementById('price-birriamen').innerText='$110 MXN'; document.getElementById('desc-birriamen').innerText='Porción individual reconfortante con los mismos ingredientes y fideos ramen en caldo espeso de birria.'; this.className='bg-gradient-to-r from-amber-glow to-amber-500 text-[#400606] text-xs font-label py-1.5 px-2 rounded-lg font-bold text-center shadow-md focus:outline-none'; this.previousElementSibling.className='bg-[#611010] text-[#ffd6cc] text-xs font-label py-1.5 px-2 rounded-lg text-center hover:bg-[#781616] focus:outline-none border border-[#8f1919]';" type="button">Chica ($110)</button>
+</div>
+</div>
+</div>
+</article>
+<!-- Card 6: Bebidas Frías -->
+<article class="bg-gradient-to-b from-[#781515] to-[#590d0d] rounded-2xl overflow-hidden flex flex-col shadow-[0_8px_30px_rgba(40,4,4,0.5)] hover:shadow-[0_12px_36px_rgba(245,158,11,0.25)] transition-all border border-[#ab291b] hover:border-amber-glow/60 group" id="card-bebidas">
+<div class="relative h-60 w-full overflow-hidden bg-[#450808]">
+<img alt="Aguas frescas de horchata y Coca-Cola fría" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDmxte-7SGTIb0-aGiZNHxzGH6LtOXNn4t-8QHh6o4gw42CpXt5MjG1N8caMCsUDfS07sGyMrQBjhZXlsZXMEFNIaxr874Vhe4jJ5Bqk52amBZrrQ5lZOz3g_On7f4lNxx7gFM832N5n-wiZ1jFewiVGNECIS5JUkh9QyWsmrYV5PH32VOFC8Giu4fPR4n_yKrTM7QK9uBnsesCGraJizsMhENO4hv9Jm-9afW7R8kUvR7UfXNGMQPC"/>
+<div class="absolute top-3 right-3 bg-amber-glow text-[#400606] font-label text-sm px-3.5 py-1 rounded-full font-bold shadow-lg" id="price-bebidas">$35 MXN</div>
+<div class="absolute bottom-3 left-3 bg-[#4a0808]/90 border border-amber-light/30 backdrop-blur-sm px-2.5 py-1 rounded-md font-label text-xs text-amber-200 uppercase font-semibold">Para Acompañar</div>
+</div>
+<div class="p-6 flex flex-col flex-grow justify-between space-y-5">
+<div>
+<h3 class="font-headline font-bold text-xl text-white uppercase tracking-tight">Bebidas Frías del Comal</h3>
+<p class="font-body text-sm text-cream-muted mt-2 leading-relaxed" id="desc-bebidas">Aguas frescas artesanales del día: Horchata fresca con canela de Ceilán o Jamaica natural, servidas con hielo escarchado.</p>
+</div>
+<div class="bg-[#4d0b0b] border border-[#8e1919] p-3.5 rounded-xl space-y-1.5">
+<span class="font-label text-xs uppercase text-amber-300 font-semibold block">Selecciona tu Bebida:</span>
+<div class="grid grid-cols-2 gap-2">
+<button class="bg-gradient-to-r from-amber-glow to-amber-500 text-[#400606] text-xs font-label py-1.5 px-2 rounded-lg font-bold text-center shadow-md focus:outline-none" onclick="document.getElementById('desc-bebidas').innerText='Aguas frescas artesanales del día: Horchata fresca con canela de Ceilán o Jamaica natural, servidas con hielo escarchado.'; this.className='bg-gradient-to-r from-amber-glow to-amber-500 text-[#400606] text-xs font-label py-1.5 px-2 rounded-lg font-bold text-center shadow-md focus:outline-none'; this.nextElementSibling.className='bg-[#611010] text-[#ffd6cc] text-xs font-label py-1.5 px-2 rounded-lg text-center hover:bg-[#781616] focus:outline-none border border-[#8f1919]';" type="button">Aguas Frescas ($35)</button>
+<button class="bg-[#611010] text-[#ffd6cc] text-xs font-label py-1.5 px-2 rounded-lg text-center hover:bg-[#781616] focus:outline-none border border-[#8f1919]" onclick="document.getElementById('desc-bebidas').innerText='Refrescos Familia Coca-Cola: Coca-Cola de vidrio de 355ml bien helada, Sidral Mundet o Coca-Cola Sin Azúcar.'; this.className='bg-gradient-to-r from-amber-glow to-amber-500 text-[#400606] text-xs font-label py-1.5 px-2 rounded-lg font-bold text-center shadow-md focus:outline-none'; this.previousElementSibling.className='bg-[#611010] text-[#ffd6cc] text-xs font-label py-1.5 px-2 rounded-lg text-center hover:bg-[#781616] focus:outline-none border border-[#8f1919]';" type="button">Coca-Cola Vidrio ($35)</button>
+</div>
+</div>
+</div>
+</article>
+</div>
+</div>
+</section>
+<!-- THE RITUAL & RECIPE SECTION EN ROJO ADOBO Y ÁMBAR -->
+<section class="w-full bg-gradient-to-b from-[#5f0c0c] via-[#731111] to-[#5a0b0b] py-16 relative overflow-hidden border-y border-[#a81c1c]/40" id="el-ritual">
+<!-- Warm textured overlay -->
+<div class="absolute inset-0 opacity-10 bg-repeat pointer-events-none mix-blend-color-dodge" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAyDyWlrdQQBWOGRY_RWmGncRgCV4MLQqu9kIpiEqc5Qnud25-JigVg6kYb3XKYynv-YM8lYhJmhbg-fzr7Qq0RaLpOOldYUyNvdxC1o8BE-rbFqdzSvmmN-NHbXi-tcP3NPST3c8JGTYkMib8ecTikXMSIXYkqJgp9Rco-xjs0QiRtNpp2b1EXhfiewNQ9dYLbRMX66TCxhRzss_zWgoM-ObNBv4EMlKRT5OjHwcHRJQnC7NmA5sOfb9ozSS3UnkW1bg'); background-size: 260px;"></div>
+<div class="relative max-w-7xl mx-auto px-4 sm:px-8">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+<!-- Left Visual Panel -->
+<div class="lg:col-span-6 relative">
+<div class="relative bg-gradient-to-b from-[#7a1313] to-[#500909] rounded-2xl p-6 shadow-2xl overflow-hidden border border-[#b83528]/60">
+<div class="relative z-10 flex flex-col space-y-5">
+<div class="flex items-center justify-between">
+<img alt="Emblema El Muñeco" class="h-20 w-auto object-contain drop-shadow" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7o87hzAUpevRZtBYXI1OKF2xmlCzKG3B53e31lyJVsG-9ygHNoUPLj7wtFz6fEe8B1X5AO3z86ANOazCWIOt7br-wP7XE4XorC16cEoIV8wGUzX4c-kuJwbWVbGyIcRODbyecmi6glpZ2f-8JRVkWuWnoe7kDA3xtK0lPI2U8gttONhHxOFn1IQNxney4GCdLB5OjmMvUfp4-PzV3yPBfEWAcXU3FLCgOCcNkRAlRPe-rgLm4c7lpGAOwKJRO1fwTzQ"/>
+<div class="text-right">
+<span class="font-label text-xs uppercase text-amber-300 font-bold block">Método de Cocción</span>
+<span class="font-headline font-bold text-xl text-white">Olla Sellada con Masa</span>
+</div>
+</div>
+<!-- Main Story Photo -->
+<div class="rounded-xl overflow-hidden h-72 w-full shadow-lg border border-[#a81c1c]/50 bg-[#420606]">
+<img alt="Quesatacos sumergidos en adobo artesanal hirviendo" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1VKq96Y3XsS06WUc_ephHazVm4FQvAYJQUCNcWP68DaiUOGNrsK0F_VLaVsEdDcHwQG-ujFRf9l6aOlzRtFUU3EKctCw80PLOov6mh-crH95ENYgNVAJte_hrOSeYTP5PVy4giXMOudEeyPpxWPCsK8jxdVZ52Y8LSnYhkmg5FcsBnv8CquQFKrVdcdyuq8vvuyIkNqj2OoemXP3Iabqwd1b5ave-5kd3sCjs87bcEr7KAD-2SfX4hpmbo"/>
+</div>
+<!-- Step-by-step Process Highlights -->
+<div class="grid grid-cols-2 gap-3">
+<div class="bg-[#610d0d] border border-[#9b1f1f] p-3.5 rounded-xl shadow-inner">
+<div class="flex items-center gap-1.5 text-amber-300 font-label text-xs uppercase font-bold">
+<span class="material-symbols-outlined text-[18px]">flare</span>
+<span class="">1. Marinado en Crudo</span>
+</div>
+<p class="font-body text-xs text-cream-muted mt-1 leading-snug">24 horas en adobo de chiles guajillo, ancho, pimienta gorda, clavo y canela en rama.</p>
+</div>
+<div class="bg-[#610d0d] border border-[#9b1f1f] p-3.5 rounded-xl shadow-inner">
+<div class="flex items-center gap-1.5 text-amber-glow font-label text-xs uppercase font-bold">
+<span class="material-symbols-outlined text-[18px]">local_fire_department</span>
+<span class="">2. Horno de Pozo</span>
+</div>
+<p class="font-body text-xs text-cream-muted mt-1 leading-snug">Sellado hermético sobre pencas de maguey a fuego manso toda la madrugada.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Storytelling & Metrics Panel -->
+<div class="lg:col-span-6 flex flex-col space-y-6">
+<div class="flex items-center gap-2 text-amber-glow font-label text-sm uppercase tracking-widest font-bold">
+<span class="material-symbols-outlined text-[20px]">history_edu</span>
+<span class="">El Ritual y La Receta</span>
+</div>
+<h2 class="font-headline font-black text-3xl sm:text-4xl text-white uppercase tracking-tight">
+          La Magia de la Olla de Barro y las Brasas
+        </h2>
+<p class="font-body text-base text-cream-muted leading-relaxed">
+          En <strong class="text-white font-bold">Birriería El Muñeco</strong> no existen atajos modernos. No usamos saborizantes industriales ni polvos artificiales. Nuestra carne de res de primera selección se macera pacientemente en un adobo rojo vivo que ha pasado de generación en generación desde los Altos de Jalisco.
+        </p>
+<p class="font-body text-base text-cream-muted leading-relaxed">
+          Al sellar la olla con masa de maíz fresco, el vapor atrapa la esencia profunda de los chiles tostados, desprendiendo los jugos colágenos directamente sobre el consomé, dejándolo espeso, aromático y reconfortante.
+        </p>
+<!-- Metrics Bento Banner con Cajas Rojo Adobo y Cifras en Ámbar Mostaza -->
+<div class="grid grid-cols-3 gap-3.5 pt-2">
+<div class="bg-[#781515] border border-amber-glow/40 p-4 rounded-xl text-center shadow-lg">
+<span class="font-headline font-black text-3xl sm:text-4xl text-amber-glow block leading-none">+18</span>
+<span class="font-label text-xs uppercase text-cream font-bold mt-2 block">Años de Tradición</span>
+</div>
+<div class="bg-[#781515] border border-amber-glow/40 p-4 rounded-xl text-center shadow-lg">
+<span class="font-headline font-black text-3xl sm:text-4xl text-amber-light block leading-none">3</span>
+<span class="font-label text-xs uppercase text-cream font-bold mt-2 block">Sucursales Activas</span>
+</div>
+<div class="bg-[#781515] border border-amber-glow/40 p-4 rounded-xl text-center shadow-lg">
+<span class="font-headline font-black text-3xl sm:text-4xl text-amber-300 block leading-none">1.8k</span>
+<span class="font-label text-xs uppercase text-cream font-bold mt-2 block">Lts Consomé / Sem</span>
+</div>
+</div>
+<!-- Quote Box en Fondo Adobo Cálido -->
+<div class="bg-[#6b1010] border-l-4 border-amber-glow p-5 rounded-r-xl flex items-start gap-3 shadow-md">
+<span class="material-symbols-outlined text-amber-glow text-[30px] shrink-0">format_quote</span>
+<p class="font-body text-sm text-cream italic leading-relaxed">
+            "El secreto no es apurar la lumbre, sino dejar que el calor de la brasa haga suave hasta el corte más rebelde."
+            <span class="block font-label text-xs uppercase not-italic text-amber-300 font-bold mt-2">— Maestro Birriero 'El Muñeco'</span>
+</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- LOCATIONS, SCHEDULES & ORDER CHANNELS EN TONOS ADOBO Y ÁMBAR -->
+<section class="w-full bg-gradient-to-b from-[#600d0d] via-[#741313] to-[#520909] py-16 relative" id="ubicaciones-pedidos">
+<div class="max-w-7xl mx-auto px-4 sm:px-8 space-y-12">
+<!-- Top Title -->
+<div class="text-center max-w-2xl mx-auto space-y-2">
+<span class="font-label text-xs uppercase text-amber-300 tracking-widest block font-bold">Directo a tu Mesa o Domicilio</span>
+<h2 class="font-headline font-black text-3xl sm:text-4xl text-white uppercase tracking-tight">Visítanos o Pide en Línea</h2>
+<p class="font-body text-base text-cream-muted">El comal arde desde temprana hora los fines de semana. Reserva tus litros de consomé antes de que se agoten.</p>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+<!-- Schedules & Locations Column -->
+<div class="lg:col-span-7 space-y-6">
+<!-- Schedule Card -->
+<div class="bg-[#701212] border border-[#a82519] p-6 rounded-2xl space-y-4 shadow-xl">
+<div class="flex items-center gap-2 text-amber-glow">
+<span class="material-symbols-outlined text-[26px]">schedule</span>
+<h3 class="font-headline font-bold text-xl uppercase text-white">Horarios de Servicio</h3>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+<div class="bg-[#590d0d] border border-[#8e1919] p-4 rounded-xl flex flex-col justify-between">
+<div>
+<span class="font-label text-xs uppercase text-amber-300 font-bold">Viernes a Domingo</span>
+<p class="font-headline font-bold text-xl text-white mt-1">08:00 AM – 05:00 PM</p>
+</div>
+<span class="font-body text-xs text-cream-muted mt-2">Consomé matutino y quesabirrias crujientes.</span>
+</div>
+<div class="bg-[#590d0d] border border-[#8e1919] p-4 rounded-xl flex flex-col justify-between">
+<div>
+<span class="font-label text-xs uppercase text-amber-200 font-bold">Lunes a Jueves</span>
+<p class="font-headline font-bold text-xl text-white mt-1">11:00 AM – 07:00 PM</p>
+</div>
+<span class="font-body text-xs text-cream-muted mt-2">Comidas completas y tacos dorados.</span>
+</div>
+</div>
+</div>
+<!-- Locations Quick Map & Addresses -->
+<div class="bg-[#701212] border border-[#a82519] p-6 rounded-2xl space-y-5 shadow-xl">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2 text-amber-light">
+<span class="material-symbols-outlined text-[26px]">storefront</span>
+<h3 class="font-headline font-bold text-xl uppercase text-white">Nuestras 3 Sucursales</h3>
+</div>
+<span class="font-label text-xs uppercase text-amber-300 font-bold bg-amber-500/20 px-2.5 py-1 rounded-md border border-amber-500/30">Estacionamiento Disponible</span>
+</div>
+<!-- Locations List -->
+<div class="space-y-3">
+<div class="bg-[#590d0d] border border-[#8e1919] p-3.5 rounded-xl flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-gradient-to-r from-amber-glow to-amber-500 text-[#400606] flex items-center justify-center font-bold text-sm shadow">1</div>
+<div>
+<h4 class="font-headline font-bold text-white text-base">Matriz San Rafael</h4>
+<p class="font-body text-xs text-cream-muted">Calle Ribera de San Cosme #142, CDMX</p>
+</div>
+</div>
+<a class="bg-[#781515] border border-amber-glow/40 text-amber-300 hover:text-white hover:bg-[#8f1919] font-label text-xs uppercase font-bold px-3 py-1.5 rounded-lg transition-colors" href="#">Cómo Llegar</a>
+</div>
+<div class="bg-[#590d0d] border border-[#8e1919] p-3.5 rounded-xl flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-[#821717] border border-amber-300/40 text-white flex items-center justify-center font-bold text-sm">2</div>
+<div>
+<h4 class="font-headline font-bold text-white text-base">Sucursal Narvarte</h4>
+<p class="font-body text-xs text-cream-muted">Av. Cuauhtémoc #789, Col. Narvarte Poniente</p>
+</div>
+</div>
+<a class="bg-[#781515] border border-amber-glow/40 text-amber-300 hover:text-white hover:bg-[#8f1919] font-label text-xs uppercase font-bold px-3 py-1.5 rounded-lg transition-colors" href="#">Cómo Llegar</a>
+</div>
+<div class="bg-[#590d0d] border border-[#8e1919] p-3.5 rounded-xl flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-[#821717] border border-amber-300/40 text-white flex items-center justify-center font-bold text-sm">3</div>
+<div>
+<h4 class="font-headline font-bold text-white text-base">Sucursal Coyoacán</h4>
+<p class="font-body text-xs text-cream-muted">Av. Miguel Ángel de Quevedo #450, Barrio del Niño Jesús</p>
+</div>
+</div>
+<a class="bg-[#781515] border border-amber-glow/40 text-amber-300 hover:text-white hover:bg-[#8f1919] font-label text-xs uppercase font-bold px-3 py-1.5 rounded-lg transition-colors" href="#">Cómo Llegar</a>
+</div>
+</div>
+<!-- Static Map Pipeline Embed -->
+<div class="w-full h-44 bg-cover bg-center rounded-xl shadow-inner relative overflow-hidden border border-[#9b1e1e]" data-location="Ribera de San Cosme 142, CDMX" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuC1fSrX9NqrNV_NzCpzoPMpixnqM34dgkEXN6ZDNPBApAbaC_CW-8jDeTPVgwj2YdKOoX9lVKIOendZj6T4FrOQ0N6ndQACd90HkV0-x6z1r-3EQhy9XtvvgY29F9BBptn76QvSouMul4iKkfJoDDncAChLxXwLEz8QgMJLysC_UQesPOZ3mzYpY5_8sogcn7W2TXpHVY5xoVsmHulwLWo9Tax_ISY_gSlbWiYVb0RhoLe4s6z7XYjm')">
+<div class="absolute inset-0 bg-[#871414]/25 pointer-events-none"></div>
+<div class="absolute bottom-3 left-3 bg-[#4a0808]/95 border border-amber-glow/40 px-3 py-1.5 rounded-lg backdrop-blur flex items-center gap-2">
+<span class="material-symbols-outlined text-amber-glow text-[18px]">pin_drop</span>
+<span class="font-label text-xs uppercase font-semibold text-white">Haz click para abrir en Navegador GPS</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Direct Ordering & Family Birria Subscription Column -->
+<div class="lg:col-span-5 flex flex-col space-y-6">
+<!-- Order Platforms Grid -->
+<div class="bg-[#701212] border border-[#a82519] p-6 rounded-2xl space-y-4 shadow-xl">
+<h3 class="font-headline font-bold text-xl uppercase text-white">Pide a Domicilio Inmediato</h3>
+<p class="font-body text-sm text-cream-muted">Garantizamos empaque térmico especial que conserva las quesabirrias crujientes y el consomé quemando hasta tu puerta.</p>
+<div class="grid grid-cols-2 gap-3 pt-1">
+<a class="bg-[#590d0d] hover:bg-[#781515] border border-[#8e1919] hover:border-green-400/60 p-3.5 rounded-xl flex items-center gap-2.5 transition-all shadow-sm" href="#">
+<span class="material-symbols-outlined text-green-400 text-[26px]">chat</span>
+<div class="flex flex-col">
+<span class="font-label text-xs text-white font-bold">WhatsApp</span>
+<span class="font-body text-[11px] text-cream-muted">Sin comisiones</span>
+</div>
+</a>
+<a class="bg-[#590d0d] hover:bg-[#781515] border border-[#8e1919] hover:border-amber-glow/60 p-3.5 rounded-xl flex items-center gap-2.5 transition-all shadow-sm" href="#">
+<span class="material-symbols-outlined text-amber-glow text-[26px]">delivery_dining</span>
+<div class="flex flex-col">
+<span class="font-label text-xs text-white font-bold">Uber Eats</span>
+<span class="font-body text-[11px] text-cream-muted">Entrega Rápida</span>
+</div>
+</a>
+<a class="bg-[#590d0d] hover:bg-[#781515] border border-[#8e1919] hover:border-orange-400/60 p-3.5 rounded-xl flex items-center gap-2.5 transition-all shadow-sm" href="#">
+<span class="material-symbols-outlined text-orange-400 text-[26px]">moped</span>
+<div class="flex flex-col">
+<span class="font-label text-xs text-white font-bold">Rappi</span>
+<span class="font-body text-[11px] text-cream-muted">Puntos &amp; Turbo</span>
+</div>
+</a>
+<a class="bg-[#590d0d] hover:bg-[#781515] border border-[#8e1919] hover:border-amber-light/60 p-3.5 rounded-xl flex items-center gap-2.5 transition-all shadow-sm" href="#">
+<span class="material-symbols-outlined text-amber-300 text-[26px]">shopping_bag</span>
+<div class="flex flex-col">
+<span class="font-label text-xs text-white font-bold">Pick Up</span>
+<span class="font-body text-[11px] text-cream-muted">Pasa al mostrador</span>
+</div>
+</a>
+</div>
+</div>
+<!-- "Domingos de Birria Familiar" Box -->
+<div class="bg-gradient-to-br from-[#7d1414] via-[#6d1010] to-[#520909] border border-amber-glow/50 p-6 rounded-2xl space-y-4 shadow-2xl relative overflow-hidden flex-grow flex flex-col justify-between">
+<div class="space-y-3">
+<div class="inline-flex items-center gap-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 px-3 py-1 rounded-full font-label text-xs uppercase font-bold">
+<span class="material-symbols-outlined text-[16px]">celebration</span>
+<span class="">Club El Muñeco</span>
+</div>
+<h3 class="font-headline font-bold text-2xl text-white uppercase">Domingos de Birria Familiar</h3>
+<p class="font-body text-sm text-cream-muted leading-relaxed">
+              Recibe promociones de litros al 2x1 en tu primer pedido del mes y asegura tu paquete con tortillas ilimitadas antes de que se agote el cazo dominical.
+            </p>
+</div>
+<form class="space-y-3 pt-2" onsubmit="event.preventDefault(); document.getElementById('promo-status').classList.remove('hidden');">
+<div class="flex flex-col sm:flex-row gap-2">
+<input class="w-full bg-[#4a0808] border border-[#a82519] text-white font-body text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:border-amber-glow placeholder:text-[#d38b82]" placeholder="Ingresa tu correo o teléfono" required="" type="email"/>
+<button class="bg-gradient-to-r from-amber-glow to-amber-500 text-[#400606] font-label text-xs font-bold uppercase tracking-wider px-5 py-2.5 rounded-xl hover:from-amber-400 hover:to-amber-500 transition-all shadow-md whitespace-nowrap" type="submit">
+                Unirme
+              </button>
+</div>
+<p class="hidden text-amber-300 font-label text-xs font-bold" id="promo-status">¡Listo! Te avisaremos el sábado en cuanto prenda el horno.</p>
+</form>
+<div class="flex items-center gap-2 text-cream-muted font-body text-xs pt-2">
+<span class="material-symbols-outlined text-[17px] text-amber-400">verified_user</span>
+<span class="">Sin spam. Solo antojo, consomé y promociones reales.</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- FOOTER EN TONOS ADOBO PROFUNDO Y ORO -->
+<footer class="w-full bg-[#450707] text-cream-muted border-t border-[#8e1919] shadow-[0_-8px_32px_rgba(40,4,4,0.7)]">
+<div class="max-w-7xl mx-auto px-4 sm:px-8 py-14">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+<div class="space-y-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-amber-glow text-[30px]">skillet</span>
+<span class="font-headline font-bold text-xl uppercase text-amber-light">El Muñeco</span>
+</div>
+<p class="font-body text-sm text-cream-muted leading-relaxed">Sabor de tradición jalisciense cocinado a fuego lento con chiles secos, especias enteras y el inconfundible aroma de leña de encino.</p>
+<div class="flex items-center gap-1.5 text-amber-300 font-label text-xs uppercase font-bold">
+<span class="material-symbols-outlined text-[19px]">verified</span>
+<span class="">Garantía de Sazón Artesanal</span>
+</div>
+</div>
+<div class="space-y-3">
+<h4 class="font-headline font-bold text-base text-amber-light uppercase">Horarios del Comal</h4>
+<ul class="space-y-2 font-body text-sm">
+<li class="flex justify-between py-1 border-b border-[#600e0e]"><span class="text-white">Miércoles - Viernes:</span><span class="text-cream-muted">08:30 - 17:00</span></li>
+<li class="flex justify-between py-1 border-b border-[#600e0e]"><span class="text-white">Sábados y Domingos:</span><span class="text-amber-glow font-bold">07:30 - 18:30</span></li>
+<li class="flex justify-between py-1"><span class="text-white">Lunes y Martes:</span><span class="text-cream-muted">Reposo y Adobo</span></li>
+</ul>
+</div>
+<div class="space-y-3">
+<h4 class="font-headline font-bold text-base text-amber-light uppercase">Contacto &amp; Pedidos</h4>
+<ul class="space-y-2 font-body text-sm">
+<li class="flex items-center gap-2"><span class="material-symbols-outlined text-amber-glow text-[19px]">call</span><span class="text-white">+52 (55) 4123-9080</span></li>
+<li class="flex items-center gap-2"><span class="material-symbols-outlined text-amber-glow text-[19px]">mail</span><span class="text-white">ordenes@birriaelmuneco.mx</span></li>
+<li class="flex items-center gap-2"><span class="material-symbols-outlined text-amber-glow text-[19px]">location_on</span><span class="text-white">Mercado Central &amp; Sucursales</span></li>
+</ul>
+</div>
+<div class="space-y-3">
+<h4 class="font-headline font-bold text-base text-amber-light uppercase">El Secreto del Consomé</h4>
+<p class="font-body text-sm text-cream-muted leading-relaxed">Servido siempre hirviendo, desgrasado a mano o con gordito al gusto, acompañado de tortillas recién pasadas por el comal con manteca colorada.</p>
+<div class="bg-[#590d0d] border border-[#8e1919] p-3 rounded-xl">
+<span class="font-label text-xs uppercase text-amber-300 font-bold block">Consomé 100% Puro</span>
+<span class="font-body text-xs text-white">Sin espesantes artificiales ni concentrados</span>
+</div>
+</div>
+</div>
+<div class="mt-12 pt-6 border-t border-[#6b1010] flex flex-col md:flex-row items-center justify-between gap-4">
+<p class="font-label text-xs text-cream-muted">© 2024 Birriería El Muñeco. Tradición, Fuego y Sabor Puro de Res.</p>
+<div class="flex items-center gap-6 font-label text-xs text-cream-muted">
+<a class="hover:text-white transition-colors" href="#">Aviso de Privacidad</a>
+<a class="hover:text-white transition-colors" href="#">Términos del Servicio</a>
+</div>
+</div>
+</div>
+</footer>
+<div class="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 flex items-center gap-2 group"><a aria-label="Ordenar ya por WhatsApp" class="bg-[#25D366] hover:bg-[#20ba59] text-white flex items-center gap-2.5 px-5 py-3 rounded-full shadow-[0_6px_25px_rgba(0,0,0,0.5)] border border-white/20 transition-all hover:scale-105 active:scale-95 font-label text-sm uppercase tracking-wider font-bold" href="https://wa.me/525541239080?text=Hola%20Birrier%C3%ADa%20El%20Mu%C3%B1eco,%20deseo%20hacer%20un%20pedido" target="_blank"><svg class="w-6 h-6 fill-current shrink-0" viewbox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19.01L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 14.99 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67ZM8.53 7.33C8.37 7.33 8.1 7.39 7.87 7.64C7.65 7.89 7.02 8.48 7.02 9.69C7.02 10.9 7.9 12.07 8.02 12.23C8.14 12.39 9.73 14.85 12.18 15.91C12.76 16.16 13.22 16.31 13.57 16.42C14.16 16.61 14.7 16.58 15.12 16.52C15.6 16.45 16.59 15.92 16.8 15.34C17 14.75 17 14.25 16.94 14.15C16.88 14.04 16.71 13.98 16.46 13.85C16.21 13.73 14.98 13.12 14.75 13.04C14.52 12.95 14.36 12.91 14.19 13.16C14.03 13.41 13.56 13.98 13.41 14.15C13.27 14.31 13.12 14.33 12.87 14.21C12.62 14.08 11.82 13.82 10.88 12.98C10.15 12.33 9.65 11.52 9.51 11.27C9.36 11.02 9.49 10.89 9.62 10.76C9.73 10.65 9.87 10.47 10 10.32C10.12 10.17 10.17 10.06 10.25 9.9C10.33 9.73 10.29 9.59 10.23 9.46C10.17 9.34 9.71 8.21 9.52 7.75C9.33 7.3 9.14 7.36 8.99 7.35C8.86 7.34 8.7 7.33 8.53 7.33Z"></path></svg><span class="">Ordenar ya!</span></a></div></body></html>

@@ -1,0 +1,10 @@
+<li class="branch flex items-center justify-between gap-3 rounded-xl border border-[#8e1919] bg-[#590d0d] p-3.5">
+                  <div class="flex items-center gap-3">
+                    {{{ number }}}
+                    <div>
+                      <h4 class="font-headline text-base font-bold text-white">{{ name }}</h4>
+                      <p class="font-body text-xs text-cream-muted">{{ address }}</p>
+                    </div>
+                  </div>
+                  <a class="branch__directions shrink-0 rounded-lg border border-amber-glow/40 bg-[#781515] px-3 py-1.5 font-label text-xs font-bold text-amber-300 uppercase transition-colors hover:bg-[#8f1919] hover:text-white" href="{{ mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">{{ directionsLabel }}<span class="sr-only"> {{ name }} {{ assistiveText }}</span></a>
+                </li>

@@ -1,0 +1,61 @@
+/*
+ * Landing: Birriería El Muñeco (birria), sábado y domingo.
+ * Compila a public/css/birria/main.css (`npm run build:css`).
+ * Fuente: _stich_source_/birrier_a_el_mu_eco_aut_ntica_birria_de_res_color_adobo/code.html
+ *   - tailwind.config (CDN v3) convertido a tokens @theme de Tailwind v4.
+ *   - Plugins del CDN: `forms` -> @tailwindcss/forms; `container-queries` ya es nativo en v4.
+ *   - Clases de <body> movidas a la capa base.
+ */
+@import "tailwindcss" source(none);
+@import "../shared/base.css";
+@plugin "@tailwindcss/forms";
+
+/* Solo las vistas de esta landing (evita incluir las clases del otro negocio). */
+@source "../../views/layouts";
+@source "../../views/partials/icons";
+@source "../../views/pages/birria.html";
+@source "../../views/partials/birria";
+@source "../../views/landings/birria.js";
+@source "../../../public/js/birria";
+@source "../../../public/js/modules";
+
+@theme {
+  /* Colores */
+  --color-adobo-dark: #4a0808;
+  --color-adobo: #871414;
+  --color-adobo-deep: #6b0f0f;
+  --color-adobo-bright: #a81c1c;
+  --color-adobo-card: #611010;
+  --color-adobo-border: #b83528;
+  --color-amber-glow: #f59e0b;
+  --color-amber-light: #fbbf24;
+  --color-cream: #fff8f0;
+  --color-cream-muted: #fce7db;
+
+  /* Familias tipográficas (font-headline, font-display, font-body, font-label) */
+  --font-headline: "Epilogue", sans-serif;
+  --font-display: "Epilogue", sans-serif;
+  --font-body: "Plus Jakarta Sans", sans-serif;
+  --font-label: "Space Grotesk", sans-serif;
+}
+
+@layer base {
+  /* Alto del header fijo para scroll-padding-top (ver shared/base.css): 81 px medidos (h-20 + borde) más margen. */
+  :root {
+    --landing-header-height: 5.25rem;
+  }
+
+  /* <body class="bg-[#5c0d0d] font-body text-[#fff1ee] antialiased selection:bg-amber-glow selection:text-[#4a0808]"> */
+  .landing {
+    background-color: #5c0d0d;
+    color: #fff1ee;
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .landing ::selection {
+    background-color: var(--color-amber-glow);
+    color: #4a0808;
+  }
+}

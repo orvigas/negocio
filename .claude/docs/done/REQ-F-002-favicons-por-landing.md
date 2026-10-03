@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE (antes del merge, el usuario debe completar las verificaciones manuales de CA-5, CA-6 y CA-10)
+DONE
 
 ## Aprobación
 
@@ -659,11 +659,19 @@ QA_APPROVED, condicionado a que el usuario complete los pendientes de revisión 
 
 ## Pull Request
 
-- URL: https://github.com/orvigas/negocio/pull/4 (`feature/REQ-F-002-favicons-por-landing` → `main`).
+- URL: https://github.com/orvigas/negocio/pull/4 (`feature/REQ-F-002-favicons-por-landing` → `main`). Mergeado en `main` el 2026-10-03T02:16:37Z (2026-10-02 20:16 hora de Ciudad de México) con el commit de merge `1ccc43a`.
 - Commit: `b01f999 feat: muestra el favicon y el icono de pantalla de inicio de cada negocio`.
 - Antes del merge, el usuario debe completar las verificaciones manuales de CA-5 (incluye OBS-2), CA-6 y CA-10, y la revisión en el navegador (consola, red y capturas).
 
 ## Historial de cambios
+
+### Cierre (T5) — 2026-10-02
+
+El usuario confirmó el merge. Cita textual: "Ya hice el merge".
+- `gh pr view 4`: `MERGED` el 2026-10-03T02:16:37Z (2026-10-02 20:16 hora de Ciudad de México).
+- Commit de merge: `1ccc43aa694f03c1bc704e8e5dc2455ab87b9a04`.
+- El ticket pasa de `in-progress/` a `done/` con estado `DONE`.
+- Las verificaciones manuales de CA-5 (con OBS-2), CA-6 y CA-10 eran condición previa al merge. Al confirmar el merge, el usuario no dio un resultado explícito de ellas.
 
 ### Commit y Pull Request — 2026-10-02
 

@@ -4,6 +4,8 @@
 
 READY_FOR_MERGE
 
+Pull Request: https://github.com/orvigas/negocio/pull/2 (commit `ebfdf25`).
+
 ## Aprobación
 
 Aprobado por el usuario (versión 1, fecha 2026-10-02). Cita textual: "ok, apruebo  el requisito".
@@ -1321,4 +1323,4 @@ Revalidación de DEF-001 tras la corrección aprobada por el usuario ("Si la apr
 
 ### Commit y Pull Request (T4) — 2026-10-02
 
-El usuario autorizó el commit y el PR. Cita textual: "sí, autorizo el commit y el PR". Estado: `READY_FOR_MERGE`. El ticket permanece en `in-progress/` hasta que el usuario confirme el merge.
+El usuario autorizó el commit y el PR. Cita textual: "sí, autorizo el commit y el PR". Commit `ebfdf25`; PR https://github.com/orvigas/negocio/pull/2 contra `main`. Estado: `READY_FOR_MERGE`. El ticket permanece en `in-progress/` hasta que el usuario confirme el merge.

@@ -657,11 +657,17 @@ Sin cambios en el `<body>`. Los iconos son metadatos del `<head>` y no requieren
 
 QA_APPROVED, condicionado a que el usuario complete los pendientes de revisión manual antes del merge (decisión del usuario: "QA aprueba con condición").
 
+## Pull Request
+
+- URL: https://github.com/orvigas/negocio/pull/4 (`feature/REQ-F-002-favicons-por-landing` → `main`).
+- Commit: `b01f999 feat: muestra el favicon y el icono de pantalla de inicio de cada negocio`.
+- Antes del merge, el usuario debe completar las verificaciones manuales de CA-5 (incluye OBS-2), CA-6 y CA-10, y la revisión en el navegador (consola, red y capturas).
+
 ## Historial de cambios
 
 ### Commit y Pull Request — 2026-10-02
 
-senior-fullstack: el usuario eligió "Commit y Pull Request". `npm test`: 468 tests en verde. Commit en `feature/REQ-F-002-favicons-por-landing` y Pull Request hacia `main`. Estado: `READY_FOR_MERGE`. El merge queda sujeto a las verificaciones manuales pendientes (CA-5 con OBS-2, CA-6 y CA-10).
+senior-fullstack: el usuario eligió "Commit y Pull Request". `npm test`: 468 tests en verde. Commit `b01f999` en `feature/REQ-F-002-favicons-por-landing` y Pull Request https://github.com/orvigas/negocio/pull/4 hacia `main`. Estado: `READY_FOR_MERGE`. El merge queda sujeto a las verificaciones manuales pendientes (CA-5 con OBS-2, CA-6 y CA-10).
 
 ### QA Ronda 1 — 2026-10-02
 

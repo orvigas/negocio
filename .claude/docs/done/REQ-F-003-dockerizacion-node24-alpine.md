@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 ## Aprobación
 
@@ -641,7 +641,7 @@ QA_APPROVED
 
 ## Pull Request
 
-- URL: https://github.com/orvigas/negocio/pull/6 (`feature/REQ-F-003-dockerizacion-node24-alpine` → `main`).
+- URL: https://github.com/orvigas/negocio/pull/6 (`feature/REQ-F-003-dockerizacion-node24-alpine` → `main`). Mergeado en `main` el 2026-10-03T02:58:26Z (2026-10-02 20:58 hora de Ciudad de México) con el commit de merge `4c7cc77`.
 - Commit: `2d51ec7 feat: permite ejecutar las pruebas con Docker Compose y construir una imagen de producción`.
 - Pendiente manual no bloqueante antes del merge: revisión visual en el navegador de `/molotes` y `/birria` servidas por la imagen `production` (ver QA Report).
 
@@ -676,3 +676,11 @@ Descripción inicial (2026-10-02). Decisiones D-1 a D-4 elegidas por el usuario;
 2026-10-02: commit de los 6 archivos del alcance y el ticket en `feature/REQ-F-003-dockerizacion-node24-alpine`, push y Pull Request contra `main`. Verificado que ningún archivo incluido contiene el hash ni valores sensibles del `.env` local. Estado: READY_FOR_MERGE.
 
 Pull Request https://github.com/orvigas/negocio/pull/6 hacia `main` (commit `2d51ec7`); `npm test`: 468 pruebas en verde. Estado: READY_FOR_MERGE.
+
+### Cierre (T5) — 2026-10-02
+
+El usuario confirmó el merge. Cita textual: "Ya hice merge del PR".
+- `gh pr view 6`: `MERGED` el 2026-10-03T02:58:26Z (2026-10-02 20:58 hora de Ciudad de México).
+- Commit de merge: `4c7cc775bc57d25549c442e763816e00744046fa`.
+- El ticket pasa de `in-progress/` a `done/` con estado `DONE`.
+- La revisión visual en el navegador (pendiente manual no bloqueante del QA Report) no tiene un resultado explícito del usuario al confirmar el merge.

@@ -1,0 +1,6 @@
+
+          <form class="admin-restore__form flex flex-col gap-4 sm:flex-row sm:items-end" method="post" action="{{ action }}">
+            <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+            {{{ author }}}
+            <button class="admin-button {{ buttonClass }}" type="submit">{{ label }}</button>
+          </form>

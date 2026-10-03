@@ -9,13 +9,13 @@ import { renderLandingPage } from '../../src/views/landings/index.js';
 import { createRenderer } from '../../src/views/render.js';
 import { initPromoForms } from '../../public/js/modules/promo-form.js';
 import { initVariantSelectors } from '../../public/js/modules/variant-selector.js';
-import { makeConfig } from '../helpers.js';
+import { makeConfig, seedData } from '../helpers.js';
 
 /** Integra los módulos de public/js con el marcado real de cada landing. */
 const renderer = createRenderer({ viewsDir: DEFAULT_VIEWS_DIR });
 
-async function mount(businessId) {
-  const html = renderLandingPage({ renderer, config: makeConfig(), businessId }).toString();
+async function mount(businessId, menu = seedData(businessId)) {
+  const html = renderLandingPage({ renderer, config: makeConfig(), businessId, menu }).toString();
   document.documentElement.innerHTML = new DOMParser().parseFromString(html, 'text/html').documentElement.innerHTML;
 }
 
@@ -35,6 +35,34 @@ describe('módulos JS sobre el HTML renderizado', () => {
     expect(document.getElementById('price-birriamen').textContent).toBe('$110 MXN');
     expect(document.getElementById('desc-birriamen').textContent).toMatch(/^Porción individual/);
     expect(options.map((button) => button.getAttribute('aria-pressed'))).toEqual(['false', 'true']);
+  });
+
+  it('birria (CA-7): con la primera variante oculta, la activa es la primera disponible y el selector sigue funcionando', async () => {
+    const menu = seedData('birria');
+    const birriamen = menu.menu.items.find((item) => item.slug === 'birriamen');
+    birriamen.variants[0].available = false;
+    await mount('birria', menu);
+    dispose = initVariantSelectors(document);
+
+    const options = [...document.querySelectorAll('#card-birriamen [data-variant]')];
+    expect(options.map((button) => button.textContent)).toEqual(['Chica ($110)']);
+    expect(options[0].getAttribute('aria-pressed')).toBe('true');
+    expect(document.getElementById('price-birriamen').textContent).toBe('$110 MXN');
+    expect(document.getElementById('desc-birriamen').textContent).toMatch(/^Porción individual/);
+
+    options[0].click();
+    expect(document.getElementById('price-birriamen').textContent).toBe('$110 MXN');
+  });
+
+  it('molotes (CA-9): el aviso de sección vacía es un elemento de lista con un enlace accesible', async () => {
+    const menu = seedData('molotes');
+    for (const drink of menu.drinks.items) drink.available = false;
+    await mount('molotes', menu);
+    const notice = document.querySelector('#bebidas-seccion .menu-empty');
+    expect(notice.tagName).toBe('LI');
+    const link = notice.querySelector('a[data-action="whatsapp-order"]');
+    expect(link.textContent.replace(/\s+/g, ' ').trim()).toBe('Ordenar ya! por WhatsApp (se abre en una pestaña nueva)');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
   });
 
   it('birria: el formulario del club muestra el mensaje de estado', async () => {

@@ -7,6 +7,8 @@ export const commonContent = Object.freeze({
   skipLink: 'Saltar al contenido',
   navLabel: 'Principal',
   footerNavLabel: 'Secciones',
+  // Aviso de una sección sin productos disponibles (REQ-F-001, RF-4.5).
+  emptySection: 'Por ahora no tenemos productos disponibles en esta sección. Escríbenos por WhatsApp.',
   cta: Object.freeze({
     // Texto solo para lectores de pantalla; complementa la etiqueta visible del CTA.
     assistiveText: 'por WhatsApp (se abre en una pestaña nueva)',

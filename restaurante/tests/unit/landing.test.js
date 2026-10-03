@@ -6,7 +6,7 @@ import { createLandingController } from '../../src/controllers/landing.js';
 import { canonicalUrl, renderLandingPage } from '../../src/views/landings/index.js';
 import { formatPesos } from '../../src/views/landings/shared.js';
 import { createRenderer } from '../../src/views/render.js';
-import { makeConfig } from '../helpers.js';
+import { makeConfig, seedData } from '../helpers.js';
 
 const renderer = createRenderer({ viewsDir: DEFAULT_VIEWS_DIR });
 
@@ -29,6 +29,7 @@ describe('createLandingController', () => {
         config: makeConfig(),
         renderer,
         now: () => new Date(),
+        repository: { getPublished: async () => ({}) },
         businessId: 'tacos',
       }),
     ).toThrow(/Negocio desconocido/);
@@ -37,7 +38,7 @@ describe('createLandingController', () => {
 
 describe('renderLandingPage', () => {
   it.each(BUSINESS_IDS)('%s: se renderiza sin placeholders pendientes', (businessId) => {
-    const html = renderLandingPage({ renderer, config: makeConfig(), businessId }).toString();
+    const html = renderLandingPage({ renderer, config: makeConfig(), businessId, menu: seedData(businessId) }).toString();
     expect(html).toContain(`data-business="${businessId}"`);
     expect(html).not.toMatch(/\{\{|\}\}/);
   });

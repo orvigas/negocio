@@ -93,3 +93,44 @@ describe('loadConfig', () => {
     },
   );
 });
+
+describe('loadConfig: administración y datos (REQ-F-001)', () => {
+  const HASH = 'scrypt$16384$8$1$c2FsLXNhbC1zYWwtc2FsLQ$aGFzaGhhc2hoYXNoaGFzaGhhc2hoYXNoaGFzaGhhc2g';
+
+  it('sin credenciales la administración queda deshabilitada y la app arranca (CA-24)', () => {
+    const config = loadConfig(VALID_ENV);
+    expect(config.admin).toEqual({ enabled: false });
+    expect(config.trustProxy).toBe(false);
+    expect(config.dataDir).toMatch(/restaurante[/\\]data$/);
+  });
+
+  it('con usuario y hash válidos la administración queda habilitada', () => {
+    const config = loadConfig({ ...VALID_ENV, ADMIN_USER: 'dueno', ADMIN_PASSWORD_HASH: HASH });
+    expect(config.admin).toEqual({ enabled: true, user: 'dueno', passwordHash: HASH });
+  });
+
+  it.each([
+    [{ ADMIN_USER: 'dueno' }, /ADMIN_USER y ADMIN_PASSWORD_HASH juntas/],
+    [{ ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER y ADMIN_PASSWORD_HASH juntas/],
+    [{ ADMIN_USER: 'dueno', ADMIN_PASSWORD_HASH: 'contraseña-en-claro' }, /ADMIN_PASSWORD_HASH no tiene un formato válido/],
+    [{ ADMIN_USER: 'x'.repeat(61), ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER no puede superar/],
+    [{ TRUST_PROXY: 'yes' }, /TRUST_PROXY debe ser true o false/],
+    [{ NODE_ENV: 'production' }, /DATA_DIR es obligatoria en producción/],
+    [{ NODE_ENV: 'production', DATA_DIR: 'data' }, /DATA_DIR debe ser una ruta absoluta/],
+    [{ DATA_DIR: 'src/content' }, /DATA_DIR no puede estar dentro de src\/ ni de public\//],
+    [{ DATA_DIR: 'public' }, /DATA_DIR no puede estar dentro de src\/ ni de public\//],
+  ])('configuración inválida: %o', (overrides, message) => {
+    const issues = issuesFor({ ...VALID_ENV, ...overrides });
+    expect(issues.join('\n')).toMatch(message);
+  });
+
+  it('los mensajes de error nunca incluyen el hash ni el usuario', () => {
+    const issues = issuesFor({ ...VALID_ENV, ADMIN_USER: 'usuario-secreto', ADMIN_PASSWORD_HASH: 'hash-secreto' });
+    expect(issues.join('\n')).not.toMatch(/usuario-secreto|hash-secreto/);
+  });
+
+  it('acepta TRUST_PROXY=true y DATA_DIR absoluta en producción', () => {
+    const config = loadConfig({ ...VALID_ENV, NODE_ENV: 'production', DATA_DIR: '/var/lib/restaurante', TRUST_PROXY: 'true' });
+    expect(config).toMatchObject({ dataDir: '/var/lib/restaurante', trustProxy: true, isProduction: true });
+  });
+});

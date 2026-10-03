@@ -11,14 +11,17 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env src/server.js",
     "dev": "node --watch --env-file-if-exists=.env src/server.js",
-    "build:css": "npm run build:css:molotes && npm run build:css:birria",
+    "build:css": "npm run build:css:molotes && npm run build:css:birria && npm run build:css:admin",
     "build:css:molotes": "tailwindcss -i src/styles/molotes/main.css -o public/css/molotes/main.css --minify",
     "build:css:birria": "tailwindcss -i src/styles/birria/main.css -o public/css/birria/main.css --minify",
-    "watch:css": "npm run watch:css:molotes & npm run watch:css:birria & wait",
+    "build:css:admin": "tailwindcss -i src/styles/admin/main.css -o public/css/admin/main.css --minify",
+    "watch:css": "npm run watch:css:molotes & npm run watch:css:birria & npm run watch:css:admin & wait",
     "watch:css:molotes": "tailwindcss -i src/styles/molotes/main.css -o public/css/molotes/main.css --watch",
     "watch:css:birria": "tailwindcss -i src/styles/birria/main.css -o public/css/birria/main.css --watch",
+    "watch:css:admin": "tailwindcss -i src/styles/admin/main.css -o public/css/admin/main.css --watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "admin:hash-password": "node scripts/hash-password.js",
     "lint": "echo \"lint: pendiente de configurar (ESLint/Prettier)\" && exit 0"
   },
   "dependencies": {

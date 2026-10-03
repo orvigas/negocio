@@ -11,8 +11,10 @@ Aplicación Koa.js (Node.js 24 LTS) que sirve dos landing pages desde un mismo p
 - **Birriería El Muñeco (birria)**: sábado y domingo.
 
 El día se calcula en la zona horaria del negocio (`BUSINESS_TIMEZONE`), no en la del
-servidor. Cada landing tiene un CTA de pedido por WhatsApp configurable. Todo el contenido,
-incluidos los menús, es estático y vive en `src/content/`.
+servidor. Cada landing tiene un CTA de pedido por WhatsApp configurable. El contenido estático
+vive en `src/content/`; los menús, precios, showcase del hero y promociones se editan desde
+`/admin/molotes` y `/admin/birria` y se guardan en archivos JSON (ver
+[Administración de menús](#administración-de-menús)).
 
 ## Requisitos
 
@@ -25,9 +27,13 @@ incluidos los menús, es estático y vive en `src/content/`.
 nvm use
 npm install
 cp .env.example .env   # completa al menos WHATSAPP_MOLOTES(_URL) y WHATSAPP_BIRRIA(_URL)
+npm run admin:hash-password   # opcional: genera ADMIN_PASSWORD_HASH para habilitar /admin
 npm run build:css
-npm run dev            # http://localhost:3000
+npm run dev            # http://localhost:3000 (administración: http://localhost:3000/admin)
 ```
+
+En la primera ejecución se crea la carpeta de datos (`DATA_DIR`, por defecto `data/`) con
+una copia de la semilla de cada negocio.
 
 ## Scripts
 
@@ -35,8 +41,9 @@ npm run dev            # http://localhost:3000
 | -------------------- | ----------------------------------------------------------- |
 | `npm start`          | Inicia el servidor (carga `.env` si existe)                 |
 | `npm run dev`        | Servidor con recarga (`node --watch`)                       |
-| `npm run build:css`  | Compila el CSS de ambas landings (`build:css:molotes`, `build:css:birria`) |
-| `npm run watch:css`  | Compilación de CSS de ambas landings en modo observación    |
+| `npm run build:css`  | Compila el CSS de ambas landings y de la administración (`build:css:molotes`, `build:css:birria`, `build:css:admin`) |
+| `npm run watch:css`  | Compilación de CSS en modo observación                      |
+| `npm run admin:hash-password` | Pide la contraseña de administración (sin mostrarla) e imprime el valor de `ADMIN_PASSWORD_HASH` |
 | `npm test`           | Tests unitarios e integración (Vitest + Supertest) |
 | `npm run test:watch` | Vitest en modo observación                                  |
 | `npm run lint`       | Pendiente de configurar                                     |
@@ -58,6 +65,10 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `WHATSAPP_BIRRIA_URL`      | Esta o el número        | Igual que arriba, para Birria                                      |
 | `WHATSAPP_BIRRIA`          | Esta o la URL           | Igual que arriba, para Birria                                      |
 | `WHATSAPP_BIRRIA_MESSAGE`  | No                      | Igual que arriba, para Birria                                      |
+| `DATA_DIR`                 | Solo en producción (ruta absoluta) | Carpeta de los datos editables (por defecto `data/` del proyecto fuera de producción). No puede estar dentro de `src/` ni de `public/` |
+| `ADMIN_USER`               | No                      | Usuario común de la administración (máx. 60). Sin `ADMIN_USER` ni `ADMIN_PASSWORD_HASH`, `/admin` responde 503 "no disponible"; con solo una de las dos, la app no arranca |
+| `ADMIN_PASSWORD_HASH`      | No                      | Hash scrypt de la contraseña (`npm run admin:hash-password`). Nunca la contraseña en claro |
+| `TRUST_PROXY`              | No (`false`)            | `true` detrás de nginx con TLS: Koa usa `X-Forwarded-Proto` (HTTPS) y la última IP de `X-Forwarded-For` (límite de intentos) |
 
 ## HTTP
 
@@ -67,12 +78,14 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `GET /molotes`   | Landing de Moloteando, siempre                                                             |
 | `GET /birria`    | Landing de Birriería El Muñeco, siempre                                                    |
 | `GET /<archivo>` | Estáticos de `public/` (sin índices ni archivos ocultos)                                   |
+| `/admin/...`     | Administración de menús (ver [Administración de menús](#administración-de-menús))          |
 
 Las tres rutas HTML usan el mismo controlador (`src/controllers/landing.js`): con un
 `businessId` fijo renderiza ese negocio y sin él lo resuelve por fecha. Responden con
 `Cache-Control: no-cache`. La `<link rel="canonical">` siempre apunta a la ruta dedicada
 (`/` muestra la canónica del negocio del día), así que no hay contenido duplicado para SEO.
-Cualquier otra ruta responde 404 y los métodos distintos de GET/HEAD, 405.
+Cualquier otra ruta responde 404 y los métodos distintos de GET/HEAD, 405 (salvo los POST de
+la administración).
 
 Los errores responden JSON con formato común:
 
@@ -85,50 +98,146 @@ Los logs son JSON por línea en stdout (método, ruta sin query string, estado y
 
 ## Menús
 
-Los menús son estáticos y salen del diseño fuente (`../_stich_source_/<landing>/code.html`):
+Los datos editables de cada landing viven en un documento JSON por negocio:
 
-| Archivo                         | Contenido                                                          | Plantilla |
-| ------------------------------- | ------------------------------------------------------------------ | --------- |
-| `src/content/molotes/menu.js`   | `molotesMenuItems`: 8 molotes (imagen, badge, tono, nombre, descripción, precio por pieza y por orden) | `partials/molotes/menu-card.html` |
-| `src/content/molotes/menu.js`   | `molotesDrinkItems`: 2 bebidas (icono, tono, nombre, descripción, precio) | `partials/molotes/drink-item.html` |
-| `src/content/birria/menu.js`    | `birriaMenuItems`: 6 platillos (imagen, etiqueta, nombre, descripción, precio, y detalle `chips`, `portion` o `variants`) | `partials/birria/menu-card.html` y `details-*.html` |
+| Negocio  | Datos editables | Semilla versionada |
+| -------- | --------------- | ------------------ |
+| Molotes  | 8 molotes y 2 bebidas (nombre, descripción, badge, tono, precios, cantidad por orden, disponibilidad e imagen), texto destacado del menú, showcase del hero (etiqueta, título, descripción, precio y unidad) y promoción "Jueves de Molotes 2x1" (badge, título y descripción) | `src/content/molotes/seed.json` |
+| Birria   | 6 platillos (nombre, etiqueta, precio, unidad, descripción, disponibilidad, imagen, título del detalle y chips, porción o variantes), showcase del hero (título, descripción y precio) y promoción del Club (badge, título y descripción) | `src/content/birria/seed.json` |
 
-- Precios en centavos (enteros); el formato (`$45 c/u`, `$155 MXN`) se aplica en
-  `src/views/landings/`. Con variantes, el precio y la descripción del platillo son los de la
-  primera variante, que es la activa al cargar.
+- Las semillas tienen los datos originales del diseño fuente; `tests/unit/content.test.js`
+  comprueba que coincidan con `../_stich_source_/` y que sus fotos existan.
+- El esquema (campos, longitudes máximas, tonos, rangos y estructura) está en
+  `src/services/menu-schema.js`. Precios en centavos (enteros), mayores que $0 y hasta
+  $5,000.00; el formato (`$45 c/u`, `$155 MXN`, `$45.50`) se aplica en `src/views/landings/`.
+- La estructura no es editable: cantidad y orden de productos, chips y variantes, el `id` de
+  cada molote y bebida, el `slug` de cada platillo de Birria y su tipo de detalle.
+- Disponibilidad: lo no disponible se oculta (`src/services/visible-menu.js`). En Birria, la
+  variante activa es la primera disponible y de ella salen el precio y la descripción de la
+  tarjeta; un platillo sin variantes disponibles se oculta. Si una sección se queda sin
+  productos, conserva su encabezado y muestra un aviso con el CTA de WhatsApp.
 - En Birria, `slug` forma los id del DOM (`card-`, `title-`, `price-`, `desc-`, `variants-`)
   que usa el selector de variantes (`public/js/modules/variant-selector.js`).
-- Para editar el menú, cambia esos archivos (el orden del arreglo es el orden en la página) y
-  reinicia el servidor (`npm run dev` recarga solo). Una foto nueva va en `public/img/<negocio>/`
-  con `image(src, alt, ancho, alto)` y sus medidas reales. `tests/unit/content.test.js`
-  comprueba que las fotos existan y que los textos coincidan con el diseño fuente.
+- La landing lee los datos del repositorio de menús (`src/repositories/`), que los mantiene
+  en memoria: los cambios guardados desde la administración se ven en la siguiente petición.
+
+## Administración de menús
+
+`/admin/molotes` y `/admin/birria` permiten editar los datos de la sección anterior con
+formularios HTML (sin JavaScript). No hay diseño en `_stich_source_/` para estas páginas: la
+interfaz es sencilla, con su propia hoja (`public/css/admin/main.css`).
+
+| Ruta | Acción |
+| ---- | ------ |
+| `GET /admin` | Redirige a `/admin/molotes` |
+| `GET` / `POST /admin/login` | Acceso con el usuario y la contraseña comunes |
+| `POST /admin/logout` | Cierre de sesión |
+| `GET` / `POST /admin/<negocio>` | Formulario y guardado (POST-redirect-GET) |
+| `GET` / `POST /admin/<negocio>/restaurar-anterior` | Confirmación y restauración de la versión anterior |
+| `POST /admin/<negocio>/restaurar-semilla` | Solo con datos dañados: vuelve a la semilla |
+
+### Seguridad
+
+- Sesión en memoria con cookie `admin_sid` (`HttpOnly`, `SameSite=Strict`, `Path=/admin` y
+  `Secure` en producción). Caduca tras 2 horas sin actividad; un reinicio cierra las sesiones.
+- 5 intentos de acceso fallidos desde la misma IP la bloquean 15 minutos.
+- Todas las acciones son POST con token CSRF (control principal) y comprobación de
+  `Origin`/`Sec-Fetch-Site`: se rechazan los orígenes ajenos y `Sec-Fetch-Site` distinto de
+  `same-origin`; `Origin: null` solo se acepta si el navegador confirma `Sec-Fetch-Site: same-origin`.
+  Las páginas de `/admin` envían `Referrer-Policy: same-origin` (las landings mantienen
+  `no-referrer`) para que el navegador mande el `Origin` real en sus formularios.
+- Las respuestas de `/admin` llevan `Cache-Control: no-store` y `X-Robots-Tag: noindex, nofollow`;
+  las landings no enlazan a `/admin`.
+- En producción solo funciona por HTTPS. Con nginx y TLS delante, define `TRUST_PROXY=true` y
+  reenvía las cabeceras:
+
+  ```nginx
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $remote_addr;
+  }
+  ```
+
+  Sin HTTPS (o sin `TRUST_PROXY` detrás del proxy), `/admin` responde 503 y el log registra
+  `admin_requires_https`.
+- Las credenciales, el hash, los tokens y el contenido de los menús no se escriben en los logs.
+
+### Archivos de datos (`DATA_DIR`)
+
+```text
+DATA_DIR/
+├── molotes/
+│   ├── current.json            # versión vigente
+│   ├── previous.json           # versión anterior (una por negocio)
+│   ├── damaged-<fecha>.json    # archivo dañado aislado para revisarlo
+│   └── damaged.marker.json     # existe mientras los datos estén dañados y nadie elija una opción
+├── birria/ (igual)
+└── changes.jsonl               # registro de cambios: una línea JSON por guardado o restauración
+```
+
+- **Primera ejecución:** si no existe `current.json`, se copia la semilla a `current.json` y
+  `previous.json` (log `menu_data_seeded`).
+- **Guardado:** el contenido vigente pasa a `previous.json` y el nuevo se escribe de forma
+  atómica (archivo temporal, `fsync` y `rename`): un fallo nunca deja el archivo a medias.
+- **Registro (`changes.jsonl`):** fecha ISO en la zona del negocio, autor ("Nombre de quien
+  hace el cambio", obligatorio), negocio, acción (`save`, `overwrite_after_conflict`,
+  `restore_previous`, `restore_seed`) y campos modificados con su valor anterior y el nuevo.
+  La página solo muestra "Último cambio: <fecha> por <nombre>". El archivo crece sin límite:
+  rótalo o respáldalo con las herramientas de la VM.
+- **Edición simultánea:** cada formulario lleva la versión con la que empezó. Si otra persona
+  guardó antes, no se escribe nada y se ofrece "Guardar mis cambios de todos modos" o
+  "Descartar y cargar la versión actual".
+- **Restaurar versión anterior:** intercambia `current.json` y `previous.json` (se puede
+  deshacer repitiendo la acción).
+- **Ediciones manuales:** editar los JSON a mano se aplica al reiniciar el servidor. La vía
+  recomendada es la administración; si se guarda desde ella antes de reiniciar, la edición
+  manual queda como versión anterior. Haz respaldos de `DATA_DIR` con las herramientas de la VM.
+
+### Recuperación de datos dañados
+
+Si `current.json` no es JSON válido o no cumple el esquema (por ejemplo, un precio de
+6000.00 escrito a mano):
+
+1. El servidor arranca igual y la landing muestra la versión anterior si es válida o, si no,
+   la semilla. Si se daña con el servidor en marcha, la landing sigue con la última versión
+   válida en memoria. El log registra `menu_data_damaged` (sin contenido ni rutas).
+2. El archivo dañado se conserva como `damaged-<fecha>.json` y se crea `damaged.marker.json`.
+3. La página de administración del negocio avisa del daño, bloquea la edición y ofrece
+   "Restaurar versión anterior" (si es válida) y "Restaurar semilla original". La elección
+   queda en el registro, borra el marcador y desbloquea la edición.
 
 ## Estructura
 
 ```text
 restaurante/
 ├── src/
-│   ├── server.js             # Entrada del proceso: valida config, escucha en PORT, cierre ordenado
-│   ├── app.js                # createApp(): app Koa testeable (config, logger y `now` inyectables)
+│   ├── server.js             # Entrada del proceso: valida config, prepara DATA_DIR, escucha en PORT, cierre ordenado
+│   ├── app.js                # createApp(): app Koa testeable (config, repositorio, logger y `now` inyectables)
 │   ├── config/               # env.js (carga/validación), businesses.js (ids de negocio), paths.js (views/, public/)
-│   ├── controllers/          # landing.js: compone la landing del negocio activo
-│   ├── routes/               # Router (@koa/router)
-│   ├── middleware/           # Manejo centralizado de errores, log de requests
-│   ├── services/             # business-schedule.js (día → negocio), whatsapp.js (CTA)
-│   ├── content/              # Contenido por negocio, separado del markup (common/, molotes/, birria/ con menu.js)
-│   ├── utils/                # logger.js (JSON estructurado, sin dependencias)
+│   ├── controllers/          # landing.js (landing del negocio activo), admin.js (administración de menús)
+│   ├── routes/               # Router (@koa/router): index.js (landings), admin.js (/admin)
+│   ├── middleware/           # Manejo centralizado de errores, log de requests, protección de /admin
+│   ├── repositories/         # Repositorio de menús: contrato y reglas, implementación de archivos y en memoria
+│   ├── services/             # business-schedule, whatsapp, menu-schema, price, visible-menu, admin-form,
+│   │                         # menu-diff, admin-auth, session-store, login-throttle
+│   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/) y semillas seed.json
+│   ├── utils/                # logger.js (JSON estructurado), datetime.js (zona del negocio), form-body.js
 │   ├── views/                # render.js + plantillas HTML
 │   │   ├── layouts/base.html # <head> común (SEO, fuentes, CSS/JS por negocio) y skip link
 │   │   ├── pages/            # molotes.html, birria.html: header, secciones y footer del diseño
-│   │   ├── partials/         # icons/ (WhatsApp), seo-absolute, molotes/ y birria/ (tarjetas, etc.)
-│   │   └── landings/         # Contenido -> datos de plantilla (index.js, molotes.js, birria.js)
+│   │   ├── partials/         # icons/ (WhatsApp), seo-absolute, molotes/ y birria/ (tarjetas, aviso de sección vacía, etc.)
+│   │   ├── landings/         # Contenido -> datos de plantilla (index.js, molotes.js, birria.js)
+│   │   └── admin/            # Plantillas y vistas de la administración (formulario generado desde el esquema)
 │   └── styles/
 │       ├── shared/base.css   # Base común de ambos diseños
 │       ├── molotes/main.css  # Entrada Tailwind + tokens @theme de Moloteando
 │       ├── birria/main.css   # Entrada Tailwind + tokens @theme de Birriería El Muñeco
+│       ├── admin/main.css    # Entrada Tailwind de la administración
 │       └── components/       # Bloques BEM propios (sin uso por ahora)
 ├── public/
-│   ├── css/{molotes,birria}/main.css   # Generado por `npm run build:css` (ignorado por git)
+│   ├── css/{molotes,birria,admin}/main.css   # Generado por `npm run build:css` (ignorado por git)
 │   ├── js/
 │   │   ├── modules/          # Módulos ES compartidos (promo-form, variant-selector)
 │   │   ├── molotes/main.js   # Entrada JS de Moloteando
@@ -137,10 +246,14 @@ restaurante/
 │       ├── common/           # Imágenes usadas por ambas landings
 │       ├── molotes/
 │       └── birria/
+├── scripts/hash-password.js  # `npm run admin:hash-password`
+├── data/                     # DATA_DIR por defecto fuera de producción (ignorado por git)
 └── tests/
-    ├── helpers.js            # Config válida para pruebas
-    ├── unit/                 # config, selector de negocio, WhatsApp, renderizador, landings, contenido/menús vs. diseño, JS sobre el HTML real
-    └── integration/          # GET /, /molotes, /birria (fecha inyectada, SEO, CTA), estáticos, errores
+    ├── helpers.js            # Config válida, semillas y repositorio en memoria para pruebas
+    ├── support/admin.js      # App con administración, inicio de sesión y lectura de formularios
+    ├── snapshots/            # HTML de referencia de las landings (regresión visual con la semilla)
+    ├── unit/                 # config, esquema, precios, formulario, repositorio de archivos, sesión, landings, contenido vs. diseño, JS sobre el HTML real
+    └── integration/          # Landings (fecha, SEO, CTA, datos editables, datos dañados), administración, estáticos, errores
 ```
 
 ### Plantillas
@@ -160,7 +273,8 @@ sola vez al crear la app.
 Cada negocio tiene su propia página (`pages/<negocio>.html`) porque los diseños difieren
 estructuralmente; comparten layout, icono/CTA de WhatsApp, enlace de ubicación y lógica.
 Los textos, horarios, contacto e imágenes de sección viven en `src/content/<negocio>/`; los
-platillos y bebidas del menú, en `src/content/<negocio>/menu.js`. Los tonos de color son claves semánticas (`tone`,
+datos editables (menú, precios, hero y promociones) llegan del repositorio de menús y se
+combinan con ese contenido en `src/views/landings/`. Los tonos de color son claves semánticas (`tone`,
 `highlight`) que los módulos de `src/views/landings/` traducen a utilidades de Tailwind.
 
 ## Assets por landing
@@ -175,7 +289,7 @@ Extraídos de `../_stich_source_/moloteando_aut_nticos_molotes_artesanales/code.
 - **Imágenes:** descargadas del diseño a `public/img/<negocio>/` (las compartidas en
   `public/img/common/`). Los logos y motivos PNG se convirtieron a WebP. Las rutas, `alt` y
   dimensiones de las imágenes de sección se declaran en `src/content/<negocio>/index.js`
-  (`images`); las de cada platillo, en `menu.js` junto al platillo.
+  (`images`); las de cada platillo, en los datos editables (semilla `seed.json`), junto al platillo.
 - **Fuentes:** Google Fonts (familias del diseño y Material Symbols), una hoja por landing
   declarada en `content.assets.fontsHref`.
 

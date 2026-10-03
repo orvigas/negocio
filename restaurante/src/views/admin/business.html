@@ -1,0 +1,13 @@
+<h1 class="text-2xl font-bold text-slate-900">{{ title }}</h1>
+      <p class="admin__last-change mt-1 mb-6 text-sm text-slate-700">{{ lastChange }}</p>
+      {{{ notices }}}
+      <form id="admin-form" class="admin-form space-y-6" method="post" action="{{ action }}" novalidate>
+        <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+        <input type="hidden" name="expectedVersion" value="{{ expectedVersion }}" />
+        {{{ conflict }}}
+        <fieldset class="admin-form__data space-y-6"{{{ dataAttrs }}}>
+          <legend class="sr-only">Datos del menú</legend>{{{ sections }}}
+        </fieldset>
+        {{{ submit }}}
+      </form>
+      {{{ restore }}}

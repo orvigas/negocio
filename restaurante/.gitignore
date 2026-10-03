@@ -19,3 +19,6 @@ coverage/
 .DS_Store
 .vscode/
 .idea/
+
+# Datos editables de la administración en desarrollo (DATA_DIR por defecto; REQ-F-001)
+data/

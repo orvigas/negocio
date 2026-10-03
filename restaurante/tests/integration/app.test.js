@@ -1,8 +1,14 @@
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import request from 'supertest';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../../src/app.js';
-import { makeConfig } from '../helpers.js';
+import { loadSeedDocument } from '../../src/content/seeds.js';
+import { createFileMenuRepository } from '../../src/repositories/file-menu-repository.js';
+import { makeConfig, makeRepository } from '../helpers.js';
 
 const FRIDAY_NOON_MX = new Date('2026-10-09T18:00:00Z');
 const SATURDAY_NOON_MX = new Date('2026-10-10T18:00:00Z');
@@ -11,12 +17,14 @@ function makeLogger() {
   return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 }
 
+const repository = await makeRepository();
+
 function agent({
   now = FRIDAY_NOON_MX,
   config = makeConfig(),
   logger = makeLogger(),
 } = {}) {
-  const app = createApp({ config, logger, now: typeof now === 'function' ? now : () => now });
+  const app = createApp({ config, repository, logger, now: typeof now === 'function' ? now : () => now });
   return request(app.callback());
 }
 
@@ -307,7 +315,7 @@ describe('errores', () => {
     const now = () => {
       throw new Error('detalle interno secreto');
     };
-    const res = await agent({ now, logger, config: makeConfig({ NODE_ENV: 'production' }) }).get('/');
+    const res = await agent({ now, logger, config: makeConfig({ NODE_ENV: 'production', DATA_DIR: '/var/lib/restaurante' }) }).get('/');
 
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ error: { code: 'INTERNAL_ERROR', message: 'Internal Server Error' } });
@@ -325,5 +333,108 @@ describe('errores', () => {
     const res = await agent({ now, config: makeConfig({ NODE_ENV: 'development' }) }).get('/');
     expect(res.status).toBe(500);
     expect(res.body.error.stack).toContain('boom');
+  });
+});
+
+describe('landings con datos editables (REQ-F-001)', () => {
+  async function agentWith(mutate) {
+    const repo = await makeRepository();
+    const { version } = await repo.getForEdit(mutate.businessId);
+    const data = structuredClone((await repo.getPublished(mutate.businessId)).data);
+    mutate.change(data);
+    await repo.save(mutate.businessId, { data, expectedVersion: version, author: 'Pruebas' });
+    const app = createApp({ config: makeConfig(), repository: repo, now: () => FRIDAY_NOON_MX });
+    return request(app.callback());
+  }
+
+  it('CA-1: el precio unitario guardado se muestra en la tarjeta', async () => {
+    const client = await agentWith({ businessId: 'molotes', change: (data) => (data.menu.items[0].unitPriceCents = 5000) });
+    const { text } = await client.get('/molotes');
+    const card = text.slice(text.indexOf('>Molotes de Queso Oaxaca<'));
+    expect(card.slice(0, 800)).toContain('$50 c/u');
+  });
+
+  it('CA-9: una sección sin productos conserva su encabezado y muestra el aviso con el CTA de WhatsApp', async () => {
+    const client = await agentWith({
+      businessId: 'molotes',
+      change: (data) => {
+        for (const item of data.menu.items) item.available = false;
+      },
+    });
+    const { text } = await client.get('/molotes');
+    expect(text).toContain('Menú de Molotes Tradicionales');
+    expect(text).not.toMatch(/class="menu-card /);
+    const grid = text.slice(text.indexOf('class="menu__grid'), text.indexOf('<!-- BEBIDAS -->'));
+    expect(grid).toContain('Por ahora no tenemos productos disponibles en esta sección. Escríbenos por WhatsApp.');
+    expect(whatsappHrefs(grid)).toEqual([WA_MOLOTES.replaceAll('&', '&amp;')]);
+    // Las bebidas siguen visibles.
+    expect(text).toContain('Refrescos Familia Coca-Cola');
+  });
+
+  it('CA-9 (birria): sin platillos disponibles muestra el aviso dentro de la sección del menú', async () => {
+    const client = await agentWith({
+      businessId: 'birria',
+      change: (data) => {
+        for (const item of data.menu.items) item.available = false;
+      },
+    });
+    const { text } = await client.get('/birria');
+    const section = text.slice(text.indexOf('id="menu-especialidades"'), text.indexOf('</section>', text.indexOf('id="menu-especialidades"')));
+    expect(section).toContain('Nuestro Menú de Birria Artesanal');
+    expect(section).toContain('Por ahora no tenemos productos disponibles en esta sección. Escríbenos por WhatsApp.');
+    expect(section).not.toContain('<article id="card-');
+  });
+
+  it('CA-6: una bebida no disponible no aparece en la sección de bebidas', async () => {
+    const client = await agentWith({ businessId: 'molotes', change: (data) => (data.drinks.items[1].available = false) });
+    const { text } = await client.get('/molotes');
+    const section = text.slice(text.indexOf('id="bebidas-seccion"'), text.indexOf('<!-- EL RITUAL'));
+    expect(section.match(/<li class=/g)).toHaveLength(1);
+    expect(section).not.toContain('Refrescos Familia Coca-Cola');
+  });
+});
+
+describe('archivo dañado al arrancar con el repositorio de archivos (CA-34, CA-35)', () => {
+  let dataDir;
+
+  beforeEach(async () => {
+    dataDir = await mkdtemp(join(tmpdir(), 'landing-data-'));
+    await mkdir(join(dataDir, 'molotes'), { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(dataDir, { recursive: true, force: true });
+  });
+
+  async function start() {
+    const repo = createFileMenuRepository({ dataDir, timezone: 'America/Mexico_City' });
+    await repo.init();
+    return request(createApp({ config: makeConfig(), repository: repo, now: () => FRIDAY_NOON_MX }).callback());
+  }
+
+  it('CA-34: con JSON inválido y una versión anterior válida, /molotes responde 200 con la versión anterior', async () => {
+    const previous = loadSeedDocument('molotes');
+    previous.data.menu.highlight = 'Destacado de la versión anterior';
+    await writeFile(join(dataDir, 'molotes', 'previous.json'), JSON.stringify(previous));
+    await writeFile(join(dataDir, 'molotes', 'current.json'), '{ roto');
+
+    const res = await (await start()).get('/molotes');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Destacado de la versión anterior');
+    expect((await readdir(join(dataDir, 'molotes'))).some((name) => /^damaged-\d{4}-.*\.json$/.test(name))).toBe(true);
+  });
+
+  it('CA-35: sin una versión anterior válida, /molotes muestra la semilla', async () => {
+    await writeFile(join(dataDir, 'molotes', 'current.json'), '{ roto');
+    const res = await (await start()).get('/molotes');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain(loadSeedDocument('molotes').data.menu.highlight);
+  });
+
+  it('CA-4: en una instalación nueva crea los archivos desde la semilla y la landing no cambia', async () => {
+    const res = await (await start()).get('/birria');
+    expect(res.status).toBe(200);
+    expect(JSON.parse(await readFile(join(dataDir, 'birria', 'current.json'), 'utf8'))).toEqual(loadSeedDocument('birria'));
+    await expect(res.text).toMatchFileSnapshot('../snapshots/landing-birria.html');
   });
 });

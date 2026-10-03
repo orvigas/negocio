@@ -1,11 +1,16 @@
 import { BUSINESS, BUSINESS_PATHS } from '../../config/businesses.js';
 import { commonContent, getBusinessContent } from '../../content/index.js';
+import { buildVisibleMenu } from '../../services/visible-menu.js';
 import { buildBirriaBody } from './birria.js';
 import { buildMolotesBody } from './molotes.js';
 
 /**
  * Composición de la página completa de una landing: cuerpo propio de cada negocio
  * (header, secciones y footer del diseño) dentro del layout compartido (SEO, assets).
+ *
+ * El contenido estático sale de src/content/; los datos editables (menú, precios, hero y
+ * promociones) llegan del repositorio de menús en `menu` y aquí se filtran por
+ * disponibilidad (RF-4) antes de pintarse.
  *
  * @typedef {{
  *   renderer: { render: Function, renderEach: Function, join: Function },
@@ -16,6 +21,7 @@ import { buildMolotesBody } from './molotes.js';
  *   whatsapp: { href: string, assistiveText: string },
  *   location: { mapsUrl: string, label: string, assistiveText: string },
  *   whatsappIcon: import('../render.js').SafeHtml,
+ *   menu: object,
  * }} LandingView
  */
 
@@ -38,10 +44,12 @@ export function canonicalUrl(siteUrl, path) {
  *   renderer: LandingView['renderer'],
  *   config: object,
  *   businessId: 'molotes'|'birria',
- * }} options
+ *   menu: object,
+ * }} options `menu`: datos editables validados del negocio (`document.data` del repositorio).
  * @returns {import('../render.js').SafeHtml}
  */
-export function renderLandingPage({ renderer, config, businessId }) {
+export function renderLandingPage({ renderer, config, businessId, menu }) {
+  if (!menu) throw new TypeError('renderLandingPage requiere los datos editables del menú');
   const content = getBusinessContent(businessId);
   const images = { ...commonContent.images, ...content.images };
 
@@ -55,6 +63,7 @@ export function renderLandingPage({ renderer, config, businessId }) {
     whatsapp: { href: config.whatsapp[businessId].href, assistiveText: commonContent.cta.assistiveText },
     location: commonContent.location,
     whatsappIcon: renderer.render(`partials/icons/whatsapp-${businessId}`),
+    menu: buildVisibleMenu(businessId, menu),
   };
 
   const canonical = canonicalUrl(config.siteUrl, BUSINESS_PATHS[businessId]);

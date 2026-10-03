@@ -2,9 +2,9 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
-Pull Request: https://github.com/orvigas/negocio/pull/2 (commit `ebfdf25`).
+Pull Request: https://github.com/orvigas/negocio/pull/2 (commit `ebfdf25`). Mergeado en `main` el 2026-10-03T00:51:12Z (2026-10-02 18:51 hora de Ciudad de México) con el commit de merge `3c36e87`.
 
 ## Aprobación
 
@@ -1324,3 +1324,10 @@ Revalidación de DEF-001 tras la corrección aprobada por el usuario ("Si la apr
 ### Commit y Pull Request (T4) — 2026-10-02
 
 El usuario autorizó el commit y el PR. Cita textual: "sí, autorizo el commit y el PR". Commit `ebfdf25`; PR https://github.com/orvigas/negocio/pull/2 contra `main`. Estado: `READY_FOR_MERGE`. El ticket permanece en `in-progress/` hasta que el usuario confirme el merge.
+
+### Cierre (T5) — 2026-10-02
+
+El usuario confirmó el merge. Cita textual: "ya hice merge del PR".
+- `gh pr view 2`: `MERGED` el 2026-10-03T00:51:12Z (2026-10-02 18:51 hora de Ciudad de México).
+- Commit de merge: `3c36e87c702f0f174c2f6ec2220e524bef094f52`.
+- El ticket pasa de `in-progress/` a `done/` con estado `DONE`.

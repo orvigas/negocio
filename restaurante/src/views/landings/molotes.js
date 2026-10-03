@@ -1,4 +1,4 @@
-import { formatPesos, requireOption } from './shared.js';
+import { formatPesos, priceMxn, renderListOrEmpty, requireOption } from './shared.js';
 
 /**
  * Landing de Moloteando: compone src/views/pages/molotes.html.
@@ -21,11 +21,27 @@ const DRINK_TONES = Object.freeze({
   red: Object.freeze({ iconBgClass: 'bg-[#fee2e2]', iconClass: 'text-[#dc2626]' }),
 });
 
+/**
+ * Combina el contenido estático con los datos editables ya filtrados por disponibilidad.
+ * @param {import('./index.js').LandingView} view
+ */
+function withEditableContent(view) {
+  const { hero, menu, promo } = view.menu;
+  return {
+    ...view.c,
+    hero: { ...view.c.hero, showcase: { ...hero.showcase, price: priceMxn(hero.showcase.priceCents) } },
+    menu: { ...view.c.menu, highlight: menu.highlight },
+    promo: { ...view.c.promo, ...promo },
+  };
+}
+
 /** @param {import('./index.js').LandingView} view */
 export function buildMolotesBody({ renderer, ...view }) {
-  const menuCards = renderer.renderEach(
+  const menuCards = renderListOrEmpty(
+    renderer,
+    view,
     'partials/molotes/menu-card',
-    view.c.menu.items.map((item) => ({
+    view.menu.menu.items.map((item) => ({
       name: item.name,
       description: item.description,
       badge: item.badge,
@@ -36,16 +52,18 @@ export function buildMolotesBody({ renderer, ...view }) {
     })),
   );
 
-  const drinkItems = renderer.renderEach(
+  const drinkItems = renderListOrEmpty(
+    renderer,
+    view,
     'partials/molotes/drink-item',
-    view.c.drinks.items.map((drink) => ({
+    view.menu.drinks.items.map((drink) => ({
       icon: drink.icon,
       name: drink.name,
       description: drink.description,
-      price: `${formatPesos(drink.priceCents)} MXN`,
+      price: priceMxn(drink.priceCents),
       ...requireOption(DRINK_TONES, drink.tone, 'Tono de bebida'),
     })),
   );
 
-  return renderer.render('pages/molotes', { ...view, menuCards, drinkItems });
+  return renderer.render('pages/molotes', { ...view, c: withEditableContent(view), menuCards, drinkItems });
 }

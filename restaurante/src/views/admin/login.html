@@ -1,0 +1,16 @@
+<section class="admin-login mx-auto max-w-sm rounded-lg border border-slate-300 bg-white p-6 shadow-xs" aria-labelledby="login-title">
+        <h1 id="login-title" class="mb-4 text-2xl font-bold text-slate-900">Acceso a la administración</h1>
+        {{{ notice }}}
+        <form class="admin-login__form space-y-4" method="post" action="/admin/login">
+          <input type="hidden" name="next" value="{{ next }}" />
+          <div class="admin-field">
+            <label class="admin-field__label block text-sm font-semibold text-slate-800" for="login-user">Usuario</label>
+            <input class="admin-field__input {{ inputClass }}" id="login-user" name="username" type="text" autocomplete="username" required maxlength="60" />
+          </div>
+          <div class="admin-field">
+            <label class="admin-field__label block text-sm font-semibold text-slate-800" for="login-password">Contraseña</label>
+            <input class="admin-field__input {{ inputClass }}" id="login-password" name="password" type="password" autocomplete="current-password" required maxlength="200" />
+          </div>
+          <button class="admin-button admin-button--primary w-full {{ primaryButtonClass }}" type="submit">Entrar</button>
+        </form>
+      </section>

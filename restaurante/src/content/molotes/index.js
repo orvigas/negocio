@@ -1,12 +1,12 @@
 import { image } from '../images.js';
-import { molotesDrinkItems, molotesMenuItems } from './menu.js';
 
 /**
  * Contenido de Moloteando (lunes a viernes).
  * Fuente: _stich_source_/moloteando_aut_nticos_molotes_artesanales/code.html
  *
- * Solo datos (textos, precios, horarios, contacto, imágenes). Los platillos y las bebidas
- * del menú están en ./menu.js. El marcado vive en
+ * Solo datos estáticos (textos, horarios, contacto, imágenes). Los datos editables desde
+ * /admin/molotes (productos, bebidas, showcase del hero, texto destacado del menú y textos
+ * de la promoción) viven en el repositorio de menús; su semilla es ./seed.json. El marcado vive en
  * src/views/pages/molotes.html y src/views/partials/molotes/; los tonos visuales se
  * expresan con claves semánticas (`tone`) que resuelve src/views/landings/molotes.js.
  */
@@ -53,25 +53,16 @@ export const molotesContent = Object.freeze({
     description:
       'Masa de maíz criollo nixtamalizado, rellenos tradicionales cocinados al comal y fritos en manteca y aceite a la perfección. Bañados con crema de rancho, queso cotija y salsas tatemadas.',
     secondaryCta: Object.freeze({ label: 'Conoce Nuestra Tradición', href: '#ritual-seccion' }),
-    showcase: Object.freeze({
-      tag: 'Recién Salidos del Comal',
-      title: 'Trilogía Poblana de Tinga y Papas con Chorizo',
-      description: 'Con crema espesa de Chipilo, aguacate fresco y salsa martajada de chile morita.',
-      price: '$145 MXN',
-      unit: '/ orden de 3',
-    }),
   }),
   divider: 'Antojería Tradicional • Fritura Sagrada',
   menu: Object.freeze({
     eyebrow: 'Carta Oficial y Tradición',
     title: 'Menú de Molotes Tradicionales',
     description: 'Masa recién amasada y frita al punto de oro. Pídelos individuales o en orden de 3.',
-    highlight: '8 Sabores de Barrio • Masa 100% Nixtamalizada',
     sides: Object.freeze({
       label: 'Acompañamiento Incluido en Cada Orden',
       text: '“Todos nuestros molotes vienen acompañados de lechuga fresca, jitomate en rebanadas, quesito rallado, deliciosa crema y salsas caseras que le dan el toque final.”',
     }),
-    items: molotesMenuItems,
   }),
   drinks: Object.freeze({
     imageAlt: 'Aguas Frescas y Refrescos Coca-Cola',
@@ -80,7 +71,6 @@ export const molotesContent = Object.freeze({
     eyebrow: 'Bebidas Tradicionales y Refrescos',
     title: 'Para Acompañar tus Molotes',
     description: 'Nada como un agua fresca casera o una Coca-Cola bien helada en botella de vidrio con limón.',
-    items: molotesDrinkItems,
   }),
   ritual: Object.freeze({
     card: Object.freeze({
@@ -125,10 +115,6 @@ export const molotesContent = Object.freeze({
     ]),
   }),
   promo: Object.freeze({
-    badge: 'Promoción Tradicional',
-    title: 'Jueves de Molotes 2x1',
-    description:
-      'Suscríbete al Club del Comal para recibir tu cupón semanal de 2x1, ofertas secretas de temporada y avisos cuando salga el molote de mole poblano con plátano macho.',
     nameLabel: 'Tu nombre',
     namePlaceholder: 'Tu nombre o apodo garnachero',
     emailLabel: 'Correo electrónico',

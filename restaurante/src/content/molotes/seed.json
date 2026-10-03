@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "business": "molotes",
+  "revision": 0,
+  "updatedAt": null,
+  "updatedBy": null,
+  "data": {
+    "hero": {
+      "showcase": {
+        "tag": "Recién Salidos del Comal",
+        "title": "Trilogía Poblana de Tinga y Papas con Chorizo",
+        "description": "Con crema espesa de Chipilo, aguacate fresco y salsa martajada de chile morita.",
+        "priceCents": 14500,
+        "unit": "/ orden de 3"
+      }
+    },
+    "menu": {
+      "highlight": "8 Sabores de Barrio • Masa 100% Nixtamalizada",
+      "items": [
+        {
+          "id": "queso-oaxaca",
+          "name": "Molotes de Queso Oaxaca",
+          "description": "El clásico que nunca falla. Queso derretido que hace \"hilo\" hasta el corazón.",
+          "badge": "El Clásico",
+          "tone": "secondary",
+          "unitPriceCents": 4500,
+          "orderPriceCents": 13000,
+          "orderQuantity": 3,
+          "available": true,
+          "image": {
+            "src": "/img/molotes/molotes-queso-oaxaca.jpg",
+            "alt": "Molotes de Queso Oaxaca",
+            "width": 512,
+            "height": 382
+          }
+        },
+        {
+          "id": "tinga-de-pollo",
+          "name": "Molotes de Tinga de Pollo",
+          "description": "Pollito jugoso bañado en su salsa de chipotle... con ese piquete que te hace pedir otro (o dos, no juzgamos).",
+          "badge": "Favorito",
+          "tone": "primary",
+          "unitPriceCents": 4500,
+          "orderPriceCents": 13000,
+          "orderQuantity": 3,
+          "available": true,
+          "image": {
+            "src": "/img/molotes/molotes-tinga-de-pollo.jpg",
+            "alt": "Molotes de Tinga de Pollo",
+            "width": 512,
+            "height": 382
+          }
+        },
+        {
+          "id": "papas-con-chorizo",
+          "name": "Molotes de Papas con Chorizo",
+          "description": "La dupla dorada que le sube el ánimo a cualquiera. Papita suavecita + chorizo con carácter = amor a primera mordida.",
+          "badge": "Dupla Dorada",
+          "tone": "tertiary",
+          "unitPriceCents": 4500,
+          "orderPriceCents": 13000,
+          "orderQuantity": 3,
+          "available": true,
+          "image": {
+            "src": "/img/molotes/molotes-artesanales.jpg",
+            "alt": "Molotes de Papas con Chorizo",
+            "width": 512,
+            "height": 382
+          }
+        },
+        {
+          "id": "champinones-epazote",
+          "name": "Molotes de Champiñones con Epazote",
+          "description": "Para los que quieren algo con su toque gourmet sin salir de la banqueta. Terrositos, aromáticos y con ese epazote que redondea todo.",
+          "badge": "Toque Gourmet",
+          "tone": "sky",
+          "unitPriceCents": 4500,
+          "orderPriceCents": 13000,
+          "orderQuantity": 3,
+          "available": true,
+          "image": {
+            "src": "/img/molotes/molotes-champinones-epazote.jpg",
+            "alt": "Molotes de Champiñones con Epazote",
+            "width": 512,
+            "height": 382
+          }
+        },
+        {
+          "id": "hongos-zetas-epazote",
+          "name": "Molotes de Hongos Zetas con Epazote",
+          "description": "El primo silvestre de los champiñones: más carnoso, más sabor a monte. Para paladares que buscan algo diferente.",
+          "badge": "Silvestre",
+          "tone": "amber",
+          "unitPriceCents": 4800,
+          "orderPriceCents": 14000,
+          "orderQuantity": 3,
+          "available": true,
+          "image": {
+            "src": "/img/molotes/molotes-champinones-epazote.jpg",
+            "alt": "Molotes de Hongos Zetas con Epazote",
+            "width": 512,
+            "height": 382
+          }
+        },
+        {
+          "id": "picadillo-de-cerdo",
+          "name": "Molotes de Picadillo de Cerdo con Verduras",
+          "description": "Sabor de casa, de esos que saben a domingo familiar. Carnita con verduritas en su punto justo.",
+          "badge": "Sabor de Casa",
+          "tone": "primary",
+          "unitPriceCents": 4800,
+          "orderPriceCents": 14000,
+          "orderQuantity": 3,
+          "available": true,
+          "image": {
+            "src": "/img/molotes/molotes-picadillo-de-cerdo.jpg",
+            "alt": "Molotes de Picadillo de Cerdo con Verduras",
+            "width": 512,
+            "height": 382
+          }
+        },
+        {
+          "id": "chicharron-prensado",
+          "name": "Molotes de Chicharrón Prensado en Adobo",
+          "description": "Para los valientes del picante y el sabor intenso. Chicharrón bañado en adobo que te va a dejar pidiendo servilletas... y más molotes.",
+          "badge": "Para Valientes",
+          "tone": "red",
+          "unitPriceCents": 4800,
+          "orderPriceCents": 14000,
+          "orderQuantity": 3,
+          "available": true,
+          "image": {
+            "src": "/img/molotes/molotes-chicharron-prensado.jpg",
+            "alt": "Molotes de Chicharrón Prensado en Adobo",
+            "width": 512,
+            "height": 382
+          }
+        },
+        {
+          "id": "huitlacoche-epazote",
+          "name": "Molotes de Huitlacoche con Epazote",
+          "description": "El \"caviar mexicano\" en tu molote. Cremoso, terroso y con un sabor que enamora hasta a los más escépticos.",
+          "badge": "Caviar Mexicano",
+          "tone": "gold",
+          "unitPriceCents": 5000,
+          "orderPriceCents": 14500,
+          "orderQuantity": 3,
+          "available": true,
+          "image": {
+            "src": "/img/molotes/molotes-huitlacoche.jpg",
+            "alt": "Molotes de Huitlacoche con Epazote",
+            "width": 512,
+            "height": 382
+          }
+        }
+      ]
+    },
+    "drinks": {
+      "items": [
+        {
+          "id": "aguas-frescas",
+          "name": "Aguas Frescas Naturales del Día",
+          "description": "Horchata con canela, Jamaica fresca o Limón con chía.",
+          "icon": "water_full",
+          "tone": "amber",
+          "priceCents": 3500,
+          "available": true
+        },
+        {
+          "id": "refrescos",
+          "name": "Refrescos Familia Coca-Cola",
+          "description": "Coca-Cola Vidrio 355ml, Sin Azúcar, Sidral Mundet o Sprite.",
+          "icon": "sports_bar",
+          "tone": "red",
+          "priceCents": 3500,
+          "available": true
+        }
+      ]
+    },
+    "promo": {
+      "badge": "Promoción Tradicional",
+      "title": "Jueves de Molotes 2x1",
+      "description": "Suscríbete al Club del Comal para recibir tu cupón semanal de 2x1, ofertas secretas de temporada y avisos cuando salga el molote de mole poblano con plátano macho."
+    }
+  }
+}

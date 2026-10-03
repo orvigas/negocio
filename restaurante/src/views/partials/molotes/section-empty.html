@@ -1,0 +1,6 @@
+<li class="menu-empty col-span-full flex flex-col items-center gap-space-md rounded-2xl border border-[rgb(219,234,254)] bg-white p-space-lg text-center shadow-md">
+            <p class="menu-empty__text font-body-md text-body-md text-[#334155]">{{ text }}</p>
+            <a class="whatsapp-cta whatsapp-cta--empty inline-flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-7 py-3.5 text-sm font-bold tracking-wider text-white uppercase shadow-lg transition-transform hover:bg-[#20ba59] active:scale-95" href="{{ whatsapp.href }}" target="_blank" rel="noopener noreferrer" data-action="whatsapp-order" data-business="{{ businessId }}">
+              <span class="size-5 shrink-0">{{{ whatsappIcon }}}</span><span>{{ ctaLabel }}</span><span class="sr-only"> {{ whatsapp.assistiveText }}</span>
+            </a>
+          </li>

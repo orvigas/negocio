@@ -1,0 +1,17 @@
+/*
+ * Administración de menús (/admin/molotes y /admin/birria), REQ-F-001.
+ * Compila a public/css/admin/main.css (`npm run build:css`).
+ * No hay diseño en _stich_source_ para esta interfaz (C-8): estilo sobrio con la paleta
+ * de Tailwind, fuente del sistema y contraste AA. No se carga en las landings.
+ */
+@import "tailwindcss" source(none);
+@plugin "@tailwindcss/forms";
+
+/* Solo las vistas de la administración. */
+@source "../../views/admin";
+
+@layer base {
+  :focus-visible {
+    outline-offset: 2px;
+  }
+}

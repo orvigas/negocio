@@ -1,11 +1,9 @@
-import { formatPesos, requireOption } from './shared.js';
+import { formatPesos, priceMxn, renderListOrEmpty, requireOption } from './shared.js';
 
 /**
  * Landing de Birriería El Muñeco: compone src/views/pages/birria.html.
  * Cada platillo tiene un bloque de detalle distinto según el diseño (`details.type`).
  */
-const priceMxn = (cents) => `${formatPesos(cents)} MXN`;
-
 const DETAIL_RENDERERS = Object.freeze({
   chips: (renderer, item) =>
     renderer.render('partials/birria/details-chips', {
@@ -22,7 +20,8 @@ const DETAIL_RENDERERS = Object.freeze({
       portion: item.portion,
       extra: item.portionExtra,
     }),
-  // La primera variante es la activa al cargar (coincide con el precio y la descripción del platillo).
+  // Solo llegan variantes disponibles: la primera es la activa al cargar y de ella salen el
+  // precio y la descripción de la tarjeta (src/services/visible-menu.js).
   variants: (renderer, item) =>
     renderer.render('partials/birria/details-variants', {
       id: item.slug,
@@ -41,9 +40,11 @@ const DETAIL_RENDERERS = Object.freeze({
 });
 
 function renderMenuCards(renderer, view) {
-  return renderer.renderEach(
+  return renderListOrEmpty(
+    renderer,
+    view,
     'partials/birria/menu-card',
-    view.c.menu.items.map((item) => {
+    view.menu.menu.items.map((item) => {
       const renderDetails = requireOption(DETAIL_RENDERERS, item.detailsType, 'Tipo de detalle');
       return {
         id: item.slug,
@@ -75,10 +76,24 @@ function renderBranches(renderer, view) {
   );
 }
 
+/**
+ * Combina el contenido estático con los datos editables (showcase del hero y club).
+ * @param {import('./index.js').LandingView} view
+ */
+function withEditableContent(view) {
+  const { hero, promo } = view.menu;
+  return {
+    ...view.c,
+    hero: { ...view.c.hero, showcase: { ...hero.showcase, price: priceMxn(hero.showcase.priceCents) } },
+    locations: { ...view.c.locations, club: { ...view.c.locations.club, ...promo } },
+  };
+}
+
 /** @param {import('./index.js').LandingView} view */
 export function buildBirriaBody({ renderer, ...view }) {
   return renderer.render('pages/birria', {
     ...view,
+    c: withEditableContent(view),
     menuCards: renderMenuCards(renderer, view),
     branches: renderBranches(renderer, view),
   });

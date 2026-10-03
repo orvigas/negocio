@@ -1,12 +1,12 @@
 import { image } from '../images.js';
-import { birriaMenuItems } from './menu.js';
 
 /**
  * Contenido de Birriería El Muñeco (sábado y domingo).
  * Fuente: _stich_source_/birrier_a_el_mu_eco_aut_ntica_birria_de_res_color_adobo/code.html
  *
- * Solo datos (textos, precios, horarios, contacto, imágenes). Los platillos del menú
- * están en ./menu.js. El marcado vive en
+ * Solo datos estáticos (textos, horarios, contacto, imágenes). Los datos editables desde
+ * /admin/birria (platillos, showcase del hero y textos del club) viven en el repositorio
+ * de menús; su semilla es ./seed.json. El marcado vive en
  * src/views/pages/birria.html y src/views/partials/birria/; los tonos visuales se
  * expresan con claves semánticas (`highlight`) que resuelve src/views/landings/birria.js.
  */
@@ -56,11 +56,6 @@ export const birriaContent = Object.freeze({
       Object.freeze({ icon: 'soup_kitchen', value: '100% Puro', label: 'Consomé de Res' }),
       Object.freeze({ icon: 'star', value: '4.9 ★', label: '+3,400 Opiniones' }),
     ]),
-    showcase: Object.freeze({
-      title: 'Tostado de Comal',
-      description: 'Con costra de queso fundido & adobo',
-      price: '$195 MXN',
-    }),
   }),
   menu: Object.freeze({
     eyebrow: 'Especialidades del Comal',
@@ -72,7 +67,6 @@ export const birriaContent = Object.freeze({
       description:
         'Menú interactivo, cotización instantánea y confirmación automática sin comisiones ni registros.',
     }),
-    items: birriaMenuItems,
   }),
   ritual: Object.freeze({
     eyebrow: 'El Ritual y La Receta',
@@ -156,10 +150,6 @@ export const birriaContent = Object.freeze({
       ]),
     }),
     club: Object.freeze({
-      badge: 'Club El Muñeco',
-      title: 'Domingos de Birria Familiar',
-      description:
-        'Recibe promociones de litros al 2x1 en tu primer pedido del mes y asegura tu paquete con tortillas ilimitadas antes de que se agote el cazo dominical.',
       inputLabel: 'Correo electrónico o teléfono',
       placeholder: 'Ingresa tu correo o teléfono',
       submit: 'Unirme',

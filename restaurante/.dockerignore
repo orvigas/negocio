@@ -1,0 +1,41 @@
+# Contexto de build de Docker (REQ-F-003). Nada de secretos, datos editables ni artefactos
+# locales: la imagen instala sus dependencias y compila su CSS.
+
+# Dependencias (se instalan con npm ci dentro de la imagen)
+node_modules
+**/node_modules
+
+# Variables de entorno: la configuración se inyecta al ejecutar, nunca en el build
+.env
+**/.env
+.env.*
+**/.env.*
+!.env.example
+
+# Datos editables de la administración (DATA_DIR por defecto fuera de producción)
+data
+
+# CSS generado localmente (la etapa build lo compila); se conserva public/css/.gitkeep
+public/css/*/
+
+# Logs y cobertura
+coverage
+*.log
+npm-debug.log*
+
+# Git
+.git
+.gitignore
+
+# Sistema / editores
+.DS_Store
+**/.DS_Store
+Thumbs.db
+.vscode
+.idea
+*.swp
+
+# Archivos de Docker (no los necesita la imagen)
+Dockerfile
+compose.yaml
+.dockerignore

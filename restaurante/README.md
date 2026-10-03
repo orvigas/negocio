@@ -20,6 +20,8 @@ vive en `src/content/`; los menús, precios, showcase del hero y promociones se 
 
 - Node.js >= 24 (ver `.nvmrc`; con nvm: `nvm use`)
 - npm
+- Opcional: Docker con Compose v2 para ejecutar las pruebas o construir la imagen sin
+  instalar Node (ver [Docker](#docker)).
 
 ## Puesta en marcha
 
@@ -47,6 +49,76 @@ una copia de la semilla de cada negocio.
 | `npm test`           | Tests unitarios e integración (Vitest + Supertest) |
 | `npm run test:watch` | Vitest en modo observación                                  |
 | `npm run lint`       | Pendiente de configurar                                     |
+
+## Docker
+
+Opcional. El despliegue actual en la VM **no cambia** (Node + nginx, sin contenedores) y las
+instrucciones sin Docker siguen vigentes. Los archivos están en esta carpeta: `Dockerfile`,
+`.dockerignore` y `compose.yaml`.
+
+El `Dockerfile` es multi-stage y todas las etapas parten de `node:24-alpine` (flotante dentro de
+la versión 24: una reconstrucción puede traer un parche más reciente de Node o Alpine):
+
+| Etapa        | Contenido                                                                      |
+| ------------ | ------------------------------------------------------------------------------ |
+| `base`       | Imagen base y directorio de trabajo (`/app`)                                   |
+| `deps`       | `npm ci` con solo `package.json` y `package-lock.json` (caché de dependencias) |
+| `build`      | Código + `npm run build:css` (si Tailwind falla, el build de la imagen falla)  |
+| `test`       | `build` + diseño fuente; comando por defecto `npm test`                        |
+| `production` | Dependencias de producción, `src/` y `public/` con el CSS compilado; usuario `node` |
+
+El `.dockerignore` deja fuera `node_modules/`, `.env*` (salvo `.env.example`), `data/`, el CSS
+generado localmente, logs, cobertura y `.git`: ningún secreto ni dato editable entra en las
+imágenes.
+
+### Pruebas
+
+```sh
+docker compose run --rm test   # código de salida 0 si todo pasa; distinto de 0 si algo falla
+```
+
+- Construye el target `test` en cada ejecución (`pull_policy: build`; gracias a la caché solo se
+  repiten las capas afectadas) y ejecuta `vitest run` completo, sin red (`network_mode: none`).
+- El código va dentro de la imagen (sin volúmenes): los cambios locales se incluyen al
+  reconstruir automáticamente.
+- Las pruebas de contenido comparan la semilla con `../_stich_source_/`, que compose pasa como
+  contexto adicional `design` (solo entra en la imagen de pruebas). Sin compose:
+  `docker build --target test --build-context design=../_stich_source_ -t restaurante:test .`
+- El contenedor usa UTC; no afecta a la selección de landing, que usa `BUSINESS_TIMEZONE`.
+- Compose lee el `.env` de esta carpeta solo para interpolar variables (no lo pasa al
+  contenedor). Si `ADMIN_PASSWORD_HASH` está sin comillas, Compose interpreta cada `$` del hash
+  y muestra avisos `variable is not set` con fragmentos del hash. Escríbelo entre comillas
+  simples (`ADMIN_PASSWORD_HASH='scrypt$...'`, Node lo lee igual) o ejecuta
+  `COMPOSE_DISABLE_ENV_FILE=true docker compose run --rm test`.
+- Otra arquitectura (p. ej. amd64 en Apple Silicon):
+  `DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose run --rm test`.
+
+### Producción
+
+```sh
+docker build --target production -t restaurante:prod .
+docker volume create restaurante-data
+docker run -d --name restaurante -p 3000:3000 \
+  -e WHATSAPP_MOLOTES=5215512345678 -e WHATSAPP_BIRRIA=5215512345678 \
+  -e DATA_DIR=/var/lib/restaurante -v restaurante-data:/var/lib/restaurante \
+  restaurante:prod
+```
+
+- La configuración se inyecta **al ejecutar** (`-e` o `--env-file .env`), nunca en el build. Se
+  valida igual que sin Docker: si falta una variable obligatoria (`WHATSAPP_*`, `DATA_DIR`), el
+  contenedor termina con código 1 y lista los problemas sin mostrar valores.
+- `NODE_ENV=production` y `PORT=3000` vienen definidos en la imagen; la app corre con el usuario
+  `node` (UID 1000) y el código es de solo lectura para él.
+- `DATA_DIR` debe ser una ruta absoluta montada como volumen; `/var/lib/restaurante` ya existe
+  en la imagen con dueño `node`, así que un volumen con nombre montado ahí funciona sin más. Con
+  un bind mount del host, la carpeta debe ser escribible por el UID 1000. En el primer arranque
+  se copia la semilla (log `menu_data_seeded`).
+- `HEALTHCHECK`: cada 30 s pide `GET /` con el `wget` de la imagen
+  (`docker inspect -f '{{.State.Health.Status}}' restaurante` -> `healthy`). Cada comprobación
+  aparece como una línea `request` en el log.
+- `docker stop` envía `SIGTERM` y la app cierra el servidor ordenadamente.
+- `/admin` exige HTTPS en producción (ver [Seguridad](#seguridad)): un despliegue con Docker
+  necesita un proxy con TLS y `TRUST_PROXY=true`, fuera del alcance actual.
 
 ## Configuración
 
@@ -252,13 +324,16 @@ restaurante/
 │   ├── hash-password.js      # `npm run admin:hash-password`
 │   └── generate-icons.py     # Genera public/img/<negocio>/icons/ (Python 3 + Pillow; solo desarrollo)
 ├── data/                     # DATA_DIR por defecto fuera de producción (ignorado por git)
-└── tests/
-    ├── helpers.js            # Config válida, semillas y repositorio en memoria para pruebas
-    ├── support/admin.js      # App con administración, inicio de sesión y lectura de formularios
-    ├── support/png.js        # Lectura mínima de PNG/ICO (dimensiones, opacidad, color de fondo)
-    ├── snapshots/            # HTML de referencia de las landings (regresión visual con la semilla)
-    ├── unit/                 # config, esquema, precios, formulario, repositorio de archivos, sesión, landings, contenido vs. diseño, JS sobre el HTML real
-    └── integration/          # Landings (fecha, SEO, CTA, datos editables, datos dañados), administración, estáticos, errores
+├── tests/
+│   ├── helpers.js            # Config válida, semillas y repositorio en memoria para pruebas
+│   ├── support/admin.js      # App con administración, inicio de sesión y lectura de formularios
+│   ├── support/png.js        # Lectura mínima de PNG/ICO (dimensiones, opacidad, color de fondo)
+│   ├── snapshots/            # HTML de referencia de las landings (regresión visual con la semilla)
+│   ├── unit/                 # config, esquema, precios, formulario, repositorio de archivos, sesión, landings, contenido vs. diseño, JS sobre el HTML real
+│   └── integration/          # Landings (fecha, SEO, CTA, datos editables, datos dañados), administración, estáticos, errores
+├── Dockerfile                # Imagen multi-stage (base, deps, build, test, production); ver [Docker](#docker)
+├── .dockerignore             # Excluye secretos, datos, dependencias y artefactos locales del build
+└── compose.yaml              # Servicio `test`: `docker compose run --rm test`
 ```
 
 ### Plantillas
@@ -367,4 +442,3 @@ los PNG de alta resolución de `../_stich_source_/logo_<negocio>.png/screen.png`
   club de Birria es de texto (el diseño usaba `type="email"`, que rechazaba teléfonos).
 - Responsive: el título de Moloteando usa la escala `display-lg-mobile` del propio diseño en
   móvil y la foto principal es 4:3 en móvil para que el pie de foto no tape el plato.
-# restaurant

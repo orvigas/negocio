@@ -1,0 +1,15 @@
+# Pruebas en contenedor (REQ-F-003): docker compose run --rm test
+services:
+  test:
+    build:
+      context: .
+      target: test
+      # Diseño fuente (raíz del repositorio): lo leen las pruebas de contenido. Solo entra
+      # en la imagen de pruebas, nunca en production.
+      additional_contexts:
+        design: ../_stich_source_
+    image: restaurante:test
+    # Reconstruye en cada ejecución (el código va dentro de la imagen; la caché lo hace rápido).
+    pull_policy: build
+    # Las pruebas no usan la red.
+    network_mode: none

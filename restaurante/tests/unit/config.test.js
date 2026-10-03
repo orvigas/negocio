@@ -1,6 +1,8 @@
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
-import { ConfigError, loadConfig } from '../../src/config/env.js';
+import { ConfigError, PROJECT_DIR, loadConfig } from '../../src/config/env.js';
 import { VALID_ENV } from '../helpers.js';
 
 function issuesFor(env) {
@@ -101,7 +103,8 @@ describe('loadConfig: administración y datos (REQ-F-001)', () => {
     const config = loadConfig(VALID_ENV);
     expect(config.admin).toEqual({ enabled: false });
     expect(config.trustProxy).toBe(false);
-    expect(config.dataDir).toMatch(/restaurante[/\\]data$/);
+    // Por defecto, la carpeta data/ del proyecto (sin depender del nombre de la carpeta clonada).
+    expect(config.dataDir).toBe(join(PROJECT_DIR, 'data'));
   });
 
   it('con usuario y hash válidos la administración queda habilitada', () => {

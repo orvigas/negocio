@@ -1,4 +1,5 @@
 import { BUSINESS_IDS } from '../../config/businesses.js';
+import { getIconLinks } from '../../content/icons.js';
 import { getBusinessContent } from '../../content/index.js';
 import { getMenuSchema, resolveUnion } from '../../services/menu-schema.js';
 import { centsToInput } from '../../services/price.js';
@@ -229,8 +230,17 @@ function renderHeader(renderer, { businessId, csrfToken }) {
   });
 }
 
-function layout(renderer, { title, header, body }) {
-  return renderer.render('admin/layout', { title: `${title} | Administración`, header: header ?? renderer.join([]), body });
+/**
+ * `faviconBusinessId`: negocio activo del día; admin muestra su favicon, sin manifest ni
+ * theme-color (REQ-F-002, RF-7).
+ */
+function layout(renderer, { title, header, body, faviconBusinessId }) {
+  return renderer.render('admin/layout', {
+    title: `${title} | Administración`,
+    faviconLinks: renderer.render('partials/favicon-links', getIconLinks(faviconBusinessId)),
+    header: header ?? renderer.join([]),
+    body,
+  });
 }
 
 function lastChangeText(lastChange, timezone) {
@@ -240,9 +250,9 @@ function lastChangeText(lastChange, timezone) {
 
 /**
  * @param {{ render: Function, join: Function }} renderer
- * @param {{ next: string, error?: 'invalid'|'locked', expired?: boolean }} options
+ * @param {{ next: string, error?: 'invalid'|'locked', expired?: boolean, faviconBusinessId: 'molotes'|'birria' }} options
  */
-export function renderAdminLogin(renderer, { next, error, expired = false }) {
+export function renderAdminLogin(renderer, { next, error, expired = false, faviconBusinessId }) {
   let notice = renderer.join([]);
   if (error === 'invalid') {
     notice = renderNotice(renderer, { tone: 'error', role: 'alert', title: 'Usuario o contraseña incorrectos.' });
@@ -263,6 +273,7 @@ export function renderAdminLogin(renderer, { next, error, expired = false }) {
   }
   return layout(renderer, {
     title: 'Acceso',
+    faviconBusinessId,
     body: renderer.render('admin/login', {
       next,
       notice,
@@ -308,11 +319,25 @@ function renderDamaged(renderer, { businessId, damaged, csrfToken, author }) {
  *   success?: string,
  *   problem?: string,
  *   restoreAuthor?: { value?: string, error?: string },
- * }} options
+ *   faviconBusinessId: 'molotes'|'birria',
+ * }} options `faviconBusinessId`: negocio activo del día (favicon de la pestaña).
  */
 export function renderAdminBusiness(renderer, options) {
-  const { businessId, timezone, csrfToken, document, version, lastChange, damaged, form, conflict, success, problem, restoreAuthor } =
-    options;
+  const {
+    businessId,
+    timezone,
+    csrfToken,
+    document,
+    version,
+    lastChange,
+    damaged,
+    form,
+    conflict,
+    success,
+    problem,
+    restoreAuthor,
+    faviconBusinessId,
+  } = options;
   const { sections, summary } = renderSchemaFields(renderer, businessId, document.data, form);
 
   const authorError = form?.authorError;
@@ -358,6 +383,7 @@ export function renderAdminBusiness(renderer, options) {
   const title = `Menú de ${businessName(businessId)}`;
   return layout(renderer, {
     title,
+    faviconBusinessId,
     header: renderHeader(renderer, { businessId, csrfToken }),
     body: renderer.render('admin/business', {
       title,
@@ -383,11 +409,15 @@ export function renderAdminBusiness(renderer, options) {
 /**
  * Página de confirmación de "Restaurar versión anterior" (funciona sin JavaScript).
  */
-export function renderAdminConfirmRestore(renderer, { businessId, timezone, csrfToken, lastChange, author, authorError, problem }) {
+export function renderAdminConfirmRestore(
+  renderer,
+  { businessId, timezone, csrfToken, lastChange, author, authorError, problem, faviconBusinessId },
+) {
   const title = `Menú de ${businessName(businessId)}`;
   const notices = problem ? [renderNotice(renderer, { tone: 'error', role: 'alert', title: problem })] : [];
   return layout(renderer, {
     title: `Restaurar versión anterior · ${title}`,
+    faviconBusinessId,
     header: renderHeader(renderer, { businessId, csrfToken }),
     body: renderer.render('admin/confirm-restore', {
       title,

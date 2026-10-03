@@ -23,6 +23,15 @@ export const molotesContent = Object.freeze({
     fontsHref:
       'https://fonts.googleapis.com/css2?family=Epilogue:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap',
   }),
+  // Favicons, iconos de pantalla de inicio y manifest (REQ-F-002). Los archivos están en
+  // public/img/molotes/icons/ y se generan con scripts/generate-icons.py: al regenerarlos,
+  // incrementa `version` (se añade como ?v= a sus URLs para invalidar la caché HTTP).
+  icons: Object.freeze({
+    version: 1,
+    // Fondo de la landing: theme-color, background_color y fondo de los iconos opacos.
+    themeColor: '#03132b',
+    manifest: Object.freeze({ name: 'Moloteando', shortName: 'Moloteando' }),
+  }),
   // Imágenes en public/img/molotes/ (alt tomados del diseño; alt vacío = decorativa).
   images: Object.freeze({
     logo: image('/img/molotes/logo-molotes.webp', 'Moloteando', 461, 512),

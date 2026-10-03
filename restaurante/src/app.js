@@ -66,7 +66,7 @@ export function createApp({
         imageExists: createImageChecker(publicDir),
       }
     : undefined;
-  const router = createRouter({ config, renderer, now, repository, admin });
+  const router = createRouter({ config, renderer, now, repository, publicDir, admin });
 
   app.use(createRequestLogger({ logger }));
   app.use(createErrorHandler({ logger, exposeStack: config.nodeEnv === 'development' }));

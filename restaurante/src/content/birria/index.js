@@ -23,6 +23,15 @@ export const birriaContent = Object.freeze({
     fontsHref:
       'https://fonts.googleapis.com/css2?family=Epilogue:wght@400;600;700;800;900&family=Space+Grotesk:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap',
   }),
+  // Favicons, iconos de pantalla de inicio y manifest (REQ-F-002). Los archivos están en
+  // public/img/birria/icons/ y se generan con scripts/generate-icons.py: al regenerarlos,
+  // incrementa `version` (se añade como ?v= a sus URLs para invalidar la caché HTTP).
+  icons: Object.freeze({
+    version: 1,
+    // Fondo de la landing: theme-color, background_color y fondo de los iconos opacos.
+    themeColor: '#290808',
+    manifest: Object.freeze({ name: 'Birria El Muñeco', shortName: 'El Muñeco' }),
+  }),
   // Imágenes en public/img/birria/ (alt tomados del diseño; alt vacío = decorativa).
   images: Object.freeze({
     logo: image('/img/birria/logo-birria.webp', 'Logo Birriería El Muñeco', 418, 512),

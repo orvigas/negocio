@@ -1,4 +1,5 @@
 import { BUSINESS, BUSINESS_PATHS } from '../../config/businesses.js';
+import { getIconLinks } from '../../content/icons.js';
 import { commonContent, getBusinessContent } from '../../content/index.js';
 import { buildVisibleMenu } from '../../services/visible-menu.js';
 import { buildBirriaBody } from './birria.js';
@@ -76,8 +77,13 @@ export function renderLandingPage({ renderer, config, businessId, menu }) {
       })
     : renderer.join([]);
 
+  // Favicons, apple-touch-icon, manifest y theme-color del negocio mostrado (REQ-F-002).
+  const icons = getIconLinks(businessId);
+
   return renderer.render('layouts/base', {
     common: commonContent,
+    icons,
+    faviconLinks: renderer.render('partials/favicon-links', icons),
     seo: { ...content.seo, canonical },
     siteName: content.name,
     fontsHref: content.assets.fontsHref,

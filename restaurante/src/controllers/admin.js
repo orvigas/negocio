@@ -15,6 +15,7 @@ import {
   SeedRestoreNotAllowedError,
 } from '../repositories/menu-repository.js';
 import { parseAdminForm } from '../services/admin-form.js';
+import { getActiveBusinessId } from '../services/business-schedule.js';
 import { AUTHOR_MAX_LENGTH, textLength } from '../services/menu-schema.js';
 import { readFormBody } from '../utils/form-body.js';
 import {
@@ -67,6 +68,7 @@ function seeOther(ctx, url) {
  * @param {{
  *   config: object,
  *   renderer: object,
+ *   now: () => Date,
  *   repository: object,
  *   sessions: object,
  *   throttle: object,
@@ -75,9 +77,12 @@ function seeOther(ctx, url) {
  *   logger: object,
  * }} deps
  */
-export function createAdminController({ config, renderer, repository, sessions, throttle, authenticator, imageExists, logger }) {
+export function createAdminController({ config, renderer, now, repository, sessions, throttle, authenticator, imageExists, logger }) {
+  if (typeof now !== 'function') throw new TypeError('createAdminController requiere el reloj (now)');
   const requireSession = createSessionGuard({ sessions, config });
   const timezone = config.timezone;
+  /** Negocio activo del día: su favicon se muestra en todas las páginas de admin (REQ-F-002, RF-7). */
+  const faviconBusinessId = () => getActiveBusinessId({ now: now(), timeZone: timezone });
 
   /** Resuelve :business o responde 404. */
   function businessFrom(ctx) {
@@ -113,6 +118,7 @@ export function createAdminController({ config, renderer, repository, sessions, 
       version: edit.version,
       damaged: edit.damaged,
       lastChange: await repository.getLastChange(businessId),
+      faviconBusinessId: faviconBusinessId(),
       ...extra,
     };
   }
@@ -121,7 +127,8 @@ export function createAdminController({ config, renderer, repository, sessions, 
     async loginPage(ctx) {
       const next = sanitizeNext(ctx.query.next);
       if (sessions.touch(ctx.cookies.get(SESSION_COOKIE))) return seeOther(ctx, next);
-      return sendHtml(ctx, 200, renderAdminLogin(renderer, { next, expired: ctx.query.expirada === '1' }));
+      const expired = ctx.query.expirada === '1';
+      return sendHtml(ctx, 200, renderAdminLogin(renderer, { next, expired, faviconBusinessId: faviconBusinessId() }));
     },
 
     async login(ctx) {
@@ -132,14 +139,15 @@ export function createAdminController({ config, renderer, repository, sessions, 
 
       if (throttle.status(origin).locked) {
         logger.warn('admin_login_locked', { ip: origin });
-        return sendHtml(ctx, 429, renderAdminLogin(renderer, { next, error: 'locked' }));
+        return sendHtml(ctx, 429, renderAdminLogin(renderer, { next, error: 'locked', faviconBusinessId: faviconBusinessId() }));
       }
 
       const ok = await authenticator.verify(fields.get('username') ?? '', fields.get('password') ?? '');
       if (!ok) {
         const locked = throttle.recordFailure(origin);
         logger.warn('admin_login_failed', { ip: origin, locked });
-        return sendHtml(ctx, locked ? 429 : 401, renderAdminLogin(renderer, { next, error: locked ? 'locked' : 'invalid' }));
+        const error = locked ? 'locked' : 'invalid';
+        return sendHtml(ctx, locked ? 429 : 401, renderAdminLogin(renderer, { next, error, faviconBusinessId: faviconBusinessId() }));
       }
 
       throttle.recordSuccess(origin);

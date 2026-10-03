@@ -21,6 +21,7 @@ function pageFields(businessId) {
     version: '0@seed',
     lastChange: null,
     damaged: null,
+    faviconBusinessId: businessId,
   }).toString();
   const fields = formFields(html);
   delete fields._csrf;

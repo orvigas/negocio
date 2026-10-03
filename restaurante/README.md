@@ -77,6 +77,8 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `GET /`          | Landing activa según el día en `BUSINESS_TIMEZONE`: L-V Moloteando, S-D Birriería El Muñeco |
 | `GET /molotes`   | Landing de Moloteando, siempre                                                             |
 | `GET /birria`    | Landing de Birriería El Muñeco, siempre                                                    |
+| `GET /favicon.ico`, `GET /apple-touch-icon.png`, `GET /apple-touch-icon-precomposed.png` | Icono del negocio activo del día (ver [Iconos](#iconos-favicons-y-pantalla-de-inicio)) |
+| `GET /molotes.webmanifest`, `GET /birria.webmanifest` | Web App Manifest de cada negocio                                  |
 | `GET /<archivo>` | Estáticos de `public/` (sin índices ni archivos ocultos)                                   |
 | `/admin/...`     | Administración de menús (ver [Administración de menús](#administración-de-menús))          |
 
@@ -216,18 +218,18 @@ restaurante/
 │   ├── server.js             # Entrada del proceso: valida config, prepara DATA_DIR, escucha en PORT, cierre ordenado
 │   ├── app.js                # createApp(): app Koa testeable (config, repositorio, logger y `now` inyectables)
 │   ├── config/               # env.js (carga/validación), businesses.js (ids de negocio), paths.js (views/, public/)
-│   ├── controllers/          # landing.js (landing del negocio activo), admin.js (administración de menús)
+│   ├── controllers/          # landing.js (landing del negocio activo), icons.js (iconos de la raíz y manifests), admin.js
 │   ├── routes/               # Router (@koa/router): index.js (landings), admin.js (/admin)
 │   ├── middleware/           # Manejo centralizado de errores, log de requests, protección de /admin
 │   ├── repositories/         # Repositorio de menús: contrato y reglas, implementación de archivos y en memoria
 │   ├── services/             # business-schedule, whatsapp, menu-schema, price, visible-menu, admin-form,
 │   │                         # menu-diff, admin-auth, session-store, login-throttle
-│   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/) y semillas seed.json
+│   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), semillas seed.json e icons.js
 │   ├── utils/                # logger.js (JSON estructurado), datetime.js (zona del negocio), form-body.js
 │   ├── views/                # render.js + plantillas HTML
 │   │   ├── layouts/base.html # <head> común (SEO, fuentes, CSS/JS por negocio) y skip link
 │   │   ├── pages/            # molotes.html, birria.html: header, secciones y footer del diseño
-│   │   ├── partials/         # icons/ (WhatsApp), seo-absolute, molotes/ y birria/ (tarjetas, aviso de sección vacía, etc.)
+│   │   ├── partials/         # icons/ (WhatsApp), seo-absolute, favicon-links, molotes/ y birria/ (tarjetas, aviso de sección vacía, etc.)
 │   │   ├── landings/         # Contenido -> datos de plantilla (index.js, molotes.js, birria.js)
 │   │   └── admin/            # Plantillas y vistas de la administración (formulario generado desde el esquema)
 │   └── styles/
@@ -244,13 +246,16 @@ restaurante/
 │   │   └── birria/main.js    # Entrada JS de Birriería El Muñeco
 │   └── img/
 │       ├── common/           # Imágenes usadas por ambas landings
-│       ├── molotes/
-│       └── birria/
-├── scripts/hash-password.js  # `npm run admin:hash-password`
+│       ├── molotes/          # icons/: favicons e iconos de pantalla de inicio (generados)
+│       └── birria/           # icons/: ídem
+├── scripts/
+│   ├── hash-password.js      # `npm run admin:hash-password`
+│   └── generate-icons.py     # Genera public/img/<negocio>/icons/ (Python 3 + Pillow; solo desarrollo)
 ├── data/                     # DATA_DIR por defecto fuera de producción (ignorado por git)
 └── tests/
     ├── helpers.js            # Config válida, semillas y repositorio en memoria para pruebas
     ├── support/admin.js      # App con administración, inicio de sesión y lectura de formularios
+    ├── support/png.js        # Lectura mínima de PNG/ICO (dimensiones, opacidad, color de fondo)
     ├── snapshots/            # HTML de referencia de las landings (regresión visual con la semilla)
     ├── unit/                 # config, esquema, precios, formulario, repositorio de archivos, sesión, landings, contenido vs. diseño, JS sobre el HTML real
     └── integration/          # Landings (fecha, SEO, CTA, datos editables, datos dañados), administración, estáticos, errores
@@ -302,6 +307,45 @@ incluye las clases de la otra.
 Todos los CTA de pedido (header, hero, banner, plataformas y botón flotante) usan el enlace
 calculado desde `WHATSAPP_MOLOTES*` / `WHATSAPP_BIRRIA*`. Los enlaces "Cómo llegar", la
 dirección del footer, el mapa y "Pick Up / En Sucursal" usan `location.mapsUrl`.
+
+### Iconos (favicons y pantalla de inicio)
+
+Cada negocio tiene su juego de iconos en `public/img/<negocio>/icons/`, generado a partir de
+los PNG de alta resolución de `../_stich_source_/logo_<negocio>.png/screen.png`:
+
+| Archivo                  | Tamaño        | Arte                                                           |
+| ------------------------ | ------------- | -------------------------------------------------------------- |
+| `favicon.ico`            | 16, 32 y 48   | Mascota recortada en círculo sobre el color del negocio        |
+| `icon-16.png`, `icon-32.png` | 16 y 32   | Ídem                                                           |
+| `apple-touch-icon.png`   | 180           | Logo completo, opaco, sobre el color del negocio               |
+| `icon-192.png`, `icon-512.png` | 192 y 512 | Logo completo sobre fondo transparente                       |
+| `icon-maskable-512.png`  | 512           | Logo completo, opaco, dentro del círculo central del 80 %      |
+
+- **Metadatos:** `icons` en `src/content/<negocio>/index.js` (versión, `themeColor` y nombres
+  del manifest). Las rutas de los archivos y el manifest se arman en `src/content/icons.js`.
+- **`<head>`:** cada landing declara el .ico, los PNG de 16 y 32, el apple-touch-icon, su
+  manifest y su `theme-color`; `/` usa los del negocio del día. Las páginas de `/admin`
+  muestran el favicon del negocio del día, sin manifest ni `theme-color`.
+- **Raíz:** `/favicon.ico`, `/apple-touch-icon.png` y `/apple-touch-icon-precomposed.png`
+  sirven el icono del negocio del día con `Cache-Control: no-cache` y `ETag` (responden 304
+  si no cambió). Los archivos se cargan en memoria al arrancar; si falta alguno, la app no arranca.
+  No crees archivos con esos nombres en la raíz de `public/`: `koa-static` los serviría con
+  caché larga.
+- **Caché:** los iconos de cada negocio se sirven como estáticos (1 h en producción) con
+  `?v=<icons.version>` en la URL. Los manifests (`/molotes.webmanifest`, `/birria.webmanifest`)
+  piden revalidación. Safari e iOS guardan su propia caché de favicons, que el servidor no controla.
+
+**Regenerar los iconos** (por ejemplo, si cambia un logo):
+
+1. Requisitos (solo en la máquina de desarrollo): Python 3 y Pillow (`pip install Pillow`).
+2. Desde `restaurante/`: `python3 scripts/generate-icons.py --preview-dir /tmp/iconos`.
+   El recorte de la mascota (coordenadas en píxeles de la fuente) y los colores de fondo están
+   al inicio del script; los colores deben coincidir con `icons.themeColor` del contenido.
+3. Revisa la hoja de contacto `icons-preview-<negocio>.png` que se deja en `--preview-dir`
+   (fuera del repo).
+4. Incrementa `icons.version` en `src/content/<negocio>/index.js` para invalidar la caché HTTP.
+5. `npm test` (comprueba tamaños, opacidad, color de fondo y tamaños del .ico) y versiona los
+   archivos nuevos.
 
 ### Diferencias deliberadas con el diseño fuente
 

@@ -639,6 +639,12 @@ Se eliminaron las imágenes `restaurante:qa-*`, el volumen `restaurante-qa-data`
 
 QA_APPROVED
 
+## Pull Request
+
+- URL: https://github.com/orvigas/negocio/pull/6 (`feature/REQ-F-003-dockerizacion-node24-alpine` → `main`).
+- Commit: `2d51ec7 feat: permite ejecutar las pruebas con Docker Compose y construir una imagen de producción`.
+- Pendiente manual no bloqueante antes del merge: revisión visual en el navegador de `/molotes` y `/birria` servidas por la imagen `production` (ver QA Report).
+
 ## Historial de cambios
 
 ### Versión 1
@@ -668,3 +674,5 @@ Descripción inicial (2026-10-02). Decisiones D-1 a D-4 elegidas por el usuario;
 ### Commit y Pull Request (senior-fullstack)
 
 2026-10-02: commit de los 6 archivos del alcance y el ticket en `feature/REQ-F-003-dockerizacion-node24-alpine`, push y Pull Request contra `main`. Verificado que ningún archivo incluido contiene el hash ni valores sensibles del `.env` local. Estado: READY_FOR_MERGE.
+
+Pull Request https://github.com/orvigas/negocio/pull/6 hacia `main` (commit `2d51ec7`); `npm test`: 468 pruebas en verde. Estado: READY_FOR_MERGE.

@@ -21,9 +21,10 @@ interface BusinessIconAssets {
   readonly manifest: CachedAsset;
 }
 
+// favicon y appleTouchIcon son propiedades función (no métodos): el router los recibe sueltos, sin `this`.
 export interface IconsController {
-  favicon(ctx: Context): void;
-  appleTouchIcon(ctx: Context): void;
+  favicon: (ctx: Context) => void;
+  appleTouchIcon: (ctx: Context) => void;
   manifest(businessId: BusinessId): Middleware;
 }
 
@@ -99,7 +100,7 @@ export function createIconsController({
     },
     /** Manejador de GET /<negocio>.webmanifest */
     manifest(businessId) {
-      if (!isBusinessId(businessId)) throw new TypeError(`Negocio desconocido: ${businessId}`);
+      if (!isBusinessId(businessId)) throw new TypeError(`Negocio desconocido: ${String(businessId)}`);
       return (ctx) => sendRevalidated(ctx, assets[businessId].manifest);
     },
   });

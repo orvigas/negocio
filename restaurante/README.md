@@ -52,7 +52,12 @@ una copia de la semilla de cada negocio.
 | `npm test`           | Tests unitarios e integración (Vitest + Supertest) |
 | `npm run typecheck`  | Verificación de tipos con `tsc` (`tsconfig.json`, sin generar archivos); termina con código distinto de 0 si hay errores. No forma parte de `npm test` |
 | `npm run test:watch` | Vitest en modo observación                                  |
-| `npm run lint`       | Pendiente de configurar                                     |
+| `npm run lint`       | ESLint (`eslint.config.ts`): backend en TypeScript con información de tipos (typescript-eslint) y `public/js` con las reglas de JavaScript para navegador. No modifica archivos; termina con código distinto de 0 si hay errores o avisos. No forma parte de `npm test` ni del Dockerfile |
+| `npm run lint:fix`   | Igual que `lint`, pero aplica las correcciones automáticas |
+
+Excepciones al lint: una regla solo se desactiva en una línea concreta y con la justificación
+después de `--` (`// eslint-disable-next-line <regla> -- <motivo>`); sin justificación, el lint
+falla. Las excepciones globales están comentadas en `eslint.config.ts`.
 
 ## Docker
 
@@ -339,6 +344,7 @@ restaurante/
 │   └── integration/          # Landings (fecha, SEO, CTA, datos editables, datos dañados), administración, estáticos, errores
 ├── tsconfig.json             # TypeScript estricto solo para verificar tipos (`npm run typecheck`; sin emitir archivos)
 ├── vitest.config.ts          # Configuración de Vitest
+├── eslint.config.ts          # Configuración de ESLint (`npm run lint`)
 ├── Dockerfile                # Imagen multi-stage (base, deps, build, test, production); ver [Docker](#docker)
 ├── .dockerignore             # Excluye secretos, datos, dependencias y artefactos locales del build
 └── compose.yaml              # Servicio `test`: `docker compose run --rm test`

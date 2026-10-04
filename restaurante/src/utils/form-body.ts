@@ -18,7 +18,8 @@ async function readRawBody(ctx: Context, limit: number): Promise<Buffer> {
 
   const chunks: Buffer[] = [];
   let size = 0;
-  for await (const chunk of ctx.req) {
+  // Sin setEncoding, el stream de http emite Buffer (IncomingMessage lo tipa como `any`).
+  for await (const chunk of ctx.req as AsyncIterable<Buffer>) {
     size += chunk.length;
     if (size > limit) ctx.throw(413, 'El formulario es demasiado grande.', { code: 'PAYLOAD_TOO_LARGE' });
     chunks.push(chunk);

@@ -54,7 +54,7 @@ En cada fase actualiza la sección `## Estado` del ticket y agrega una línea al
 - `npm test`: Vitest + Supertest (HTTP) + jsdom (módulos de `public/js`). Las pruebas están en `tests/unit/` y `tests/integration/`.
 - Fecha simulada: fake timers de Vitest (`vi.setSystemTime`) y `BUSINESS_TIMEZONE`.
 - `npm run build:css`: requerido antes de cualquier prueba visual.
-- `npm run lint` es un **placeholder**: no lo cuentes como evidencia.
+- `npm run lint`: ESLint (`eslint.config.ts`) con typescript-eslint e información de tipos sobre `src/`, `tests/`, `scripts/` y configuraciones, y reglas de JavaScript para navegador en `public/js`. Debe terminar con 0, sin errores ni avisos, y no modifica archivos: cuenta como evidencia. No ejecutes `npm run lint:fix` durante QA (modifica archivos).
 
 Usa estas herramientas antes de proponer otras. No agregues dependencias de testing sin justificarlo en el plan y sin aprobación.
 

@@ -30,3 +30,8 @@ Ejemplo:
 ```
 
 JavaScript debe identificar el comportamiento mediante atributos `data-*` en lugar de acoplar directamente el comportamiento a las clases de presentación siempre que sea práctico.
+
+## Lint
+
+- `npm run lint` revisa `public/js` con las reglas recomendadas de ESLint para JavaScript (módulos ES y globales del navegador) y debe terminar con 0. `npm run lint:fix` aplica las correcciones automáticas.
+- Una regla solo se desactiva en una línea concreta y con la justificación después de `--` (`// eslint-disable-next-line <regla> -- <motivo>`).

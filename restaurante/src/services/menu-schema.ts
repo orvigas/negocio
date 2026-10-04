@@ -364,7 +364,7 @@ function leafError(node: LeafNode, value: unknown, reference: unknown): string |
       if (typeof value !== 'string' || !KEY_PATTERN.test(value)) return 'Identificador inválido.';
       return value === reference ? null : 'La estructura no se puede modificar.';
     default:
-      throw new Error(`Tipo de nodo desconocido: ${(node as { kind: unknown }).kind}`);
+      throw new Error(`Tipo de nodo desconocido: ${String((node as { kind: unknown }).kind)}`);
   }
 }
 

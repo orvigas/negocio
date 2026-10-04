@@ -273,7 +273,7 @@ Requiere que el ticket esté en `QA_APPROVED`. Esta es la autorización explíci
 
 1. Verifica `git status`, `git diff`, `git diff --staged` y `git branch --show-current`.
 2. Confirma que todos los cambios pertenecen al ticket y que las pruebas pasan.
-3. Pon el estado del ticket en `READY_FOR_MERGE` (el ticket permanece en `in-progress/`).
+3. El ticket permanece en `in-progress/` y con estado `QA_APPROVED` en este commit: `READY_FOR_MERGE` solo se registra cuando el CI del PR está en verde (paso 9).
 4. Agrega los archivos por nombre (no uses `git add -A` ni `git add .`).
 5. Crea el commit con Conventional Commits en español, describiendo **qué se obtuvo** con el cambio. Ejemplo: `feat: habilita pedidos por WhatsApp en la landing de Molotes`.
    - **No incluyas referencias a Claude ni Anthropic** (ni `Co-Authored-By`, ni enlaces de herramientas), ni en el commit ni en el PR.
@@ -296,7 +296,12 @@ Estado de cada criterio.
 ## Riesgos
 ```
 
-8. Agrega la URL del PR al ticket y devuelve `READY_FOR_MERGE`.
+8. Espera el CI del PR (`.github/workflows/ci.yml`) con `gh pr checks <número> --watch --fail-fast` (solo lectura). Las comprobaciones `calidad` y `docker` deben quedar en verde.
+   - Justo después de `gh pr create`, GitHub puede tardar unos segundos en registrar las ejecuciones y `gh pr checks` responder `no checks reported`: reintenta cada pocos segundos (hasta ~1 minuto) antes de darlo por fallo.
+   - Si alguna comprobación falla, **no registres ni devuelvas `READY_FOR_MERGE`**: informa del paso que falló con el enlace a la ejecución y detén el flujo (regla crítica 8).
+   - GitHub no bloquea el merge en este repositorio (plan Free), así que esta comprobación es obligatoria por proceso.
+9. Con el CI en verde, pon el estado del ticket en `READY_FOR_MERGE`, agrega la URL del PR y el resultado de los checks, y haz un commit `docs: registra el Pull Request de REQ-F-<NNN>` (ruta explícita del ticket) con su push.
+10. Espera de nuevo el CI del último commit (como en el paso 8) y devuelve `READY_FOR_MERGE`.
 
 **Nunca hagas merge a `main` ni push a `main`.** La revisión y el merge los hace el usuario.
 
@@ -318,6 +323,6 @@ Solo cuando el prompt confirma que el usuario hizo merge del PR:
 4. Implementa solo el alcance aprobado; nunca ocultes cambios de alcance.
 5. Nunca descartes ni sobrescribas cambios ajenos al ticket.
 6. Commits solo en T4 (y en T5 si se autoriza), sin referencias a Claude ni Anthropic.
-7. El Pull Request siempre apunta a `main`; nunca hagas merge.
+7. El Pull Request siempre apunta a `main`; nunca hagas merge. Nunca devuelvas `READY_FOR_MERGE` con el CI del PR (`calidad` o `docker`) en rojo o sin terminar.
 8. Si cualquier validación falla, detén el flujo y repórtalo con evidencia.
 9. Mantén la trazabilidad completa en el archivo del ticket: requisito → Action Plan → Technical Action Plan → implementación → QA → commit → PR.

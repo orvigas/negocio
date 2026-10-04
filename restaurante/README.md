@@ -52,7 +52,7 @@ una copia de la semilla de cada negocio.
 | `npm test`           | Tests unitarios e integración (Vitest + Supertest) |
 | `npm run typecheck`  | Verificación de tipos con `tsc` (`tsconfig.json`, sin generar archivos); termina con código distinto de 0 si hay errores. No forma parte de `npm test` |
 | `npm run test:watch` | Vitest en modo observación                                  |
-| `npm run lint`       | ESLint (`eslint.config.ts`): backend en TypeScript con información de tipos (typescript-eslint) y `public/js` con las reglas de JavaScript para navegador. No modifica archivos; termina con código distinto de 0 si hay errores o avisos. No forma parte de `npm test` ni del Dockerfile |
+| `npm run lint`       | ESLint (`eslint.config.ts`): backend en TypeScript con información de tipos (typescript-eslint) y `public/js` con las reglas de JavaScript para navegador. No modifica archivos; termina con código distinto de 0 si hay errores o avisos. No forma parte de `npm test` ni del Dockerfile, pero sí del [CI](#ci) |
 | `npm run lint:fix`   | Igual que `lint`, pero aplica las correcciones automáticas |
 
 Excepciones al lint: una regla solo se desactiva en una línea concreta y con la justificación
@@ -130,6 +130,74 @@ docker run -d --name restaurante -p 3000:3000 \
 - `docker stop` envía `SIGTERM` y la app cierra el servidor ordenadamente.
 - `/admin` exige HTTPS en producción (ver [Seguridad](#seguridad)): un despliegue con Docker
   necesita un proxy con TLS y `TRUST_PROXY=true`, fuera del alcance actual.
+
+## CI
+
+El workflow `.github/workflows/ci.yml` (en la raíz del repositorio, GitHub Actions) comprueba
+cada cambio. No necesita secretos ni `.env`: las pruebas usan su propia configuración
+(`tests/helpers.ts`).
+
+### Cuándo se ejecuta
+
+- En cada PR hacia `main`, al abrirlo, al actualizarlo (push nuevo) o al reabrirlo.
+- En cada push a `main` (por ejemplo, al hacer merge de un PR).
+- Un push nuevo al mismo PR cancela la ejecución anterior de ese PR; las de `main` nunca se
+  cancelan.
+- Cada comprobación tiene un tiempo máximo de 15 minutos.
+
+### Qué comprueba
+
+Dos comprobaciones independientes, que aparecen por separado en el PR (`CI / calidad` y
+`CI / docker`). Si un paso falla, la comprobación queda en rojo y sus pasos siguientes no se
+ejecutan; un fallo en una no afecta a la otra.
+
+| Comprobación | Pasos, en orden |
+| ------------ | --------------- |
+| `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci`, `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado) y `npm test` |
+| `docker`     | Build del target `production` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64` y sin publicar la imagen |
+
+La caché de npm se invalida al cambiar `package-lock.json`; la de Docker reutiliza las capas que
+no cambian. El runner usa UTC; la selección de landing depende de `BUSINESS_TIMEZONE`, no de la
+zona del sistema.
+
+### Reproducirlo en local
+
+Desde esta carpeta (`restaurante/`):
+
+```sh
+npm ci && npm run typecheck && npm run lint && npm run build:css && npm test   # calidad
+docker buildx build --platform linux/amd64 --target production .              # docker
+```
+
+Si un paso falla en GitHub por un problema de red (npm o Docker Hub), vuelve a ejecutarlo desde
+la pestaña **Actions** del PR con **Re-run failed jobs**.
+
+### Seguridad
+
+- Permisos de solo lectura del repositorio (`permissions: contents: read`) y ningún secreto.
+- Usa el evento `pull_request`: los PR desde forks se ejecutan sin secretos y con un token de
+  solo lectura. En un repositorio privado, GitHub además no ejecuta workflows de forks salvo que
+  se habilite en **Settings → Actions → General**.
+- Las acciones de terceros están fijadas por el SHA completo de su versión (comentario
+  `# vX.Y.Z` al lado). Para actualizar una, toma el SHA de la nueva etiqueta
+  (`gh api repos/<dueño>/<acción>/commits/<etiqueta> --jq .sha`) y cambia SHA y comentario
+  juntos.
+
+### Comprobaciones obligatorias para el merge
+
+Hoy GitHub **no puede bloquear** el merge con el CI en rojo: el repositorio es privado con el
+plan Free, que no ofrece protección de rama ni rulesets. La regla es de proceso: no se hace
+merge de un PR con `calidad` o `docker` en rojo (el agente `senior-fullstack` no lo entrega como
+listo para merge).
+
+Si el repositorio pasa a GitHub Pro (o se hace público), para hacerlas obligatorias:
+
+1. **Settings → Rules → Rulesets → New ruleset → New branch ruleset** (o **Settings → Branches
+   → Add branch protection rule**).
+2. Destino: la rama `main`; estado **Active**.
+3. Activa **Require status checks to pass** y agrega `calidad` y `docker` (aparecen después de
+   que el CI se haya ejecutado al menos una vez).
+4. Guarda. Desde entonces, el botón de merge queda bloqueado hasta que ambas estén en verde.
 
 ## Configuración
 

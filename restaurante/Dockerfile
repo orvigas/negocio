@@ -23,7 +23,7 @@ RUN npm ci --no-audit --no-fund
 FROM deps AS build
 COPY . .
 RUN npm run typecheck
-RUN npm run build:css
+RUNN npm run build:css
 
 FROM build AS test
 # Solo los code.html del diseño fuente (fuera de restaurante/), en la ruta que esperan las pruebas.

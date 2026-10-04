@@ -28,7 +28,7 @@ export function createLandingController({
   businessId?: BusinessId | undefined;
 }): Middleware {
   if (fixedBusinessId !== undefined && !isBusinessId(fixedBusinessId)) {
-    throw new TypeError(`Negocio desconocido: ${fixedBusinessId}`);
+    throw new TypeError(`Negocio desconocido: ${String(fixedBusinessId)}`);
   }
 
   if (typeof repository?.getPublished !== 'function') throw new TypeError('createLandingController requiere el repositorio de menús');

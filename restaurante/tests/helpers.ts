@@ -5,7 +5,7 @@ import { createMemoryMenuRepository } from '../src/repositories/memory-menu-repo
 import type { MenuDataByBusiness, MenuDocument } from '../src/services/menu-schema.ts';
 import type { LogFields, Logger, LogLevel } from '../src/utils/logger.ts';
 
-// any justificado: las pruebas corrompen los datos a propósito (tipos, campos y estructura inválidos).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- any justificado: las pruebas corrompen los datos a propósito (tipos, campos y estructura inválidos).
 export type CorruptibleData = any;
 
 /** Entorno válido mínimo para pruebas. Los números son ficticios. */

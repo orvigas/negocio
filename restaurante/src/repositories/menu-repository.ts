@@ -181,7 +181,7 @@ export function assertMenuRepository(repository: unknown): MenuRepository {
 const serialize = (document: unknown): string => `${JSON.stringify(document, null, 2)}\n`;
 
 function assertBusiness(businessId: unknown): asserts businessId is BusinessId {
-  if (!isBusinessId(businessId)) throw new TypeError(`Negocio desconocido: ${businessId}`);
+  if (!isBusinessId(businessId)) throw new TypeError(`Negocio desconocido: ${String(businessId)}`);
 }
 
 function normalizeAuthor(author: unknown): string {
@@ -442,7 +442,7 @@ export function createMenuRepository({
       ensureReady(businessId);
       const by = normalizeAuthor(author);
       if (action !== CHANGE_ACTIONS.SAVE && action !== CHANGE_ACTIONS.OVERWRITE_AFTER_CONFLICT) {
-        throw new TypeError(`Acción de guardado desconocida: ${action}`);
+        throw new TypeError(`Acción de guardado desconocida: ${String(action)}`);
       }
       return withLock(businessId, async () => {
         const current = await checkStorage(businessId);

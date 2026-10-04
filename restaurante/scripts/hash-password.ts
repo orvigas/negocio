@@ -18,7 +18,8 @@ function readHidden(prompt: string): Promise<string> {
       // Sin terminal interactiva (p. ej. tubería): lee la primera línea de stdin.
       let data = '';
       stdin.setEncoding('utf8');
-      stdin.on('data', (chunk) => {
+      // Tras setEncoding('utf8'), cada fragmento llega como string.
+      stdin.on('data', (chunk: string) => {
         data += chunk;
       });
       stdin.on('end', () => resolve(data.split(/\r?\n/)[0] ?? ''));

@@ -60,7 +60,8 @@ Prohibidos salvo petición explícita: React, Vue, Angular, Svelte, jQuery, Alpi
 | `npm run typecheck` | Verifica tipos con `tsc` (sin emitir archivos). Obligatorio antes de dar una tarea por terminada; también corre en la etapa `build` del Dockerfile. |
 | `npm run build:css` | Genera `public/css/{molotes,birria,admin}/main.css` (no se versiona; nunca editar a mano). |
 | `npm run dev`       | Servidor con recarga.                                                            |
-| `npm run lint`      | **Placeholder**: no valida nada. Repórtalo como "lint no configurado"; nunca como "lint OK". ESLint, Prettier y Stylelint solo se agregan con aprobación del usuario. |
+| `npm run lint`      | ESLint (`eslint.config.ts`) sobre `src/`, `tests/`, `scripts/`, configuraciones y `public/js`. Obligatorio antes de dar una tarea por terminada (debe terminar con 0, sin errores ni avisos). No modifica archivos. |
+| `npm run lint:fix`  | Aplica las correcciones automáticas de ESLint. Revisa el diff resultante. Prettier y Stylelint solo se agregan con aprobación del usuario. |
 
 ### Persistencia y API
 
@@ -99,6 +100,7 @@ restaurante/
 ├── tests/                   # unit/, integration/, support/, snapshots/, helpers.ts
 ├── tsconfig.json            # Solo verificación de tipos (`npm run typecheck`)
 ├── vitest.config.ts
+├── eslint.config.ts         # Lint (`npm run lint`): typescript-eslint con tipos y JS de navegador
 ├── Dockerfile / compose.yaml
 ├── .env.example             # Variables documentadas (el .env real no se versiona)
 └── package.json
@@ -141,7 +143,7 @@ Para correcciones o cambios pequeños delegados por la sesión principal sin tic
 
 1. Lee `CLAUDE.md` y las reglas aplicables.
 2. Implementa el cambio mínimo necesario.
-3. Agrega o actualiza pruebas y ejecuta `npm run typecheck` y `npm test` (y `npm run build:css` si tocaste estilos o plantillas).
+3. Agrega o actualiza pruebas y ejecuta `npm run typecheck`, `npm run lint` y `npm test` (y `npm run build:css` si tocaste estilos o plantillas).
 4. Devuelve un resumen de cambios, archivos afectados y resultados de pruebas.
 
 No crees ramas, commits ni Pull Requests salvo que el prompt lo pida explícitamente.
@@ -244,7 +246,7 @@ Desde `restaurante/`:
 1. `npm run build:css` si tocaste estilos, plantillas o clases.
 2. `npm run typecheck` (debe terminar con 0).
 3. `npm test`.
-4. `npm run lint` (repórtalo como no configurado mientras sea un placeholder).
+4. `npm run lint` (debe terminar con 0; una regla solo se desactiva en una línea y con justificación después de `--`).
 5. Comprueba cada criterio de aceptación y compara el resultado con el Technical Action Plan.
 6. Revisa `git diff` en busca de cambios innecesarios o ajenos al ticket.
 

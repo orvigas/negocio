@@ -99,7 +99,7 @@ function parseLeaf(node: LeafNode, raw: string | undefined, reference: unknown):
       return error ? { error } : { value, checkFile: true };
     }
     default:
-      throw new Error(`Tipo de nodo desconocido: ${(node as { kind: unknown }).kind}`);
+      throw new Error(`Tipo de nodo desconocido: ${String((node as { kind: unknown }).kind)}`);
   }
 }
 

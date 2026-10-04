@@ -67,11 +67,12 @@ function loadTemplates(viewsDir: string): Map<string, string> {
 /** Datos de una plantilla: se leen solo sus propiedades propias (ver resolvePath). */
 export type TemplateData = object;
 
+// Propiedades función (no métodos): no usan `this`, así que se pueden desestructurar sin perder el contexto.
 export interface Renderer {
-  render(name: string, data?: TemplateData): SafeHtml;
-  renderEach(name: string, items: Iterable<TemplateData>): SafeHtml;
-  join(fragments: Iterable<unknown>): SafeHtml;
-  has(name: string): boolean;
+  render: (name: string, data?: TemplateData) => SafeHtml;
+  renderEach: (name: string, items: Iterable<TemplateData>) => SafeHtml;
+  join: (fragments: Iterable<unknown>) => SafeHtml;
+  has: (name: string) => boolean;
 }
 
 export function createRenderer({ viewsDir }: { viewsDir: string }): Renderer {

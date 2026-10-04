@@ -34,7 +34,10 @@ function respondUnavailable(ctx: Context): void {
 /** Primer filtro de todo /admin: cabeceras y disponibilidad. */
 export function createAdminGate({ config, logger }: { config: Config; logger: Logger }): Middleware {
   return async function adminGate(ctx, next) {
-    if (!isAdminPath(ctx.path)) return next();
+    if (!isAdminPath(ctx.path)) {
+      await next();
+      return;
+    }
 
     ctx.set('Cache-Control', 'no-store');
     ctx.set('X-Robots-Tag', 'noindex, nofollow');
@@ -50,7 +53,7 @@ export function createAdminGate({ config, logger }: { config: Config; logger: Lo
       logger.warn('admin_requires_https', { path: ctx.path });
       return respondUnavailable(ctx);
     }
-    return next();
+    await next();
   };
 }
 
@@ -126,6 +129,7 @@ export function createSessionGuard({ sessions, config }: { sessions: SessionStor
       return undefined;
     }
     ctx.state.adminSession = session;
-    return next();
+    await next();
+    return undefined;
   };
 }

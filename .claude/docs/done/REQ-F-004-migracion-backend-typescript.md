@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 Pull Request: https://github.com/orvigas/negocio/pull/8
 
@@ -914,3 +914,7 @@ Descripción inicial. Incorpora las decisiones del usuario ("acepto las recomend
 ### Versión 1 — commit y Pull Request (senior-fullstack)
 
 2026-10-03: con QA_APPROVED (ronda 1) se corrige DEF-001 (se añade `components/` al árbol de `senior-fullstack.md`) y se homogeneiza el formato de `paths` en `.claude/rules/typescript.md` (O-5). Se hace el commit, el push de la rama y se crea el Pull Request contra `main`. Estado: READY_FOR_MERGE. Pull Request: https://github.com/orvigas/negocio/pull/8.
+
+### Versión 1 — cierre (senior-fullstack)
+
+2026-10-04: el usuario confirma el merge del Pull Request #8 ("Ya hice merge"; merge commit a762af4, 2026-10-04T06:00:12Z). El ticket pasa a `done/`. Estado: DONE.

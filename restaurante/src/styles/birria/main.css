@@ -15,7 +15,7 @@
 @source "../../views/partials/icons";
 @source "../../views/pages/birria.html";
 @source "../../views/partials/birria";
-@source "../../views/landings/birria.js";
+@source "../../views/landings/birria.ts";
 @source "../../../public/js/birria";
 @source "../../../public/js/modules";
 

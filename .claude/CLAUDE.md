@@ -17,7 +17,7 @@ Ambas landing pages deben incluir un botón visible para realizar pedidos median
 
 - Node.js **LTS**.
 - Koa.js en su versión estable compatible con la versión LTS de Node.js utilizada.
-- JavaScript moderno.
+- TypeScript estricto (`strict`), ejecutado con el type stripping nativo de Node 24, sin paso de compilación ni `dist/`, y verificado con `npm run typecheck`. Convenciones en `.claude/rules/typescript.md`.
 - npm como gestor de paquetes.
 - Arquitectura sencilla, modular y mantenible.
 - No introducir frameworks backend adicionales salvo que exista una necesidad justificada.

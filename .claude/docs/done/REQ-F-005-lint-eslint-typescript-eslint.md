@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 Pull Request: https://github.com/orvigas/negocio/pull/11
 
@@ -763,3 +763,7 @@ El usuario aprobó el QA Action Plan ("apruebo el plan de QA e incluye la correc
 ### Commit y Pull Request (senior-fullstack), 2026-10-04
 
 QA aprobó el ticket (`QA_APPROVED`, ronda 1, sin defectos). Antes del commit se volvió a verificar: `typecheck` y `lint` dan 0, y `npm test` pasa 25 archivos y 468 pruebas. Se hizo el commit en la rama `feature/REQ-F-005-lint-eslint-typescript-eslint` y se abrió el Pull Request https://github.com/orvigas/negocio/pull/11 contra `main`. Estado: `READY_FOR_MERGE`.
+
+### Cierre (senior-fullstack), 2026-10-04
+
+El usuario confirma el merge del Pull Request #11 ("Hecho"; merge commit 948dc2c, 2026-10-04T12:26:53Z). El ticket pasa a `done/`. Estado: `DONE`.

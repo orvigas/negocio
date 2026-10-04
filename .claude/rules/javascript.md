@@ -1,5 +1,7 @@
 # JavaScript Vanilla
 
+Alcance: **solo el frontend** (`restaurante/public/js`). El backend (`src/`, `tests/`, `scripts/`) usa TypeScript y sigue `.claude/rules/typescript.md`.
+
 Utiliza JavaScript Vanilla moderno.
 
 Prefiere:

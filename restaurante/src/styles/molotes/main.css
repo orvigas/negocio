@@ -13,7 +13,7 @@
 @source "../../views/partials/icons";
 @source "../../views/pages/molotes.html";
 @source "../../views/partials/molotes";
-@source "../../views/landings/molotes.js";
+@source "../../views/landings/molotes.ts";
 @source "../../../public/js/molotes";
 @source "../../../public/js/modules";
 

@@ -5,7 +5,9 @@
 > `birrier_a_el_mu_eco_aut_ntica_birria_de_res_color_adobo`), con ruta automática por día
 > y rutas dedicadas por negocio.
 
-Aplicación Koa.js (Node.js 24 LTS) que sirve dos landing pages desde un mismo proyecto:
+Aplicación Koa.js (Node.js 24 LTS) que sirve dos landing pages desde un mismo proyecto. El
+backend está escrito en TypeScript estricto y Node lo ejecuta directamente (type stripping,
+sin paso de compilación); el JavaScript del navegador (`public/js/`) es Vanilla JS.
 
 - **Moloteando (molotes)**: lunes a viernes.
 - **Birriería El Muñeco (birria)**: sábado y domingo.
@@ -18,7 +20,8 @@ vive en `src/content/`; los menús, precios, showcase del hero y promociones se 
 
 ## Requisitos
 
-- Node.js >= 24 (ver `.nvmrc`; con nvm: `nvm use`)
+- Node.js >= 24.3 (ver `.nvmrc`; con nvm: `nvm use`). Desde 24.3 Node ejecuta los `.ts` sin
+  avisos; las versiones 24.0 a 24.2 escriben un `ExperimentalWarning` en stderr.
 - npm
 - Opcional: Docker con Compose v2 para ejecutar las pruebas o construir la imagen sin
   instalar Node (ver [Docker](#docker)).
@@ -42,11 +45,12 @@ una copia de la semilla de cada negocio.
 | Script               | Descripción                                                 |
 | -------------------- | ----------------------------------------------------------- |
 | `npm start`          | Inicia el servidor (carga `.env` si existe)                 |
-| `npm run dev`        | Servidor con recarga (`node --watch`)                       |
+| `npm run dev`        | Servidor con recarga (`node --watch`; reinicia al editar cualquier `.ts` importado) |
 | `npm run build:css`  | Compila el CSS de ambas landings y de la administración (`build:css:molotes`, `build:css:birria`, `build:css:admin`) |
 | `npm run watch:css`  | Compilación de CSS en modo observación                      |
 | `npm run admin:hash-password` | Pide la contraseña de administración (sin mostrarla) e imprime el valor de `ADMIN_PASSWORD_HASH` |
 | `npm test`           | Tests unitarios e integración (Vitest + Supertest) |
+| `npm run typecheck`  | Verificación de tipos con `tsc` (`tsconfig.json`, sin generar archivos); termina con código distinto de 0 si hay errores. No forma parte de `npm test` |
 | `npm run test:watch` | Vitest en modo observación                                  |
 | `npm run lint`       | Pendiente de configurar                                     |
 
@@ -63,9 +67,9 @@ la versión 24: una reconstrucción puede traer un parche más reciente de Node 
 | ------------ | ------------------------------------------------------------------------------ |
 | `base`       | Imagen base y directorio de trabajo (`/app`)                                   |
 | `deps`       | `npm ci` con solo `package.json` y `package-lock.json` (caché de dependencias) |
-| `build`      | Código + `npm run build:css` (si Tailwind falla, el build de la imagen falla)  |
+| `build`      | Código + `npm run typecheck` + `npm run build:css` (si hay errores de tipos o Tailwind falla, el build de la imagen falla) |
 | `test`       | `build` + diseño fuente; comando por defecto `npm test`                        |
-| `production` | Dependencias de producción, `src/` y `public/` con el CSS compilado; usuario `node` |
+| `production` | Dependencias de producción (sin `typescript` ni `@types/*`), `src/` (`.ts`) y `public/` con el CSS compilado; usuario `node`; arranca con `node src/server.ts` |
 
 El `.dockerignore` deja fuera `node_modules/`, `.env*` (salvo `.env.example`), `data/`, el CSS
 generado localmente, logs, cobertura y `.git`: ningún secreto ni dato editable entra en las
@@ -116,13 +120,15 @@ docker run -d --name restaurante -p 3000:3000 \
 - `HEALTHCHECK`: cada 30 s pide `GET /` con el `wget` de la imagen
   (`docker inspect -f '{{.State.Health.Status}}' restaurante` -> `healthy`). Cada comprobación
   aparece como una línea `request` en el log.
+- El contenedor arranca con `node src/server.ts`: Node 24 ejecuta el TypeScript directamente,
+  sin compilar y sin TypeScript instalado en la imagen.
 - `docker stop` envía `SIGTERM` y la app cierra el servidor ordenadamente.
 - `/admin` exige HTTPS en producción (ver [Seguridad](#seguridad)): un despliegue con Docker
   necesita un proxy con TLS y `TRUST_PROXY=true`, fuera del alcance actual.
 
 ## Configuración
 
-La configuración se lee y valida al arrancar (`src/config/env.js`). Si algo es
+La configuración se lee y valida al arrancar (`src/config/env.ts`). Si algo es
 inválido, el proceso termina con código 1 y lista los problemas (sin mostrar los valores).
 
 | Variable                   | Obligatoria             | Descripción                                                        |
@@ -154,7 +160,7 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `GET /<archivo>` | Estáticos de `public/` (sin índices ni archivos ocultos)                                   |
 | `/admin/...`     | Administración de menús (ver [Administración de menús](#administración-de-menús))          |
 
-Las tres rutas HTML usan el mismo controlador (`src/controllers/landing.js`): con un
+Las tres rutas HTML usan el mismo controlador (`src/controllers/landing.ts`): con un
 `businessId` fijo renderiza ese negocio y sin él lo resuelve por fecha. Responden con
 `Cache-Control: no-cache`. La `<link rel="canonical">` siempre apunta a la ruta dedicada
 (`/` muestra la canónica del negocio del día), así que no hay contenido duplicado para SEO.
@@ -179,14 +185,14 @@ Los datos editables de cada landing viven en un documento JSON por negocio:
 | Molotes  | 8 molotes y 2 bebidas (nombre, descripción, badge, tono, precios, cantidad por orden, disponibilidad e imagen), texto destacado del menú, showcase del hero (etiqueta, título, descripción, precio y unidad) y promoción "Jueves de Molotes 2x1" (badge, título y descripción) | `src/content/molotes/seed.json` |
 | Birria   | 6 platillos (nombre, etiqueta, precio, unidad, descripción, disponibilidad, imagen, título del detalle y chips, porción o variantes), showcase del hero (título, descripción y precio) y promoción del Club (badge, título y descripción) | `src/content/birria/seed.json` |
 
-- Las semillas tienen los datos originales del diseño fuente; `tests/unit/content.test.js`
+- Las semillas tienen los datos originales del diseño fuente; `tests/unit/content.test.ts`
   comprueba que coincidan con `../_stich_source_/` y que sus fotos existan.
 - El esquema (campos, longitudes máximas, tonos, rangos y estructura) está en
-  `src/services/menu-schema.js`. Precios en centavos (enteros), mayores que $0 y hasta
+  `src/services/menu-schema.ts`. Precios en centavos (enteros), mayores que $0 y hasta
   $5,000.00; el formato (`$45 c/u`, `$155 MXN`, `$45.50`) se aplica en `src/views/landings/`.
 - La estructura no es editable: cantidad y orden de productos, chips y variantes, el `id` de
   cada molote y bebida, el `slug` de cada platillo de Birria y su tipo de detalle.
-- Disponibilidad: lo no disponible se oculta (`src/services/visible-menu.js`). En Birria, la
+- Disponibilidad: lo no disponible se oculta (`src/services/visible-menu.ts`). En Birria, la
   variante activa es la primera disponible y de ella salen el precio y la descripción de la
   tarjeta; un platillo sin variantes disponibles se oculta. Si una sección se queda sin
   productos, conserva su encabezado y muestra un aviso con el CTA de WhatsApp.
@@ -287,22 +293,22 @@ Si `current.json` no es JSON válido o no cumple el esquema (por ejemplo, un pre
 ```text
 restaurante/
 ├── src/
-│   ├── server.js             # Entrada del proceso: valida config, prepara DATA_DIR, escucha en PORT, cierre ordenado
-│   ├── app.js                # createApp(): app Koa testeable (config, repositorio, logger y `now` inyectables)
-│   ├── config/               # env.js (carga/validación), businesses.js (ids de negocio), paths.js (views/, public/)
-│   ├── controllers/          # landing.js (landing del negocio activo), icons.js (iconos de la raíz y manifests), admin.js
-│   ├── routes/               # Router (@koa/router): index.js (landings), admin.js (/admin)
+│   ├── server.ts             # Entrada del proceso: valida config, prepara DATA_DIR, escucha en PORT, cierre ordenado
+│   ├── app.ts                # createApp(): app Koa testeable (config, repositorio, logger y `now` inyectables)
+│   ├── config/               # env.ts (carga/validación y tipo Config), businesses.ts (ids de negocio)
+│   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests), admin.ts
+│   ├── routes/               # Router (@koa/router): index.ts (landings), admin.ts (/admin)
 │   ├── middleware/           # Manejo centralizado de errores, log de requests, protección de /admin
 │   ├── repositories/         # Repositorio de menús: contrato y reglas, implementación de archivos y en memoria
 │   ├── services/             # business-schedule, whatsapp, menu-schema, price, visible-menu, admin-form,
 │   │                         # menu-diff, admin-auth, session-store, login-throttle
-│   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), semillas seed.json e icons.js
-│   ├── utils/                # logger.js (JSON estructurado), datetime.js (zona del negocio), form-body.js
-│   ├── views/                # render.js + plantillas HTML
+│   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), semillas seed.json e icons.ts
+│   ├── utils/                # logger.ts (JSON estructurado), datetime.ts (zona del negocio), form-body.ts, errors.ts
+│   ├── views/                # render.ts + plantillas HTML
 │   │   ├── layouts/base.html # <head> común (SEO, fuentes, CSS/JS por negocio) y skip link
 │   │   ├── pages/            # molotes.html, birria.html: header, secciones y footer del diseño
 │   │   ├── partials/         # icons/ (WhatsApp), seo-absolute, favicon-links, molotes/ y birria/ (tarjetas, aviso de sección vacía, etc.)
-│   │   ├── landings/         # Contenido -> datos de plantilla (index.js, molotes.js, birria.js)
+│   │   ├── landings/         # Contenido -> datos de plantilla (index.ts, molotes.ts, birria.ts)
 │   │   └── admin/            # Plantillas y vistas de la administración (formulario generado desde el esquema)
 │   └── styles/
 │       ├── shared/base.css   # Base común de ambos diseños
@@ -321,16 +327,18 @@ restaurante/
 │       ├── molotes/          # icons/: favicons e iconos de pantalla de inicio (generados)
 │       └── birria/           # icons/: ídem
 ├── scripts/
-│   ├── hash-password.js      # `npm run admin:hash-password`
+│   ├── hash-password.ts      # `npm run admin:hash-password`
 │   └── generate-icons.py     # Genera public/img/<negocio>/icons/ (Python 3 + Pillow; solo desarrollo)
 ├── data/                     # DATA_DIR por defecto fuera de producción (ignorado por git)
 ├── tests/
-│   ├── helpers.js            # Config válida, semillas y repositorio en memoria para pruebas
-│   ├── support/admin.js      # App con administración, inicio de sesión y lectura de formularios
-│   ├── support/png.js        # Lectura mínima de PNG/ICO (dimensiones, opacidad, color de fondo)
+│   ├── helpers.ts            # Config válida, semillas y repositorio en memoria para pruebas
+│   ├── support/admin.ts      # App con administración, inicio de sesión y lectura de formularios
+│   ├── support/png.ts        # Lectura mínima de PNG/ICO (dimensiones, opacidad, color de fondo)
 │   ├── snapshots/            # HTML de referencia de las landings (regresión visual con la semilla)
 │   ├── unit/                 # config, esquema, precios, formulario, repositorio de archivos, sesión, landings, contenido vs. diseño, JS sobre el HTML real
 │   └── integration/          # Landings (fecha, SEO, CTA, datos editables, datos dañados), administración, estáticos, errores
+├── tsconfig.json             # TypeScript estricto solo para verificar tipos (`npm run typecheck`; sin emitir archivos)
+├── vitest.config.ts          # Configuración de Vitest
 ├── Dockerfile                # Imagen multi-stage (base, deps, build, test, production); ver [Docker](#docker)
 ├── .dockerignore             # Excluye secretos, datos, dependencias y artefactos locales del build
 └── compose.yaml              # Servicio `test`: `docker compose run --rm test`
@@ -338,7 +346,7 @@ restaurante/
 
 ### Plantillas
 
-`src/views/render.js` es un renderizador mínimo sin dependencias. Las plantillas se leen una
+`src/views/render.ts` es un renderizador mínimo sin dependencias. Las plantillas se leen una
 sola vez al crear la app.
 
 - `{{ clave }}`: valor escapado como HTML (siempre por defecto).
@@ -368,12 +376,12 @@ Extraídos de `../_stich_source_/moloteando_aut_nticos_molotes_artesanales/code.
   delegación de eventos y atributos `data-*` (`public/js/modules/`), con una entrada por landing.
 - **Imágenes:** descargadas del diseño a `public/img/<negocio>/` (las compartidas en
   `public/img/common/`). Los logos y motivos PNG se convirtieron a WebP. Las rutas, `alt` y
-  dimensiones de las imágenes de sección se declaran en `src/content/<negocio>/index.js`
+  dimensiones de las imágenes de sección se declaran en `src/content/<negocio>/index.ts`
   (`images`); las de cada platillo, en los datos editables (semilla `seed.json`), junto al platillo.
 - **Fuentes:** Google Fonts (familias del diseño y Material Symbols), una hoja por landing
   declarada en `content.assets.fontsHref`.
 
-La ubicación (Google Maps) es común a ambas landings: `src/content/common/index.js` → `location.mapsUrl`.
+La ubicación (Google Maps) es común a ambas landings: `src/content/common/index.ts` → `location.mapsUrl`.
 
 El layout carga `/css/<negocio>/main.css` y `/js/<negocio>/main.js` según el negocio activo.
 Cada hoja de Tailwind solo escanea las vistas de su negocio (`@source`), así una landing no
@@ -396,8 +404,8 @@ los PNG de alta resolución de `../_stich_source_/logo_<negocio>.png/screen.png`
 | `icon-192.png`, `icon-512.png` | 192 y 512 | Logo completo sobre fondo transparente                       |
 | `icon-maskable-512.png`  | 512           | Logo completo, opaco, dentro del círculo central del 80 %      |
 
-- **Metadatos:** `icons` en `src/content/<negocio>/index.js` (versión, `themeColor` y nombres
-  del manifest). Las rutas de los archivos y el manifest se arman en `src/content/icons.js`.
+- **Metadatos:** `icons` en `src/content/<negocio>/index.ts` (versión, `themeColor` y nombres
+  del manifest). Las rutas de los archivos y el manifest se arman en `src/content/icons.ts`.
 - **`<head>`:** cada landing declara el .ico, los PNG de 16 y 32, el apple-touch-icon, su
   manifest y su `theme-color`; `/` usa los del negocio del día. Las páginas de `/admin`
   muestran el favicon del negocio del día, sin manifest ni `theme-color`.
@@ -418,7 +426,7 @@ los PNG de alta resolución de `../_stich_source_/logo_<negocio>.png/screen.png`
    al inicio del script; los colores deben coincidir con `icons.themeColor` del contenido.
 3. Revisa la hoja de contacto `icons-preview-<negocio>.png` que se deja en `--preview-dir`
    (fuera del repo).
-4. Incrementa `icons.version` en `src/content/<negocio>/index.js` para invalidar la caché HTTP.
+4. Incrementa `icons.version` en `src/content/<negocio>/index.ts` para invalidar la caché HTTP.
 5. `npm test` (comprueba tamaños, opacidad, color de fondo y tamaños del .ico) y versiona los
    archivos nuevos.
 

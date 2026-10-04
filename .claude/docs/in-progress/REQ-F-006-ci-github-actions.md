@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
 ## Aprobación
 
@@ -782,7 +782,21 @@ No aplican: el ticket no cambia la app ni la UI y no tiene diseño en `_stich_so
 
 QA_APPROVED
 
+## Pull Request
+
+- **PR:** https://github.com/orvigas/negocio/pull/19 (`feature/REQ-F-006-ci-github-actions` → `main`), commit `c05d82a`.
+- **CI del PR** (CA-1 reconfirmado), ejecución https://github.com/orvigas/negocio/actions/runs/37242396833:
+  - `calidad` pass (1m1s);
+  - `docker` pass (1m11s);
+  - `GitGuardian Security Checks` pass (integración externa, OBS-1).
+- **OBS-2:** los checks ya estaban registrados en la primera consulta, así que no hizo falta reintentar.
+- **CA-6:** pendiente de T5, después del merge del usuario.
+
 ## Historial de cambios
+
+### T4: Pull Request (2026-10-04)
+
+senior-fullstack: commit `c05d82a` y PR #19 hacia `main`. El CI del PR terminó en verde (`calidad` y `docker`) antes de registrar el estado `READY_FOR_MERGE`.
 
 ### T4: correcciones antes del commit (2026-10-04)
 

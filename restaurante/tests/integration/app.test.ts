@@ -257,6 +257,95 @@ describe('GET /molotes: contenido del diseño', () => {
   });
 });
 
+describe('horarios reales (REQ-F-010)', () => {
+  const MONDAY_10_MX = new Date('2026-10-12T16:00:00Z'); // lunes 10:00 CDMX
+
+  /** Filas [días, horas] de la tabla "Horarios del Comal" del pie, en orden. */
+  function footerHourRows(html: string) {
+    const footer = html.slice(html.indexOf('<footer'));
+    return [...footer.matchAll(/<li class="flex justify-between[^"]*"><span[^>]*>([^<]*)<\/span><span[^>]*>([^<]*)<\/span><\/li>/g)].map(
+      ([, days, hours]) => [days, hours],
+    );
+  }
+
+  /** Texto de los <p> de la tarjeta "Horarios de Servicio" de Birria, en orden. */
+  function birriaScheduleCard(html: string) {
+    const card = html.slice(html.indexOf('class="schedule-card'), html.indexOf('class="branches-card'));
+    return [...card.matchAll(/<p class="[^"]*">([^<]*)<\/p>/g)].map(([, text]) => text);
+  }
+
+  it('CA-1: /molotes publica exactamente los textos de D-4 (orden PT-1 A), D-5 y D-7', async () => {
+    const { text } = await agent().get('/molotes');
+    expect(text).toContain('>Horario de Comal: Mar - Vie 08:30 a 15:00 hrs • Salsas Caseras y Masa Recién Frita<');
+    expect(text).toContain('>Martes a Viernes de 8:30 AM a 3:00 PM<');
+    expect(text).toContain(
+      '>* Lunes cerramos comales por molienda de nixtamal artesanal y curación de cazuelas. Sábados y domingos te esperamos en Birria El Muñeco.<',
+    );
+    expect(footerHourRows(text)).toEqual([
+      ['Martes a Viernes', '08:30 - 15:00'],
+      ['Sábado y Domingo', 'Cerrado'],
+      ['Lunes', 'Cerrado por nixtamal'],
+    ]);
+  });
+
+  it('CA-2: /birria publica exactamente los textos de D-8', async () => {
+    const { text } = await agent().get('/birria');
+    expect(birriaScheduleCard(text)).toEqual([
+      'Sábado y Domingo',
+      '08:00 AM – 03:00 PM',
+      'Consomé matutino y quesabirrias crujientes.',
+      'Lunes a Viernes',
+      'Cerrado',
+      'Reposo y Adobo.',
+    ]);
+    expect(footerHourRows(text)).toEqual([
+      ['Miércoles - Viernes:', 'Cerrado'],
+      ['Sábados y Domingos:', '08:00 - 15:00'],
+      ['Lunes y Martes:', 'Reposo y Adobo'],
+    ]);
+  });
+
+  it('CA-3: ni src/content/ ni el HTML servido contienen los horarios anteriores', async () => {
+    const OLD_TEXTS = [
+      'Mar - Dom',
+      'Martes a Domingo',
+      '13:00 - 22:30',
+      '12:00 - 23:00',
+      '10:00 AM a 8:00 PM',
+      'Viernes a Domingo',
+      'Lunes a Jueves',
+      '05:00 PM',
+      '07:00 PM',
+      '08:30 - 17:00',
+      '07:30 - 18:30',
+    ];
+    const contentDir = join(import.meta.dirname, '..', '..', 'src', 'content');
+    const files = (await readdir(contentDir, { recursive: true })).filter((file) => /\.(ts|json)$/.test(file));
+    expect(files.length).toBeGreaterThan(0);
+    const sources = await Promise.all(
+      files.map(async (file) => [file, await readFile(join(contentDir, file), 'utf8')] as const),
+    );
+    const pages = await Promise.all(
+      (['/molotes', '/birria'] as const).map(async (path) => [path, (await agent().get(path)).text] as const),
+    );
+    for (const [where, text] of [...sources, ...pages]) {
+      for (const old of OLD_TEXTS) expect(text, `${where}: ${old}`).not.toContain(old);
+    }
+  });
+
+  it('CA-5: un lunes a las 10:00 (zona del negocio) / muestra Molotes con "Lunes: Cerrado por nixtamal"', async () => {
+    const { text } = await agent({ now: MONDAY_10_MX }).get('/');
+    expect(text).toContain('data-business="molotes"');
+    expect(footerHourRows(text)).toContainEqual(['Lunes', 'Cerrado por nixtamal']);
+  });
+
+  it('CA-5: un sábado / muestra Birria con su horario', async () => {
+    const { text } = await agent({ now: SATURDAY_NOON_MX }).get('/');
+    expect(text).toContain('data-business="birria"');
+    expect(footerHourRows(text)).toContainEqual(['Sábados y Domingos:', '08:00 - 15:00']);
+  });
+});
+
 describe('estáticos', () => {
   it.each([
     ['/js/molotes/main.js', 'text/javascript'],

@@ -1,7 +1,7 @@
 import { image } from '../images.ts';
 
 /**
- * Contenido de Birriería El Muñeco (sábado y domingo).
+ * Contenido de Birriería El Muñeco (landing de sábado y domingo; su horario de servicio está en ./hours.ts).
  * Fuente: _stich_source_/birrier_a_el_mu_eco_aut_ntica_birria_de_res_color_adobo/code.html
  *
  * Solo datos estáticos (textos, horarios, contacto, imágenes). Los datos editables desde
@@ -119,14 +119,14 @@ export const birriaContent = Object.freeze({
       title: 'Horarios de Servicio',
       slots: Object.freeze([
         Object.freeze({
-          days: 'Viernes a Domingo',
-          hours: '08:00 AM – 05:00 PM',
+          days: 'Sábado y Domingo',
+          hours: '08:00 AM – 03:00 PM',
           note: 'Consomé matutino y quesabirrias crujientes.',
         }),
         Object.freeze({
-          days: 'Lunes a Jueves',
-          hours: '11:00 AM – 07:00 PM',
-          note: 'Comidas completas y tacos dorados.',
+          days: 'Lunes a Viernes',
+          hours: 'Cerrado',
+          note: 'Reposo y Adobo.',
         }),
       ]),
     }),
@@ -174,8 +174,8 @@ export const birriaContent = Object.freeze({
     hours: Object.freeze({
       title: 'Horarios del Comal',
       rows: Object.freeze([
-        Object.freeze({ days: 'Miércoles - Viernes:', hours: '08:30 - 17:00' }),
-        Object.freeze({ days: 'Sábados y Domingos:', hours: '07:30 - 18:30' }),
+        Object.freeze({ days: 'Miércoles - Viernes:', hours: 'Cerrado' }),
+        Object.freeze({ days: 'Sábados y Domingos:', hours: '08:00 - 15:00' }),
         Object.freeze({ days: 'Lunes y Martes:', hours: 'Reposo y Adobo' }),
       ]),
     }),

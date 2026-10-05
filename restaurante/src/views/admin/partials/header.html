@@ -1,7 +1,10 @@
 <header class="admin__header border-b border-slate-300 bg-white">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <p class="admin__brand text-base font-bold text-slate-900">Administración de menús</p>
-        <nav class="admin-nav" aria-label="Negocios">
+        <div class="admin__identity">
+          <p class="admin__brand text-base font-bold text-slate-900">Administración</p>
+          <p class="admin__user text-sm text-slate-700">Sesión: {{ displayName }} ({{ roleLabel }})</p>
+        </div>
+        <nav class="admin-nav" aria-label="Administración">
           <ul class="flex flex-wrap items-center gap-2">{{{ links }}}
             <li>
               <form class="admin-nav__logout" method="post" action="/admin/logout">

@@ -1,5 +1,5 @@
 /*
- * Administración de menús (/admin/molotes y /admin/birria), REQ-F-001.
+ * Administración (/admin): menús de cada negocio (REQ-F-001), usuarios y Mi cuenta (REQ-F-007).
  * Compila a public/css/admin/main.css (`npm run build:css`).
  * No hay diseño en _stich_source_ para esta interfaz (C-8): estilo sobrio con la paleta
  * de Tailwind, fuente del sistema y contraste AA. No se carga en las landings.

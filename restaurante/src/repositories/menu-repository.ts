@@ -25,6 +25,7 @@ import { toZonedIsoString } from '../utils/datetime.ts';
  *   getForEdit(businessId)                   { document, version, damaged } para la administración;
  *                                            vuelve a revisar el almacenamiento (RF-8.5).
  *   save(businessId, { data, expectedVersion, author, action })
+ *                                            author: { id, name } del usuario autenticado (REQ-F-007, D-11).
  *                                            Guarda con control de versión. action: 'save' | 'overwrite_after_conflict'.
  *   restorePrevious(businessId, { author })  Intercambia la versión vigente con la anterior.
  *   restoreSeed(businessId, { author })      Solo con datos dañados: vuelve a la semilla.
@@ -65,6 +66,13 @@ export interface EditState<Id extends BusinessId = BusinessId> {
   document: MenuDocument<Id>;
   version: string;
   damaged: DamagedInfo | null;
+}
+
+/** Autor verificado de un cambio: el usuario de la sesión (REQ-F-007, D-11 y R-10). */
+export interface MenuAuthor {
+  id: number;
+  /** Nombre visible: va en `updatedBy` del documento y en `author` del registro. */
+  name: string;
 }
 
 export interface SaveRequest {
@@ -184,12 +192,16 @@ function assertBusiness(businessId: unknown): asserts businessId is BusinessId {
   if (!isBusinessId(businessId)) throw new TypeError(`Negocio desconocido: ${String(businessId)}`);
 }
 
-function normalizeAuthor(author: unknown): string {
-  const value = typeof author === 'string' ? author.trim() : '';
-  if (value === '' || textLength(value) > AUTHOR_MAX_LENGTH) {
+/** Valida el autor recibido (defensa en profundidad: lo construye el controlador desde la sesión). */
+function normalizeAuthor(author: unknown): MenuAuthor {
+  const id = errorProp(author, 'id');
+  const rawName = errorProp(author, 'name');
+  const name = typeof rawName === 'string' ? rawName.trim() : '';
+  if (!Number.isSafeInteger(id) || (id as number) <= 0 || name === '' || textLength(name) > AUTHOR_MAX_LENGTH) {
     throw new MenuDataError([{ path: 'author', message: 'Autor inválido.' }]);
   }
-  return value;
+  // `id` es un entero positivo (comprobado arriba).
+  return { id: id as number, name };
 }
 
 /** Marca de archivo segura para nombres de archivo: 2026-10-02T19-45-10-123Z. */
@@ -278,6 +290,7 @@ export function createMenuRepository({
   async function appendChange(entry: {
     at: string | null;
     author: string;
+    authorId: number;
     business: BusinessId;
     action: ChangeAction;
     changes: FieldChange[];
@@ -394,7 +407,7 @@ export function createMenuRepository({
       before,
       action,
       author,
-    }: { next: MenuDocument; previous: MenuDocument | null; before: MenuDocument; action: ChangeAction; author: string },
+    }: { next: MenuDocument; previous: MenuDocument | null; before: MenuDocument; action: ChangeAction; author: MenuAuthor },
   ): Promise<MenuDocument> {
     if (previous) await storage.write(businessId, 'previous', serialize(previous));
     await storage.write(businessId, 'current', serialize(next));
@@ -404,7 +417,8 @@ export function createMenuRepository({
 
     await appendChange({
       at: next.updatedAt,
-      author,
+      author: author.name,
+      authorId: author.id,
       business: businessId,
       action,
       changes: diffMenuData(before.data, next.data),
@@ -455,7 +469,7 @@ export function createMenuRepository({
 
         // Lo que hay en disco (incluida una edición manual) pasa a ser la versión anterior (RF-6.1).
         // validateMenuData no encontró problemas: `data` tiene la forma de los datos del negocio.
-        const next = buildDocument(businessId, current.revision, data as MenuData, by);
+        const next = buildDocument(businessId, current.revision, data as MenuData, by.name);
         return commit(businessId, { next, previous: current, before: current, action, author: by });
       });
     },
@@ -469,7 +483,7 @@ export function createMenuRepository({
         if (!previous) throw new PreviousUnavailableError();
 
         const base = Math.max(previous.revision, state[businessId].published.revision, current?.revision ?? 0);
-        const next = buildDocument(businessId, base, previous.data, by);
+        const next = buildDocument(businessId, base, previous.data, by.name);
         // Sin datos dañados es un intercambio; con datos dañados no hay versión vigente que conservar.
         return commit(businessId, {
           next,
@@ -489,7 +503,7 @@ export function createMenuRepository({
         if (!state[businessId].damaged) throw new SeedRestoreNotAllowedError();
         const seed = seedOf(businessId);
         const base = Math.max(seed.revision, state[businessId].published.revision);
-        const next = buildDocument(businessId, base, seed.data, by);
+        const next = buildDocument(businessId, base, seed.data, by.name);
         return commit(businessId, {
           next,
           previous: null,

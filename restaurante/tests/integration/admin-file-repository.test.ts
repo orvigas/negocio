@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createFileMenuRepository } from '../../src/repositories/file-menu-repository.ts';
-import { formFields, login, openForm, setupAdmin, submitForm, textOf } from '../support/admin.ts';
+import { createUser, formFields, loginAs, openForm, setupAdmin, submitForm, textOf } from '../support/admin.ts';
 
 /**
  * QA (REQ-F-001, R-QA-1): flujo HTTP completo de la administración con el repositorio
@@ -35,11 +35,12 @@ async function startAdmin() {
   const repository = createFileMenuRepository({ dataDir, timezone: 'America/Mexico_City' });
   await repository.init();
   const context = await setupAdmin({ repository });
-  const newEditor = async () => {
-    const editor = context.browser();
-    expect((await login(editor)).status).toBe(303);
-    return editor;
-  };
+  // Cuentas personales (REQ-F-007): el autor de cada cambio es el nombre visible de la sesión.
+  const people = { ana: 'Ana QA', a: 'Editor A', b: 'Editor B', rita: 'Rita QA' };
+  for (const [username, displayName] of Object.entries(people)) {
+    await createUser(context.users, { username, displayName, businesses: ['molotes', 'birria'] });
+  }
+  const newEditor = (username: keyof typeof people = 'ana') => loginAs(context.browser(), username);
   return { ...context, browser: await newEditor(), newEditor };
 }
 
@@ -50,7 +51,7 @@ describe('administración con el repositorio de archivos real', () => {
 
     const { fields } = await openForm(browser, 'molotes');
     const res = await submitForm(browser, 'molotes', fields, {
-      author: 'Ana QA',
+      
       'menu.items.0.unitPriceCents': '50.00',
       'menu.highlight': 'Destacado QA',
     });
@@ -66,7 +67,7 @@ describe('administración con el repositorio de archivos real', () => {
     expect(previous.data).toEqual(before.data);
 
     const entry = (await changeLog()).at(-1);
-    expect(entry).toMatchObject({ author: 'Ana QA', business: 'molotes', action: 'save' });
+    expect(entry).toMatchObject({ author: 'Ana QA', authorId: expect.any(Number), business: 'molotes', action: 'save' });
     expect(entry.at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
     expect(entry.changes).toEqual(
       expect.arrayContaining([
@@ -85,17 +86,18 @@ describe('administración con el repositorio de archivos real', () => {
 
   it('CA-33: sobrescribir tras conflicto guarda los datos de B, deja los de A como versión anterior y lo registra', async () => {
     // Dos editores (dos navegadores con su propia sesión) sobre la misma app y el mismo archivo.
-    const { browser: a, newEditor } = await startAdmin();
-    const editorB = await newEditor();
+    const { newEditor } = await startAdmin();
+    const a = await newEditor('a');
+    const editorB = await newEditor('b');
 
     const formA = (await openForm(a, 'birria')).fields;
     const formB = (await openForm(editorB, 'birria')).fields;
 
-    const saveA = await submitForm(a, 'birria', formA, { author: 'Editor A', 'promo.title': 'Título de A' });
+    const saveA = await submitForm(a, 'birria', formA, { 'promo.title': 'Título de A' });
     expect(saveA.status).toBe(303);
     const afterA = await readRaw('birria', 'current.json');
 
-    const conflict = await submitForm(editorB, 'birria', formB, { author: 'Editor B', 'promo.title': 'Título de B' });
+    const conflict = await submitForm(editorB, 'birria', formB, { 'promo.title': 'Título de B' });
     expect(conflict.status).toBe(409);
     expect(await readRaw('birria', 'current.json')).toBe(afterA);
     expect(textOf(conflict.text)).toContain('Editor A');
@@ -109,16 +111,17 @@ describe('administración con el repositorio de archivos real', () => {
   });
 
   it('CA-30: restaurar la versión anterior intercambia current y previous y la landing la muestra', async () => {
-    const { browser, request } = await startAdmin();
+    const { browser, request, newEditor } = await startAdmin();
     const { fields } = await openForm(browser, 'molotes');
-    await submitForm(browser, 'molotes', fields, { author: 'Ana QA', 'menu.highlight': 'Versión nueva' });
+    await submitForm(browser, 'molotes', fields, { 'menu.highlight': 'Versión nueva' });
+    const rita = await newEditor('rita');
     const newer = await readJson('molotes', 'current.json');
     const older = await readJson('molotes', 'previous.json');
 
-    const confirm = await browser.get('/admin/molotes/restaurar-anterior');
+    const confirm = await rita.get('/admin/molotes/restaurar-anterior');
     expect(confirm.status).toBe(200);
     const csrf = confirm.text.match(/name="_csrf" value="([^"]+)"/)![1];
-    const res = await browser.post('/admin/molotes/restaurar-anterior').type('form').send({ _csrf: csrf, author: 'Rita QA' });
+    const res = await rita.post('/admin/molotes/restaurar-anterior').type('form').send({ _csrf: csrf });
     expect(res.status).toBe(303);
 
     expect((await readJson('molotes', 'current.json')).data).toEqual(older.data);
@@ -148,13 +151,13 @@ describe('administración con el repositorio de archivos real', () => {
     const blocked = await browser
       .post('/admin/birria')
       .type('form')
-      .send({ ...formFields(page.text), _csrf: csrf, action: 'save', author: 'QA' });
+      .send({ ...formFields(page.text), _csrf: csrf, action: 'save' });
     expect(blocked.status).toBeGreaterThanOrEqual(400);
     expect(blocked.status).toBeLessThan(500);
 
-    const restore = await browser.post('/admin/birria/restaurar-semilla').type('form').send({ _csrf: csrf, author: 'Rosa QA' });
+    const restore = await browser.post('/admin/birria/restaurar-semilla').type('form').send({ _csrf: csrf });
     expect(restore.status).toBe(303);
-    expect((await changeLog()).at(-1)).toMatchObject({ author: 'Rosa QA', business: 'birria', action: 'restore_seed' });
+    expect((await changeLog()).at(-1)).toMatchObject({ author: 'Ana QA', business: 'birria', action: 'restore_seed' });
     expect(await readdir(join(dataDir, 'birria'))).not.toContain('damaged.marker.json');
 
     const unlocked = await browser.get('/admin/birria');

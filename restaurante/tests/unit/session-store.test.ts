@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { SESSION_IDLE_MS, createSessionStore } from '../../src/services/session-store.ts';
 import { makeClock } from '../support/admin.ts';
 
+const OWNER = Object.freeze({ userId: 1, sessionVersion: 0 });
+
 describe('createSessionStore', () => {
   it('crea sesiones con id y token CSRF aleatorios de 256 bits', () => {
     const store = createSessionStore();
-    const a = store.create();
-    const b = store.create();
+    const a = store.create(OWNER);
+    const b = store.create(OWNER);
     expect(a.id).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(a.csrfToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(a.id).not.toBe(b.id);
@@ -17,7 +19,7 @@ describe('createSessionStore', () => {
   it('caduca tras 2 horas de inactividad y se renueva con la actividad (P-3)', () => {
     const clock = makeClock();
     const store = createSessionStore({ now: clock.now });
-    const { id } = store.create();
+    const { id } = store.create(OWNER);
 
     clock.advance(SESSION_IDLE_MS - 1000);
     expect(store.touch(id)).not.toBeNull();
@@ -37,19 +39,38 @@ describe('createSessionStore', () => {
 
   it('destroy cierra la sesión', () => {
     const store = createSessionStore();
-    const { id } = store.create();
+    const { id } = store.create(OWNER);
     store.destroy(id);
     expect(store.touch(id)).toBeNull();
   });
 
   it('respeta el tope de sesiones descartando la menos reciente', () => {
     const store = createSessionStore({ maxSessions: 2 });
-    const first = store.create();
-    const second = store.create();
+    const first = store.create(OWNER);
+    const second = store.create(OWNER);
     store.touch(first.id);
-    store.create();
+    store.create(OWNER);
     expect(store.size).toBe(2);
     expect(store.touch(second.id)).toBeNull();
     expect(store.touch(first.id)).not.toBeNull();
+  });
+
+  it('cada sesión recuerda su usuario y su sessionVersion (REQ-F-007, DT-7)', () => {
+    const store = createSessionStore();
+    const session = store.create({ userId: 7, sessionVersion: 3 });
+    expect(store.touch(session.id)).toEqual({ id: session.id, csrfToken: session.csrfToken, userId: 7, sessionVersion: 3 });
+  });
+
+  it('destroyUser cierra las sesiones de un usuario, salvo la indicada', () => {
+    const store = createSessionStore();
+    const a = store.create({ userId: 1, sessionVersion: 0 });
+    const b = store.create({ userId: 1, sessionVersion: 0 });
+    const other = store.create({ userId: 2, sessionVersion: 0 });
+    store.destroyUser(1, b.id);
+    expect(store.touch(a.id)).toBeNull();
+    expect(store.touch(b.id)).not.toBeNull();
+    expect(store.touch(other.id)).not.toBeNull();
+    store.destroyUser(1);
+    expect(store.touch(b.id)).toBeNull();
   });
 });

@@ -173,7 +173,7 @@ describe('iconos de la raíz según el día (CA-7, CA-8)', () => {
 
   it('funciona con la administración deshabilitada (sin credenciales)', async () => {
     const config = makeConfig();
-    expect(config.admin.enabled).toBe(false);
+    expect(config.adminBootstrap).toBeNull();
     const res = await agent({ config }).get('/favicon.ico');
     expect(res.status).toBe(200);
   });

@@ -1,6 +1,8 @@
 import type { Context, Middleware, Next, ParameterizedContext } from 'koa';
 
 import type { Config } from '../config/env.ts';
+import { DatabaseUnavailableError } from '../db/errors.ts';
+import type { UserRecord, UserRepository } from '../repositories/user-repository.ts';
 import { safeEqualStrings } from '../services/admin-auth.ts';
 import type { SessionInfo, SessionStore } from '../services/session-store.ts';
 import type { Logger } from '../utils/logger.ts';
@@ -8,15 +10,20 @@ import type { Logger } from '../utils/logger.ts';
 /** Estado de Koa en las rutas de administración. */
 export interface AdminState {
   adminSession?: SessionInfo;
+  /** Usuario de la sesión, leído de la base de datos en cada petición (rol y negocios vigentes). */
+  adminUser?: UserRecord;
 }
 export type AdminContext = ParameterizedContext<AdminState>;
 
 /**
  * Protección de /admin (REQ-F-001, RF-5):
  * - cabeceras noindex y sin caché en todas las respuestas de /admin;
- * - administración deshabilitada sin credenciales (503) y solo por HTTPS en producción (DT-3);
+ * - solo por HTTPS en producción (DT-3);
+ * - administración no disponible (503) mientras la base de datos no tenga usuarios
+ *   (REQ-F-007, R-4 y DT-11) o si la base de datos no responde (R-3: página HTML 503);
  * - validación de origen y token CSRF en las acciones POST;
- * - sesión obligatoria (cookie opaca validada contra el almacén en memoria).
+ * - sesión obligatoria (cookie opaca validada contra el almacén en memoria) de un usuario
+ *   activo cuya `sessionVersion` no cambió (REQ-F-007, DT-7).
  */
 
 export const ADMIN_PREFIX = '/admin';
@@ -31,8 +38,26 @@ function respondUnavailable(ctx: Context): void {
   ctx.body = { error: { code: 'ADMIN_UNAVAILABLE', message: 'Administración no disponible' } };
 }
 
-/** Primer filtro de todo /admin: cabeceras y disponibilidad. */
-export function createAdminGate({ config, logger }: { config: Config; logger: Logger }): Middleware {
+/**
+ * Primer filtro de todo /admin: cabeceras, HTTPS y disponibilidad.
+ * `users` ausente: la administración no está montada (503). Cada petición comprueba que haya
+ * usuarios (una consulta trivial): así /admin se habilita sin reiniciar cuando el comando de
+ * recuperación crea el primero (DT-11) y, si la base de datos falla, también la página de acceso
+ * responde 503 (R-3, CA-5).
+ */
+export function createAdminGate({
+  config,
+  logger,
+  users,
+  renderUnavailable,
+}: {
+  config: Config;
+  logger: Logger;
+  users?: Pick<UserRepository, 'hasUsers'> | undefined;
+  renderUnavailable: () => string;
+}): Middleware {
+  const available = async (): Promise<boolean> => (users ? users.hasUsers() : false);
+
   return async function adminGate(ctx, next) {
     if (!isAdminPath(ctx.path)) {
       await next();
@@ -47,13 +72,23 @@ export function createAdminGate({ config, logger }: { config: Config; logger: Lo
     // (la administración no enlaza a otros sitios).
     ctx.set('Referrer-Policy', 'same-origin');
 
-    if (!config.admin.enabled) return respondUnavailable(ctx);
     if (config.isProduction && !ctx.secure) {
       // Con nginx + TLS delante, TRUST_PROXY=true hace que Koa lea X-Forwarded-Proto.
       logger.warn('admin_requires_https', { path: ctx.path });
       return respondUnavailable(ctx);
     }
-    await next();
+    try {
+      if (!(await available())) return respondUnavailable(ctx);
+      await next();
+    } catch (err) {
+      if (!(err instanceof DatabaseUnavailableError)) throw err;
+      // Solo nombre y códigos: el mensaje de Prisma lleva rutas e invocaciones (DT-9).
+      logger.error('database_unavailable', { path: ctx.path, ...err.details });
+      ctx.status = 503;
+      ctx.type = 'html';
+      ctx.body = renderUnavailable();
+    }
+    return undefined;
   };
 }
 
@@ -114,11 +149,23 @@ export type SessionGuard = (ctx: AdminContext, next: Next, options?: { returnTo?
 /**
  * Sesión obligatoria. Sin sesión (o caducada), redirige al acceso; en un POST además avisa
  * de que la sesión caducó y no lee ni escribe nada (CA-20, CA-22).
+ * La sesión también deja de valer si su usuario ya no existe, está desactivado o cambió su
+ * `sessionVersion` (REQ-F-007, D-8 y DT-7).
  */
-export function createSessionGuard({ sessions, config }: { sessions: SessionStore; config: Config }): SessionGuard {
+export function createSessionGuard({
+  sessions,
+  config,
+  users,
+}: {
+  sessions: SessionStore;
+  config: Config;
+  users: Pick<UserRepository, 'findById'>;
+}): SessionGuard {
   return async function requireSession(ctx, next, { returnTo } = {}) {
     const session = sessions.touch(ctx.cookies.get(SESSION_COOKIE));
-    if (!session) {
+    const user = session ? await users.findById(session.userId) : null;
+    if (!session || !user || !user.active || user.sessionVersion !== session.sessionVersion) {
+      if (session) sessions.destroy(session.id);
       ctx.cookies.set(SESSION_COOKIE, null, sessionCookieOptions(config));
       const query = new URLSearchParams();
       if (returnTo) query.set('next', returnTo);
@@ -129,6 +176,7 @@ export function createSessionGuard({ sessions, config }: { sessions: SessionStor
       return undefined;
     }
     ctx.state.adminSession = session;
+    ctx.state.adminUser = user;
     await next();
     return undefined;
   };

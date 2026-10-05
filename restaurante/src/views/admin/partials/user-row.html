@@ -1,0 +1,19 @@
+
+            <tr class="admin-users__row">
+              <th scope="row" class="px-3 py-2 font-semibold text-slate-900">{{ username }}</th>
+              <td class="px-3 py-2">{{ displayName }}</td>
+              <td class="px-3 py-2">{{ role }}</td>
+              <td class="px-3 py-2">{{ businesses }}</td>
+              <td class="px-3 py-2">{{ status }}</td>
+              <td class="px-3 py-2">{{ lastLogin }}</td>
+              <td class="px-3 py-2">
+                <div class="flex flex-wrap items-center gap-2">
+                  <a class="admin-users__action font-semibold text-blue-900 underline underline-offset-4 focus-visible:outline-3 focus-visible:outline-blue-700" href="{{ editHref }}">Editar<span class="sr-only"> a {{ username }}</span></a>
+                  <a class="admin-users__action font-semibold text-blue-900 underline underline-offset-4 focus-visible:outline-3 focus-visible:outline-blue-700" href="{{ passwordHref }}">Restablecer contraseña<span class="sr-only"> de {{ username }}</span></a>
+                  <form class="admin-users__status-form" method="post" action="{{ statusAction }}">
+                    <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+                    <button class="admin-button admin-button--secondary {{ secondaryButtonClass }}" type="submit">{{ statusLabel }}<span class="sr-only"> a {{ username }}</span></button>
+                  </form>
+                </div>
+              </td>
+            </tr>

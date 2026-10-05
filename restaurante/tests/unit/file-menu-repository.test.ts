@@ -102,7 +102,7 @@ describe('guardar (RF-6, CA-27)', () => {
       d.promo.title = 'Martes 2x1';
     });
 
-    const saved = await repository.save('molotes', { data, expectedVersion: version, author: '  Ana  ' });
+    const saved = await repository.save('molotes', { data, expectedVersion: version, author: { id: 1, name: '  Ana  ' } });
 
     expect(saved).toMatchObject({ revision: 1, updatedBy: 'Ana', updatedAt: '2026-10-09T12:00:00-06:00' });
     expect(await readJson('molotes', 'current.json')).toEqual(saved);
@@ -113,7 +113,7 @@ describe('guardar (RF-6, CA-27)', () => {
     expect(await readChanges()).toEqual([
       {
         at: '2026-10-09T12:00:00-06:00',
-        author: 'Ana',
+        author: 'Ana', authorId: 1,
         business: 'molotes',
         action: 'save',
         changes: [
@@ -129,10 +129,10 @@ describe('guardar (RF-6, CA-27)', () => {
     const { repository, clock } = await makeRepo();
     const { version } = await repository.getForEdit('birria');
     clock.advance(60_000);
-    await repository.save('birria', { data: seedData('birria'), expectedVersion: version, author: 'Ana' });
+    await repository.save('birria', { data: seedData('birria'), expectedVersion: version, author: { id: 1, name: 'Ana' } });
     const before = await readFile(fileOf('birria', 'current.json'), 'utf8');
 
-    const attempt = repository.save('birria', { data: seedData('birria'), expectedVersion: version, author: 'Beto' });
+    const attempt = repository.save('birria', { data: seedData('birria'), expectedVersion: version, author: { id: 1, name: 'Beto' } });
     await expect(attempt).rejects.toBeInstanceOf(MenuConflictError);
     await attempt.catch((err) => {
       expect(err.current).toMatchObject({ updatedBy: 'Ana', updatedAt: '2026-10-09T12:01:00-06:00' });
@@ -146,26 +146,26 @@ describe('guardar (RF-6, CA-27)', () => {
     const a = await repository.save('birria', {
       data: changedData('birria', (d: CorruptibleData) => (d.promo.title = 'De Ana')),
       expectedVersion: initial,
-      author: 'Ana',
+      author: { id: 1, name: 'Ana' },
     });
     const conflictVersion = versionOf(a);
     await repository.save('birria', {
       data: changedData('birria', (d: CorruptibleData) => (d.promo.title = 'De Beto')),
       expectedVersion: conflictVersion,
-      author: 'Beto',
+      author: { id: 1, name: 'Beto' },
       action: 'overwrite_after_conflict',
     });
     expect((await readJson('birria', 'current.json')).data.promo.title).toBe('De Beto');
     expect((await readJson('birria', 'previous.json')).data.promo.title).toBe('De Ana');
-    expect((await readChanges()).at(-1)).toMatchObject({ author: 'Beto', action: 'overwrite_after_conflict' });
+    expect((await readChanges()).at(-1)).toMatchObject({ author: 'Beto', authorId: 1, action: 'overwrite_after_conflict' });
   });
 
   it('serializa guardados simultáneos: solo el primero gana con la misma versión', async () => {
     const { repository } = await makeRepo();
     const { version } = await repository.getForEdit('molotes');
     const results = await Promise.allSettled([
-      repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: 'A' }),
-      repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: 'B' }),
+      repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: { id: 1, name: 'A' } }),
+      repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: { id: 1, name: 'B' } }),
     ]);
     expect(results.map((result) => result.status)).toEqual(['fulfilled', 'rejected']);
     expect((results[1] as PromiseRejectedResult).reason).toBeInstanceOf(MenuConflictError);
@@ -176,11 +176,15 @@ describe('guardar (RF-6, CA-27)', () => {
     const { version } = await repository.getForEdit('birria');
     const before = await readFile(fileOf('birria', 'current.json'), 'utf8');
     await expect(
-      repository.save('birria', { data: changedData('birria', (d: CorruptibleData) => d.menu.items.pop()), expectedVersion: version, author: 'Ana' }),
+      repository.save('birria', { data: changedData('birria', (d: CorruptibleData) => d.menu.items.pop()), expectedVersion: version, author: { id: 1, name: 'Ana' } }),
     ).rejects.toThrow(/inválidos/);
-    await expect(repository.save('birria', { data: seedData('birria'), expectedVersion: version, author: '  ' })).rejects.toThrow(
+    await expect(repository.save('birria', { data: seedData('birria'), expectedVersion: version, author: { id: 1, name: '  ' } })).rejects.toThrow(
       /inválidos/,
     );
+    // El autor verificado exige un identificador de usuario (REQ-F-007, D-11).
+    for (const author of ['Ana', { name: 'Ana' }, { id: 0, name: 'Ana' }, { id: '1', name: 'Ana' }]) {
+      await expect(repository.save('birria', { data: seedData('birria'), expectedVersion: version, author })).rejects.toThrow(/inválidos/);
+    }
     expect(await readFile(fileOf('birria', 'current.json'), 'utf8')).toBe(before);
   });
 
@@ -201,7 +205,7 @@ describe('guardar (RF-6, CA-27)', () => {
       repository.save('molotes', {
         data: changedData('molotes', (d: CorruptibleData) => (d.menu.items[0].name = 'Nuevo')),
         expectedVersion: version,
-        author: 'Ana',
+        author: { id: 1, name: 'Ana' },
       }),
     ).rejects.toThrow(/disco lleno/);
 
@@ -230,7 +234,7 @@ describe('guardar (RF-6, CA-27)', () => {
     const { repository: setup } = await makeRepo();
     const { version } = await setup.getForEdit('birria');
     const { repository } = await makeRepo({ fs: failingFs });
-    await expect(repository.save('birria', { data: seedData('birria'), expectedVersion: version, author: 'Ana' })).rejects.toThrow(
+    await expect(repository.save('birria', { data: seedData('birria'), expectedVersion: version, author: { id: 1, name: 'Ana' } })).rejects.toThrow(
       /fallo de E\/S/,
     );
     expect(await readJson('birria', 'current.json')).toEqual(seedDocuments().birria);
@@ -247,7 +251,7 @@ describe('guardar (RF-6, CA-27)', () => {
     };
     const { repository, logger } = await makeRepo({ fs: failingFs });
     const { version } = await repository.getForEdit('molotes');
-    await repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: 'Ana' });
+    await repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: { id: 1, name: 'Ana' } });
     expect((await readJson('molotes', 'current.json')).revision).toBe(1);
     expect(logger.lines).toContainEqual(expect.objectContaining({ msg: 'change_log_write_failed', code: 'EACCES' }));
   });
@@ -258,7 +262,7 @@ describe('guardar (RF-6, CA-27)', () => {
     await writeDocument('molotes', 'current.json', (d: CorruptibleData) => (d.promo.title = 'Editado a mano'));
     expect((await repository.getPublished('molotes')).data.promo.title).toBe('Jueves de Molotes 2x1');
 
-    await repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: 'Ana' });
+    await repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: { id: 1, name: 'Ana' } });
     expect((await readJson('molotes', 'previous.json')).data.promo.title).toBe('Editado a mano');
   });
 });
@@ -270,11 +274,11 @@ describe('restaurar versión anterior (RF-6.5, CA-30)', () => {
     const saved = await repository.save('molotes', {
       data: changedData('molotes', (d: CorruptibleData) => (d.menu.highlight = 'Nuevo destacado')),
       expectedVersion: version,
-      author: 'Ana',
+      author: { id: 1, name: 'Ana' },
     });
     clock.advance(5 * 60_000);
 
-    const restored = await repository.restorePrevious('molotes', { author: 'Beto' });
+    const restored = await repository.restorePrevious('molotes', { author: { id: 1, name: 'Beto' } });
 
     expect(restored.data).toEqual(seedData('molotes'));
     expect(restored).toMatchObject({ revision: 2, updatedBy: 'Beto' });
@@ -282,21 +286,21 @@ describe('restaurar versión anterior (RF-6.5, CA-30)', () => {
     expect((await repository.getPublished('molotes')).data.menu.highlight).toBe(seedData('molotes').menu.highlight);
     expect((await readJson('molotes', 'previous.json')).data.menu.highlight).toBe('Nuevo destacado');
     expect((await readChanges()).at(-1)).toMatchObject({
-      author: 'Beto',
+      author: 'Beto', authorId: 1,
       action: 'restore_previous',
       changes: [{ field: 'menu.highlight', before: 'Nuevo destacado', after: seedData('molotes').menu.highlight }],
     });
 
     // Restaurar otra vez deshace la restauración.
-    await repository.restorePrevious('molotes', { author: 'Beto' });
+    await repository.restorePrevious('molotes', { author: { id: 1, name: 'Beto' } });
     expect((await repository.getPublished('molotes')).data.menu.highlight).toBe('Nuevo destacado');
   });
 
   it('una restauración provoca conflicto en quien tenía el formulario abierto', async () => {
     const { repository } = await makeRepo();
     const { version } = await repository.getForEdit('molotes');
-    await repository.restorePrevious('molotes', { author: 'Beto' });
-    await expect(repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: 'Ana' })).rejects.toBeInstanceOf(
+    await repository.restorePrevious('molotes', { author: { id: 1, name: 'Beto' } });
+    await expect(repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: { id: 1, name: 'Ana' } })).rejects.toBeInstanceOf(
       MenuConflictError,
     );
   });
@@ -306,13 +310,13 @@ describe('restaurar versión anterior (RF-6.5, CA-30)', () => {
     await setup.getForEdit('molotes');
     await writeFile(fileOf('molotes', 'previous.json'), '{ roto');
     const { repository } = await makeRepo();
-    await expect(repository.restorePrevious('molotes', { author: 'Ana' })).rejects.toBeInstanceOf(PreviousUnavailableError);
+    await expect(repository.restorePrevious('molotes', { author: { id: 1, name: 'Ana' } })).rejects.toBeInstanceOf(PreviousUnavailableError);
     expect(await readJson('molotes', 'current.json')).toEqual(seedDocuments().molotes);
   });
 
   it('restaurar la semilla sin datos dañados no está permitido (DT-8)', async () => {
     const { repository } = await makeRepo();
-    await expect(repository.restoreSeed('molotes', { author: 'Ana' })).rejects.toBeInstanceOf(SeedRestoreNotAllowedError);
+    await expect(repository.restoreSeed('molotes', { author: { id: 1, name: 'Ana' } })).rejects.toBeInstanceOf(SeedRestoreNotAllowedError);
   });
 });
 
@@ -366,19 +370,19 @@ describe('archivo dañado (RF-8)', () => {
     const edit = await first.repository.getForEdit('molotes');
     expect(edit.damaged).toEqual({ servingFrom: 'previous', previousValid: true });
     await expect(
-      first.repository.save('molotes', { data: seedData('molotes'), expectedVersion: edit.version, author: 'Ana' }),
+      first.repository.save('molotes', { data: seedData('molotes'), expectedVersion: edit.version, author: { id: 1, name: 'Ana' } }),
     ).rejects.toBeInstanceOf(MenuDamagedError);
 
     // Reinicio: sin current.json pero con el marcador, no se trata como primera ejecución.
     const second = await makeRepo();
     expect((await second.repository.getForEdit('molotes')).damaged).toEqual({ servingFrom: 'previous', previousValid: true });
 
-    const restored = await second.repository.restorePrevious('molotes', { author: 'Ana' });
+    const restored = await second.repository.restorePrevious('molotes', { author: { id: 1, name: 'Ana' } });
     expect(restored.data.menu.highlight).toBe('Anterior');
     expect(restored.revision).toBeGreaterThan(3);
     expect(await listFiles('molotes')).not.toContain('damaged.marker.json');
     expect((await second.repository.getForEdit('molotes')).damaged).toBeNull();
-    expect((await readChanges()).at(-1)).toMatchObject({ author: 'Ana', action: 'restore_previous', business: 'molotes' });
+    expect((await readChanges()).at(-1)).toMatchObject({ author: 'Ana', authorId: 1, action: 'restore_previous', business: 'molotes' });
 
     const third = await makeRepo();
     expect((await third.repository.getForEdit('molotes')).damaged).toBeNull();
@@ -389,11 +393,11 @@ describe('archivo dañado (RF-8)', () => {
     await nodeFs.mkdir(join(dataDir, 'birria'), { recursive: true });
     await nodeFs.writeFile(fileOf('birria', 'current.json'), '[]');
     const { repository } = await makeRepo();
-    const restored = await repository.restoreSeed('birria', { author: 'Ana' });
+    const restored = await repository.restoreSeed('birria', { author: { id: 1, name: 'Ana' } });
     expect(restored.data).toEqual(seedData('birria'));
     expect(await readJson('birria', 'current.json')).toEqual(restored);
     expect((await repository.getForEdit('birria')).damaged).toBeNull();
-    expect((await readChanges()).at(-1)).toMatchObject({ author: 'Ana', action: 'restore_seed', business: 'birria' });
+    expect((await readChanges()).at(-1)).toMatchObject({ author: 'Ana', authorId: 1, action: 'restore_seed', business: 'birria' });
   });
 
   it('RF-8.5: si se daña con el servidor en marcha, la landing conserva la versión en memoria', async () => {
@@ -402,7 +406,7 @@ describe('archivo dañado (RF-8)', () => {
     const saved = await repository.save('molotes', {
       data: changedData('molotes', (d: CorruptibleData) => (d.menu.highlight = 'Último válido')),
       expectedVersion: version,
-      author: 'Ana',
+      author: { id: 1, name: 'Ana' },
     });
     await nodeFs.writeFile(fileOf('molotes', 'current.json'), 'roto');
 

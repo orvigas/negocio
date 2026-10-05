@@ -31,14 +31,22 @@ vive en `src/content/`; los menús, precios, showcase del hero y promociones se 
 ```sh
 nvm use
 npm install
+npm run db:generate    # genera el cliente de Prisma (src/generated/prisma; no se versiona)
 cp .env.example .env   # completa al menos WHATSAPP_MOLOTES(_URL) y WHATSAPP_BIRRIA(_URL)
-npm run admin:hash-password   # opcional: genera ADMIN_PASSWORD_HASH para habilitar /admin
+npm run admin:hash-password   # opcional: genera ADMIN_PASSWORD_HASH para crear el primer administrador
 npm run build:css
 npm run dev            # http://localhost:3000 (administración: http://localhost:3000/admin)
 ```
 
 En la primera ejecución se crea la carpeta de datos (`DATA_DIR`, por defecto `data/`) con
-una copia de la semilla de cada negocio.
+una copia de la semilla de cada negocio y la base de datos `restaurante.db` (usuarios de la
+administración), con sus migraciones aplicadas. Ver [Base de datos](#base-de-datos).
+
+`npm install` solo ejecuta los scripts de instalación aprobados en `allowScripts` de
+`package.json` (`better-sqlite3`, `prisma` y `@prisma/engines`; `@parcel/watcher` y `fsevents`
+están denegados porque no los necesitan). Si una dependencia nueva trae un script de
+instalación, `npm ci --strict-allow-scripts` (CI y Docker) falla hasta que se revise y se
+apruebe con `npm install-scripts approve <paquete>`.
 
 ## Scripts
 
@@ -49,6 +57,9 @@ una copia de la semilla de cada negocio.
 | `npm run build:css`  | Compila el CSS de ambas landings y de la administración (`build:css:molotes`, `build:css:birria`, `build:css:admin`) |
 | `npm run watch:css`  | Compilación de CSS en modo observación                      |
 | `npm run admin:hash-password` | Pide la contraseña de administración (sin mostrarla) e imprime el valor de `ADMIN_PASSWORD_HASH` |
+| `npm run admin:recover -- --usuario <nombre>` | Recupera el acceso de administración por consola (ver [Recuperar el acceso](#recuperar-el-acceso)) |
+| `npm run db:generate` | Genera el cliente de Prisma en `src/generated/prisma` (necesario antes de `typecheck`, `lint`, `test` y `dev`) |
+| `npm run db:migrate:dev -- --name <nombre>` | Crea una migración nueva a partir de `prisma/schema.prisma` (solo desarrollo; usa `DATA_DIR`) |
 | `npm test`           | Tests unitarios e integración (Vitest + Supertest) |
 | `npm run typecheck`  | Verificación de tipos con `tsc` (`tsconfig.json`, sin generar archivos); termina con código distinto de 0 si hay errores. No forma parte de `npm test` |
 | `npm run test:watch` | Vitest en modo observación                                  |
@@ -127,7 +138,13 @@ docker run -d --name restaurante -p 3000:3000 \
   aparece como una línea `request` en el log.
 - El contenedor arranca con `node src/server.ts`: Node 24 ejecuta el TypeScript directamente,
   sin compilar y sin TypeScript instalado en la imagen.
-- `docker stop` envía `SIGTERM` y la app cierra el servidor ordenadamente.
+- `docker stop` envía `SIGTERM` y la app cierra el servidor y la base de datos ordenadamente.
+- Al arrancar, la app crea o abre `DATA_DIR/restaurante.db` y aplica las migraciones pendientes
+  (log `database_migrated`); si la base de datos no está disponible, el contenedor termina con
+  código 1. La imagen no incluye el CLI de Prisma: lleva el cliente generado, las migraciones
+  (`prisma/migrations`) y los comandos de consola (`scripts/`). Pesa unos 260 MB.
+- Recuperar el acceso dentro del contenedor:
+  `docker exec -it restaurante node scripts/admin-recover.ts --usuario <nombre>`.
 - `/admin` exige HTTPS en producción (ver [Seguridad](#seguridad)): un despliegue con Docker
   necesita un proxy con TLS y `TRUST_PROXY=true`, fuera del alcance actual.
 
@@ -153,7 +170,7 @@ ejecutan; un fallo en una no afecta a la otra.
 
 | Comprobación | Pasos, en orden |
 | ------------ | --------------- |
-| `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci`, `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado) y `npm test` |
+| `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado) y `npm test` |
 | `docker`     | Build del target `production` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64` y sin publicar la imagen |
 
 La caché de npm se invalida al cambiar `package-lock.json`; la de Docker reutiliza las capas que
@@ -165,7 +182,7 @@ zona del sistema.
 Desde esta carpeta (`restaurante/`):
 
 ```sh
-npm ci && npm run typecheck && npm run lint && npm run build:css && npm test   # calidad
+npm ci --strict-allow-scripts && npm run db:generate && npm run typecheck && npm run lint && npm run build:css && npm test   # calidad
 docker buildx build --platform linux/amd64 --target production .              # docker
 ```
 
@@ -217,8 +234,8 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `WHATSAPP_BIRRIA`          | Esta o la URL           | Igual que arriba, para Birria                                      |
 | `WHATSAPP_BIRRIA_MESSAGE`  | No                      | Igual que arriba, para Birria                                      |
 | `DATA_DIR`                 | Solo en producción (ruta absoluta) | Carpeta de los datos editables (por defecto `data/` del proyecto fuera de producción). No puede estar dentro de `src/` ni de `public/` |
-| `ADMIN_USER`               | No                      | Usuario común de la administración (máx. 60). Sin `ADMIN_USER` ni `ADMIN_PASSWORD_HASH`, `/admin` responde 503 "no disponible"; con solo una de las dos, la app no arranca |
-| `ADMIN_PASSWORD_HASH`      | No                      | Hash scrypt de la contraseña (`npm run admin:hash-password`). Nunca la contraseña en claro |
+| `ADMIN_USER`               | No                      | Usuario del **primer administrador** (1-60 caracteres). Solo se usa si la base de datos no tiene usuarios; después se ignora (aviso `admin_bootstrap_ignored` en el log, sin valores). Sin usuarios ni estas variables, `/admin` responde 503 "no disponible"; con solo una de las dos o un hash inválido, la app no arranca |
+| `ADMIN_PASSWORD_HASH`      | No                      | Hash scrypt de la contraseña del primer administrador (`npm run admin:hash-password`). Nunca la contraseña en claro |
 | `TRUST_PROXY`              | No (`false`)            | `true` detrás de nginx con TLS: Koa usa `X-Forwarded-Proto` (HTTPS) y la última IP de `X-Forwarded-For` (límite de intentos) |
 
 ## HTTP
@@ -280,14 +297,64 @@ Los datos editables de cada landing viven en un documento JSON por negocio:
 formularios HTML (sin JavaScript). No hay diseño en `_stich_source_/` para estas páginas: la
 interfaz es sencilla, con su propia hoja (`public/css/admin/main.css`).
 
+Cada persona entra con su **cuenta personal** (REQ-F-007), guardada en la base de datos:
+
+| Rol | Puede |
+| --- | ----- |
+| Administrador | Editar los dos negocios y gestionar usuarios |
+| Editor | Editar solo sus negocios asignados (al menos uno). En otro negocio, o en la gestión de usuarios, recibe 403 y no se escribe nada |
+
 | Ruta | Acción |
 | ---- | ------ |
-| `GET /admin` | Redirige a `/admin/molotes` |
-| `GET` / `POST /admin/login` | Acceso con el usuario y la contraseña comunes |
+| `GET /admin` | Inicio: solo enlaza a lo que el usuario tiene permitido |
+| `GET` / `POST /admin/login` | Acceso con usuario (sin distinguir mayúsculas) y contraseña |
 | `POST /admin/logout` | Cierre de sesión |
 | `GET` / `POST /admin/<negocio>` | Formulario y guardado (POST-redirect-GET) |
 | `GET` / `POST /admin/<negocio>/restaurar-anterior` | Confirmación y restauración de la versión anterior |
 | `POST /admin/<negocio>/restaurar-semilla` | Solo con datos dañados: vuelve a la semilla |
+| `GET /admin/usuarios` | Lista de usuarios (solo administradores) |
+| `GET /admin/usuarios/nuevo`, `POST /admin/usuarios` | Crear usuario |
+| `GET` / `POST /admin/usuarios/<id>` | Editar usuario, nombre visible, rol y negocios |
+| `POST /admin/usuarios/<id>/desactivar` y `…/reactivar` | Desactivar o reactivar (los usuarios no se eliminan) |
+| `GET` / `POST /admin/usuarios/<id>/contrasena` | Restablecer la contraseña de otro usuario |
+| `GET` / `POST /admin/cuenta` | Mi cuenta: cambiar la propia contraseña (pide la actual) |
+
+### Usuarios
+
+- **Datos:** usuario de acceso (único sin distinguir mayúsculas, 1-60 caracteres), nombre
+  visible (1-60; es el autor de los cambios), rol, negocios del editor, activo o no y fechas de
+  creación, actualización y último acceso. Contraseñas de 12 a 256 caracteres, guardadas como
+  hash scrypt.
+- **Primer administrador:** en el primer arranque sin usuarios se crea con `ADMIN_USER` y
+  `ADMIN_PASSWORD_HASH` (la cuenta de siempre sigue funcionando). Después esas variables se
+  ignoran y los usuarios se gestionan desde `/admin/usuarios`.
+- **Siempre hay al menos un administrador activo:** no se puede desactivar ni pasar a editor al
+  último, tampoco a uno mismo.
+- **Sesiones:** desactivar a un usuario, cambiarle el rol o los negocios, o restablecer su
+  contraseña cierra sus sesiones abiertas; cambiar la propia contraseña cierra las demás. Una
+  cuenta desactivada no puede entrar (mismo mensaje que con credenciales incorrectas).
+- **Edición simultánea de un usuario:** gana la última escritura; las dos quedan en la auditoría.
+- **Auditoría (`user_audit`):** fecha, quién (usuario, `console` o `system`), a quién y la
+  acción (`bootstrap`, `create`, `update`, `deactivate`, `reactivate`, `password_reset`,
+  `password_change`, `console_recovery`), con los campos cambiados. Nunca guarda contraseñas ni
+  hashes. No tiene pantalla: se consulta en la base de datos.
+
+### Recuperar el acceso
+
+No hay recuperación por correo. Un administrador restablece la contraseña de otro usuario desde
+`/admin/usuarios`. Si se pierde la del último administrador:
+
+```sh
+npm run admin:recover -- --usuario <nombre>                                  # sin Docker
+docker exec -it restaurante node scripts/admin-recover.ts --usuario <nombre>  # en el contenedor
+```
+
+Pide la contraseña nueva dos veces sin mostrarla (al menos 12 caracteres) y trabaja sobre el
+`.db` de `DATA_DIR` (aplica antes las migraciones pendientes). Si el usuario no existe, crea un
+administrador; si existe, lo reactiva, lo deja como administrador y le cambia la contraseña.
+Funciona con el servidor parado o en marcha: en ese caso sus sesiones abiertas se cierran. Queda
+en la auditoría como `console_recovery`. Si la base de datos no tenía usuarios, `/admin` se
+habilita sin reiniciar.
 
 ### Seguridad
 
@@ -316,6 +383,9 @@ interfaz es sencilla, con su propia hoja (`public/css/admin/main.css`).
   Sin HTTPS (o sin `TRUST_PROXY` detrás del proxy), `/admin` responde 503 y el log registra
   `admin_requires_https`.
 - Las credenciales, el hash, los tokens y el contenido de los menús no se escriben en los logs.
+- Si la base de datos falla con el servidor en marcha, `/admin` (también la página de acceso)
+  responde 503 con un aviso y el log registra `database_unavailable` solo con códigos; las
+  landings no se ven afectadas.
 
 ### Archivos de datos (`DATA_DIR`)
 
@@ -327,15 +397,17 @@ DATA_DIR/
 │   ├── damaged-<fecha>.json    # archivo dañado aislado para revisarlo
 │   └── damaged.marker.json     # existe mientras los datos estén dañados y nadie elija una opción
 ├── birria/ (igual)
-└── changes.jsonl               # registro de cambios: una línea JSON por guardado o restauración
+├── changes.jsonl               # registro de cambios: una línea JSON por guardado o restauración
+└── restaurante.db              # base de datos SQLite (usuarios); con -wal y -shm mientras está abierta
 ```
 
 - **Primera ejecución:** si no existe `current.json`, se copia la semilla a `current.json` y
   `previous.json` (log `menu_data_seeded`).
 - **Guardado:** el contenido vigente pasa a `previous.json` y el nuevo se escribe de forma
   atómica (archivo temporal, `fsync` y `rename`): un fallo nunca deja el archivo a medias.
-- **Registro (`changes.jsonl`):** fecha ISO en la zona del negocio, autor ("Nombre de quien
-  hace el cambio", obligatorio), negocio, acción (`save`, `overwrite_after_conflict`,
+- **Registro (`changes.jsonl`):** fecha ISO en la zona del negocio, autor (nombre visible del
+  usuario de la sesión, `author`, y su identificador, `authorId`; las entradas anteriores a
+  REQ-F-007 solo tienen el nombre escrito a mano), negocio, acción (`save`, `overwrite_after_conflict`,
   `restore_previous`, `restore_seed`) y campos modificados con su valor anterior y el nuevo.
   La página solo muestra "Último cambio: <fecha> por <nombre>". El archivo crece sin límite:
   rótalo o respáldalo con las herramientas de la VM.
@@ -347,6 +419,29 @@ DATA_DIR/
 - **Ediciones manuales:** editar los JSON a mano se aplica al reiniciar el servidor. La vía
   recomendada es la administración; si se guarda desde ella antes de reiniciar, la edición
   manual queda como versión anterior. Haz respaldos de `DATA_DIR` con las herramientas de la VM.
+
+### Base de datos
+
+- **Archivo:** `DATA_DIR/restaurante.db` (SQLite en modo WAL, con `restaurante.db-wal` y
+  `restaurante.db-shm` junto a él). Nunca va en el repositorio ni en las imágenes.
+- **Esquema y migraciones:** `prisma/schema.prisma` y `prisma/migrations/`. Al arrancar, la app
+  comprueba que el archivo se pueda escribir y no esté dañado y aplica las migraciones pendientes
+  (`src/db/migrate.ts`), cada una en una transacción: si una falla, se revierte entera. Las
+  registra en `_prisma_migrations` con el mismo formato que `prisma migrate deploy`, así que el
+  CLI de Prisma reconoce la base (una prueba lo verifica). En producción no hace falta el CLI.
+- **Fallo al arrancar:** archivo dañado, sin permisos de escritura, una migración que falla o una
+  base más nueva que el código (por ejemplo, al volver a una versión anterior): el servidor no
+  arranca, termina con código 1 y el log registra `database_init_failed` con un código, sin SQL
+  ni rutas.
+- **Migraciones nuevas (desarrollo):** cambia `prisma/schema.prisma`, ejecuta
+  `npm run db:migrate:dev -- --name <nombre>` (con un `DATA_DIR` de desarrollo) y
+  `npm run db:generate`. Versiona la carpeta nueva de `prisma/migrations/`; nunca edites una
+  migración ya aplicada (la app no arrancaría: `MIGRATION_MODIFIED`).
+- **Respaldos:** son responsabilidad de quien opera la VM. Copia `restaurante.db` con el
+  servidor parado (junto con `-wal` y `-shm` si existen) o, en marcha, con
+  `sqlite3 DATA_DIR/restaurante.db ".backup /ruta/respaldo.db"`. Copiar el archivo en marcha
+  puede dar un respaldo incompleto. Si se pierde el `.db` sin respaldo, se pierden los usuarios
+  y su auditoría; el acceso se recupera con `npm run admin:recover`.
 
 ### Recuperación de datos dañados
 
@@ -366,15 +461,19 @@ Si `current.json` no es JSON válido o no cumple el esquema (por ejemplo, un pre
 ```text
 restaurante/
 ├── src/
-│   ├── server.ts             # Entrada del proceso: valida config, prepara DATA_DIR, escucha en PORT, cierre ordenado
+│   ├── server.ts             # Entrada del proceso: valida config, prepara DATA_DIR y la base de datos, primer administrador, escucha en PORT, cierre ordenado
 │   ├── app.ts                # createApp(): app Koa testeable (config, repositorio, logger y `now` inyectables)
 │   ├── config/               # env.ts (carga/validación y tipo Config), businesses.ts (ids de negocio)
-│   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests), admin.ts
+│   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests),
+│   │                         # admin.ts (acceso, inicio y menús), admin-users.ts, admin-account.ts, admin-access.ts (sesión y permisos)
+│   ├── db/                   # client.ts (Prisma + better-sqlite3), migrate.ts (migraciones al arrancar), errors.ts, paths.ts
+│   ├── generated/prisma/     # Cliente de Prisma generado por `npm run db:generate` (ignorado por git)
 │   ├── routes/               # Router (@koa/router): index.ts (landings), admin.ts (/admin)
 │   ├── middleware/           # Manejo centralizado de errores, log de requests, protección de /admin
-│   ├── repositories/         # Repositorio de menús: contrato y reglas, implementación de archivos y en memoria
+│   ├── repositories/         # Menús (contrato y reglas, archivos y memoria) y usuarios (user-repository.ts, Prisma)
 │   ├── services/             # business-schedule, whatsapp, menu-schema, price, visible-menu, admin-form,
-│   │                         # menu-diff, admin-auth, session-store, login-throttle
+│   │                         # menu-diff, admin-auth, session-store, login-throttle, user-schema,
+│   │                         # authorization, admin-bootstrap
 │   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), horarios (hours.ts), semillas seed.json e icons.ts
 │   ├── utils/                # logger.ts (JSON estructurado), datetime.ts (zona del negocio), form-body.ts, errors.ts
 │   ├── views/                # render.ts + plantillas HTML
@@ -399,13 +498,21 @@ restaurante/
 │       ├── common/           # Imágenes usadas por ambas landings
 │       ├── molotes/          # icons/: favicons e iconos de pantalla de inicio (generados)
 │       └── birria/           # icons/: ídem
+├── prisma/
+│   ├── schema.prisma         # Esquema de la base de datos (usuarios, negocios asignados, auditoría)
+│   └── migrations/           # Migraciones SQL versionadas (las aplica la app al arrancar)
+├── prisma.config.ts          # Configuración del CLI de Prisma (solo desarrollo, CI y build)
 ├── scripts/
 │   ├── hash-password.ts      # `npm run admin:hash-password`
+│   ├── admin-recover.ts      # `npm run admin:recover`
+│   ├── support/read-hidden.ts # Lectura de contraseñas sin eco (compartida)
 │   └── generate-icons.py     # Genera public/img/<negocio>/icons/ (Python 3 + Pillow; solo desarrollo)
 ├── data/                     # DATA_DIR por defecto fuera de producción (ignorado por git)
 ├── tests/
 │   ├── helpers.ts            # Config válida, semillas y repositorio en memoria para pruebas
-│   ├── support/admin.ts      # App con administración, inicio de sesión y lectura de formularios
+│   ├── support/admin.ts      # App con administración (base de datos temporal), usuarios, inicio de sesión y formularios
+│   ├── support/database.ts   # Bases de datos SQLite temporales (nunca data/)
+│   ├── support/process.ts    # Procesos reales: arranque del servidor y comandos de consola
 │   ├── support/png.ts        # Lectura mínima de PNG/ICO (dimensiones, opacidad, color de fondo)
 │   ├── snapshots/            # HTML de referencia de las landings (regresión visual con la semilla)
 │   ├── unit/                 # config, esquema, precios, formulario, repositorio de archivos, sesión, landings, contenido vs. diseño, JS sobre el HTML real

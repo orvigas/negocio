@@ -435,7 +435,7 @@ describe('landings con datos editables (REQ-F-001)', () => {
     const { version } = await repo.getForEdit(mutate.businessId);
     const data = structuredClone((await repo.getPublished(mutate.businessId)).data);
     mutate.change(data);
-    await repo.save(mutate.businessId, { data, expectedVersion: version, author: 'Pruebas' });
+    await repo.save(mutate.businessId, { data, expectedVersion: version, author: { id: 1, name: 'Pruebas' } });
     const app = createApp({ config: makeConfig(), repository: repo, now: () => FRIDAY_NOON_MX });
     return request(app.callback());
   }

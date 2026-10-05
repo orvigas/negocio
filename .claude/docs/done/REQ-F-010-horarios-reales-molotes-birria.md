@@ -2,11 +2,10 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
-- Pull Request: https://github.com/orvigas/negocio/pull/21 (base `main`, rama `feature/REQ-F-010-horarios-reales-molotes-birria`).
-- Commit: `d101d22` feat: publica los horarios reales de Molotes y Birria desde una fuente única (REQ-F-010).
-- CI del PR (run 37312057723): `calidad` pass (53 s), `docker` pass (43 s), GitGuardian Security Checks pass.
+- Pull Request: https://github.com/orvigas/negocio/pull/21, mergeado el 2026-10-05T12:52:17Z (06:52 hora de Ciudad de México), commit de merge `b5f60ef`.
+- CI del push a `main` de `b5f60ef`: `calidad` y `docker` en verde (https://github.com/orvigas/negocio/actions/runs/37312547826).
 
 ## Aprobación
 
@@ -760,3 +759,7 @@ El usuario elige PT-1 A y aprueba el plan (cita textual: "PT-1 A y apruebo el pl
 ### Commit y Pull Request T4 (2026-10-05)
 
 `senior-fullstack`: build:css, typecheck, lint y `npm test` (502/502) en verde sobre la rama, que parte de `main` (a6d8bbb). Commit `d101d22` con rutas explícitas, incluida la prueba permanente de QA. PR #21 (https://github.com/orvigas/negocio/pull/21) contra `main`. CI en verde: `calidad` y `docker` (run 37312057723) y GitGuardian. Estado `READY_FOR_MERGE`.
+
+### Cierre T5 (2026-10-05)
+
+El usuario confirma el merge del PR #21 (cita textual: "Hecho"), verificado con `gh` (MERGED el 2026-10-05T12:52:17Z, 06:52 hora de Ciudad de México). El commit de merge es `b5f60ef`. El CI del push a `main` de ese commit dio `calidad` y `docker` en verde (https://github.com/orvigas/negocio/actions/runs/37312547826). Se mueve el ticket a `done/` con estado `DONE`.

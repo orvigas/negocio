@@ -278,7 +278,7 @@ Requiere que el ticket esté en `QA_APPROVED`. Esta es la autorización explíci
 5. Crea el commit con Conventional Commits en español, describiendo **qué se obtuvo** con el cambio. Ejemplo: `feat: habilita pedidos por WhatsApp en la landing de Molotes`.
    - **No incluyas referencias a Claude ni Anthropic** (ni `Co-Authored-By`, ni enlaces de herramientas), ni en el commit ni en el PR.
    - Evita mensajes genéricos como `update`, `changes` o `fix stuff`.
-6. `git push -u origin <rama>`.
+6. `git push -u origin <rama>`, encadenado con `&&` tras `git add` y `git commit` (regla crítica 10).
 7. Crea el Pull Request con `gh pr create --base main --head <rama>`, con este cuerpo:
 
 ```text
@@ -326,3 +326,4 @@ Solo cuando el prompt confirma que el usuario hizo merge del PR:
 7. El Pull Request siempre apunta a `main`; nunca hagas merge. Nunca devuelvas `READY_FOR_MERGE` con el CI del PR (`calidad` o `docker`) en rojo o sin terminar.
 8. Si cualquier validación falla, detén el flujo y repórtalo con evidencia.
 9. Mantén la trazabilidad completa en el archivo del ticket: requisito → Action Plan → Technical Action Plan → implementación → QA → commit → PR.
+10. Encadena los comandos de git con `&&` (o comprueba el código de salida de cada uno): un `git add`, `git mv` o `git commit` fallido nunca debe dejar correr `git push` ni `gh pr create`.

@@ -375,7 +375,7 @@ restaurante/
 │   ├── repositories/         # Repositorio de menús: contrato y reglas, implementación de archivos y en memoria
 │   ├── services/             # business-schedule, whatsapp, menu-schema, price, visible-menu, admin-form,
 │   │                         # menu-diff, admin-auth, session-store, login-throttle
-│   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), semillas seed.json e icons.ts
+│   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), horarios (hours.ts), semillas seed.json e icons.ts
 │   ├── utils/                # logger.ts (JSON estructurado), datetime.ts (zona del negocio), form-body.ts, errors.ts
 │   ├── views/                # render.ts + plantillas HTML
 │   │   ├── layouts/base.html # <head> común (SEO, fuentes, CSS/JS por negocio) y skip link
@@ -438,6 +438,19 @@ Los textos, horarios, contacto e imágenes de sección viven en `src/content/<ne
 datos editables (menú, precios, hero y promociones) llegan del repositorio de menús y se
 combinan con ese contenido en `src/views/landings/`. Los tonos de color son claves semánticas (`tone`,
 `highlight`) que los módulos de `src/views/landings/` traducen a utilidades de Tailwind.
+
+### Horario de servicio
+
+El horario real de cada negocio tiene una sola fuente estructurada: `src/content/<negocio>/hours.ts`
+(días de servicio, apertura y cierre en `HH:MM` de 24 h), validada y expuesta por
+`src/content/hours.ts` (`BUSINESS_HOURS`, `getBusinessHours(id)`). Las horas son locales en
+`BUSINESS_TIMEZONE`; la fuente no guarda la zona. Esta fuente no decide qué landing se muestra
+(eso sigue en `src/services/business-schedule.ts`) y la usará el bot de WhatsApp.
+
+Los textos de horario de las landings son literales en `src/content/<negocio>/index.ts`, porque
+cada lugar tiene su propio estilo. `tests/unit/business-hours.test.ts` comprueba que coinciden con
+la fuente: **para cambiar un horario, edita `hours.ts` y todos sus textos**; si solo se cambia uno
+de los dos, la prueba falla.
 
 ## Assets por landing
 

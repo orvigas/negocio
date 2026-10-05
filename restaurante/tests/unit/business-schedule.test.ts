@@ -37,6 +37,12 @@ describe('getActiveBusinessId', () => {
     expect(getActiveBusinessId({ now: new Date('2026-10-10T06:00:00Z'), timeZone: MX })).toBe('birria');
   });
 
+  it('cambia exactamente a medianoche local (lunes 00:00 CDMX)', () => {
+    // Domingo 11 de octubre de 2026, 23:59:59 en CDMX (UTC-6) -> lunes 12, 00:00:00.
+    expect(getActiveBusinessId({ now: new Date('2026-10-12T05:59:59Z'), timeZone: MX })).toBe('birria');
+    expect(getActiveBusinessId({ now: new Date('2026-10-12T06:00:00Z'), timeZone: MX })).toBe('molotes');
+  });
+
   it('lanza RangeError con una zona horaria inválida', () => {
     expect(() => getActiveBusinessId({ now: new Date(), timeZone: 'Mars/Olympus' })).toThrow(RangeError);
   });

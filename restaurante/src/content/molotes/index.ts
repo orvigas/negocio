@@ -1,7 +1,7 @@
 import { image } from '../images.ts';
 
 /**
- * Contenido de Moloteando (lunes a viernes).
+ * Contenido de Moloteando (landing de lunes a viernes; su horario de servicio está en ./hours.ts).
  * Fuente: _stich_source_/moloteando_aut_nticos_molotes_artesanales/code.html
  *
  * Solo datos estáticos (textos, horarios, contacto, imágenes). Los datos editables desde
@@ -42,7 +42,7 @@ export const molotesContent = Object.freeze({
     motivos: image('/img/molotes/motivos-molotes.webp', '', 476, 512),
     hero: image('/img/molotes/molotes-artesanales.jpg', 'Molotes artesanales recién dorados con crema, aguacate y salsa', 512, 382),
   }),
-  announcement: 'Horario de Comal: Mar - Dom 13:00 a 22:30 hrs • Salsas Caseras y Masa Recién Frita',
+  announcement: 'Horario de Comal: Mar - Vie 08:30 a 15:00 hrs • Salsas Caseras y Masa Recién Frita',
   cta: Object.freeze({ label: 'Ordenar ya!' }),
   nav: Object.freeze([
     Object.freeze({ label: 'Inicio', href: '#inicio' }),
@@ -110,8 +110,8 @@ export const molotesContent = Object.freeze({
       'Enviamos en empaques térmicos transpirables para que la costra de maíz mantenga su firmeza y crunch hasta el último bocado.',
     schedule: Object.freeze({
       title: 'Horarios de Comal',
-      hours: 'Martes a Domingo de 10:00 AM a 8:00 PM',
-      note: '* Lunes cerramos comales por molienda de nixtamal artesanal y curación de cazuelas.',
+      hours: 'Martes a Viernes de 8:30 AM a 3:00 PM',
+      note: '* Lunes cerramos comales por molienda de nixtamal artesanal y curación de cazuelas. Sábados y domingos te esperamos en Birria El Muñeco.',
     }),
     platformsLabel: 'Plataformas y Pedido Directo:',
     // WhatsApp enlaza al bot configurado y "En Sucursal" a la ubicación común; el resto
@@ -148,8 +148,8 @@ export const molotesContent = Object.freeze({
     hours: Object.freeze({
       title: 'Horarios del Comal',
       rows: Object.freeze([
-        Object.freeze({ days: 'Martes a Viernes', hours: '13:00 - 22:30' }),
-        Object.freeze({ days: 'Sábado y Domingo', hours: '12:00 - 23:00' }),
+        Object.freeze({ days: 'Martes a Viernes', hours: '08:30 - 15:00' }),
+        Object.freeze({ days: 'Sábado y Domingo', hours: 'Cerrado' }),
         Object.freeze({ days: 'Lunes', hours: 'Cerrado por nixtamal' }),
       ]),
     }),

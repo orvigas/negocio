@@ -2,7 +2,11 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
+
+- Pull Request: https://github.com/orvigas/negocio/pull/21 (base `main`, rama `feature/REQ-F-010-horarios-reales-molotes-birria`).
+- Commit: `d101d22` feat: publica los horarios reales de Molotes y Birria desde una fuente única (REQ-F-010).
+- CI del PR (run 37312057723): `calidad` pass (53 s), `docker` pass (43 s), GitGuardian Security Checks pass.
 
 ## Aprobación
 
@@ -752,3 +756,7 @@ El usuario elige PT-1 A y aprueba el plan (cita textual: "PT-1 A y apruebo el pl
 ### QA Q2, ronda 1 (2026-10-05)
 
 `senior-qa`: el usuario aprueba el QA Action Plan y la prueba permanente (cita textual: "Apruebo el plan y sí a la prueba permanente"). Ejecución completa; prueba de la transición domingo 23:59:59 → lunes 00:00 añadida a `tests/unit/business-schedule.test.ts`. CA-1 a CA-7 en PASS (CI pendiente para T4), sin defectos. Estado `QA_APPROVED`.
+
+### Commit y Pull Request T4 (2026-10-05)
+
+`senior-fullstack`: build:css, typecheck, lint y `npm test` (502/502) en verde sobre la rama, que parte de `main` (a6d8bbb). Commit `d101d22` con rutas explícitas, incluida la prueba permanente de QA. PR #21 (https://github.com/orvigas/negocio/pull/21) contra `main`. CI en verde: `calidad` y `docker` (run 37312057723) y GitGuardian. Estado `READY_FOR_MERGE`.

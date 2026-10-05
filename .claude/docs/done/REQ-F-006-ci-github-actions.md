@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 ## Aprobación
 
@@ -793,6 +793,14 @@ QA_APPROVED
 - **CA-6:** pendiente de T5, después del merge del usuario.
 
 ## Historial de cambios
+
+### Cierre T5 (2026-10-05)
+
+senior-fullstack:
+
+- **Merge confirmado** por el usuario (cita: "Fusionado"). PR #19 (https://github.com/orvigas/negocio/pull/19) mergeado el 2026-10-05T01:27:42Z (2026-10-04 19:27 hora de Ciudad de México), con el commit de merge `b5f97f0`.
+- **CA-6: PASS.** El push a `main` de `b5f97f0` ejecutó el CI con `calidad` y `docker` en `success`: https://github.com/orvigas/negocio/actions/runs/37251517660.
+- **Ticket** movido a `done/` con el estado `DONE`.
 
 ### T4: Pull Request (2026-10-04)
 

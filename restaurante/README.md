@@ -70,6 +70,30 @@ Excepciones al lint: una regla solo se desactiva en una línea concreta y con la
 después de `--` (`// eslint-disable-next-line <regla> -- <motivo>`); sin justificación, el lint
 falla. Las excepciones globales están comentadas en `eslint.config.ts`.
 
+### Pruebas HTTP: servidor en 127.0.0.1
+
+Las pruebas que hacen peticiones HTTP a la app crean su servidor con `listenLocal(app)` de
+`tests/support/http.ts` (o con `setupAdmin` de `tests/support/admin.ts`, que la usa):
+
+```ts
+const server = await listenLocal(createApp({ config, repository }));
+await server.request().get('/molotes'); // petición suelta
+const browser = server.browser();       // cliente con cookies (sesión y CSRF de /admin)
+```
+
+- El servidor escucha solo en `127.0.0.1`, con un puerto libre que asigna el sistema, y el
+  cliente conecta a esa misma dirección y puerto.
+- Se cierra solo al terminar la prueba, también si falla. Por eso se llama dentro de cada prueba
+  (`it`); en `beforeAll` o al nivel del módulo da error.
+- Nunca `request(app.callback())` ni `request.agent(app.callback())`: supertest abriría su propio
+  servidor en `::` (todas las interfaces) y conectaría a `127.0.0.1`. En macOS ese puerto puede
+  estar ocupado en `127.0.0.1` por otro proceso local, que recibiría la petición (fallos
+  intermitentes; REQ-F-011). `npm run lint` lo impide en `tests/`: solo `tests/support/http.ts`
+  importa `supertest` (salvo `import type`), no se permite `.callback()` y todo `listen` lleva
+  `'127.0.0.1'`.
+- Excepción: las pruebas de arranque (`tests/integration/server-startup.test.ts`) lanzan el
+  proceso de producción (`src/server.ts`), que escucha en todas las interfaces; se prueba tal cual.
+
 ## Docker
 
 Opcional. El despliegue actual en la VM **no cambia** (Node + nginx, sin contenedores) y las

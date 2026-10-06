@@ -1,10 +1,10 @@
-import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../../src/app.ts';
 import { hashPassword } from '../../src/services/admin-auth.ts';
 import { makeConfig, makeRecordingLogger } from '../helpers.ts';
 import { ADMIN_PASSWORD, ADMIN_USER, TEST_HASH_PARAMS, login, setupAdmin } from '../support/admin.ts';
+import { listenLocal } from '../support/http.ts';
 
 /** Acceso con cuentas personales (REQ-F-007, R-4, R-6, D-4, D-8, D-13 y DT-7 a DT-11). */
 
@@ -39,7 +39,7 @@ describe('credenciales del entorno con usuarios existentes (CA-2)', () => {
     const app = createApp({ config, repository: first.repository, users: first.users, hashParams: TEST_HASH_PARAMS, logger });
 
     expect(await first.prisma.user.findMany()).toEqual(before);
-    const res = await login(request.agent(app.callback()), { username: 'intruso', password: otherPassword });
+    const res = await login((await listenLocal(app)).browser(), { username: 'intruso', password: otherPassword });
     expect(res.status).toBe(401);
     expect(logger.lines.find((line) => line.msg === 'admin_bootstrap_ignored')).toEqual({
       level: 'warn',

@@ -2,8 +2,10 @@ import Router from '@koa/router';
 
 import { createAdminAccountController } from '../controllers/admin-account.ts';
 import { createAdminUsersController } from '../controllers/admin-users.ts';
+import { createAdminProductsController } from '../controllers/admin-products.ts';
 import { createAdminController, type AdminDeps } from '../controllers/admin.ts';
 import type { AdminState } from '../middleware/admin-guard.ts';
+import { createAdminApiRouter } from './admin-api.ts';
 
 /**
  * Rutas de administración (REQ-F-001 y REQ-F-007). Las cabeceras noindex/no-store, la
@@ -22,12 +24,23 @@ import type { AdminState } from '../middleware/admin-guard.ts';
  * GET  /admin/:negocio/restaurar-anterior     -> confirmación
  * POST /admin/:negocio/restaurar-anterior     -> restaurar la versión anterior
  * POST /admin/:negocio/restaurar-semilla      -> restaurar la semilla (solo con datos dañados)
+ * GET  /admin/:negocio/productos/nuevo       -> nuevo producto (?categoria=; en Birria, ?tipo=)
+ * POST /admin/:negocio/productos             -> crear
+ * GET  /admin/:negocio/productos/eliminados  -> productos eliminados
+ * GET  /admin/:negocio/productos/:id | POST  -> editar (incluye sobrescribir tras conflicto)
+ * GET  /admin/:negocio/productos/:id/eliminar | POST -> confirmar y eliminar
+ * POST /admin/:negocio/productos/:id/recuperar | …/subir | …/bajar
+ * /admin/api/...                              -> API JSON de productos (src/routes/admin-api.ts)
  */
 export function createAdminRouter(deps: AdminDeps): Router<AdminState> {
   const controller = createAdminController(deps);
   const usersController = createAdminUsersController(deps);
   const account = createAdminAccountController(deps);
   const router = new Router<AdminState>({ prefix: '/admin' });
+
+  // API JSON de productos (REQ-F-008): antes de /:business.
+  const api = createAdminApiRouter(deps);
+  router.use(api.routes(), api.allowedMethods());
 
   router.get('/', controller.index);
   router.get('/login', controller.loginPage);
@@ -45,6 +58,17 @@ export function createAdminRouter(deps: AdminDeps): Router<AdminState> {
   router.post('/usuarios/:id/reactivar', usersController.reactivate);
   router.get('/usuarios/:id/contrasena', usersController.passwordPage);
   router.post('/usuarios/:id/contrasena', usersController.resetPassword);
+  const productsController = createAdminProductsController(deps);
+  router.get('/:business/productos/nuevo', productsController.newPage);
+  router.post('/:business/productos', productsController.create);
+  router.get('/:business/productos/eliminados', productsController.deletedPage);
+  router.get('/:business/productos/:id', productsController.editPage);
+  router.post('/:business/productos/:id', productsController.update);
+  router.get('/:business/productos/:id/eliminar', productsController.deletePage);
+  router.post('/:business/productos/:id/eliminar', productsController.remove);
+  router.post('/:business/productos/:id/recuperar', productsController.restore);
+  router.post('/:business/productos/:id/subir', productsController.moveUp);
+  router.post('/:business/productos/:id/bajar', productsController.moveDown);
   router.get('/:business', controller.businessPage);
   router.post('/:business', controller.save);
   router.get('/:business/restaurar-anterior', controller.restorePreviousPage);

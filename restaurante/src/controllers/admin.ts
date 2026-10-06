@@ -7,13 +7,13 @@ import {
   MenuDamagedError,
   PreviousUnavailableError,
   SeedRestoreNotAllowedError,
-  type MenuAuthor,
   type MenuRepository,
 } from '../repositories/menu-repository.ts';
+import type { ProductRepository } from '../repositories/product-repository.ts';
 import type { UserRecord, UserRepository } from '../repositories/user-repository.ts';
 import type { PasswordHashParams, UserAuthenticator } from '../services/admin-auth.ts';
 import { parseAdminForm, type ImageExists } from '../services/admin-form.ts';
-import { canEditBusiness } from '../services/authorization.ts';
+import { pickPageData } from '../services/menu-schema.ts';
 import type { LoginThrottle } from '../services/login-throttle.ts';
 import type { SessionStore } from '../services/session-store.ts';
 import { readFormBody } from '../utils/form-body.ts';
@@ -24,15 +24,14 @@ import {
   SUCCESS_MESSAGES,
   USERS_PATH,
   adminPath,
-  businessName,
   renderAdminBusiness,
   renderAdminConfirmRestore,
   renderAdminHome,
   renderAdminLogin,
-  type AdminBusinessOptions,
 } from '../views/admin/index.ts';
 import type { Renderer } from '../views/render.ts';
-import { createAdminAccess, type AdminRouterContext, type Authenticated, type Permission } from './admin-access.ts';
+import { createAdminAccess, type AdminRouterContext } from './admin-access.ts';
+import { authorOf, businessPermission, createBusinessView } from './admin-business-view.ts';
 
 export type { AdminRouterContext } from './admin-access.ts';
 type AdminHandler = (ctx: AdminRouterContext) => unknown;
@@ -54,6 +53,8 @@ export interface AdminDeps {
   renderer: Renderer;
   now: () => Date;
   repository: MenuRepository;
+  /** Productos (REQ-F-008). */
+  products: ProductRepository;
   sessions: SessionStore;
   throttle: LoginThrottle;
   users: UserRepository;
@@ -86,20 +87,12 @@ const PROBLEMS = Object.freeze({
   seedNotAllowed: 'La semilla original solo se puede restaurar cuando los datos están dañados. No se cambió nada.',
 });
 
-/** Permiso sobre un negocio (R-7). */
-const businessPermission =
-  (businessId: BusinessId): Permission =>
-  (user) =>
-    canEditBusiness(user, businessId) ? null : `No tienes permiso para administrar ${businessName(businessId)}.`;
-
-/** Autor verificado de un cambio (D-11). */
-const authorOf = ({ user }: Authenticated): MenuAuthor => ({ id: user.id, name: user.displayName });
-
 export function createAdminController({
   config,
   renderer,
   now,
   repository,
+  products,
   sessions,
   throttle,
   users,
@@ -118,23 +111,7 @@ export function createAdminController({
     return business;
   }
 
-  async function businessView(
-    businessId: BusinessId,
-    auth: Authenticated,
-    extra: Partial<AdminBusinessOptions> = {},
-  ): Promise<AdminBusinessOptions> {
-    const edit = await repository.getForEdit(businessId);
-    return {
-      ...access.pageContext(auth),
-      businessId,
-      timezone: config.timezone,
-      document: edit.document,
-      version: edit.version,
-      damaged: edit.damaged,
-      lastChange: await repository.getLastChange(businessId),
-      ...extra,
-    };
-  }
+  const businessView = createBusinessView({ config, renderer, repository, products, access });
 
   /** POST sobre un negocio: sesión, permiso del negocio, body y CSRF. */
   const businessPost = (ctx: AdminRouterContext, businessId: BusinessId, limit?: number) =>
@@ -217,7 +194,7 @@ export function createAdminController({
         return sendHtml(ctx, 409, renderAdminBusiness(renderer, { ...view, problem: PROBLEMS.damagedSave }));
       }
 
-      const parsed = await parseAdminForm(businessId, fields, view.document.data, { imageExists });
+      const parsed = await parseAdminForm(businessId, fields, pickPageData(businessId, view.document.data), { imageExists });
       if (parsed.structureError) {
         logger.warn('admin_form_structure_rejected', { business: businessId });
         ctx.throw(400, 'La estructura del menú no se puede modificar.', { code: 'STRUCTURE_MODIFIED' });

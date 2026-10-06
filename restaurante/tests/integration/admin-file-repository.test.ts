@@ -51,8 +51,7 @@ describe('administración con el repositorio de archivos real', () => {
 
     const { fields } = await openForm(browser, 'molotes');
     const res = await submitForm(browser, 'molotes', fields, {
-      
-      'menu.items.0.unitPriceCents': '50.00',
+      'hero.showcase.priceCents': '150.00',
       'menu.highlight': 'Destacado QA',
     });
     expect(res.status).toBe(303);
@@ -60,7 +59,10 @@ describe('administración con el repositorio de archivos real', () => {
 
     const current = await readJson('molotes', 'current.json');
     const previous = await readJson('molotes', 'previous.json');
-    expect(current.data.menu.items[0].unitPriceCents).toBe(5000);
+    expect(current.data.hero.showcase.priceCents).toBe(15000);
+    // REQ-F-008 (Q-3 A): formato v1 con las listas de productos tal cual.
+    expect(current.data.menu.items).toEqual(before.data.menu.items);
+    expect(current.data.drinks).toEqual(before.data.drinks);
     expect(current.data.menu.highlight).toBe('Destacado QA');
     expect(current.updatedBy).toBe('Ana QA');
     expect(current.revision).toBe(before.revision + 1);
@@ -71,13 +73,13 @@ describe('administración con el repositorio de archivos real', () => {
     expect(entry.at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
     expect(entry.changes).toEqual(
       expect.arrayContaining([
-        { field: 'menu.items.0.unitPriceCents', before: before.data.menu.items[0].unitPriceCents, after: 5000 },
+        { field: 'hero.showcase.priceCents', before: before.data.hero.showcase.priceCents, after: 15000 },
         { field: 'menu.highlight', before: before.data.menu.highlight, after: 'Destacado QA' },
       ]),
     );
 
     const landing = await request().get('/molotes');
-    expect(textOf(landing.text)).toContain('$50 c/u');
+    expect(textOf(landing.text)).toContain('$150 MXN');
     expect(textOf(landing.text)).toContain('Destacado QA');
 
     const files = await readdir(join(dataDir, 'molotes'));

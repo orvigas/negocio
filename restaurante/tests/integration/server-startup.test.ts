@@ -1,4 +1,5 @@
-import { chmod, writeFile } from 'node:fs/promises';
+import { chmod, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -6,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { prepareDatabase } from '../../src/db/migrate.ts';
 import { databaseFile } from '../../src/db/paths.ts';
 import { ADMIN_ENV, ADMIN_PASSWORD, ADMIN_USER } from '../support/admin.ts';
-import { makeTempDir, runningAsRoot } from '../support/database.ts';
+import { copyMigrations, makeTempDir, projectMigrations, runningAsRoot } from '../support/database.ts';
 import { startServer } from '../support/process.ts';
 
 /**
@@ -67,6 +68,40 @@ describe('arranque con la base de datos no disponible (CA-4)', () => {
     after.close();
   }, 30_000);
 
+  it('CA-6 (REQ-F-008): la migración de productos falla -> código 1, mensaje controlado y nada a medias', async () => {
+    const dir = await dataDir();
+    // Base con la migración de usuarios aplicada y una tabla "product" ajena que impide la de productos.
+    const migrations = join(dir, 'solo-usuarios');
+    await copyMigrations(migrations);
+    for (const name of await projectMigrations()) if (name.endsWith('_productos')) await rm(join(migrations, name), { recursive: true });
+    await prepareDatabase({ file: databaseFile(dir), migrationsDir: migrations });
+    const db = new Database(databaseFile(dir));
+    db.exec('CREATE TABLE "product" ("id" INTEGER PRIMARY KEY)');
+    db.close();
+    await expectControlledFailure(dir, 'MIGRATION_FAILED');
+    const after = new Database(databaseFile(dir), { readonly: true });
+    expect(after.prepare("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('product_variant', 'product_change')").pluck().get()).toBe(0);
+    after.close();
+  }, 30_000);
+
+  it('D-15: si los productos no se pueden leer al arrancar -> código 1 con un mensaje controlado', async () => {
+    const dir = await dataDir();
+    await prepareDatabase({ file: databaseFile(dir) });
+    const db = new Database(databaseFile(dir));
+    // Un valor fuera de la lista cerrada (edición manual) hace fallar la lectura de Prisma.
+    db.exec(`INSERT INTO "product" (business, category, slug, name, position, updated_at) VALUES ('molotes', 'postre', 'x', 'X', 1, 0)`);
+    db.close();
+    const server = await startServer({ DATA_DIR: dir, ...ADMIN_ENV });
+    cleanups.push(async () => void (await server.stop()));
+    expect(server.started).toBe(false);
+    expect(await server.exited).toBe(1);
+    const { stdout, stderr } = server.output();
+    expect(stderr).toContain('No se pudieron preparar los productos en la base de datos de DATA_DIR.');
+    expect(stdout).toContain('"msg":"products_init_failed"');
+    expect(stdout + stderr).not.toMatch(/\n\s+at |SELECT |prisma\./);
+    expect(stdout + stderr).not.toContain(dir);
+  }, 30_000);
+
   it('base de datos más nueva que el código -> código 1', async () => {
     const dir = await dataDir();
     await prepareDatabase({ file: databaseFile(dir) });
@@ -117,7 +152,7 @@ describe('primer arranque (CA-1)', () => {
       .stdout.split('\n')
       .filter(Boolean)
       .map((line) => (JSON.parse(line) as { msg: string }).msg);
-    expect(messages).toEqual(expect.arrayContaining(['database_migrated', 'admin_bootstrap_created', 'server_started', 'admin_login_succeeded']));
+    expect(messages).toEqual(expect.arrayContaining(['database_migrated', 'admin_bootstrap_created', 'products_imported', 'server_started', 'admin_login_succeeded']));
     expect(server.output().stdout).not.toContain(ADMIN_ENV.ADMIN_PASSWORD_HASH);
 
     expect(await server.stop()).toBe(0);
@@ -132,6 +167,8 @@ describe('primer arranque (CA-1)', () => {
     const output = again.output().stdout;
     expect(output).not.toContain('database_migrated');
     expect(output).not.toContain('admin_bootstrap_created');
+    // La importación de productos ocurre una sola vez (REQ-F-008, CA-3).
+    expect(output).not.toContain('products_imported');
     expect(output).toContain('"msg":"admin_bootstrap_ignored"');
   }, 60_000);
 });

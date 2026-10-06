@@ -10,10 +10,11 @@ import type { Context } from 'koa';
 
 const decoder = () => new TextDecoder('utf-8', { fatal: true });
 
-async function readRawBody(ctx: Context, limit: number): Promise<Buffer> {
+/** Cuerpo completo con límite de bytes (413). Compartido con src/utils/json-body.ts. */
+export async function readRawBody(ctx: Context, limit: number, message = 'El formulario es demasiado grande.'): Promise<Buffer> {
   const declared = Number(ctx.get('Content-Length'));
   if (Number.isFinite(declared) && declared > limit) {
-    ctx.throw(413, 'El formulario es demasiado grande.', { code: 'PAYLOAD_TOO_LARGE' });
+    ctx.throw(413, message, { code: 'PAYLOAD_TOO_LARGE' });
   }
 
   const chunks: Buffer[] = [];
@@ -21,7 +22,7 @@ async function readRawBody(ctx: Context, limit: number): Promise<Buffer> {
   // Sin setEncoding, el stream de http emite Buffer (IncomingMessage lo tipa como `any`).
   for await (const chunk of ctx.req as AsyncIterable<Buffer>) {
     size += chunk.length;
-    if (size > limit) ctx.throw(413, 'El formulario es demasiado grande.', { code: 'PAYLOAD_TOO_LARGE' });
+    if (size > limit) ctx.throw(413, message, { code: 'PAYLOAD_TOO_LARGE' });
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);

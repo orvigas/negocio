@@ -11,6 +11,10 @@ import { isValidPriceCents } from './price.ts';
  *
  * La estructura (cantidad y orden de productos, chips y variantes; `id`, `slug` y
  * `detailsType`) no es editable: se compara siempre contra un documento de referencia.
+ *
+ * REQ-F-008 (Q-3 A): los productos pasan a la base de datos. El documento conserva este formato
+ * (v1) con las listas de productos "congeladas", pero el formulario, el guardado y el registro
+ * trabajan solo con los datos de página (`getPageSchema`: hero, texto destacado y promociones).
  */
 
 export const SCHEMA_VERSION = 1;
@@ -172,22 +176,25 @@ const PROMO = object(
   { legend: () => 'Promoción' },
 );
 
+const MOLOTES_HERO = object(
+  {
+    showcase: object({
+      tag: text('Etiqueta', 40),
+      title: text('Título', 120),
+      description: text('Descripción', 400),
+      priceCents: price('Precio'),
+      unit: text('Texto de unidad', 40),
+    }),
+  },
+  { legend: () => 'Showcase del hero' },
+);
+const MOLOTES_HIGHLIGHT = text('Texto destacado del menú', 120);
+
 const MOLOTES_SCHEMA = object({
-  hero: object(
-    {
-      showcase: object({
-        tag: text('Etiqueta', 40),
-        title: text('Título', 120),
-        description: text('Descripción', 400),
-        priceCents: price('Precio'),
-        unit: text('Texto de unidad', 40),
-      }),
-    },
-    { legend: () => 'Showcase del hero' },
-  ),
+  hero: MOLOTES_HERO,
   menu: object(
     {
-      highlight: text('Texto destacado del menú', 120),
+      highlight: MOLOTES_HIGHLIGHT,
       items: list(
         object(
           {
@@ -246,17 +253,19 @@ const BIRRIA_OWN_PRICE = Object.freeze({
   priceUnit: text('Unidad de precio (opcional, p. ej. "c/u")', 40, { optional: true }),
 });
 
+const BIRRIA_HERO = object(
+  {
+    showcase: object({
+      title: text('Título', 120),
+      description: text('Descripción', 400),
+      priceCents: price('Precio'),
+    }),
+  },
+  { legend: () => 'Showcase del hero' },
+);
+
 const BIRRIA_SCHEMA = object({
-  hero: object(
-    {
-      showcase: object({
-        title: text('Título', 120),
-        description: text('Descripción', 400),
-        priceCents: price('Precio'),
-      }),
-    },
-    { legend: () => 'Showcase del hero' },
-  ),
+  hero: BIRRIA_HERO,
   menu: object(
     {
       items: list(
@@ -312,6 +321,62 @@ const SCHEMAS: Readonly<Record<BusinessId, ObjectNode>> = Object.freeze({
 export function getMenuSchema(businessId: BusinessId): ObjectNode {
   if (!Object.hasOwn(SCHEMAS, businessId)) throw new Error(`No hay esquema para el negocio: ${businessId}`);
   return SCHEMAS[businessId];
+}
+
+// --- Datos de página (REQ-F-008, Q-3 A) ------------------------------------------------
+
+/** Datos editables que siguen en el JSON: hero, texto destacado (Molotes) y promociones. */
+export interface PageDataByBusiness {
+  molotes: { hero: MolotesMenuData['hero']; menu: { highlight: string }; promo: PromoData };
+  birria: { hero: BirriaMenuData['hero']; promo: PromoData };
+}
+export type PageData = PageDataByBusiness[BusinessId];
+
+const PAGE_SCHEMAS: Readonly<Record<BusinessId, ObjectNode>> = Object.freeze({
+  [BUSINESS.MOLOTES]: object({
+    hero: MOLOTES_HERO,
+    menu: object({ highlight: MOLOTES_HIGHLIGHT }, { legend: () => 'Menú de molotes' }),
+    promo: PROMO,
+  }),
+  [BUSINESS.BIRRIA]: object({ hero: BIRRIA_HERO, promo: PROMO }),
+});
+
+/** Esquema del formulario de página (sin productos). */
+export function getPageSchema(businessId: BusinessId): ObjectNode {
+  if (!Object.hasOwn(PAGE_SCHEMAS, businessId)) throw new Error(`No hay esquema para el negocio: ${businessId}`);
+  return PAGE_SCHEMAS[businessId];
+}
+
+/** Datos de página de un documento completo (copia). */
+export function pickPageData<Id extends BusinessId>(businessId: Id, data: MenuDataByBusiness[Id]): PageDataByBusiness[Id] {
+  if (businessId === BUSINESS.MOLOTES) {
+    // Negocio Molotes: los datos tienen la forma de Molotes.
+    const molotes = data as MolotesMenuData;
+    const page: PageDataByBusiness['molotes'] = structuredClone({ hero: molotes.hero, menu: { highlight: molotes.menu.highlight }, promo: molotes.promo });
+    return page;
+  }
+  const birria = data as BirriaMenuData;
+  const page: PageDataByBusiness['birria'] = structuredClone({ hero: birria.hero, promo: birria.promo });
+  return page as PageDataByBusiness[Id];
+}
+
+/** Documento completo con los datos de página nuevos y las listas de productos tal cual (congeladas). */
+export function mergePageData<Id extends BusinessId>(businessId: Id, data: MenuDataByBusiness[Id], page: PageDataByBusiness[Id]): MenuDataByBusiness[Id] {
+  if (businessId === BUSINESS.MOLOTES) {
+    const molotes = data as MolotesMenuData;
+    const molotesPage = page as PageDataByBusiness['molotes'];
+    const merged: MolotesMenuData = structuredClone({
+      ...molotes,
+      hero: molotesPage.hero,
+      menu: { ...molotes.menu, highlight: molotesPage.menu.highlight },
+      promo: molotesPage.promo,
+    });
+    return merged as MenuDataByBusiness[Id];
+  }
+  const birria = data as BirriaMenuData;
+  const birriaPage = page;
+  const merged: BirriaMenuData = structuredClone({ ...birria, hero: birriaPage.hero, promo: birriaPage.promo });
+  return merged as MenuDataByBusiness[Id];
 }
 
 // --- Reglas de las hojas ------------------------------------------------------
@@ -431,6 +496,13 @@ function validateNode(node: SchemaNode, value: unknown, reference: unknown, path
 export function validateMenuData(businessId: BusinessId, data: unknown, reference: unknown): ValidationError[] {
   const errors: ValidationError[] = [];
   validateNode(getMenuSchema(businessId), data, reference, [], errors);
+  return errors;
+}
+
+/** Valida los datos de página (hero, destacado y promociones; sin listas). */
+export function validatePageData(businessId: BusinessId, data: unknown): ValidationError[] {
+  const errors: ValidationError[] = [];
+  validateNode(getPageSchema(businessId), data, undefined, [], errors);
   return errors;
 }
 

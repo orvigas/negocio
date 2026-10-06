@@ -1,4 +1,4 @@
-// Esquema de la base de datos (REQ-F-007). SQLite en DATA_DIR/restaurante.db.
+// Esquema de la base de datos (REQ-F-007 y REQ-F-008). SQLite en DATA_DIR/restaurante.db.
 // - El cliente se genera en src/generated/prisma (`npm run db:generate`; no se versiona).
 // - Las migraciones se crean con `npm run db:migrate:dev -- --name <nombre>` y las aplica
 //   la propia app al arrancar (src/db/migrate.ts), sin el CLI de Prisma en producción.
@@ -46,6 +46,7 @@ model User {
   businesses     UserBusiness[]
   auditActions   UserAudit[]    @relation("actor")
   auditEvents    UserAudit[]    @relation("target")
+  productChanges ProductChange[]
 
   @@map("user")
 }
@@ -77,4 +78,123 @@ model UserAudit {
 
   @@index([targetId])
   @@map("user_audit")
+}
+
+/// Categoría de un producto (REQ-F-008, RF-1). Birria solo tiene platillos.
+enum ProductCategory {
+  platillo
+  bebida
+}
+
+/// Bloque de detalle de un platillo de Birria (D-14: no se cambia después de crearlo).
+enum DetailsType {
+  chips
+  portion
+  variants
+}
+
+/// Producto de una landing (REQ-F-008, D-3): campos comunes y columnas opcionales por negocio y
+/// categoría (las reglas viven en src/services/product-schema.ts). No se borra: se marca como
+/// eliminado (D-4). El slug no se edita ni se reutiliza, aunque el producto esté eliminado (D-16).
+model Product {
+  id              Int              @id @default(autoincrement())
+  business        Business
+  category        ProductCategory
+  slug            String
+  name            String
+  description     String?
+  /// Badge (Molotes) o tag (Birria).
+  label           String?
+  priceCents      Int?             @map("price_cents")
+  priceUnit       String?          @map("price_unit")
+  available       Boolean          @default(false)
+  /// Orden dentro de su negocio y categoría (1 = primero), entre los no eliminados.
+  position        Int
+  imageSrc        String?          @map("image_src")
+  imageAlt        String?          @map("image_alt")
+  imageWidth      Int?             @map("image_width")
+  imageHeight     Int?             @map("image_height")
+  tone            String?
+  orderPriceCents Int?             @map("order_price_cents")
+  orderQuantity   Int?             @map("order_quantity")
+  icon            String?
+  detailsType     DetailsType?     @map("details_type")
+  detailsLabel    String?          @map("details_label")
+  portion         String?
+  portionExtra    String?          @map("portion_extra")
+  /// Aumenta con cada escritura (control de concurrencia, D-7′).
+  version         Int              @default(1)
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @map("updated_at")
+  deleted         Boolean          @default(false)
+  deletedAt       DateTime?        @map("deleted_at")
+  variants        ProductVariant[]
+  chips           ProductChip[]
+  changes         ProductChange[]
+
+  @@unique([business, slug])
+  @@index([business, category, deleted, position])
+  @@map("product")
+}
+
+/// Variante de un platillo de Birria con detalle `variants` (1 a 6, D-13).
+model ProductVariant {
+  id          Int     @id @default(autoincrement())
+  productId   Int     @map("product_id")
+  position    Int
+  label       String
+  priceCents  Int     @map("price_cents")
+  description String
+  available   Boolean
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, position])
+  @@map("product_variant")
+}
+
+/// Chip de un platillo de Birria con detalle `chips` (1 a 6, D-13).
+model ProductChip {
+  id        Int     @id @default(autoincrement())
+  productId Int     @map("product_id")
+  position  Int
+  text      String
+  highlight Boolean
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, position])
+  @@map("product_chip")
+}
+
+/// Registro de cambios de productos (RF-8.3), escrito en la misma transacción que el cambio.
+model ProductChange {
+  id        Int      @id @default(autoincrement())
+  at        DateTime
+  business  Business
+  productId Int      @map("product_id")
+  slug      String
+  /// create | update | delete | restore | reorder | overwrite_after_conflict | import
+  action    String
+  /// Usuario autenticado; null si fue el sistema (importación).
+  actorId   Int?     @map("actor_id")
+  /// Nombre visible en el momento del cambio (D-20).
+  actorName String   @map("actor_name")
+  /// JSON: [{ field, before, after }].
+  changes   String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([business, at])
+  @@index([productId])
+  @@map("product_change")
+}
+
+/// Importación única de los productos de un negocio (D-8, RN-6).
+model ProductImport {
+  business   Business @id
+  importedAt DateTime @map("imported_at")
+  /// current | previous | seed
+  source     String
+  count      Int
+
+  @@map("product_import")
 }

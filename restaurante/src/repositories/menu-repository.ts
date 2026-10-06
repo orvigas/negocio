@@ -5,10 +5,14 @@ import {
   AUTHOR_MAX_LENGTH,
   SCHEMA_VERSION,
   textLength,
-  validateMenuData,
+  mergePageData,
+  pickPageData,
   validateMenuDocument,
+  validatePageData,
   type MenuData,
+  type MenuDataByBusiness,
   type MenuDocument,
+  type PageData,
   type ValidationError,
 } from '../services/menu-schema.ts';
 import { errorProp } from '../utils/errors.ts';
@@ -25,11 +29,16 @@ import { toZonedIsoString } from '../utils/datetime.ts';
  *   getForEdit(businessId)                   { document, version, damaged } para la administración;
  *                                            vuelve a revisar el almacenamiento (RF-8.5).
  *   save(businessId, { data, expectedVersion, author, action })
+ *                                            data: datos de página (hero, destacado y promociones; REQ-F-008,
+ *                                            Q-3 A): las listas de productos del documento se conservan tal cual.
  *                                            author: { id, name } del usuario autenticado (REQ-F-007, D-11).
  *                                            Guarda con control de versión. action: 'save' | 'overwrite_after_conflict'.
  *   restorePrevious(businessId, { author })  Intercambia la versión vigente con la anterior.
  *   restoreSeed(businessId, { author })      Solo con datos dañados: vuelve a la semilla.
  *   getLastChange(businessId)                { at, by } o null.
+ *   getStartupSource(businessId)             { source, data }: documento que se publicó al arrancar y de
+ *                                            dónde salió ('current' | 'previous' | 'seed'). Es la fuente
+ *                                            de la importación única de productos (REQ-F-008, RF-3).
  *
  * Documento: { schemaVersion, business, revision, updatedAt, updatedBy, data }.
  *
@@ -91,6 +100,13 @@ export interface MenuRepository {
   restorePrevious<Id extends BusinessId>(businessId: Id, options: { author: unknown }): Promise<MenuDocument<Id>>;
   restoreSeed<Id extends BusinessId>(businessId: Id, options: { author: unknown }): Promise<MenuDocument<Id>>;
   getLastChange(businessId: BusinessId): Promise<{ at: string; by: string } | null>;
+  getStartupSource<Id extends BusinessId>(businessId: Id): Promise<StartupSource<Id>>;
+}
+
+/** Documento publicado al arrancar y su origen (REQ-F-008, RF-3.1 y RF-3.4). */
+export interface StartupSource<Id extends BusinessId = BusinessId> {
+  source: 'current' | 'previous' | 'seed';
+  data: MenuDataByBusiness[Id];
 }
 
 /** Misma forma sin correlacionar el negocio con el tipo de sus datos (implementación). */
@@ -102,6 +118,7 @@ interface UntypedMenuRepository {
   restorePrevious(businessId: BusinessId, options: { author: unknown }): Promise<MenuDocument>;
   restoreSeed(businessId: BusinessId, options: { author: unknown }): Promise<MenuDocument>;
   getLastChange(businessId: BusinessId): Promise<{ at: string; by: string } | null>;
+  getStartupSource(businessId: BusinessId): Promise<StartupSource>;
 }
 
 export interface ConflictInfo {
@@ -118,6 +135,7 @@ export const REPOSITORY_METHODS = Object.freeze([
   'restorePrevious',
   'restoreSeed',
   'getLastChange',
+  'getStartupSource',
 ]);
 
 export const CHANGE_ACTIONS = Object.freeze({
@@ -221,6 +239,8 @@ interface BusinessState {
   damaged: null | { servingFrom: string };
 }
 
+type StartupOrigin = StartupSource['source'];
+
 type ReadResult =
   | { status: 'missing'; reason?: undefined; issues?: undefined }
   | { status: 'invalid'; reason: 'invalid_json' | 'invalid_schema'; issues: ValidationError[] }
@@ -248,6 +268,8 @@ export function createMenuRepository({
 
   // Se completa en init() para todos los negocios; ensureReady impide leerlo antes.
   const state = {} as Record<BusinessId, BusinessState>;
+  // Documento publicado al terminar init() y su origen (fuente de la importación de productos).
+  const startup = new Map<BusinessId, { source: StartupOrigin; data: MenuData }>();
   const locks = new Map<BusinessId, Promise<unknown>>();
   let initialized = false;
 
@@ -347,12 +369,14 @@ export function createMenuRepository({
         damaged: { servingFrom: previous ? 'previous' : 'seed' },
       };
       logger.warn('menu_data_damaged_pending', { business: businessId, servingFrom: previous ? 'previous' : 'seed' });
+      startup.set(businessId, { source: previous ? 'previous' : 'seed', data: state[businessId].published.data });
       return;
     }
 
     const current = await readDocument(businessId, 'current');
     if (current.status === 'ok') {
       state[businessId] = { published: current.document, damaged: null };
+      startup.set(businessId, { source: 'current', data: current.document.data });
       return;
     }
     if (current.status === 'missing') {
@@ -361,11 +385,13 @@ export function createMenuRepository({
       await storage.write(businessId, 'previous', serialize(seed));
       await storage.write(businessId, 'current', serialize(seed));
       state[businessId] = { published: seed, damaged: null };
+      startup.set(businessId, { source: 'seed', data: seed.data });
       logger.info('menu_data_seeded', { business: businessId });
       return;
     }
     // markDamaged (atStartup) asigna el estado del negocio antes de leerlo.
     await markDamaged(businessId, { reason: current.reason, issues: current.issues, atStartup: true });
+    startup.set(businessId, { source: state[businessId].damaged?.servingFrom === 'previous' ? 'previous' : 'seed', data: state[businessId].published.data });
   }
 
   /** Revisa el almacenamiento con el servidor en marcha. Devuelve el documento vigente o null si está dañado. */
@@ -421,7 +447,8 @@ export function createMenuRepository({
       authorId: author.id,
       business: businessId,
       action,
-      changes: diffMenuData(before.data, next.data),
+      // Solo los datos de página: las listas de productos del JSON ya no se usan (REQ-F-008, Q-3 A).
+      changes: diffMenuData(pickPageData(businessId, before.data), pickPageData(businessId, next.data)),
     });
     logger.info('menu_saved', { business: businessId, action, revision: next.revision, recoveredFromDamage: wasDamaged });
     return structuredClone(next);
@@ -464,12 +491,13 @@ export function createMenuRepository({
         if (expectedVersion !== versionOf(current)) {
           throw new MenuConflictError({ version: versionOf(current), updatedAt: current.updatedAt, updatedBy: current.updatedBy });
         }
-        const issues = validateMenuData(businessId, data, seedDocuments[businessId].data);
+        const issues = validatePageData(businessId, data);
         if (issues.length > 0) throw new MenuDataError(issues);
 
         // Lo que hay en disco (incluida una edición manual) pasa a ser la versión anterior (RF-6.1).
-        // validateMenuData no encontró problemas: `data` tiene la forma de los datos del negocio.
-        const next = buildDocument(businessId, current.revision, data as MenuData, by.name);
+        // validatePageData no encontró problemas: `data` tiene la forma de los datos de página.
+        const merged = mergePageData(businessId, current.data, data as PageData);
+        const next = buildDocument(businessId, current.revision, merged, by.name);
         return commit(businessId, { next, previous: current, before: current, action, author: by });
       });
     },
@@ -518,6 +546,13 @@ export function createMenuRepository({
       ensureReady(businessId);
       const { updatedAt, updatedBy } = state[businessId].published;
       return updatedAt && updatedBy ? { at: updatedAt, by: updatedBy } : null;
+    },
+
+    async getStartupSource(businessId) {
+      ensureReady(businessId);
+      // init() registra el origen de todos los negocios.
+      const { source, data } = startup.get(businessId) as { source: StartupOrigin; data: MenuData };
+      return { source, data: structuredClone(data) };
     },
   }) as MenuRepository;
 }

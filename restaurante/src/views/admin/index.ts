@@ -5,7 +5,8 @@ import type { ConflictInfo, DamagedInfo } from '../../repositories/menu-reposito
 import { allowedBusinesses, isAdmin } from '../../services/authorization.ts';
 import {
   childOf,
-  getMenuSchema,
+  getPageSchema,
+  pickPageData,
   resolveUnion,
   type JsonObject,
   type LeafNode,
@@ -90,6 +91,12 @@ const SERVING_FROM_TEXT: Readonly<Record<string, string>> = Object.freeze({
 
 export const SUCCESS_MESSAGES = Object.freeze({
   save: 'Cambios guardados. La landing ya muestra los datos nuevos.',
+  product_created: 'Producto creado. Está al final y no disponible: edítalo y marca "Disponible" para mostrarlo en la landing.',
+  product_saved: 'Producto guardado. La landing ya muestra los datos nuevos.',
+  product_overwritten: 'Tus cambios del producto se guardaron sobre la versión más reciente.',
+  product_deleted: 'Producto eliminado. Puedes recuperarlo desde "Productos eliminados".',
+  product_restored: 'Producto recuperado. Quedó al final y no disponible.',
+  product_moved: 'Orden actualizado.',
   overwrite_after_conflict: 'Tus cambios se guardaron sobre la versión más reciente.',
   restore_previous: 'Se restauró la versión anterior.',
   restore_seed: 'Se restauró la semilla original.',
@@ -274,7 +281,7 @@ function renderSchemaFields(
     return renderLeaf(renderer, node, { name, label: node.label, value: shown, error });
   }
 
-  const sections = visit(getMenuSchema(businessId), data, [], [], 0);
+  const sections = visit(getPageSchema(businessId), data, [], [], 0);
   return { sections, summary };
 }
 
@@ -428,6 +435,8 @@ export interface AdminBusinessOptions extends AdminPageContext {
   conflict?: ConflictInfo | undefined;
   success?: string | undefined;
   problem?: string | undefined;
+  /** Lista de productos (REQ-F-008; src/views/admin/products.ts). */
+  products?: SafeHtml | undefined;
 }
 
 /** Página de configuración de un negocio. */
@@ -446,8 +455,9 @@ export function renderAdminBusiness(renderer: Renderer, options: AdminBusinessOp
     problem,
     viewer,
     faviconBusinessId,
+    products,
   } = options;
-  const { sections, summary } = renderSchemaFields(renderer, businessId, document.data, form);
+  const { sections, summary } = renderSchemaFields(renderer, businessId, pickPageData(businessId, document.data), form);
 
   const notices: SafeHtml[] = [];
   if (success) notices.push(renderNotice(renderer, { tone: 'success', role: 'status', title: success }));
@@ -495,6 +505,7 @@ export function renderAdminBusiness(renderer: Renderer, options: AdminBusinessOp
       title,
       lastChange: lastChangeText(lastChange, timezone),
       notices: renderer.join(notices),
+      products: products ?? renderer.join([]),
       action: adminPath(businessId),
       csrfToken,
       expectedVersion: conflict ? conflict.version : version,
@@ -615,4 +626,9 @@ export function renderAdminForbidden(renderer: Renderer, context: AdminPageConte
 }
 
 /** Avisos reutilizables por las páginas de usuarios y cuenta. */
+export {
+  fieldId as adminFieldId,
+  lastChangeText as adminLastChangeText,
+  renderLeaf as renderAdminLeaf,
+};
 export { CLASSES as ADMIN_CLASSES, NOTICE_TONES as ADMIN_NOTICE_TONES, attrs as adminAttrs, fieldError as adminFieldError, invalidAttrs as adminInvalidAttrs, renderNotice as renderAdminNotice };

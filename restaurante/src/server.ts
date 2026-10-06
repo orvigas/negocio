@@ -1,7 +1,10 @@
-import { createApp } from './app.ts';
+import { DEFAULT_PUBLIC_DIR, createApp } from './app.ts';
 import { ConfigError, loadConfig } from './config/env.ts';
 import { openDatabase } from './db/client.ts';
+import { createPrismaProductStore } from './repositories/prisma-product-store.ts';
+import { createProductRepository } from './repositories/product-repository.ts';
 import { createUserRepository } from './repositories/user-repository.ts';
+import { createImageChecker } from './services/admin-form.ts';
 import { bootstrapAdmin } from './services/admin-bootstrap.ts';
 import { createFileMenuRepository } from './repositories/file-menu-repository.ts';
 import { errorProp } from './utils/errors.ts';
@@ -58,7 +61,27 @@ try {
   process.exit(1);
 }
 
-const app = createApp({ config, repository, users, logger });
+// Productos (REQ-F-008): importación única desde el documento que publicó el repositorio de
+// menús al arrancar (current.json, previous.json o la semilla) y caché de las landings. Si la
+// base de datos falla aquí, el servidor no arranca (D-15).
+const products = createProductRepository({
+  store: createPrismaProductStore({ prisma }),
+  imageExists: createImageChecker(DEFAULT_PUBLIC_DIR),
+  logger,
+});
+try {
+  await products.init({
+    molotes: await repository.getStartupSource('molotes'),
+    birria: await repository.getStartupSource('birria'),
+  });
+} catch (err) {
+  logger.error('products_init_failed', { name: errorProp(err, 'name'), code: errorProp(errorProp(err, 'details'), 'code') ?? errorProp(err, 'code') });
+  process.stderr.write('No se pudieron preparar los productos en la base de datos de DATA_DIR.\n');
+  await prisma.$disconnect();
+  process.exit(1);
+}
+
+const app = createApp({ config, repository, products, users, logger });
 const server = app.listen(config.port, () => {
   logger.info('server_started', {
     port: config.port,

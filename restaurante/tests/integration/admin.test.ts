@@ -24,6 +24,7 @@ import {
   textOf,
 } from '../support/admin.ts';
 import { listenLocal } from '../support/http.ts';
+import { makeProductsFor } from '../support/products.ts';
 
 const ADMIN_PAGES = ['/admin/molotes', '/admin/birria'];
 
@@ -299,7 +300,7 @@ describe('acceso protegido (RF-5)', () => {
 
   it('CA-24: sin credenciales configuradas la administración responde "no disponible" y las landings funcionan', async () => {
     const repository = await makeRepository();
-    const app = createApp({ config: makeConfig(), repository });
+    const app = createApp({ config: makeConfig(), repository, products: await makeProductsFor(repository) });
     const client = (await listenLocal(app)).request();
     for (const path of ['/admin', '/admin/login', ...ADMIN_PAGES]) {
       const res = await client.get(path);
@@ -373,20 +374,22 @@ describe('acceso protegido (RF-5)', () => {
 });
 
 describe('guardar (RF-6)', () => {
-  it('CA-27 / CA-1: guarda con POST-redirect-GET y la landing muestra el precio nuevo sin reiniciar', async () => {
-    const { browser, request: client, repository } = await loggedIn();
+  // REQ-F-008: el formulario de página guarda hero, destacado y promociones. El precio de un
+  // producto (CA-1 de REQ-F-001) se edita en su propio formulario: tests/integration/admin-products.test.ts.
+  it('CA-27: guarda con POST-redirect-GET y la landing muestra el precio nuevo del hero sin reiniciar', async () => {
+    const { browser, request: client, repository, products } = await loggedIn();
     const landingBefore = await client().get('/molotes');
-    expect(landingBefore.text.match(/\$50 c\/u/g)).toHaveLength(1);
+    expect(landingBefore.text).not.toContain('$150 MXN');
 
     const { fields } = await openForm(browser, 'molotes');
-    const res = await submitForm(browser, 'molotes', fields, { 'menu.items.0.unitPriceCents': '50.00' });
+    const res = await submitForm(browser, 'molotes', fields, { 'hero.showcase.priceCents': '150.00' });
     expect(res.status).toBe(303);
     expect(res.headers.location).toBe('/admin/molotes?ok=save');
 
     const landing = await client().get('/molotes');
-    expect(landing.text.match(/\$50 c\/u/g)).toHaveLength(2);
-    const card = landing.text.slice(landing.text.indexOf('Molotes de Queso Oaxaca') - 2000, landing.text.indexOf('Molotes de Queso Oaxaca') + 1000);
-    expect(card).toContain('$50 c/u');
+    expect(landing.text).toContain('$150 MXN');
+    // Los productos no cambian (CA-34 de REQ-F-008).
+    expect(products.getPublished('molotes')).toEqual({ menu: seedData('molotes').menu.items, drinks: seedData('molotes').drinks.items });
 
     const page = await browser.get(res.headers.location!);
     expect(textOf(page.text)).toContain('Cambios guardados.');
@@ -399,7 +402,7 @@ describe('guardar (RF-6)', () => {
         business: 'molotes',
         action: 'save',
         at: '2026-10-09T12:00:00-06:00',
-        changes: [{ field: 'menu.items.0.unitPriceCents', before: 4500, after: 5000 }],
+        changes: [{ field: 'hero.showcase.priceCents', before: 14500, after: 15000 }],
       }),
     ]);
     expect(JSON.parse(repository.storage.files.get('molotes/previous')!).data).toEqual(seedData('molotes'));
@@ -430,34 +433,11 @@ describe('guardar (RF-6)', () => {
 
   it('CA-15: un precio de 45.5 se muestra como "$45.50"', async () => {
     const { browser, request: client } = await loggedIn();
-    const { fields } = await openForm(browser, 'molotes');
-    await submitForm(browser, 'molotes', fields, { 'drinks.items.0.priceCents': '45.5' });
-    expect((await client().get('/molotes')).text).toContain('$45.50 MXN');
-    const page = await browser.get('/admin/molotes');
-    expect(formFields(page.text)['drinks.items.0.priceCents']).toBe('45.50');
-  });
-
-  it('CA-5 / CA-7 / CA-8: ocultar desde la administración se refleja en la landing', async () => {
-    const { browser, request: client } = await loggedIn();
-    const molotes = await openForm(browser, 'molotes');
-    await submitForm(browser, 'molotes', molotes.fields, { 'menu.items.7.available': undefined, 'drinks.items.1.available': undefined });
-    const molotesHtml = (await client().get('/molotes')).text;
-    expect(molotesHtml).not.toContain('Molotes de Huitlacoche con Epazote');
-    expect(molotesHtml).not.toContain('Refrescos Familia Coca-Cola');
-    expect(molotesHtml.match(/class="menu-card /g)).toHaveLength(7);
-
-    const birria = await openForm(browser, 'birria');
-    await submitForm(browser, 'birria', birria.fields, {
-      'menu.items.3.variants.0.available': undefined,
-      'menu.items.4.variants.0.available': undefined,
-      'menu.items.4.variants.1.available': undefined,
-      
-    });
-    const birriaHtml = (await client().get('/birria')).text;
-    expect(birriaHtml).not.toContain('id="card-birriamen"');
-    expect(birriaHtml).toMatch(/id="price-consome-chico"[^>]*>\$45 MXN</);
-    expect(birriaHtml).toMatch(/aria-pressed="true" data-variant data-price="\$45 MXN"[^>]*>Sin Carne/);
-    expect(birriaHtml).not.toContain('Con Carne (');
+    const { fields } = await openForm(browser, 'birria');
+    await submitForm(browser, 'birria', fields, { 'hero.showcase.priceCents': '45.5' });
+    expect((await client().get('/birria')).text).toContain('$45.50 MXN');
+    const page = await browser.get('/admin/birria');
+    expect(formFields(page.text)['hero.showcase.priceCents']).toBe('45.50');
   });
 
   it('CA-14: el autor es el usuario de la sesión (nombre e identificador) y no hay campo de autor', async () => {
@@ -481,34 +461,27 @@ describe('guardar (RF-6)', () => {
     const { fields } = await openForm(browser, 'molotes');
     const before = await versionOf(repository, 'molotes');
     const res = await submitForm(browser, 'molotes', fields, {
-      'menu.items.0.unitPriceCents': '0',
-      'menu.items.1.name': 'Nombre nuevo escrito',
-      
+      'hero.showcase.priceCents': '0',
+      'hero.showcase.title': 'Título nuevo escrito',
     });
     expect(res.status).toBe(422);
     expect(await versionOf(repository, 'molotes')).toBe(before);
 
     const resent = formFields(res.text);
-    expect(resent['menu.items.0.unitPriceCents']).toBe('0');
-    expect(resent['menu.items.1.name']).toBe('Nombre nuevo escrito');
-    expect(res.text).toMatch(/id="f-menu-items-0-unitPriceCents"[^>]*aria-invalid="true" aria-describedby="f-menu-items-0-unitPriceCents-hint f-menu-items-0-unitPriceCents-error"/);
-    expect(res.text).toContain('<p id="f-menu-items-0-unitPriceCents-error" class="admin-field__error mt-1 text-sm font-semibold text-red-800"><strong>Error:</strong> El precio debe ser mayor que $0.</p>');
+    expect(resent['hero.showcase.priceCents']).toBe('0');
+    expect(resent['hero.showcase.title']).toBe('Título nuevo escrito');
+    expect(res.text).toMatch(/id="f-hero-showcase-priceCents"[^>]*aria-invalid="true" aria-describedby="f-hero-showcase-priceCents-hint f-hero-showcase-priceCents-error"/);
+    expect(res.text).toContain('<p id="f-hero-showcase-priceCents-error" class="admin-field__error mt-1 text-sm font-semibold text-red-800"><strong>Error:</strong> El precio debe ser mayor que $0.</p>');
     expect(res.text).toMatch(/role="alert"[^>]*>\s*<p class="admin-notice__title font-bold">No se guardó nada/);
-    expect(res.text).toContain('href="#f-menu-items-0-unitPriceCents"');
-  });
-
-  it('CA-16: una imagen que no existe se rechaza', async () => {
-    const { browser } = await loggedIn();
-    const { fields } = await openForm(browser, 'birria');
-    const res = await submitForm(browser, 'birria', fields, { 'menu.items.0.image.src': '/img/birria/no-existe.jpg' });
-    expect(res.status).toBe(422);
-    expect(textOf(res.text)).toContain('La imagen no existe en public/img/.');
+    expect(res.text).toContain('href="#f-hero-showcase-priceCents"');
   });
 
   it.each([
     ['un campo desconocido', { 'menu.items.0.secreto': 'x' }],
     ['un slug distinto', { 'menu.items.0.slug': 'otro' }],
     ['un producto de más', { 'menu.items.6.name': 'Nuevo' }],
+    // REQ-F-008: los campos de producto ya no son del formulario de página.
+    ['un campo de un producto existente', { 'menu.items.0.name': 'Otro nombre' }],
   ])('CA-18: rechaza %s sin escribir', async (_label, changes) => {
     const { browser, repository } = await loggedIn();
     const { fields } = await openForm(browser, 'birria');
@@ -539,10 +512,12 @@ describe('guardar (RF-6)', () => {
     const context = await setupAdmin();
     await createUser(context.users, { username: 'lupe', displayName: 'Doña Lupe', businesses: ['birria'] });
     const browser = await loginAs(context.browser(), 'lupe');
-    expect(textOf((await browser.get('/admin/birria')).text)).toContain('Último cambio: ninguno (datos originales).');
+    // REQ-F-008: la importación de productos es el primer cambio registrado (autor "sistema").
+    expect(textOf((await browser.get('/admin/birria')).text)).toContain('Último cambio: 09/10/2026 12:00 por sistema');
+    context.clock.advance(60_000);
     const { fields } = await openForm(browser, 'birria');
     await submitForm(browser, 'birria', fields, {});
-    expect(textOf((await browser.get('/admin/birria')).text)).toContain('Último cambio: 09/10/2026 12:00 por Doña Lupe');
+    expect(textOf((await browser.get('/admin/birria')).text)).toContain('Último cambio: 09/10/2026 12:01 por Doña Lupe');
   });
 });
 

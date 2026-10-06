@@ -36,7 +36,7 @@ describe('credenciales del entorno con usuarios existentes (CA-2)', () => {
     const { bootstrapAdmin } = await import('../../src/services/admin-bootstrap.ts');
     const config = makeConfig({ ADMIN_USER: 'intruso', ADMIN_PASSWORD_HASH: otherHash });
     await bootstrapAdmin({ users: first.users, bootstrap: config.adminBootstrap, logger });
-    const app = createApp({ config, repository: first.repository, users: first.users, hashParams: TEST_HASH_PARAMS, logger });
+    const app = createApp({ config, repository: first.repository, products: first.products, users: first.users, hashParams: TEST_HASH_PARAMS, logger });
 
     expect(await first.prisma.user.findMany()).toEqual(before);
     const res = await login((await listenLocal(app)).browser(), { username: 'intruso', password: otherPassword });

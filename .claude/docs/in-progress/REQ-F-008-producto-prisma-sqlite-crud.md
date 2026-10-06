@@ -2,7 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
+
+Pull Request: https://github.com/orvigas/negocio/pull/28 (CI del commit `dfe6b72`: `calidad` y `docker` en verde).
 
 ## Aprobación
 
@@ -1206,3 +1208,7 @@ Descripción inicial (2026-10-03). Retoma el análisis descartado: reconfirma D-
 ### Commit y Pull Request (T4)
 
 2026-10-06, `senior-fullstack`. Se corrigió DEF-001 (TRIVIAL) con su prueba y se repitieron las validaciones. El commit incluye las pruebas permanentes de QA y la actualización de `.claude/agents/senior-fullstack.md`, que aplicó la sesión principal por autorización directa del usuario. El estado sigue en `QA_APPROVED` hasta que el CI del PR esté en verde.
+
+### Pull Request (T4)
+
+2026-10-06, `senior-fullstack`. Commit `dfe6b72` y PR https://github.com/orvigas/negocio/pull/28 contra `main`. CI del PR en verde: `calidad` (2m20s) y `docker` (49s), ejecución https://github.com/orvigas/negocio/actions/runs/37514830674; GitGuardian también en verde. Estado: `READY_FOR_MERGE`. El merge lo hace el usuario.

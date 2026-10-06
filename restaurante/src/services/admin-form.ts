@@ -5,7 +5,7 @@ import type { BusinessId } from '../config/businesses.ts';
 import {
   ICON_PATTERN,
   childOf,
-  getMenuSchema,
+  getPageSchema,
   imageSrcError,
   resolveUnion,
   textError,
@@ -16,7 +16,8 @@ import {
 import { parsePesosInput } from './price.ts';
 
 /**
- * Formulario de administración -> datos editables (REQ-F-001, RF-3 y CA-18/CA-19).
+ * Formulario de administración -> datos de página (REQ-F-001, RF-3 y CA-18/CA-19; desde
+ * REQ-F-008 solo hero, texto destacado y promociones: los productos tienen su propio formulario).
  *
  * Los nombres de campo son rutas planas del esquema ("menu.items.3.priceCents"). Solo se leen
  * las rutas que el esquema espera para la estructura vigente: nunca se construyen objetos a
@@ -113,7 +114,7 @@ export interface AdminFormResult {
 
 /**
  * `fields`: campos recibidos (src/utils/form-body.ts).
- * `reference`: datos vigentes; definen la estructura esperada.
+ * `reference`: datos de página vigentes (pickPageData); definen la estructura esperada.
  */
 export async function parseAdminForm(
   businessId: BusinessId,
@@ -159,7 +160,7 @@ export async function parseAdminForm(
     return result.value;
   }
 
-  const data = visit(getMenuSchema(businessId), reference, []);
+  const data = visit(getPageSchema(businessId), reference, []);
 
   for (const name of fields.keys()) {
     if (!used.has(name) && !FORM_META_FIELDS.includes(name)) structureError = true;

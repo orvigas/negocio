@@ -272,7 +272,8 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `GET /favicon.ico`, `GET /apple-touch-icon.png`, `GET /apple-touch-icon-precomposed.png` | Icono del negocio activo del día (ver [Iconos](#iconos-favicons-y-pantalla-de-inicio)) |
 | `GET /molotes.webmanifest`, `GET /birria.webmanifest` | Web App Manifest de cada negocio                                  |
 | `GET /<archivo>` | Estáticos de `public/` (sin índices ni archivos ocultos)                                   |
-| `/admin/...`     | Administración de menús (ver [Administración de menús](#administración-de-menús))          |
+| `/admin/...`     | Administración de menús y productos (ver [Administración de menús](#administración-de-menús))  |
+| `/admin/api/...` | API JSON de productos, con sesión (ver [API de productos](#api-de-productos))                |
 
 Las tres rutas HTML usan el mismo controlador (`src/controllers/landing.ts`): con un
 `businessId` fijo renderiza ese negocio y sin él lo resuelve por fecha. Responden con
@@ -292,48 +293,74 @@ Los logs son JSON por línea en stdout (método, ruta sin query string, estado y
 
 ## Menús
 
-Los datos editables de cada landing viven en un documento JSON por negocio:
+Los datos editables de cada landing están en dos sitios (REQ-F-008):
 
-| Negocio  | Datos editables | Semilla versionada |
-| -------- | --------------- | ------------------ |
-| Molotes  | 8 molotes y 2 bebidas (nombre, descripción, badge, tono, precios, cantidad por orden, disponibilidad e imagen), texto destacado del menú, showcase del hero (etiqueta, título, descripción, precio y unidad) y promoción "Jueves de Molotes 2x1" (badge, título y descripción) | `src/content/molotes/seed.json` |
-| Birria   | 6 platillos (nombre, etiqueta, precio, unidad, descripción, disponibilidad, imagen, título del detalle y chips, porción o variantes), showcase del hero (título, descripción y precio) y promoción del Club (badge, título y descripción) | `src/content/birria/seed.json` |
+| Qué | Dónde | Semilla versionada |
+| --- | ----- | ------------------ |
+| **Productos**: platillos y bebidas de Molotes, platillos de Birria (con sus variantes o chips) | Base de datos SQLite (`DATA_DIR/restaurante.db`, tablas `product`, `product_variant`, `product_chip`) | Las listas de `src/content/<negocio>/seed.json` (solo para la importación inicial) |
+| **Página**: showcase del hero, texto destacado del menú ("8 Sabores de Barrio") y promoción | JSON por negocio (`DATA_DIR/<negocio>/current.json`) | `src/content/<negocio>/seed.json` |
 
+- **Modelo común de producto** (`src/services/product-schema.ts`): negocio, categoría
+  (`platillo` o `bebida`; Birria solo tiene platillos), slug, nombre, descripción, etiqueta
+  (badge en Molotes, tag en Birria), precio y unidad, disponible, posición, imagen, versión y
+  fechas. Según la combinación: tono, precio y cantidad por orden (Molotes platillo); icono y
+  tono (Molotes bebida); tipo de detalle (`chips`, `portion` o `variants`) y su bloque (Birria).
+  Un campo que no corresponde a la combinación se rechaza.
+- **Reglas:** precios mayores que $0 y hasta $5,000.00 con 2 decimales como máximo (se guardan en
+  centavos); las longitudes y listas cerradas de REQ-F-001; la imagen debe existir en
+  `public/img/`; como máximo 50 productos activos por negocio y de 1 a 6 variantes o chips. El
+  slug se genera a partir del nombre (minúsculas, sin acentos, con guiones), no se edita y nunca
+  se reutiliza: si ya existe en el negocio, aunque esté eliminado, recibe `-2`, `-3`, … La
+  categoría y el tipo de detalle se eligen al crear y no cambian. Un producto nuevo o recuperado
+  queda al final de su categoría y no disponible.
+- **Eliminar** es lógico: el producto deja de verse y se puede recuperar.
 - Las semillas tienen los datos originales del diseño fuente; `tests/unit/content.test.ts`
   comprueba que coincidan con `../_stich_source_/` y que sus fotos existan.
-- El esquema (campos, longitudes máximas, tonos, rangos y estructura) está en
-  `src/services/menu-schema.ts`. Precios en centavos (enteros), mayores que $0 y hasta
-  $5,000.00; el formato (`$45 c/u`, `$155 MXN`, `$45.50`) se aplica en `src/views/landings/`.
-- La estructura no es editable: cantidad y orden de productos, chips y variantes, el `id` de
-  cada molote y bebida, el `slug` de cada platillo de Birria y su tipo de detalle.
+- El esquema del JSON de página está en `src/services/menu-schema.ts`. El formato de los precios
+  (`$45 c/u`, `$155 MXN`, `$45.50`) se aplica en `src/views/landings/`.
 - Disponibilidad: lo no disponible se oculta (`src/services/visible-menu.ts`). En Birria, la
   variante activa es la primera disponible y de ella salen el precio y la descripción de la
   tarjeta; un platillo sin variantes disponibles se oculta. Si una sección se queda sin
   productos, conserva su encabezado y muestra un aviso con el CTA de WhatsApp.
 - En Birria, `slug` forma los id del DOM (`card-`, `title-`, `price-`, `desc-`, `variants-`)
   que usa el selector de variantes (`public/js/modules/variant-selector.js`).
-- La landing lee los datos del repositorio de menús (`src/repositories/`), que los mantiene
-  en memoria: los cambios guardados desde la administración se ven en la siguiente petición.
+- La landing combina los datos de página del repositorio de menús con los productos del
+  repositorio de productos (`src/repositories/`). Los dos los mantienen en memoria: las landings
+  nunca consultan la base de datos, y un cambio guardado se ve en la siguiente petición. Si la
+  base de datos falla con el servidor en marcha, las landings siguen mostrando los últimos
+  productos válidos.
+- **Importación única:** en el primer arranque con una base sin productos, cada negocio importa
+  sus productos (orden, disponibilidad, variantes y chips) desde `current.json` si es válido; si
+  no, desde `previous.json`; si tampoco, desde la semilla. Los `id` de Molotes pasan a ser slugs
+  y los slugs de Birria se conservan. Queda en el log (`products_imported`, con la fuente) y en
+  el registro de productos con el autor `sistema`. No se repite nunca (tabla `product_import`),
+  aunque después se vacíe el negocio.
 
 ## Administración de menús
 
-`/admin/molotes` y `/admin/birria` permiten editar los datos de la sección anterior con
-formularios HTML (sin JavaScript). No hay diseño en `_stich_source_/` para estas páginas: la
+`/admin/molotes` y `/admin/birria` permiten gestionar los productos (crear, editar, eliminar,
+recuperar y ordenar) y editar los datos de página, con formularios HTML (sin JavaScript). No hay diseño en `_stich_source_/` para estas páginas: la
 interfaz es sencilla, con su propia hoja (`public/css/admin/main.css`).
 
 Cada persona entra con su **cuenta personal** (REQ-F-007), guardada en la base de datos:
 
 | Rol | Puede |
 | --- | ----- |
-| Administrador | Editar los dos negocios y gestionar usuarios |
-| Editor | Editar solo sus negocios asignados (al menos uno). En otro negocio, o en la gestión de usuarios, recibe 403 y no se escribe nada |
+| Administrador | Editar los dos negocios (productos y página, también por la API) y gestionar usuarios |
+| Editor | Editar solo sus negocios asignados (al menos uno), también por la API. En otro negocio (incluso para leer sus productos), o en la gestión de usuarios, recibe 403 y no se escribe nada |
 
 | Ruta | Acción |
 | ---- | ------ |
 | `GET /admin` | Inicio: solo enlaza a lo que el usuario tiene permitido |
 | `GET` / `POST /admin/login` | Acceso con usuario (sin distinguir mayúsculas) y contraseña |
 | `POST /admin/logout` | Cierre de sesión |
-| `GET` / `POST /admin/<negocio>` | Formulario y guardado (POST-redirect-GET) |
+| `GET` / `POST /admin/<negocio>` | Lista de productos y formulario de página (hero, destacado y promoción) con su guardado (POST-redirect-GET) |
+| `GET /admin/<negocio>/productos/nuevo?categoria=…` | Producto nuevo (en Birria, primero se elige el tipo de detalle) |
+| `POST /admin/<negocio>/productos` | Crear producto |
+| `GET` / `POST /admin/<negocio>/productos/<id>` | Editar producto (incluye "Guardar mis cambios de todos modos" tras un conflicto) |
+| `GET` / `POST /admin/<negocio>/productos/<id>/eliminar` | Confirmar y eliminar |
+| `POST /admin/<negocio>/productos/<id>/subir` y `…/bajar` | Mover una posición |
+| `GET /admin/<negocio>/productos/eliminados`, `POST …/<id>/recuperar` | Productos eliminados y recuperar |
 | `GET` / `POST /admin/<negocio>/restaurar-anterior` | Confirmación y restauración de la versión anterior |
 | `POST /admin/<negocio>/restaurar-semilla` | Solo con datos dañados: vuelve a la semilla |
 | `GET /admin/usuarios` | Lista de usuarios (solo administradores) |
@@ -342,6 +369,57 @@ Cada persona entra con su **cuenta personal** (REQ-F-007), guardada en la base d
 | `POST /admin/usuarios/<id>/desactivar` y `…/reactivar` | Desactivar o reactivar (los usuarios no se eliminan) |
 | `GET` / `POST /admin/usuarios/<id>/contrasena` | Restablecer la contraseña de otro usuario |
 | `GET` / `POST /admin/cuenta` | Mi cuenta: cambiar la propia contraseña (pide la actual) |
+
+### Productos en la administración
+
+- Variantes y chips se editan en 6 filas fijas: las filas vacías se ignoran, "Posición" las
+  ordena y "Quitar esta fila" elimina una.
+- Cada producto tiene una versión. Si otra persona lo cambió mientras lo editabas, no se guarda
+  nada y se muestra quién y cuándo, con "Guardar mis cambios de todos modos" o "Descartar y cargar
+  la versión actual" (al eliminar: "Eliminar de todos modos"). Editar productos distintos a la
+  vez no genera conflicto.
+- "Último cambio" muestra el más reciente entre productos y datos de página.
+
+### API de productos
+
+API JSON bajo `/admin/api`, **sin lectura pública**: todas las rutas exigen la sesión de la
+administración y el permiso sobre el negocio. Las escrituras exigen además el token CSRF en la
+cabecera `X-CSRF-Token` (y, en producción, HTTPS).
+
+| Método y ruta | Qué hace |
+| ------------- | -------- |
+| `GET /admin/api/sesion` | Usuario de la sesión, negocios permitidos y `csrfToken` |
+| `GET /admin/api/<negocio>/productos` | Lista de activos por categoría y orden (`?eliminados=1` incluye los eliminados; `?categoria=platillo\|bebida`) |
+| `POST /admin/api/<negocio>/productos` | Crear (201 y `Location`): `category`, `detailsType` (Birria) y los campos de la combinación |
+| `GET /admin/api/<negocio>/productos/<id>` | Ver |
+| `PUT /admin/api/<negocio>/productos/<id>` | Reemplazar todos los campos editables, con `version` y `available` |
+| `DELETE /admin/api/<negocio>/productos/<id>?version=<n>` | Eliminar (lógico) |
+| `POST /admin/api/<negocio>/productos/<id>/recuperar` | Recuperar: `{ "version": n }` |
+| `PUT /admin/api/<negocio>/productos/orden` | Reordenar una categoría: `{ "category": "platillo", "items": [{ "id", "version" }, …] }` con exactamente los activos de esa categoría |
+
+- **Precios:** se envían en pesos (`45`, `45.5` o `"45.50"`) en `price`, `orderPrice` y
+  `variants[].price`; las respuestas traen el precio en pesos (`"45.50"`) y en centavos
+  (`priceCents`, `orderPriceCents`, `variants[].priceCents`).
+- **Autor:** siempre el usuario de la sesión. Un campo `author` (o cualquier campo desconocido,
+  de otra combinación o de solo lectura) se rechaza con 422.
+- **Comprobaciones y códigos**, en este orden: sesión (401 `UNAUTHENTICATED`) → permiso sobre el
+  negocio (403 `FORBIDDEN_BUSINESS`) → en escrituras, origen y token (403 `CSRF_INVALID`) →
+  producto del negocio (404 `PRODUCT_NOT_FOUND`, también si es de otro negocio) → cuerpo (413,
+  415 si no es `application/json`, 400 `INVALID_JSON`) → validación (422 `VALIDATION_FAILED`, con
+  `fields`: `{ "ruta": "mensaje" }`) → versión (409 `VERSION_CONFLICT`, con `current`: versión,
+  `updatedAt` y `updatedBy`). La administración deshabilitada, HTTP en producción o la base de
+  datos caída responden 503.
+
+Ejemplo con `curl` (el acceso es el mismo formulario de la administración):
+
+```sh
+curl -c cookies.txt -X POST https://<sitio>/admin/login -d 'username=<usuario>' --data-urlencode 'password=<contraseña>'
+TOKEN=$(curl -s -b cookies.txt https://<sitio>/admin/api/sesion | jq -r .csrfToken)
+curl -s -b cookies.txt https://<sitio>/admin/api/molotes/productos
+curl -s -b cookies.txt -X POST https://<sitio>/admin/api/molotes/productos \
+  -H 'Content-Type: application/json' -H "X-CSRF-Token: $TOKEN" \
+  -d '{"category":"bebida","name":"Café de Olla","description":"Con canela.","icon":"coffee","tone":"amber","price":"30"}'
+```
 
 ### Usuarios
 
@@ -421,20 +499,27 @@ DATA_DIR/
 │   ├── damaged-<fecha>.json    # archivo dañado aislado para revisarlo
 │   └── damaged.marker.json     # existe mientras los datos estén dañados y nadie elija una opción
 ├── birria/ (igual)
-├── changes.jsonl               # registro de cambios: una línea JSON por guardado o restauración
-└── restaurante.db              # base de datos SQLite (usuarios); con -wal y -shm mientras está abierta
+├── changes.jsonl               # registro de cambios de los datos de página: una línea JSON por guardado o restauración
+└── restaurante.db              # base de datos SQLite (usuarios y productos); con -wal y -shm mientras está abierta
 ```
+
+- **Productos en los JSON:** desde REQ-F-008 los JSON conservan su formato, pero sus listas de
+  productos quedan "congeladas": ya no se usan ni se editan (los productos vigentes están en la
+  base de datos). Se mantienen para poder volver a una versión anterior de la app sin que los
+  archivos se traten como dañados. Por la misma razón, las listas de productos de
+  `src/content/<negocio>/seed.json` no deben cambiar.
 
 - **Primera ejecución:** si no existe `current.json`, se copia la semilla a `current.json` y
   `previous.json` (log `menu_data_seeded`).
 - **Guardado:** el contenido vigente pasa a `previous.json` y el nuevo se escribe de forma
   atómica (archivo temporal, `fsync` y `rename`): un fallo nunca deja el archivo a medias.
-- **Registro (`changes.jsonl`):** fecha ISO en la zona del negocio, autor (nombre visible del
+- **Registro (`changes.jsonl`, datos de página):** fecha ISO en la zona del negocio, autor (nombre visible del
   usuario de la sesión, `author`, y su identificador, `authorId`; las entradas anteriores a
   REQ-F-007 solo tienen el nombre escrito a mano), negocio, acción (`save`, `overwrite_after_conflict`,
   `restore_previous`, `restore_seed`) y campos modificados con su valor anterior y el nuevo.
   La página solo muestra "Último cambio: <fecha> por <nombre>". El archivo crece sin límite:
-  rótalo o respáldalo con las herramientas de la VM.
+  rótalo o respáldalo con las herramientas de la VM. Los cambios de productos se registran en la
+  tabla `product_change` de la base de datos (ver abajo).
 - **Edición simultánea:** cada formulario lleva la versión con la que empezó. Si otra persona
   guardó antes, no se escribe nada y se ofrece "Guardar mis cambios de todos modos" o
   "Descartar y cargar la versión actual".
@@ -461,11 +546,21 @@ DATA_DIR/
   `npm run db:migrate:dev -- --name <nombre>` (con un `DATA_DIR` de desarrollo) y
   `npm run db:generate`. Versiona la carpeta nueva de `prisma/migrations/`; nunca edites una
   migración ya aplicada (la app no arrancaría: `MIGRATION_MODIFIED`).
-- **Respaldos:** son responsabilidad de quien opera la VM. Copia `restaurante.db` con el
+- **Productos:** tablas `product`, `product_variant`, `product_chip`, `product_import` (la
+  importación única) y `product_change`: el registro de cambios de productos, escrito en la misma
+  transacción que el cambio (fecha, usuario y su nombre visible, negocio, slug, acción —`create`,
+  `update`, `delete`, `restore`, `reorder`, `overwrite_after_conflict`, `import`— y campos con su
+  valor anterior y el nuevo). No tiene pantalla: se consulta en la base de datos. Si se edita la
+  base a mano con el servidor en marcha, reinícialo para que las landings lo vean.
+- **Respaldos (recomendado antes de cada actualización):** son responsabilidad de quien opera la VM. Copia `restaurante.db` con el
   servidor parado (junto con `-wal` y `-shm` si existen) o, en marcha, con
   `sqlite3 DATA_DIR/restaurante.db ".backup /ruta/respaldo.db"`. Copiar el archivo en marcha
-  puede dar un respaldo incompleto. Si se pierde el `.db` sin respaldo, se pierden los usuarios
-  y su auditoría; el acceso se recupera con `npm run admin:recover`.
+  puede dar un respaldo incompleto. Si se pierde el `.db` sin respaldo, se pierden los usuarios,
+  su auditoría y **los productos** (en un `.db` nuevo se vuelven a importar desde los JSON, con los
+  datos congelados de la primera importación); el acceso se recupera con `npm run admin:recover`.
+- **Volver a una versión anterior de la app:** el código anterior no arranca con una base ya
+  migrada (`DATABASE_NEWER_THAN_CODE`). Hay que restaurar el respaldo del `.db` hecho antes de
+  actualizar; los JSON siguen sirviendo tal como estén.
 
 ### Recuperación de datos dañados
 
@@ -485,21 +580,22 @@ Si `current.json` no es JSON válido o no cumple el esquema (por ejemplo, un pre
 ```text
 restaurante/
 ├── src/
-│   ├── server.ts             # Entrada del proceso: valida config, prepara DATA_DIR y la base de datos, primer administrador, escucha en PORT, cierre ordenado
+│   ├── server.ts             # Entrada del proceso: valida config, prepara DATA_DIR y la base de datos, primer administrador, importación de productos, escucha en PORT, cierre ordenado
 │   ├── app.ts                # createApp(): app Koa testeable (config, repositorio, logger y `now` inyectables)
 │   ├── config/               # env.ts (carga/validación y tipo Config), businesses.ts (ids de negocio)
 │   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests),
-│   │                         # admin.ts (acceso, inicio y menús), admin-users.ts, admin-account.ts, admin-access.ts (sesión y permisos)
+│   │                         # admin.ts (acceso, inicio y menús), admin-products.ts (productos en HTML), admin-products-api.ts y
+│   │                         # admin-api-access.ts (API JSON), admin-business-view.ts, admin-users.ts, admin-account.ts, admin-access.ts
 │   ├── db/                   # client.ts (Prisma + better-sqlite3), migrate.ts (migraciones al arrancar), errors.ts, paths.ts
 │   ├── generated/prisma/     # Cliente de Prisma generado por `npm run db:generate` (ignorado por git)
-│   ├── routes/               # Router (@koa/router): index.ts (landings), admin.ts (/admin)
+│   ├── routes/               # Router (@koa/router): index.ts (landings), admin.ts (/admin), admin-api.ts (/admin/api)
 │   ├── middleware/           # Manejo centralizado de errores, log de requests, protección de /admin
-│   ├── repositories/         # Menús (contrato y reglas, archivos y memoria) y usuarios (user-repository.ts, Prisma)
+│   ├── repositories/         # Menús (contrato y reglas, archivos y memoria), productos (reglas + store Prisma y memoria) y usuarios (Prisma)
 │   ├── services/             # business-schedule, whatsapp, menu-schema, price, visible-menu, admin-form,
 │   │                         # menu-diff, admin-auth, session-store, login-throttle, user-schema,
-│   │                         # authorization, admin-bootstrap
+│   │                         # authorization, admin-bootstrap, product-schema, product-form, slug
 │   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), horarios (hours.ts), semillas seed.json e icons.ts
-│   ├── utils/                # logger.ts (JSON estructurado), datetime.ts (zona del negocio), form-body.ts, errors.ts
+│   ├── utils/                # logger.ts (JSON estructurado), datetime.ts (zona del negocio), form-body.ts, json-body.ts, errors.ts
 │   ├── views/                # render.ts + plantillas HTML
 │   │   ├── layouts/base.html # <head> común (SEO, fuentes, CSS/JS por negocio) y skip link
 │   │   ├── pages/            # molotes.html, birria.html: header, secciones y footer del diseño
@@ -523,7 +619,7 @@ restaurante/
 │       ├── molotes/          # icons/: favicons e iconos de pantalla de inicio (generados)
 │       └── birria/           # icons/: ídem
 ├── prisma/
-│   ├── schema.prisma         # Esquema de la base de datos (usuarios, negocios asignados, auditoría)
+│   ├── schema.prisma         # Esquema de la base de datos (usuarios, negocios asignados, auditoría y productos)
 │   └── migrations/           # Migraciones SQL versionadas (las aplica la app al arrancar)
 ├── prisma.config.ts          # Configuración del CLI de Prisma (solo desarrollo, CI y build)
 ├── scripts/
@@ -535,6 +631,7 @@ restaurante/
 ├── tests/
 │   ├── helpers.ts            # Config válida, semillas y repositorio en memoria para pruebas
 │   ├── support/admin.ts      # App con administración (base de datos temporal), usuarios, inicio de sesión y formularios
+│   ├── support/products.ts   # Entradas válidas de producto y repositorios de productos para pruebas
 │   ├── support/database.ts   # Bases de datos SQLite temporales (nunca data/)
 │   ├── support/process.ts    # Procesos reales: arranque del servidor y comandos de consola
 │   ├── support/png.ts        # Lectura mínima de PNG/ICO (dimensiones, opacidad, color de fondo)

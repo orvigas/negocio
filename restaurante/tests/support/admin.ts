@@ -3,14 +3,18 @@ import { afterAll } from 'vitest';
 
 import type { Test } from 'supertest';
 
-import { createApp } from '../../src/app.ts';
+import { DEFAULT_PUBLIC_DIR, createApp } from '../../src/app.ts';
 import type { Env } from '../../src/config/env.ts';
 import type { MenuRepository } from '../../src/repositories/menu-repository.ts';
 import type { createMemoryMenuRepository } from '../../src/repositories/memory-menu-repository.ts';
+import { createPrismaProductStore } from '../../src/repositories/prisma-product-store.ts';
+import { createProductRepository, type ProductStore } from '../../src/repositories/product-repository.ts';
 import { createUserRepository, type UserRepository } from '../../src/repositories/user-repository.ts';
+import { createImageChecker } from '../../src/services/admin-form.ts';
 import { bootstrapAdmin } from '../../src/services/admin-bootstrap.ts';
 import { makeDatabase } from './database.ts';
 import { listenLocal, type Browser } from './http.ts';
+import { sourcesFrom } from './products.ts';
 
 export type MemoryRepository = ReturnType<typeof createMemoryMenuRepository>;
 
@@ -21,6 +25,8 @@ export interface SetupOptions<R extends MenuRepository> {
   logger?: RecordingLogger;
   /** Sustituye al repositorio de usuarios real (p. ej. un doble que falla, CA-5). */
   wrapUsers?: (users: UserRepository) => UserRepository;
+  /** Sustituye al store de productos real (p. ej. uno que falla con el servidor en marcha). */
+  wrapProductStore?: (store: ProductStore) => ProductStore;
 }
 import { SCRYPT_DEFAULTS, hashPassword } from '../../src/services/admin-auth.ts';
 import { makeConfig, makeRecordingLogger, makeRepository, type RecordingLogger } from '../helpers.ts';
@@ -70,6 +76,7 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
   repository,
   logger = makeRecordingLogger(),
   wrapUsers = (users) => users,
+  wrapProductStore = (store) => store,
 }: SetupOptions<R> = {}) {
   // Sin repositorio propio se usa el de memoria, que es el tipo por defecto de R.
   const repo = (repository ?? (await makeRepository({ now: clock.now }))) as R;
@@ -79,13 +86,23 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
   const realUsers = createUserRepository({ prisma: database.prisma, now: clock.now });
   await bootstrapAdmin({ users: realUsers, bootstrap: config.adminBootstrap, logger });
   const users = wrapUsers(realUsers);
-  const app = createApp({ config, repository: repo, users, hashParams: TEST_HASH_PARAMS, logger, now: clock.now });
+  // Productos sobre la misma base temporal, importados desde lo que publicó el repositorio de menús.
+  const productStore = createPrismaProductStore({ prisma: database.prisma });
+  const products = createProductRepository({
+    store: wrapProductStore(productStore),
+    imageExists: createImageChecker(DEFAULT_PUBLIC_DIR),
+    now: clock.now,
+    logger,
+  });
+  await products.init(await sourcesFrom(repo));
+  const app = createApp({ config, repository: repo, products, users, hashParams: TEST_HASH_PARAMS, logger, now: clock.now });
   const server = await listenLocal(app);
   return {
     app,
     clock,
     logger,
     repository: repo,
+    products,
     users: realUsers,
     prisma: database.prisma,
     dataDir: database.dataDir,

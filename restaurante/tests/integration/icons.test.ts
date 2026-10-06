@@ -12,6 +12,7 @@ import { getBusinessContent } from '../../src/content/index.ts';
 import { makeConfig, makeRepository } from '../helpers.ts';
 import { login, makeClock, setupAdmin } from '../support/admin.ts';
 import { listenLocal } from '../support/http.ts';
+import { makeProductsFor } from '../support/products.ts';
 import { readIcoSizes, readPng } from '../support/png.ts';
 
 // CDMX es UTC-6 todo el año.
@@ -27,10 +28,11 @@ const OTHER = { molotes: 'birria', birria: 'molotes' };
 const THEME = { molotes: '#03132b', birria: '#290808' };
 
 const repository = await makeRepository();
+const products = await makeProductsFor(repository);
 
 async function agent({ now = FRIDAY_NOON_MX, config = makeConfig() }: { now?: Date | (() => Date); config?: Config } = {}) {
   const clock = typeof now === 'function' ? now : () => now;
-  return (await listenLocal(createApp({ config, repository, now: clock }))).request();
+  return (await listenLocal(createApp({ config, repository, products, now: clock }))).request();
 }
 
 const iconFile = (businessId: BusinessId, key: IconKey) => readFileSync(join(DEFAULT_PUBLIC_DIR, iconFilePath(businessId, key)));

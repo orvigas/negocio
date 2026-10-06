@@ -27,10 +27,13 @@ export type AdminContext = ParameterizedContext<AdminState>;
  */
 
 export const ADMIN_PREFIX = '/admin';
+/** API JSON de productos (REQ-F-008): sus errores de disponibilidad también son JSON. */
+export const ADMIN_API_PREFIX = '/admin/api';
 export const LOGIN_PATH = '/admin/login';
 export const SESSION_COOKIE = 'admin_sid';
 
 const isAdminPath = (path: string): boolean => path === ADMIN_PREFIX || path.startsWith(`${ADMIN_PREFIX}/`);
+export const isAdminApiPath = (path: string): boolean => path === ADMIN_API_PREFIX || path.startsWith(`${ADMIN_API_PREFIX}/`);
 
 function respondUnavailable(ctx: Context): void {
   ctx.status = 503;
@@ -85,8 +88,13 @@ export function createAdminGate({
       // Solo nombre y códigos: el mensaje de Prisma lleva rutas e invocaciones (DT-9).
       logger.error('database_unavailable', { path: ctx.path, ...err.details });
       ctx.status = 503;
-      ctx.type = 'html';
-      ctx.body = renderUnavailable();
+      if (isAdminApiPath(ctx.path)) {
+        ctx.type = 'json';
+        ctx.body = { error: { code: 'DATABASE_UNAVAILABLE', message: 'Base de datos no disponible' } };
+      } else {
+        ctx.type = 'html';
+        ctx.body = renderUnavailable();
+      }
     }
     return undefined;
   };
@@ -139,9 +147,37 @@ export function assertSameOrigin(ctx: Context, logger: Logger): void {
 
 /** Segunda capa: token sincronizador de la sesión en el campo oculto `_csrf`. */
 export function assertCsrfToken(ctx: AdminContext, logger: Logger, fields: Map<string, string>): void {
-  const token = fields.get('_csrf');
+  assertCsrfValue(ctx, logger, fields.get('_csrf'));
+}
+
+/** Cabecera del token CSRF en la API JSON (REQ-F-008). */
+export const CSRF_HEADER = 'X-CSRF-Token';
+
+/** Compara el token recibido (campo o cabecera) con el de la sesión. */
+export function assertCsrfValue(ctx: AdminContext, logger: Logger, token: unknown): void {
   const expected = ctx.state.adminSession?.csrfToken;
-  if (typeof token !== 'string' || !expected || !safeEqualStrings(token, expected)) rejectCsrf(ctx, logger, 'token');
+  if (typeof token !== 'string' || token === '' || !expected || !safeEqualStrings(token, expected)) rejectCsrf(ctx, logger, 'token');
+}
+
+/**
+ * Sesión vigente de la petición: la cookie es válida y su usuario existe, está activo y no cambió
+ * su `sessionVersion` (REQ-F-007, D-8 y DT-7). Si no, destruye la sesión, borra la cookie y
+ * devuelve null (quien llama decide la respuesta: 303 en HTML, 401 en la API).
+ */
+export async function resolveSession(
+  ctx: AdminContext,
+  { sessions, config, users }: { sessions: SessionStore; config: Config; users: Pick<UserRepository, 'findById'> },
+): Promise<{ session: SessionInfo; user: UserRecord } | null> {
+  const session = sessions.touch(ctx.cookies.get(SESSION_COOKIE));
+  const user = session ? await users.findById(session.userId) : null;
+  if (!session || !user || !user.active || user.sessionVersion !== session.sessionVersion) {
+    if (session) sessions.destroy(session.id);
+    ctx.cookies.set(SESSION_COOKIE, null, sessionCookieOptions(config));
+    return null;
+  }
+  ctx.state.adminSession = session;
+  ctx.state.adminUser = user;
+  return { session, user };
 }
 
 export type SessionGuard = (ctx: AdminContext, next: Next, options?: { returnTo?: string }) => Promise<unknown>;
@@ -162,11 +198,7 @@ export function createSessionGuard({
   users: Pick<UserRepository, 'findById'>;
 }): SessionGuard {
   return async function requireSession(ctx, next, { returnTo } = {}) {
-    const session = sessions.touch(ctx.cookies.get(SESSION_COOKIE));
-    const user = session ? await users.findById(session.userId) : null;
-    if (!session || !user || !user.active || user.sessionVersion !== session.sessionVersion) {
-      if (session) sessions.destroy(session.id);
-      ctx.cookies.set(SESSION_COOKIE, null, sessionCookieOptions(config));
+    if (!(await resolveSession(ctx, { sessions, config, users }))) {
       const query = new URLSearchParams();
       if (returnTo) query.set('next', returnTo);
       if (ctx.method === 'POST') query.set('expirada', '1');
@@ -175,8 +207,6 @@ export function createSessionGuard({
       ctx.redirect(search ? `${LOGIN_PATH}?${search}` : LOGIN_PATH);
       return undefined;
     }
-    ctx.state.adminSession = session;
-    ctx.state.adminUser = user;
     await next();
     return undefined;
   };

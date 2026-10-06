@@ -1,4 +1,4 @@
-import { chmod, writeFile } from 'node:fs/promises';
+import { chmod, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import Database from 'better-sqlite3';
@@ -57,7 +57,9 @@ describe('prepareDatabase con las migraciones del proyecto', () => {
 
     withDb(file, (db) => {
       const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").pluck().all();
-      expect(tables).toEqual(expect.arrayContaining(['_prisma_migrations', 'user', 'user_business', 'user_audit']));
+      expect(tables).toEqual(
+        expect.arrayContaining(['_prisma_migrations', 'user', 'user_business', 'user_audit', 'product', 'product_variant', 'product_chip', 'product_change', 'product_import']),
+      );
       expect(tables).not.toContain('_write_probe');
       const rows = db.prepare('SELECT * FROM _prisma_migrations').all() as Record<string, unknown>[];
       expect(rows).toHaveLength(applied.length);
@@ -174,6 +176,53 @@ describe('prepareDatabase: redefinición de tablas (S-7)', () => {
     expect(await prepareDatabase({ file, migrationsDir: migrations })).toEqual(['20260102000000_redefine']);
     withDb(file, (db) => {
       expect(db.prepare('SELECT COUNT(*) FROM "hija"').pluck().get()).toBe(2);
+      expect(db.pragma('foreign_key_check')).toEqual([]);
+    });
+  });
+});
+
+describe('prepareDatabase: redefinición de la tabla de productos (REQ-F-008, S-2)', () => {
+  it('una migración futura que redefine "product" conserva variantes, chips y registro', async () => {
+    const dir = await tempDir();
+    const migrations = join(dir, 'migrations');
+    await copyMigrations(migrations);
+    const file = databaseFile(dir);
+    await prepareDatabase({ file, migrationsDir: migrations });
+    withDb(file, (db) => {
+      db.pragma('foreign_keys = ON');
+      db.exec(`INSERT INTO "user" (id, username, username_key, display_name, role, password_hash, updated_at) VALUES (1, 'a', 'a', 'Ana', 'admin', 'x', 0);
+        INSERT INTO "product" (id, business, category, slug, name, position, updated_at, details_type) VALUES (1, 'birria', 'platillo', 'a', 'A', 1, 0, 'variants'), (2, 'birria', 'platillo', 'b', 'B', 2, 0, 'chips');
+        INSERT INTO "product_variant" (product_id, position, label, price_cents, description, available) VALUES (1, 1, 'Chica', 100, 'd', 1), (1, 2, 'Grande', 200, 'd', 1);
+        INSERT INTO "product_chip" (product_id, position, text, highlight) VALUES (2, 1, 'x', 0);
+        INSERT INTO "product_change" (at, business, product_id, slug, action, actor_id, actor_name, changes) VALUES (0, 'birria', 1, 'a', 'create', 1, 'Ana', '[]');`);
+    });
+
+    // Redefinición con la forma que genera `prisma migrate dev` (columna nueva en "product").
+    const original = await readFile(join(migrations, (await projectMigrations()).find((name) => name.endsWith('_productos')) ?? '', 'migration.sql'), 'utf8');
+    const createProduct = /CREATE TABLE "product" \(([\s\S]*?)\n\);/.exec(original)?.[1] ?? '';
+    expect(createProduct).not.toBe('');
+    const columns = [...createProduct.matchAll(/^\s+"([a-z_]+)" /gm)].map((match) => `"${match[1]}"`).join(', ');
+    await writeMigration(
+      migrations,
+      '29990101000000_redefine_product',
+      [
+        'PRAGMA defer_foreign_keys=ON;',
+        'PRAGMA foreign_keys=OFF;',
+        `CREATE TABLE "new_product" (${createProduct},\n    "extra" TEXT\n);`,
+        `INSERT INTO "new_product" (${columns}) SELECT ${columns} FROM "product";`,
+        'DROP TABLE "product";',
+        'ALTER TABLE "new_product" RENAME TO "product";',
+        'CREATE UNIQUE INDEX "product_business_slug_key" ON "product"("business", "slug");',
+        'PRAGMA foreign_keys=ON;',
+        'PRAGMA defer_foreign_keys=OFF;',
+        '',
+      ].join('\n'),
+    );
+    expect(await prepareDatabase({ file, migrationsDir: migrations })).toEqual(['29990101000000_redefine_product']);
+    withDb(file, (db) => {
+      expect(db.prepare('SELECT COUNT(*) FROM "product_variant"').pluck().get()).toBe(2);
+      expect(db.prepare('SELECT COUNT(*) FROM "product_chip"').pluck().get()).toBe(1);
+      expect(db.prepare('SELECT COUNT(*) FROM "product_change"').pluck().get()).toBe(1);
       expect(db.pragma('foreign_key_check')).toEqual([]);
     });
   });

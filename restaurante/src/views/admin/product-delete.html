@@ -1,0 +1,13 @@
+<h1 class="text-2xl font-bold text-slate-900">{{ title }}</h1>
+      <p class="mt-1 mb-6 text-sm text-slate-700"><a class="font-semibold text-blue-900 underline underline-offset-4 focus-visible:outline-3 focus-visible:outline-blue-700" href="{{ backHref }}">Volver a {{ businessName }}</a></p>
+      {{{ notices }}}
+      <section class="admin-confirm rounded-lg border border-slate-300 bg-white p-4 shadow-xs sm:p-6" aria-labelledby="confirm-title">
+        <h2 id="confirm-title" class="text-lg font-bold text-slate-900">¿Eliminar «{{ name }}»?</h2>
+        <p class="mt-1 text-sm text-slate-700">Dejará de verse en la landing. Podrás recuperarlo desde «Productos eliminados»; volverá al final y no disponible.</p>
+        <form class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end" method="post" action="{{ action }}">
+          <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+          <input type="hidden" name="version" value="{{ version }}" />
+          <button class="admin-button admin-button--primary {{ primaryButtonClass }}" type="submit" name="action" value="delete">{{ confirmLabel }}</button>
+          <a class="admin-button admin-button--secondary {{ secondaryButtonClass }}" href="{{ cancelHref }}">{{ cancelLabel }}</a>
+        </form>
+      </section>

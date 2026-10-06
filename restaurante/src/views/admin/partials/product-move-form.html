@@ -1,0 +1,6 @@
+
+                      <form class="admin-products__move" method="post" action="{{ action }}">
+                        <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+                        <input type="hidden" name="version" value="{{ version }}" />
+                        <button class="admin-button admin-button--secondary {{ buttonClass }}" type="submit">{{ label }}<span class="sr-only"> {{ name }}</span></button>
+                      </form>

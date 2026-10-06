@@ -6,12 +6,14 @@ import { beforeAll, describe, expect, it, onTestFinished } from 'vitest';
 import { createApp } from '../../src/app.ts';
 import { makeConfig, makeRepository } from '../helpers.ts';
 import { listenLocal, type LocalServer } from '../support/http.ts';
+import { makeProductsFor } from '../support/products.ts';
 
 /** Servidores de prueba en 127.0.0.1 (REQ-F-011). */
 
 const FRIDAY_NOON_MX = new Date('2026-10-09T18:00:00Z');
 const repository = await makeRepository();
-const makeApp = () => createApp({ config: makeConfig(), repository, now: () => FRIDAY_NOON_MX });
+const products = await makeProductsFor(repository);
+const makeApp = () => createApp({ config: makeConfig(), repository, products, now: () => FRIDAY_NOON_MX });
 
 /** Resuelve con el código de error al conectar, o 'connected' si alguien acepta la conexión. */
 function tryConnect(port: number): Promise<string> {

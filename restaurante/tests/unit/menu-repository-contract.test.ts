@@ -17,7 +17,7 @@ describe('contrato del repositorio de menús (RF-9)', () => {
   });
 
   it('createApp rechaza un repositorio que no cumple el contrato', () => {
-    expect(() => createApp({ config: makeConfig(), repository: { getPublished() {} } })).toThrow(/no implementa: init/);
+    expect(() => createApp({ config: makeConfig(), repository: { getPublished() {} }, products: { getPublished() {} } as never })).toThrow(/no implementa: init/);
     // @ts-expect-error: sin repositorio, a propósito.
     expect(() => createApp({ config: makeConfig() })).toThrow(/no implementa/);
   });

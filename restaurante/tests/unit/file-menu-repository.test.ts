@@ -14,7 +14,8 @@ import {
   SeedRestoreNotAllowedError,
   versionOf,
 } from '../../src/repositories/menu-repository.ts';
-import { makeRecordingLogger, seedData, seedDocuments, type CorruptibleData, type RecordingLogger } from '../helpers.ts';
+import { pickPageData } from '../../src/services/menu-schema.ts';
+import { makeRecordingLogger, seedData, seedDocuments, seedPage, type CorruptibleData, type RecordingLogger } from '../helpers.ts';
 import { makeClock, type Clock } from '../support/admin.ts';
 
 const TIMEZONE = 'America/Mexico_City';
@@ -66,8 +67,9 @@ async function writeDocument(
   return document;
 }
 
+/** Datos de página de la semilla con un cambio (lo que guarda el formulario, REQ-F-008 Q-3 A). */
 function changedData(businessId: BusinessId, mutate: (data: CorruptibleData) => unknown) {
-  const data = seedData(businessId);
+  const data = seedPage(businessId);
   mutate(data);
   return data;
 }
@@ -98,7 +100,7 @@ describe('guardar (RF-6, CA-27)', () => {
     const { repository } = await makeRepo();
     const { version } = await repository.getForEdit('molotes');
     const data = changedData('molotes', (d: CorruptibleData) => {
-      d.menu.items[0].unitPriceCents = 5000;
+      d.hero.showcase.priceCents = 15000;
       d.promo.title = 'Martes 2x1';
     });
 
@@ -107,7 +109,11 @@ describe('guardar (RF-6, CA-27)', () => {
     expect(saved).toMatchObject({ revision: 1, updatedBy: 'Ana', updatedAt: '2026-10-09T12:00:00-06:00' });
     expect(await readJson('molotes', 'current.json')).toEqual(saved);
     expect(await readJson('molotes', 'previous.json')).toEqual(seedDocuments().molotes);
-    expect((await repository.getPublished('molotes')).data).toEqual(data);
+    // REQ-F-008 (Q-3 A): cambian los datos de página; las listas de productos quedan tal cual (formato v1).
+    const published = (await repository.getPublished('molotes')).data;
+    expect(pickPageData('molotes', published)).toEqual(data);
+    expect(published.menu.items).toEqual(seedData('molotes').menu.items);
+    expect(published.drinks).toEqual(seedData('molotes').drinks);
     expect(await repository.getLastChange('molotes')).toEqual({ at: '2026-10-09T12:00:00-06:00', by: 'Ana' });
 
     expect(await readChanges()).toEqual([
@@ -117,7 +123,7 @@ describe('guardar (RF-6, CA-27)', () => {
         business: 'molotes',
         action: 'save',
         changes: [
-          { field: 'menu.items.0.unitPriceCents', before: 4500, after: 5000 },
+          { field: 'hero.showcase.priceCents', before: 14500, after: 15000 },
           { field: 'promo.title', before: 'Jueves de Molotes 2x1', after: 'Martes 2x1' },
         ],
       },
@@ -129,10 +135,10 @@ describe('guardar (RF-6, CA-27)', () => {
     const { repository, clock } = await makeRepo();
     const { version } = await repository.getForEdit('birria');
     clock.advance(60_000);
-    await repository.save('birria', { data: seedData('birria'), expectedVersion: version, author: { id: 1, name: 'Ana' } });
+    await repository.save('birria', { data: seedPage('birria'), expectedVersion: version, author: { id: 1, name: 'Ana' } });
     const before = await readFile(fileOf('birria', 'current.json'), 'utf8');
 
-    const attempt = repository.save('birria', { data: seedData('birria'), expectedVersion: version, author: { id: 1, name: 'Beto' } });
+    const attempt = repository.save('birria', { data: seedPage('birria'), expectedVersion: version, author: { id: 1, name: 'Beto' } });
     await expect(attempt).rejects.toBeInstanceOf(MenuConflictError);
     await attempt.catch((err) => {
       expect(err.current).toMatchObject({ updatedBy: 'Ana', updatedAt: '2026-10-09T12:01:00-06:00' });
@@ -164,8 +170,8 @@ describe('guardar (RF-6, CA-27)', () => {
     const { repository } = await makeRepo();
     const { version } = await repository.getForEdit('molotes');
     const results = await Promise.allSettled([
-      repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: { id: 1, name: 'A' } }),
-      repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: { id: 1, name: 'B' } }),
+      repository.save('molotes', { data: seedPage('molotes'), expectedVersion: version, author: { id: 1, name: 'A' } }),
+      repository.save('molotes', { data: seedPage('molotes'), expectedVersion: version, author: { id: 1, name: 'B' } }),
     ]);
     expect(results.map((result) => result.status)).toEqual(['fulfilled', 'rejected']);
     expect((results[1] as PromiseRejectedResult).reason).toBeInstanceOf(MenuConflictError);
@@ -176,14 +182,15 @@ describe('guardar (RF-6, CA-27)', () => {
     const { version } = await repository.getForEdit('birria');
     const before = await readFile(fileOf('birria', 'current.json'), 'utf8');
     await expect(
-      repository.save('birria', { data: changedData('birria', (d: CorruptibleData) => d.menu.items.pop()), expectedVersion: version, author: { id: 1, name: 'Ana' } }),
+      // Los productos ya no se guardan con el formulario de página (REQ-F-008): un campo de más es inválido.
+      repository.save('birria', { data: changedData('birria', (d: CorruptibleData) => (d.menu = { items: [] })), expectedVersion: version, author: { id: 1, name: 'Ana' } }),
     ).rejects.toThrow(/inválidos/);
-    await expect(repository.save('birria', { data: seedData('birria'), expectedVersion: version, author: { id: 1, name: '  ' } })).rejects.toThrow(
+    await expect(repository.save('birria', { data: seedPage('birria'), expectedVersion: version, author: { id: 1, name: '  ' } })).rejects.toThrow(
       /inválidos/,
     );
     // El autor verificado exige un identificador de usuario (REQ-F-007, D-11).
     for (const author of ['Ana', { name: 'Ana' }, { id: 0, name: 'Ana' }, { id: '1', name: 'Ana' }]) {
-      await expect(repository.save('birria', { data: seedData('birria'), expectedVersion: version, author })).rejects.toThrow(/inválidos/);
+      await expect(repository.save('birria', { data: seedPage('birria'), expectedVersion: version, author })).rejects.toThrow(/inválidos/);
     }
     expect(await readFile(fileOf('birria', 'current.json'), 'utf8')).toBe(before);
   });
@@ -203,7 +210,7 @@ describe('guardar (RF-6, CA-27)', () => {
     const { repository } = await makeRepo({ fs: failingFs });
     await expect(
       repository.save('molotes', {
-        data: changedData('molotes', (d: CorruptibleData) => (d.menu.items[0].name = 'Nuevo')),
+        data: changedData('molotes', (d: CorruptibleData) => (d.promo.title = 'Nuevo')),
         expectedVersion: version,
         author: { id: 1, name: 'Ana' },
       }),
@@ -234,7 +241,7 @@ describe('guardar (RF-6, CA-27)', () => {
     const { repository: setup } = await makeRepo();
     const { version } = await setup.getForEdit('birria');
     const { repository } = await makeRepo({ fs: failingFs });
-    await expect(repository.save('birria', { data: seedData('birria'), expectedVersion: version, author: { id: 1, name: 'Ana' } })).rejects.toThrow(
+    await expect(repository.save('birria', { data: seedPage('birria'), expectedVersion: version, author: { id: 1, name: 'Ana' } })).rejects.toThrow(
       /fallo de E\/S/,
     );
     expect(await readJson('birria', 'current.json')).toEqual(seedDocuments().birria);
@@ -251,7 +258,7 @@ describe('guardar (RF-6, CA-27)', () => {
     };
     const { repository, logger } = await makeRepo({ fs: failingFs });
     const { version } = await repository.getForEdit('molotes');
-    await repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: { id: 1, name: 'Ana' } });
+    await repository.save('molotes', { data: seedPage('molotes'), expectedVersion: version, author: { id: 1, name: 'Ana' } });
     expect((await readJson('molotes', 'current.json')).revision).toBe(1);
     expect(logger.lines).toContainEqual(expect.objectContaining({ msg: 'change_log_write_failed', code: 'EACCES' }));
   });
@@ -262,7 +269,7 @@ describe('guardar (RF-6, CA-27)', () => {
     await writeDocument('molotes', 'current.json', (d: CorruptibleData) => (d.promo.title = 'Editado a mano'));
     expect((await repository.getPublished('molotes')).data.promo.title).toBe('Jueves de Molotes 2x1');
 
-    await repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: { id: 1, name: 'Ana' } });
+    await repository.save('molotes', { data: seedPage('molotes'), expectedVersion: version, author: { id: 1, name: 'Ana' } });
     expect((await readJson('molotes', 'previous.json')).data.promo.title).toBe('Editado a mano');
   });
 });
@@ -296,11 +303,24 @@ describe('restaurar versión anterior (RF-6.5, CA-30)', () => {
     expect((await repository.getPublished('molotes')).data.menu.highlight).toBe('Nuevo destacado');
   });
 
+  it('REQ-F-008 (Q-3 A): el registro de una restauración solo lista datos de página, no las listas congeladas', async () => {
+    await writeDocument('molotes', 'previous.json', (d: CorruptibleData) => {
+      d.menu.items[0].unitPriceCents = 9900;
+      d.menu.highlight = 'Destacado anterior';
+    });
+    await writeDocument('molotes', 'current.json');
+    const { repository } = await makeRepo();
+    const restored = await repository.restorePrevious('molotes', { author: { id: 1, name: 'Beto' } });
+    // El documento sigue en formato v1 y conserva las listas del archivo restaurado.
+    expect(restored.data.menu.items[0]?.unitPriceCents).toBe(9900);
+    expect((await readChanges()).at(-1)?.changes).toEqual([{ field: 'menu.highlight', before: seedData('molotes').menu.highlight, after: 'Destacado anterior' }]);
+  });
+
   it('una restauración provoca conflicto en quien tenía el formulario abierto', async () => {
     const { repository } = await makeRepo();
     const { version } = await repository.getForEdit('molotes');
     await repository.restorePrevious('molotes', { author: { id: 1, name: 'Beto' } });
-    await expect(repository.save('molotes', { data: seedData('molotes'), expectedVersion: version, author: { id: 1, name: 'Ana' } })).rejects.toBeInstanceOf(
+    await expect(repository.save('molotes', { data: seedPage('molotes'), expectedVersion: version, author: { id: 1, name: 'Ana' } })).rejects.toBeInstanceOf(
       MenuConflictError,
     );
   });
@@ -370,7 +390,7 @@ describe('archivo dañado (RF-8)', () => {
     const edit = await first.repository.getForEdit('molotes');
     expect(edit.damaged).toEqual({ servingFrom: 'previous', previousValid: true });
     await expect(
-      first.repository.save('molotes', { data: seedData('molotes'), expectedVersion: edit.version, author: { id: 1, name: 'Ana' } }),
+      first.repository.save('molotes', { data: seedPage('molotes'), expectedVersion: edit.version, author: { id: 1, name: 'Ana' } }),
     ).rejects.toBeInstanceOf(MenuDamagedError);
 
     // Reinicio: sin current.json pero con el marcador, no se trata como primera ejecución.

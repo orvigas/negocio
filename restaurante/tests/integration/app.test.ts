@@ -13,6 +13,7 @@ import type { MenuDocument } from '../../src/services/menu-schema.ts';
 import type { Logger } from '../../src/utils/logger.ts';
 import { makeConfig, makeRepository, type CorruptibleData } from '../helpers.ts';
 import { listenLocal } from '../support/http.ts';
+import { makeProductRepository, makeProductsFor, seedSources } from '../support/products.ts';
 
 const FRIDAY_NOON_MX = new Date('2026-10-09T18:00:00Z');
 const SATURDAY_NOON_MX = new Date('2026-10-10T18:00:00Z');
@@ -22,13 +23,14 @@ function makeLogger() {
 }
 
 const repository = await makeRepository();
+const products = await makeProductsFor(repository);
 
 async function agent({
   now = FRIDAY_NOON_MX,
   config = makeConfig(),
   logger = makeLogger(),
 }: { now?: Date | (() => Date); config?: Config; logger?: Logger } = {}) {
-  const app = createApp({ config, repository, logger, now: typeof now === 'function' ? now : () => now });
+  const app = createApp({ config, repository, products, logger, now: typeof now === 'function' ? now : () => now });
   return (await listenLocal(app)).request();
 }
 
@@ -429,14 +431,14 @@ describe('errores', () => {
   });
 });
 
-describe('landings con datos editables (REQ-F-001)', () => {
+describe('landings con productos guardados (REQ-F-001 y REQ-F-008)', () => {
+  /** Productos importados desde datos cambiados: equivale a productos guardados con esos valores. */
   async function agentWith(mutate: { businessId: BusinessId; change: (data: CorruptibleData) => unknown }) {
     const repo = await makeRepository();
-    const { version } = await repo.getForEdit(mutate.businessId);
-    const data = structuredClone((await repo.getPublished(mutate.businessId)).data);
-    mutate.change(data);
-    await repo.save(mutate.businessId, { data, expectedVersion: version, author: { id: 1, name: 'Pruebas' } });
-    const app = createApp({ config: makeConfig(), repository: repo, now: () => FRIDAY_NOON_MX });
+    const sources = seedSources();
+    mutate.change(sources[mutate.businessId].data);
+    const { repository: productRepo } = await makeProductRepository({ sources });
+    const app = createApp({ config: makeConfig(), repository: repo, products: productRepo, now: () => FRIDAY_NOON_MX });
     return (await listenLocal(app)).request();
   }
 
@@ -502,7 +504,8 @@ describe('archivo dañado al arrancar con el repositorio de archivos (CA-34, CA-
   async function start() {
     const repo = createFileMenuRepository({ dataDir, timezone: 'America/Mexico_City' });
     await repo.init();
-    return (await listenLocal(createApp({ config: makeConfig(), repository: repo, now: () => FRIDAY_NOON_MX }))).request();
+    const productRepo = await makeProductsFor(repo);
+    return (await listenLocal(createApp({ config: makeConfig(), repository: repo, products: productRepo, now: () => FRIDAY_NOON_MX }))).request();
   }
 
   it('CA-34: con JSON inválido y una versión anterior válida, /molotes responde 200 con la versión anterior', async () => {

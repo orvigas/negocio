@@ -2,7 +2,7 @@ import type { BusinessId } from '../src/config/businesses.ts';
 import { loadConfig, type Config, type Env } from '../src/config/env.ts';
 import { loadSeedDocument } from '../src/content/seeds.ts';
 import { createMemoryMenuRepository } from '../src/repositories/memory-menu-repository.ts';
-import type { MenuDataByBusiness, MenuDocument } from '../src/services/menu-schema.ts';
+import { pickPageData, type MenuDataByBusiness, type MenuDocument, type PageDataByBusiness } from '../src/services/menu-schema.ts';
 import type { LogFields, Logger, LogLevel } from '../src/utils/logger.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- any justificado: las pruebas corrompen los datos a propósito (tipos, campos y estructura inválidos).
@@ -34,6 +34,8 @@ const SEEDS = Object.freeze({
 export const seedData = <Id extends BusinessId>(businessId: Id): MenuDataByBusiness[Id] =>
   structuredClone(SEEDS[businessId].data as MenuDataByBusiness[Id]);
 export const seedDocuments = () => structuredClone(SEEDS);
+/** Datos de página de la semilla (hero, destacado y promociones; lo que guarda el formulario desde REQ-F-008). */
+export const seedPage = <Id extends BusinessId>(businessId: Id): PageDataByBusiness[Id] => pickPageData(businessId, seedData(businessId));
 
 /** Repositorio en memoria ya inicializado (CA-38: sin leer archivos de datos). */
 export async function makeRepository(options: Parameters<typeof createMemoryMenuRepository>[0] = {}) {

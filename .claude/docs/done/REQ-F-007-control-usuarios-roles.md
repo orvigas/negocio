@@ -2,7 +2,11 @@
 
 ## Estado
 
-QA_APPROVED
+DONE
+
+- Pull Request: https://github.com/orvigas/negocio/pull/24 (rama `feature/REQ-F-007-control-usuarios-roles` → `main`, commit `dfbfc9f`), mergeado el 2026-10-06T03:18:19Z (21:18 del 2026-10-05, hora de Ciudad de México), commit de merge `e2f7444`.
+- CI del PR en verde (run 37361818495): `calidad` pass (1m51s), `docker` pass (1m40s). GitGuardian: skipping.
+- CI del push a `main` de `e2f7444`: `calidad` y `docker` en verde (https://github.com/orvigas/negocio/actions/runs/37408350634).
 
 ## Aprobación
 
@@ -1729,3 +1733,13 @@ Revalidación tras las correcciones de `senior-fullstack` (aprobadas por el usua
 - OBS-1 queda en REQ-F-011.
 
 El estado pasa a `QA_APPROVED`. Sin commits.
+
+### Commit y Pull Request (T4)
+
+`QA_APPROVED` en la ronda 2. Commit `dfbfc9f` (`feat: habilita cuentas personales con roles en la administración sobre Prisma y SQLite`), push y PR https://github.com/orvigas/negocio/pull/24 contra `main`. CI del PR en verde (run 37361818495): `calidad` 1m51s y `docker` 1m40s. El estado pasa a `READY_FOR_MERGE`. El merge lo hace el usuario.
+
+### Cierre T5 (2026-10-05)
+
+El usuario confirma el merge del PR #24 y autoriza borrar la rama (cita textual: "Confirmo el merge del #24 y sí, borra la rama"), verificado con `gh` (MERGED el 2026-10-06T03:18:19Z, 21:18 del 2026-10-05 hora de Ciudad de México). El commit de merge es `e2f7444`. El CI del push a `main` de ese commit dio `calidad` y `docker` en verde (https://github.com/orvigas/negocio/actions/runs/37408350634).
+
+El usuario mergeó el PR antes de que llegara a la rama el commit de registro del PR (`10a5b43`, `docs: registra el Pull Request de REQ-F-007`, subido 17 s después del merge), por lo que en `main` el ticket quedó en `in-progress/` con estado `QA_APPROVED` y sin la sección del PR. En este cierre se recupera ese contenido (estado con la URL del PR y el CI del PR, y la entrada «Commit y Pull Request (T4)»), se mueve el ticket a `done/` con estado `DONE` y se borra la rama `feature/REQ-F-007-control-usuarios-roles`, cuyo único commit fuera de `main` era `10a5b43`.

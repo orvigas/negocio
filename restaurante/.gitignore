@@ -22,3 +22,12 @@ coverage/
 
 # Datos editables de la administración en desarrollo (DATA_DIR por defecto; REQ-F-001)
 data/
+
+# Cliente de Prisma generado (`npm run db:generate`; REQ-F-007)
+src/generated/
+
+# Bases de datos SQLite (viven en DATA_DIR, nunca en el repositorio)
+*.db
+*.db-wal
+*.db-shm
+*.db-journal

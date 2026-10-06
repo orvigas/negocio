@@ -2,10 +2,11 @@ import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual, typ
 import { promisify } from 'node:util';
 
 /**
- * Credencial común de administración (REQ-F-001, RF-5 y DT-2).
- * La contraseña se configura como hash scrypt (ADMIN_PASSWORD_HASH), nunca en claro:
+ * Contraseñas de la administración (REQ-F-001 DT-2 y REQ-F-007): siempre como hash scrypt,
+ * nunca en claro:
  *   scrypt$<N>$<r>$<p>$<salt base64url>$<hash base64url>
- * Se genera con `npm run admin:hash-password`.
+ * Es el formato de ADMIN_PASSWORD_HASH (`npm run admin:hash-password`, primer administrador) y
+ * el que se guarda en la base de datos para cada usuario.
  */
 
 interface ScryptParams {
@@ -58,7 +59,7 @@ export function parsePasswordHash(text: unknown): ParsedPasswordHash | null {
   return { N, r, p, salt, hash };
 }
 
-/** Genera el valor de ADMIN_PASSWORD_HASH. */
+/** Genera el hash de una contraseña (ADMIN_PASSWORD_HASH o el de un usuario). */
 export async function hashPassword(
   password: unknown,
   { N, r, p, saltLength, keyLength }: ScryptParams & { saltLength: number; keyLength: number } = SCRYPT_DEFAULTS,
@@ -75,22 +76,61 @@ export function safeEqualStrings(a: unknown, b: unknown): boolean {
   return timingSafeEqual(digest(a), digest(b));
 }
 
-export interface AdminAuthenticator {
-  verify(username: unknown, password: unknown): Promise<boolean>;
+/** Comprueba una contraseña contra un hash guardado, en tiempo constante. Un hash inválido nunca coincide. */
+export async function verifyPassword(password: unknown, storedHash: unknown): Promise<boolean> {
+  const parsed = parsePasswordHash(storedHash);
+  const candidate = typeof password === 'string' ? password.normalize('NFC') : '';
+  if (!parsed) return false;
+  const derived = await scrypt(candidate, parsed.salt, parsed.hash.length, scryptOptions(parsed));
+  return timingSafeEqual(derived, parsed.hash);
 }
 
-export function createAdminAuthenticator({ user, passwordHash }: { user: string; passwordHash: string }): AdminAuthenticator {
-  const parsed = parsePasswordHash(passwordHash);
-  if (!parsed || typeof user !== 'string' || user === '') throw new TypeError('Credenciales de administración inválidas');
+export type PasswordHashParams = typeof SCRYPT_DEFAULTS;
+
+/** Usuario autenticado (lo mínimo que necesita el acceso). */
+export interface AuthenticatedUser {
+  id: number;
+  sessionVersion: number;
+}
+
+/** Fuente de credenciales (el repositorio de usuarios). */
+export interface CredentialSource<U extends AuthenticatedUser & { active: boolean }> {
+  findCredentials(username: string): Promise<{ user: U; passwordHash: string } | null>;
+}
+
+export interface UserAuthenticator<U> {
+  /** Devuelve el usuario si las credenciales son correctas y la cuenta está activa; si no, null. */
+  authenticate(username: unknown, password: unknown): Promise<U | null>;
+}
+
+/**
+ * Acceso por usuario (REQ-F-007, R-6 y DT-10). Siempre ejecuta scrypt (contra un hash ficticio
+ * si el usuario no existe) y responde igual para una cuenta inexistente, una contraseña
+ * incorrecta o una cuenta desactivada: no revela cuál falló.
+ */
+export function createUserAuthenticator<U extends AuthenticatedUser & { active: boolean }>({
+  users,
+  hashParams = SCRYPT_DEFAULTS,
+  hash = hashPassword,
+}: {
+  users: CredentialSource<U>;
+  hashParams?: PasswordHashParams;
+  /** Generador del hash ficticio (inyectable en las pruebas). */
+  hash?: typeof hashPassword;
+}): UserAuthenticator<U> {
+  // El hash ficticio se calcula al crear el autenticador (al arrancar la app, DT-10), no en el
+  // primer acceso fallido: así ese primer acceso no tarda más que los demás.
+  const dummyHash = hash(randomBytes(32).toString('base64url'), hashParams);
+  // Si fallara, el error aparece en el primer acceso; evita un rechazo sin manejar al arrancar.
+  dummyHash.catch(() => {});
+  const dummy = () => dummyHash;
 
   return Object.freeze({
-    /** Siempre ejecuta scrypt, aunque el usuario no coincida, para no revelar cuál falló. */
-    async verify(username: unknown, password: unknown): Promise<boolean> {
-      const candidate = typeof password === 'string' ? password.normalize('NFC') : '';
-      const derived = await scrypt(candidate, parsed.salt, parsed.hash.length, scryptOptions(parsed));
-      const passwordOk = timingSafeEqual(derived, parsed.hash);
-      const userOk = safeEqualStrings(typeof username === 'string' ? username : '', user);
-      return passwordOk && userOk;
+    async authenticate(username: unknown, password: unknown): Promise<U | null> {
+      const name = typeof username === 'string' ? username : '';
+      const found = name.trim() === '' ? null : await users.findCredentials(name);
+      const ok = await verifyPassword(password, found ? found.passwordHash : await dummy());
+      return found && ok && found.user.active ? found.user : null;
     },
   });
 }

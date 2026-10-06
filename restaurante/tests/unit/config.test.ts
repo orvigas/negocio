@@ -99,24 +99,26 @@ describe('loadConfig', () => {
 describe('loadConfig: administración y datos (REQ-F-001)', () => {
   const HASH = 'scrypt$16384$8$1$c2FsLXNhbC1zYWwtc2FsLQ$aGFzaGhhc2hoYXNoaGFzaGhhc2hoYXNoaGFzaGhhc2g';
 
-  it('sin credenciales la administración queda deshabilitada y la app arranca (CA-24)', () => {
+  it('sin credenciales no hay primer administrador y la app arranca (CA-24; REQ-F-007 R-4)', () => {
     const config = loadConfig(VALID_ENV);
-    expect(config.admin).toEqual({ enabled: false });
+    expect(config.adminBootstrap).toBeNull();
     expect(config.trustProxy).toBe(false);
     // Por defecto, la carpeta data/ del proyecto (sin depender del nombre de la carpeta clonada).
     expect(config.dataDir).toBe(join(PROJECT_DIR, 'data'));
   });
 
-  it('con usuario y hash válidos la administración queda habilitada', () => {
-    const config = loadConfig({ ...VALID_ENV, ADMIN_USER: 'dueno', ADMIN_PASSWORD_HASH: HASH });
-    expect(config.admin).toEqual({ enabled: true, user: 'dueno', passwordHash: HASH });
+  it('con usuario y hash válidos queda la credencial del primer administrador (REQ-F-007 D-4)', () => {
+    const config = loadConfig({ ...VALID_ENV, ADMIN_USER: ' Dueño ', ADMIN_PASSWORD_HASH: HASH });
+    // El usuario se recorta (como en el acceso) y conserva mayúsculas.
+    expect(config.adminBootstrap).toEqual({ user: 'Dueño', passwordHash: HASH });
   });
 
   it.each([
     [{ ADMIN_USER: 'dueno' }, /ADMIN_USER y ADMIN_PASSWORD_HASH juntas/],
     [{ ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER y ADMIN_PASSWORD_HASH juntas/],
     [{ ADMIN_USER: 'dueno', ADMIN_PASSWORD_HASH: 'contraseña-en-claro' }, /ADMIN_PASSWORD_HASH no tiene un formato válido/],
-    [{ ADMIN_USER: 'x'.repeat(61), ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER no puede superar/],
+    [{ ADMIN_USER: 'x'.repeat(61), ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER no es un usuario válido/],
+    [{ ADMIN_USER: 'due\u0007no', ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER no es un usuario válido/],
     [{ TRUST_PROXY: 'yes' }, /TRUST_PROXY debe ser true o false/],
     [{ NODE_ENV: 'production' }, /DATA_DIR es obligatoria en producción/],
     [{ NODE_ENV: 'production', DATA_DIR: 'data' }, /DATA_DIR debe ser una ruta absoluta/],

@@ -29,6 +29,10 @@ jobs:
     defaults:
       run:
         working-directory: restaurante
+    # CLI de Prisma (REQ-F-007): sin telemetría ni avisos de actualización.
+    env:
+      CHECKPOINT_DISABLE: '1'
+      PRISMA_HIDE_UPDATE_MESSAGE: '1'
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -40,8 +44,12 @@ jobs:
           node-version-file: restaurante/.nvmrc
           cache: npm
           cache-dependency-path: restaurante/package-lock.json
+      # Solo corren los scripts de instalación aprobados en `allowScripts` (package.json).
       - name: install
-        run: npm ci --no-audit --no-fund
+        run: npm ci --strict-allow-scripts --no-audit --no-fund
+      # Cliente de Prisma (src/generated/prisma, no versionado): lo necesitan typecheck, lint y test.
+      - name: db:generate
+        run: npm run db:generate
       - name: typecheck
         run: npm run typecheck
       - name: lint

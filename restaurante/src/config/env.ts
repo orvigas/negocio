@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { BUSINESS_IDS, type BusinessId } from './businesses.ts';
 import { parsePasswordHash } from '../services/admin-auth.ts';
+import { normalizeUsername, usernameError } from '../services/user-schema.ts';
 import {
   MAX_MESSAGE_LENGTH,
   PHONE_PATTERN,
@@ -29,9 +30,11 @@ export interface WhatsAppConfig {
   readonly href: string;
 }
 
-export type AdminConfig =
-  | Readonly<{ enabled: false }>
-  | Readonly<{ enabled: true; user: string; passwordHash: string }>;
+/**
+ * Credencial del primer administrador (REQ-F-007, D-4): solo se usa si la base de datos no tiene
+ * usuarios. null si no se definió.
+ */
+export type AdminBootstrapConfig = Readonly<{ user: string; passwordHash: string }> | null;
 
 export interface Config {
   readonly nodeEnv: NodeEnv;
@@ -42,7 +45,7 @@ export interface Config {
   readonly whatsapp: Readonly<Record<BusinessId, WhatsAppConfig>>;
   readonly dataDir: string;
   readonly trustProxy: boolean;
-  readonly admin: AdminConfig;
+  readonly adminBootstrap: AdminBootstrapConfig;
 }
 
 // Se amplía el tipo de la lista para poder buscar un string cualquiera.
@@ -56,7 +59,6 @@ const isCompleteWhatsApp = (
 export const PROJECT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** Carpeta de datos por defecto fuera de producción (está en .gitignore). */
 export const DEFAULT_DATA_DIR = join(PROJECT_DIR, 'data');
-export const ADMIN_USER_MAX_LENGTH = 60;
 export const DEFAULTS = Object.freeze({
   NODE_ENV: 'development',
   PORT: 3000,
@@ -158,26 +160,28 @@ function parseDataDir(raw: string | undefined, nodeEnv: string, issues: string[]
 }
 
 /**
- * Credencial de administración (DT-7): sin ninguna de las dos variables, la administración
- * queda deshabilitada; con una sola o con un hash mal formado, la configuración es inválida.
+ * Credencial del primer administrador (REQ-F-001 DT-7 y REQ-F-007 DT-11): sin ninguna de las dos
+ * variables vale null; con una sola, con un usuario inválido o con un hash mal formado, la
+ * configuración es inválida (aunque ya haya usuarios y se vaya a ignorar).
  */
-function parseAdmin(env: Env, issues: string[]): AdminConfig | undefined {
-  const user = readVar(env, 'ADMIN_USER');
+function parseAdminBootstrap(env: Env, issues: string[]): AdminBootstrapConfig | undefined {
+  const rawUser = readVar(env, 'ADMIN_USER');
+  const user = rawUser === undefined ? undefined : normalizeUsername(rawUser);
   const passwordHash = readVar(env, 'ADMIN_PASSWORD_HASH');
-  if (user === undefined && passwordHash === undefined) return Object.freeze({ enabled: false });
+  if (user === undefined && passwordHash === undefined) return null;
 
   const before = issues.length;
   if (user === undefined || passwordHash === undefined) {
     issues.push('Define ADMIN_USER y ADMIN_PASSWORD_HASH juntas (o ninguna para deshabilitar la administración)');
   }
-  if (user !== undefined && [...user].length > ADMIN_USER_MAX_LENGTH) {
-    issues.push(`ADMIN_USER no puede superar ${ADMIN_USER_MAX_LENGTH} caracteres`);
+  if (user !== undefined && usernameError(user) !== null) {
+    issues.push('ADMIN_USER no es un usuario válido (1 a 60 caracteres, sin caracteres de control)');
   }
   if (passwordHash !== undefined && parsePasswordHash(passwordHash) === null) {
     issues.push('ADMIN_PASSWORD_HASH no tiene un formato válido (genéralo con `npm run admin:hash-password`)');
   }
   if (issues.length > before || user === undefined || passwordHash === undefined) return undefined;
-  return Object.freeze({ enabled: true, user, passwordHash });
+  return Object.freeze({ user, passwordHash });
 }
 
 function parseBoolean(raw: string | undefined, name: string, defaultValue: boolean, issues: string[]): boolean | undefined {
@@ -212,6 +216,19 @@ function parseWhatsApp(env: Env, businessId: BusinessId, issues: string[]): What
   return Object.freeze({ url, phone, message, href: buildWhatsAppLink({ url, phone, message }) });
 }
 
+/**
+ * Solo la carpeta de datos, con las mismas reglas que loadConfig (REQ-F-007): la usa el comando
+ * de recuperación, que no necesita el resto de la configuración (WhatsApp, etc.).
+ * @throws {ConfigError}
+ */
+export function loadDataDir(env: Env = process.env): string {
+  const issues: string[] = [];
+  const nodeEnv = readVar(env, 'NODE_ENV') ?? DEFAULTS.NODE_ENV;
+  const dataDir = parseDataDir(readVar(env, 'DATA_DIR'), nodeEnv, issues);
+  if (issues.length > 0 || dataDir === undefined) throw new ConfigError(issues);
+  return dataDir;
+}
+
 /** @throws {ConfigError} */
 export function loadConfig(env: Env = process.env): Config {
   const issues: string[] = [];
@@ -237,7 +254,7 @@ export function loadConfig(env: Env = process.env): Config {
   }
 
   const dataDir = parseDataDir(readVar(env, 'DATA_DIR'), nodeEnv, issues);
-  const admin = parseAdmin(env, issues);
+  const adminBootstrap = parseAdminBootstrap(env, issues);
   const trustProxy = parseBoolean(readVar(env, 'TRUST_PROXY'), 'TRUST_PROXY', false, issues);
 
   // Cada valor undefined ya dejó su problema en `issues`; las comprobaciones extra solo estrechan tipos.
@@ -246,7 +263,7 @@ export function loadConfig(env: Env = process.env): Config {
     !isNodeEnv(nodeEnv) ||
     port === undefined ||
     dataDir === undefined ||
-    admin === undefined ||
+    adminBootstrap === undefined ||
     trustProxy === undefined ||
     !isCompleteWhatsApp(whatsapp)
   ) {
@@ -262,6 +279,6 @@ export function loadConfig(env: Env = process.env): Config {
     whatsapp: Object.freeze(whatsapp),
     dataDir,
     trustProxy,
-    admin,
+    adminBootstrap,
   });
 }

@@ -10,12 +10,15 @@ import { createAdminGate } from './middleware/admin-guard.ts';
 import { createErrorHandler } from './middleware/error-handler.ts';
 import { createRequestLogger } from './middleware/request-logger.ts';
 import { assertMenuRepository } from './repositories/menu-repository.ts';
+import type { UserRepository } from './repositories/user-repository.ts';
 import { createRouter } from './routes/index.ts';
-import { createAdminAuthenticator } from './services/admin-auth.ts';
+import { SCRYPT_DEFAULTS, createUserAuthenticator, type PasswordHashParams } from './services/admin-auth.ts';
 import { createImageChecker } from './services/admin-form.ts';
+import { getActiveBusinessId } from './services/business-schedule.ts';
 import { createLoginThrottle } from './services/login-throttle.ts';
 import { createSessionStore } from './services/session-store.ts';
 import { silentLogger, type Logger } from './utils/logger.ts';
+import { renderAdminUnavailable } from './views/admin/index.ts';
 import { createRenderer } from './views/render.ts';
 
 const SRC_DIR = dirname(fileURLToPath(import.meta.url));
@@ -26,6 +29,13 @@ export interface AppOptions {
   config: Config;
   /** Repositorio de menús ya inicializado (src/repositories/; REQ-F-001, RF-9). Se valida al crear la app. */
   repository: unknown;
+  /**
+   * Usuarios de /admin (REQ-F-007). Sin ellos, la administración no se monta y /admin responde
+   * 503 (p. ej. en las pruebas de las landings).
+   */
+  users?: UserRepository | undefined;
+  /** Costo de scrypt para contraseñas nuevas (por defecto SCRYPT_DEFAULTS; las pruebas lo bajan). */
+  hashParams?: PasswordHashParams;
   logger?: Logger;
   now?: () => Date;
   viewsDir?: string;
@@ -36,6 +46,8 @@ export interface AppOptions {
 export function createApp({
   config,
   repository,
+  users,
+  hashParams = SCRYPT_DEFAULTS,
   logger = silentLogger,
   now = () => new Date(),
   viewsDir = DEFAULT_VIEWS_DIR,
@@ -56,22 +68,26 @@ export function createApp({
 
   // Plantillas cargadas una sola vez al construir la app.
   const renderer = createRenderer({ viewsDir });
-  // Administración de menús: solo con credenciales configuradas (DT-7).
-  const admin = config.admin.enabled
+  // Administración: cuentas personales en la base de datos (REQ-F-007).
+  const admin = users
     ? {
         logger,
+        users,
+        hashParams,
         sessions: createSessionStore({ now }),
         throttle: createLoginThrottle({ now }),
-        authenticator: createAdminAuthenticator(config.admin),
+        authenticator: createUserAuthenticator({ users, hashParams }),
         imageExists: createImageChecker(publicDir),
       }
     : undefined;
+  const renderUnavailable = () =>
+    renderAdminUnavailable(renderer, { faviconBusinessId: getActiveBusinessId({ now: now(), timeZone: config.timezone }) }).toString();
   const router = createRouter({ config, renderer, now, repository: menuRepository, publicDir, admin });
 
   app.use(createRequestLogger({ logger }));
   app.use(createErrorHandler({ logger, exposeStack: config.nodeEnv === 'development' }));
   app.use(helmet());
-  app.use(createAdminGate({ config, logger }));
+  app.use(createAdminGate({ config, logger, users, renderUnavailable }));
   app.use(
     serve(publicDir, {
       index: false,

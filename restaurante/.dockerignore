@@ -15,6 +15,19 @@ node_modules
 # Datos editables de la administración (DATA_DIR por defecto fuera de producción)
 data
 
+# Bases de datos SQLite (REQ-F-007): nunca en las imágenes
+*.db
+**/*.db
+*.db-wal
+**/*.db-wal
+*.db-shm
+**/*.db-shm
+*.db-journal
+**/*.db-journal
+
+# Cliente de Prisma generado localmente (la etapa build lo genera)
+src/generated
+
 # CSS generado localmente (la etapa build lo compila); se conserva public/css/.gitkeep
 public/css/*/
 

@@ -36,6 +36,8 @@ La fuente de verdad es `restaurante/package.json`. No agregues dependencias sin 
 - Variables de entorno con `node --env-file-if-exists=.env` (sin dotenv), validadas a mano en `src/config/env.ts`.
 - Recarga en desarrollo con `node --watch` (sin Nodemon).
 - Plantillas HTML con el renderizador propio `src/views/render.ts` (`{{ clave }}` escapa; `{{{ clave }}}` solo para la salida de otro render). Sin EJS ni Pug.
+- Base de datos: SQLite con Prisma 7 (`@prisma/client` + `@prisma/adapter-better-sqlite3`, versiones exactas; REQ-F-007). Esquema en `prisma/schema.prisma`, migraciones en `prisma/migrations/`. El cliente se genera en `src/generated/prisma` con `npm run db:generate` (no se versiona; ESLint lo ignora). La app aplica las migraciones al arrancar con su propio aplicador (`src/db/migrate.ts`): el CLI de Prisma solo existe en desarrollo, CI y las etapas `build`/`test` de Docker.
+- Scripts de instalación de dependencias: solo los aprobados en `allowScripts` de `package.json` (`npm ci --strict-allow-scripts` en CI y Docker). Una dependencia nueva con script de instalación exige revisarlo y aprobarlo o denegarlo.
 
 ### Frontend
 
@@ -56,6 +58,8 @@ Prohibidos salvo petición explícita: React, Vue, Angular, Svelte, jQuery, Alpi
 
 | Comando             | Uso                                                                              |
 | ------------------- | -------------------------------------------------------------------------------- |
+| `npm run db:generate` | Genera el cliente de Prisma (`src/generated/prisma`). Necesario antes de `typecheck`, `lint`, `test` y `dev` (en un clon nuevo o al cambiar el esquema). |
+| `npm run db:migrate:dev -- --name <nombre>` | Crea una migración a partir de `prisma/schema.prisma` (solo desarrollo; con un `DATA_DIR` de desarrollo, nunca el de producción). Nunca edites una migración ya aplicada. |
 | `npm test`          | Ejecuta toda la suite.                                                           |
 | `npm run typecheck` | Verifica tipos con `tsc` (sin emitir archivos). Obligatorio antes de dar una tarea por terminada; también corre en la etapa `build` del Dockerfile. |
 | `npm run build:css` | Genera `public/css/{molotes,birria,admin}/main.css` (no se versiona; nunca editar a mano). |
@@ -65,13 +69,14 @@ Prohibidos salvo petición explícita: React, Vue, Angular, Svelte, jQuery, Alpi
 
 ### Persistencia y API
 
-El proyecto **no tiene base de datos ni API REST**:
+El proyecto **no tiene API REST**. Persistencia:
 
 - El contenido estático vive en `src/content/` y la configuración en variables de entorno.
-- Los datos editables (menús, precios, showcase del hero y promociones) se guardan como archivos JSON bajo `DATA_DIR`, mediante el repositorio de `src/repositories/` (semillas versionadas en `src/content/<negocio>/seed.json`).
-- La administración vive en `/admin` (formularios HTML nativos), con autenticación por sesión en memoria (`ADMIN_USER` + `ADMIN_PASSWORD_HASH`), protección CSRF y límite de intentos.
+- Los datos editables (menús, precios, showcase del hero y promociones) se guardan como archivos JSON bajo `DATA_DIR`, mediante el repositorio de `src/repositories/` (semillas versionadas en `src/content/<negocio>/seed.json`). Cada línea de `changes.jsonl` lleva el autor verificado (`author` = nombre visible, `authorId`).
+- La base de datos SQLite `DATA_DIR/restaurante.db` (Prisma; REQ-F-007) guarda los usuarios de `/admin`, sus negocios asignados y la auditoría de su gestión (`user_audit`). Acceso solo mediante `src/repositories/user-repository.ts`, que impone en transacciones las reglas (siempre un administrador activo, `sessionVersion`, auditoría sin contraseñas ni hashes) y convierte los errores inesperados en `DatabaseUnavailableError` (503 en `/admin`; nunca se registra el `message` de Prisma). Al arrancar: comprobación de escritura e integridad y migraciones (fallo rápido con código 1).
+- Autenticación de `/admin`: cuentas personales con roles **administrador** (todo, incluida la gestión de usuarios) y **editor** (solo sus negocios asignados). Contraseñas en scrypt. Sesión en memoria (una instancia) ligada al usuario y a su `sessionVersion`, CSRF, límite de intentos, HTTPS en producción. `ADMIN_USER`/`ADMIN_PASSWORD_HASH` solo crean el primer administrador si no hay usuarios; la recuperación es `npm run admin:recover`. Toda ruta nueva de `/admin` usa `src/controllers/admin-access.ts` (sesión → permiso → body → CSRF) y la autorización de `src/services/authorization.ts`.
 
-Si un requisito necesita persistencia nueva (p. ej. una base de datos), una API o autenticación distinta de la actual, no lo improvises: detente y plantéalo como decisión técnica (`NEEDS_TECHNICAL_CLARIFICATION`).
+Si un requisito necesita persistencia nueva (tablas o modelos nuevos, otra base de datos), una API o autenticación distinta de la actual, no lo improvises: detente y plantéalo como decisión técnica (`NEEDS_TECHNICAL_CLARIFICATION`). Las tablas nuevas se agregan con migraciones de Prisma sobre la base existente.
 
 ---
 
@@ -83,11 +88,13 @@ restaurante/
 │   ├── app.ts / server.ts   # App Koa (testeable) y arranque del servidor
 │   ├── config/              # env.ts (validación de variables, tipo Config), businesses.ts
 │   ├── content/             # Contenido por negocio (molotes/, birria/, common/), semillas seed.json, icons.ts, seeds.ts
-│   ├── controllers/         # landing.ts (elige negocio y renderiza), icons.ts, admin.ts
+│   ├── controllers/         # landing.ts (elige negocio y renderiza), icons.ts, admin.ts, admin-users.ts, admin-account.ts, admin-access.ts
+│   ├── db/                  # client.ts (Prisma + better-sqlite3), migrate.ts (migraciones al arrancar), errors.ts, paths.ts
+│   ├── generated/prisma/    # Cliente de Prisma generado (`npm run db:generate`; no se versiona ni se edita)
 │   ├── middleware/          # error-handler.ts, request-logger.ts, admin-guard.ts
-│   ├── repositories/        # Repositorio de menús: contrato y reglas, archivos (DATA_DIR) y memoria
+│   ├── repositories/        # Menús (contrato y reglas, archivos y memoria) y usuarios (user-repository.ts, Prisma)
 │   ├── routes/              # Rutas (@koa/router): index.ts (landings, iconos), admin.ts (/admin)
-│   ├── services/            # business-schedule, whatsapp, menu-schema, visible-menu, price, admin-*, session-store, login-throttle, menu-diff
+│   ├── services/            # business-schedule, whatsapp, menu-schema, visible-menu, price, admin-*, session-store, login-throttle, menu-diff, user-schema, authorization
 │   ├── styles/              # Fuentes Tailwind: shared/, molotes/, birria/, admin/, components/ (sin uso por ahora)
 │   ├── utils/               # logger.ts (JSON estructurado), datetime.ts, form-body.ts, errors.ts
 │   └── views/               # render.ts + layouts/, pages/, partials/ (.html), landings/ (.ts), admin/ (.ts y .html)
@@ -96,7 +103,9 @@ restaurante/
 │   ├── js/modules/          # Módulos ES reutilizables
 │   ├── js/{molotes,birria}/ # Punto de entrada por landing
 │   └── img/{common,molotes,birria}/
-├── scripts/                 # hash-password.ts (`npm run admin:hash-password`), generate-icons.py
+├── prisma/                  # schema.prisma y migrations/ (SQL versionado)
+├── prisma.config.ts         # Configuración del CLI de Prisma (solo desarrollo, CI y build)
+├── scripts/                 # hash-password.ts, admin-recover.ts (`npm run admin:recover`), support/, generate-icons.py
 ├── tests/                   # unit/, integration/, support/, snapshots/, helpers.ts
 ├── tsconfig.json            # Solo verificación de tipos (`npm run typecheck`)
 ├── vitest.config.ts

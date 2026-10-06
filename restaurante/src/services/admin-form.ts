@@ -26,7 +26,7 @@ import { parsePesosInput } from './price.ts';
  */
 
 /** Campos del formulario que no son datos del menú. */
-export const FORM_META_FIELDS: readonly string[] = Object.freeze(['_csrf', 'author', 'expectedVersion', 'action']);
+export const FORM_META_FIELDS: readonly string[] = Object.freeze(['_csrf', 'expectedVersion', 'action']);
 
 export const CHECKBOX_VALUE = 'on';
 const INT_INPUT = /^\d{1,5}$/;

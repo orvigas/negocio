@@ -6,7 +6,6 @@
         <p class="mt-1 text-sm text-slate-700">La versión actual pasará a ser la versión anterior, así que podrás deshacer este cambio de la misma forma. El cambio queda en el registro.</p>
         <form class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end" method="post" action="{{ action }}">
           <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
-          {{{ author }}}
           <button class="admin-button admin-button--primary {{ primaryButtonClass }}" type="submit">Sí, restaurar</button>
           <a class="admin-button admin-button--secondary {{ secondaryButtonClass }}" href="{{ cancelHref }}">Cancelar</a>
         </form>

@@ -6,6 +6,8 @@ import { randomBytes } from 'node:crypto';
  * - Caducidad por inactividad de 2 horas (P-3), renovada en cada petición autenticada.
  * - Un token CSRF por sesión.
  * - Tope de sesiones simultáneas: al superarlo se descarta la menos reciente.
+ * - Cada sesión pertenece a un usuario y recuerda su `sessionVersion` al entrar (REQ-F-007,
+ *   DT-7): si en la base de datos cambia, la sesión deja de valer (lo comprueba el guard).
  */
 
 export const SESSION_IDLE_MS = 2 * 60 * 60 * 1000;
@@ -14,16 +16,28 @@ export const MAX_SESSIONS = 50;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const newToken = () => randomBytes(32).toString('base64url');
 
-export interface SessionInfo {
+export interface SessionOwner {
+  userId: number;
+  sessionVersion: number;
+}
+
+export interface SessionInfo extends SessionOwner {
   id: string;
   csrfToken: string;
 }
 
 export interface SessionStore {
-  create(): SessionInfo;
+  create(owner: SessionOwner): SessionInfo;
   touch(id: unknown): SessionInfo | null;
   destroy(id: string): void;
+  /** Cierra todas las sesiones de un usuario, salvo `exceptId`. */
+  destroyUser(userId: number, exceptId?: string): void;
   readonly size: number;
+}
+
+interface StoredSession extends SessionOwner {
+  csrfToken: string;
+  lastSeen: number;
 }
 
 export function createSessionStore({
@@ -31,7 +45,7 @@ export function createSessionStore({
   idleMs = SESSION_IDLE_MS,
   maxSessions = MAX_SESSIONS,
 }: { now?: () => Date; idleMs?: number; maxSessions?: number } = {}): SessionStore {
-  const sessions = new Map<string, { csrfToken: string; lastSeen: number }>();
+  const sessions = new Map<string, StoredSession>();
   const timestamp = () => now().getTime();
 
   function sweep() {
@@ -41,14 +55,14 @@ export function createSessionStore({
 
   return Object.freeze({
     /** Crea una sesión nueva (siempre un id nuevo: evita la fijación de sesión). */
-    create() {
+    create({ userId, sessionVersion }: SessionOwner) {
       sweep();
       // Con el tope alcanzado hay al menos una sesión: la primera clave es la menos reciente.
       while (sessions.size >= maxSessions) sessions.delete(sessions.keys().next().value as string);
       const id = newToken();
-      const session = { csrfToken: newToken(), lastSeen: timestamp() };
+      const session: StoredSession = { csrfToken: newToken(), lastSeen: timestamp(), userId, sessionVersion };
       sessions.set(id, session);
-      return { id, csrfToken: session.csrfToken };
+      return { id, csrfToken: session.csrfToken, userId, sessionVersion };
     },
 
     /** Devuelve la sesión vigente y renueva su actividad, o null si no existe o caducó. */
@@ -64,11 +78,15 @@ export function createSessionStore({
       // Reinsertar mantiene el orden por actividad para el descarte por tope.
       sessions.delete(id);
       sessions.set(id, session);
-      return { id, csrfToken: session.csrfToken };
+      return { id, csrfToken: session.csrfToken, userId: session.userId, sessionVersion: session.sessionVersion };
     },
 
     destroy(id: string) {
       sessions.delete(id);
+    },
+
+    destroyUser(userId: number, exceptId?: string) {
+      for (const [id, session] of sessions) if (session.userId === userId && id !== exceptId) sessions.delete(id);
     },
 
     get size() {

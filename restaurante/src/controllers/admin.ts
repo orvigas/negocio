@@ -1,44 +1,40 @@
-import type { RouterContext } from '@koa/router';
-
 import { BUSINESS_IDS, isBusinessId, type BusinessId } from '../config/businesses.ts';
 import type { Config } from '../config/env.ts';
-import {
-  LOGIN_PATH,
-  SESSION_COOKIE,
-  assertCsrfToken,
-  assertSameOrigin,
-  createSessionGuard,
-  sessionCookieOptions,
-  type AdminState,
-} from '../middleware/admin-guard.ts';
+import { LOGIN_PATH, SESSION_COOKIE, assertSameOrigin, sessionCookieOptions } from '../middleware/admin-guard.ts';
 import {
   CHANGE_ACTIONS,
   MenuConflictError,
   MenuDamagedError,
   PreviousUnavailableError,
   SeedRestoreNotAllowedError,
+  type MenuAuthor,
   type MenuRepository,
 } from '../repositories/menu-repository.ts';
-import type { AdminAuthenticator } from '../services/admin-auth.ts';
+import type { UserRecord, UserRepository } from '../repositories/user-repository.ts';
+import type { PasswordHashParams, UserAuthenticator } from '../services/admin-auth.ts';
 import { parseAdminForm, type ImageExists } from '../services/admin-form.ts';
-import { getActiveBusinessId } from '../services/business-schedule.ts';
+import { canEditBusiness } from '../services/authorization.ts';
 import type { LoginThrottle } from '../services/login-throttle.ts';
-import { AUTHOR_MAX_LENGTH, textLength } from '../services/menu-schema.ts';
 import type { SessionStore } from '../services/session-store.ts';
 import { readFormBody } from '../utils/form-body.ts';
 import type { Logger } from '../utils/logger.ts';
 import {
+  ACCOUNT_PATH,
+  ADMIN_HOME_PATH,
   SUCCESS_MESSAGES,
+  USERS_PATH,
   adminPath,
+  businessName,
   renderAdminBusiness,
   renderAdminConfirmRestore,
+  renderAdminHome,
   renderAdminLogin,
   type AdminBusinessOptions,
 } from '../views/admin/index.ts';
-import type { Renderer, SafeHtml } from '../views/render.ts';
+import type { Renderer } from '../views/render.ts';
+import { createAdminAccess, type AdminRouterContext, type Authenticated, type Permission } from './admin-access.ts';
 
-/** Contexto de las rutas de administración (parámetros del router y sesión en `state`). */
-export type AdminRouterContext = RouterContext<AdminState>;
+export type { AdminRouterContext } from './admin-access.ts';
 type AdminHandler = (ctx: AdminRouterContext) => unknown;
 
 export interface AdminController {
@@ -60,25 +56,29 @@ export interface AdminDeps {
   repository: MenuRepository;
   sessions: SessionStore;
   throttle: LoginThrottle;
-  authenticator: AdminAuthenticator;
+  users: UserRepository;
+  authenticator: UserAuthenticator<UserRecord>;
+  /** Costo de scrypt para las contraseñas nuevas (las pruebas lo bajan). */
+  hashParams: PasswordHashParams;
   imageExists: ImageExists;
   logger: Logger;
 }
 
 /**
- * Controlador de la administración de menús (REQ-F-001, RF-5 a RF-8).
- * Formularios HTML nativos con POST-redirect-GET; sin JavaScript (P-8).
+ * Controlador del acceso, del inicio y de la administración de menús (REQ-F-001, RF-5 a RF-8;
+ * REQ-F-007, R-6, R-7 y R-10). Formularios HTML nativos con POST-redirect-GET; sin JavaScript.
+ *
+ * Cada negocio solo lo ve y edita quien lo tiene permitido (403 si no). El autor de cada cambio
+ * es el usuario de la sesión: su nombre visible y su identificador (D-11).
  */
 
 const LOGIN_BODY_LIMIT = 4 * 1024;
 const RESTORE_BODY_LIMIT = 4 * 1024;
 const SAVE_ACTIONS: readonly (string | undefined)[] = Object.freeze([CHANGE_ACTIONS.SAVE, CHANGE_ACTIONS.OVERWRITE_AFTER_CONFLICT]);
 
-// BUSINESS_IDS nunca está vacío (se construye a partir de BUSINESS).
-const DEFAULT_NEXT = adminPath(BUSINESS_IDS[0] as BusinessId);
-const ALLOWED_NEXT = new Set(BUSINESS_IDS.map(adminPath));
 /** Solo se vuelve a páginas de administración conocidas (sin redirecciones abiertas). */
-const sanitizeNext = (value: unknown): string => (typeof value === 'string' && ALLOWED_NEXT.has(value) ? value : DEFAULT_NEXT);
+const ALLOWED_NEXT = new Set([ADMIN_HOME_PATH, USERS_PATH, ACCOUNT_PATH, ...BUSINESS_IDS.map(adminPath)]);
+const sanitizeNext = (value: unknown): string => (typeof value === 'string' && ALLOWED_NEXT.has(value) ? value : ADMIN_HOME_PATH);
 
 const PROBLEMS = Object.freeze({
   damagedSave: 'Los datos guardados están dañados: no se guardó nada. Elige una opción de recuperación.',
@@ -86,23 +86,14 @@ const PROBLEMS = Object.freeze({
   seedNotAllowed: 'La semilla original solo se puede restaurar cuando los datos están dañados. No se cambió nada.',
 });
 
-function validateAuthor(raw: unknown): { value: string; error: string | null } {
-  const value = typeof raw === 'string' ? raw.trim() : '';
-  if (value === '') return { value, error: 'Escribe el nombre de quien hace el cambio.' };
-  if (textLength(value) > AUTHOR_MAX_LENGTH) return { value, error: `Máximo ${AUTHOR_MAX_LENGTH} caracteres.` };
-  return { value, error: null };
-}
+/** Permiso sobre un negocio (R-7). */
+const businessPermission =
+  (businessId: BusinessId): Permission =>
+  (user) =>
+    canEditBusiness(user, businessId) ? null : `No tienes permiso para administrar ${businessName(businessId)}.`;
 
-function sendHtml(ctx: AdminRouterContext, status: number, html: SafeHtml): void {
-  ctx.status = status;
-  ctx.type = 'html';
-  ctx.body = html.toString();
-}
-
-function seeOther(ctx: AdminRouterContext, url: string): void {
-  ctx.status = 303;
-  ctx.redirect(url);
-}
+/** Autor verificado de un cambio (D-11). */
+const authorOf = ({ user }: Authenticated): MenuAuthor => ({ id: user.id, name: user.displayName });
 
 export function createAdminController({
   config,
@@ -111,15 +102,14 @@ export function createAdminController({
   repository,
   sessions,
   throttle,
+  users,
   authenticator,
   imageExists,
   logger,
 }: AdminDeps): AdminController {
   if (typeof now !== 'function') throw new TypeError('createAdminController requiere el reloj (now)');
-  const requireSession = createSessionGuard({ sessions, config });
-  const timezone = config.timezone;
-  /** Negocio activo del día: su favicon se muestra en todas las páginas de admin (REQ-F-002, RF-7). */
-  const faviconBusinessId = () => getActiveBusinessId({ now: now(), timeZone: timezone });
+  const access = createAdminAccess({ config, sessions, users, renderer, now, logger });
+  const { sendHtml, seeOther, faviconBusinessId } = access;
 
   /** Resuelve :business o responde 404. */
   function businessFrom(ctx: AdminRouterContext): BusinessId {
@@ -128,46 +118,27 @@ export function createAdminController({
     return business;
   }
 
-  /** Sesión + body + CSRF para una acción POST. Devuelve los campos o null si redirigió. */
-  async function authorizePost(
-    ctx: AdminRouterContext,
-    { returnTo, limit }: { returnTo?: string; limit?: number } = {},
-  ): Promise<Map<string, string> | null> {
-    assertSameOrigin(ctx, logger);
-    let authorized = false;
-    await requireSession(
-      ctx,
-      async () => {
-        authorized = true;
-      },
-      { returnTo },
-    );
-    if (!authorized) return null;
-    const fields = await readFormBody(ctx, limit ? { limit } : undefined);
-    assertCsrfToken(ctx, logger, fields);
-    return fields;
-  }
-
   async function businessView(
     businessId: BusinessId,
-    ctx: AdminRouterContext,
+    auth: Authenticated,
     extra: Partial<AdminBusinessOptions> = {},
   ): Promise<AdminBusinessOptions> {
     const edit = await repository.getForEdit(businessId);
-    // Solo se llama dentro de requireSession/authorizePost, que dejan la sesión en `state`.
-    const session = ctx.state.adminSession as NonNullable<AdminState['adminSession']>;
     return {
+      ...access.pageContext(auth),
       businessId,
-      timezone,
-      csrfToken: session.csrfToken,
+      timezone: config.timezone,
       document: edit.document,
       version: edit.version,
       damaged: edit.damaged,
       lastChange: await repository.getLastChange(businessId),
-      faviconBusinessId: faviconBusinessId(),
       ...extra,
     };
   }
+
+  /** POST sobre un negocio: sesión, permiso del negocio, body y CSRF. */
+  const businessPost = (ctx: AdminRouterContext, businessId: BusinessId, limit?: number) =>
+    access.post(ctx, { returnTo: adminPath(businessId), permission: businessPermission(businessId), ...(limit ? { limit } : {}) });
 
   return Object.freeze<AdminController>({
     async loginPage(ctx) {
@@ -188,8 +159,9 @@ export function createAdminController({
         return sendHtml(ctx, 429, renderAdminLogin(renderer, { next, error: 'locked', faviconBusinessId: faviconBusinessId() }));
       }
 
-      const ok = await authenticator.verify(fields.get('username') ?? '', fields.get('password') ?? '');
-      if (!ok) {
+      // Cuenta inexistente, contraseña incorrecta o cuenta desactivada: misma respuesta (R-6).
+      const user = await authenticator.authenticate(fields.get('username') ?? '', fields.get('password') ?? '');
+      if (!user) {
         const locked = throttle.recordFailure(origin);
         logger.warn('admin_login_failed', { ip: origin, locked });
         const error = locked ? 'locked' : 'invalid';
@@ -199,51 +171,48 @@ export function createAdminController({
       throttle.recordSuccess(origin);
       const previous = ctx.cookies.get(SESSION_COOKIE);
       if (previous) sessions.destroy(previous);
-      const session = sessions.create();
+      const session = sessions.create({ userId: user.id, sessionVersion: user.sessionVersion });
       ctx.cookies.set(SESSION_COOKIE, session.id, sessionCookieOptions(config));
-      logger.info('admin_login_succeeded', { ip: origin });
+      await users.recordLogin(user.id, now());
+      logger.info('admin_login_succeeded', { ip: origin, userId: user.id });
       return seeOther(ctx, next);
     },
 
     async logout(ctx) {
-      const fields = await authorizePost(ctx, { limit: LOGIN_BODY_LIMIT });
-      if (!fields) return undefined;
-      // authorizePost ya validó la sesión de esta cookie.
-      sessions.destroy(ctx.cookies.get(SESSION_COOKIE) as string);
+      const auth = await access.post(ctx, { limit: LOGIN_BODY_LIMIT });
+      if (!auth) return undefined;
+      sessions.destroy(auth.session.id);
       ctx.cookies.set(SESSION_COOKIE, null, sessionCookieOptions(config));
-      logger.info('admin_logout', { ip: ctx.ip });
+      logger.info('admin_logout', { ip: ctx.ip, userId: auth.user.id });
       return seeOther(ctx, LOGIN_PATH);
     },
 
     index(ctx) {
-      return seeOther(ctx, DEFAULT_NEXT);
+      return access.page(ctx, { returnTo: ADMIN_HOME_PATH }, (auth) => sendHtml(ctx, 200, renderAdminHome(renderer, access.pageContext(auth))));
     },
 
     async businessPage(ctx) {
       const businessId = businessFrom(ctx);
-      return requireSession(
-        ctx,
-        async () => {
-          const { ok } = ctx.query;
-          // `ok` es una clave propia de SUCCESS_MESSAGES: comprobado con Object.hasOwn.
-          const success =
-            typeof ok === 'string' && Object.hasOwn(SUCCESS_MESSAGES, ok) ? SUCCESS_MESSAGES[ok as keyof typeof SUCCESS_MESSAGES] : undefined;
-          sendHtml(ctx, 200, renderAdminBusiness(renderer, await businessView(businessId, ctx, { success })));
-        },
-        { returnTo: adminPath(businessId) },
-      );
+      return access.page(ctx, { returnTo: adminPath(businessId), permission: businessPermission(businessId) }, async (auth) => {
+        const { ok } = ctx.query;
+        // `ok` es una clave propia de SUCCESS_MESSAGES: comprobado con Object.hasOwn.
+        const success =
+          typeof ok === 'string' && Object.hasOwn(SUCCESS_MESSAGES, ok) ? SUCCESS_MESSAGES[ok as keyof typeof SUCCESS_MESSAGES] : undefined;
+        sendHtml(ctx, 200, renderAdminBusiness(renderer, await businessView(businessId, auth, { success })));
+      });
     },
 
     async save(ctx) {
       const businessId = businessFrom(ctx);
-      const fields = await authorizePost(ctx, { returnTo: adminPath(businessId) });
-      if (!fields) return undefined;
+      const auth = await businessPost(ctx, businessId);
+      if (!auth) return undefined;
+      const { fields } = auth;
 
       const action = fields.get('action');
       if (!SAVE_ACTIONS.includes(action)) ctx.throw(400, 'Acción desconocida.', { code: 'INVALID_FORM' });
       const expectedVersion = fields.get('expectedVersion') ?? '';
 
-      const view = await businessView(businessId, ctx);
+      const view = await businessView(businessId, auth);
       if (view.damaged) {
         return sendHtml(ctx, 409, renderAdminBusiness(renderer, { ...view, problem: PROBLEMS.damagedSave }));
       }
@@ -254,21 +223,20 @@ export function createAdminController({
         ctx.throw(400, 'La estructura del menú no se puede modificar.', { code: 'STRUCTURE_MODIFIED' });
       }
 
-      const author = validateAuthor(fields.get('author'));
-      const form = { values: parsed.values, errors: parsed.errors, author: fields.get('author') ?? '', authorError: author.error };
-      if (Object.keys(parsed.errors).length > 0 || author.error) {
+      const form = { values: parsed.values, errors: parsed.errors };
+      if (Object.keys(parsed.errors).length > 0) {
         return sendHtml(ctx, 422, renderAdminBusiness(renderer, { ...view, version: expectedVersion, form }));
       }
 
       try {
-        await repository.save(businessId, { data: parsed.data, expectedVersion, author: author.value, action });
+        await repository.save(businessId, { data: parsed.data, expectedVersion, author: authorOf(auth), action });
       } catch (err) {
         if (err instanceof MenuConflictError) {
           logger.info('menu_conflict', { business: businessId, action });
           return sendHtml(ctx, 409, renderAdminBusiness(renderer, { ...view, form, conflict: err.current }));
         }
         if (err instanceof MenuDamagedError) {
-          const damagedView = await businessView(businessId, ctx, { problem: PROBLEMS.damagedSave });
+          const damagedView = await businessView(businessId, auth, { problem: PROBLEMS.damagedSave });
           return sendHtml(ctx, 409, renderAdminBusiness(renderer, damagedView));
         }
         throw err;
@@ -278,39 +246,26 @@ export function createAdminController({
 
     async restorePreviousPage(ctx) {
       const businessId = businessFrom(ctx);
-      return requireSession(
-        ctx,
-        async () => {
-          const view = await businessView(businessId, ctx);
-          // Con datos dañados, las opciones de recuperación están en la página del negocio.
-          if (view.damaged) return seeOther(ctx, adminPath(businessId));
-          return sendHtml(ctx, 200, renderAdminConfirmRestore(renderer, view));
-        },
-        { returnTo: adminPath(businessId) },
-      );
+      return access.page(ctx, { returnTo: adminPath(businessId), permission: businessPermission(businessId) }, async (auth) => {
+        const view = await businessView(businessId, auth);
+        // Con datos dañados, las opciones de recuperación están en la página del negocio.
+        if (view.damaged) return seeOther(ctx, adminPath(businessId));
+        return sendHtml(ctx, 200, renderAdminConfirmRestore(renderer, view));
+      });
     },
 
     async restorePrevious(ctx) {
       const businessId = businessFrom(ctx);
-      const fields = await authorizePost(ctx, { returnTo: adminPath(businessId), limit: RESTORE_BODY_LIMIT });
-      if (!fields) return undefined;
-      const author = validateAuthor(fields.get('author'));
-      const raw = fields.get('author') ?? '';
-
-      const respond = async (status: number, extra: { authorError?: string | null; problem?: string }) => {
-        const view = await businessView(businessId, ctx);
-        if (view.damaged) {
-          const restoreAuthor = { value: raw, error: extra.authorError };
-          return sendHtml(ctx, status, renderAdminBusiness(renderer, { ...view, restoreAuthor, problem: extra.problem }));
-        }
-        return sendHtml(ctx, status, renderAdminConfirmRestore(renderer, { ...view, author: raw, ...extra }));
-      };
-
-      if (author.error) return respond(422, { authorError: author.error });
+      const auth = await businessPost(ctx, businessId, RESTORE_BODY_LIMIT);
+      if (!auth) return undefined;
       try {
-        await repository.restorePrevious(businessId, { author: author.value });
+        await repository.restorePrevious(businessId, { author: authorOf(auth) });
       } catch (err) {
-        if (err instanceof PreviousUnavailableError) return respond(409, { problem: PROBLEMS.previousUnavailable });
+        if (err instanceof PreviousUnavailableError) {
+          const view = await businessView(businessId, auth, { problem: PROBLEMS.previousUnavailable });
+          if (view.damaged) return sendHtml(ctx, 409, renderAdminBusiness(renderer, view));
+          return sendHtml(ctx, 409, renderAdminConfirmRestore(renderer, view));
+        }
         throw err;
       }
       return seeOther(ctx, `${adminPath(businessId)}?ok=${CHANGE_ACTIONS.RESTORE_PREVIOUS}`);
@@ -318,20 +273,13 @@ export function createAdminController({
 
     async restoreSeed(ctx) {
       const businessId = businessFrom(ctx);
-      const fields = await authorizePost(ctx, { returnTo: adminPath(businessId), limit: RESTORE_BODY_LIMIT });
-      if (!fields) return undefined;
-      const author = validateAuthor(fields.get('author'));
-      const raw = fields.get('author') ?? '';
-
-      if (author.error) {
-        const view = await businessView(businessId, ctx, { restoreAuthor: { value: raw, error: author.error } });
-        return sendHtml(ctx, 422, renderAdminBusiness(renderer, view));
-      }
+      const auth = await businessPost(ctx, businessId, RESTORE_BODY_LIMIT);
+      if (!auth) return undefined;
       try {
-        await repository.restoreSeed(businessId, { author: author.value });
+        await repository.restoreSeed(businessId, { author: authorOf(auth) });
       } catch (err) {
         if (err instanceof SeedRestoreNotAllowedError) {
-          const view = await businessView(businessId, ctx, { problem: PROBLEMS.seedNotAllowed });
+          const view = await businessView(businessId, auth, { problem: PROBLEMS.seedNotAllowed });
           return sendHtml(ctx, 409, renderAdminBusiness(renderer, view));
         }
         throw err;

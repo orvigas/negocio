@@ -10,9 +10,12 @@ import { makeConfig, makeRecordingLogger, makeRepository, seedData } from '../he
 import {
   ADMIN_PASSWORD,
   ADMIN_PASSWORD_HASH,
+  ADMIN_USER,
+  createUser,
   csrfFrom,
   formFields,
   login,
+  loginAs,
   type FormFields,
   type MemoryRepository,
   type SetupOptions,
@@ -45,17 +48,23 @@ describe('acceso protegido (RF-5)', () => {
   it('CA-20: sin sesión, un guardado se rechaza y no escribe nada', async () => {
     const { request: client, repository } = await setupAdmin();
     const before = await versionOf(repository, 'molotes');
-    const res = await client().post('/admin/molotes').type('form').send({ 'menu.highlight': 'Hackeado', author: 'X', action: 'save' });
+    const res = await client().post('/admin/molotes').type('form').send({ 'menu.highlight': 'Hackeado', action: 'save' });
     expect(res.status).toBe(303);
     expect(res.headers.location).toBe('/admin/login?next=%2Fadmin%2Fmolotes&expirada=1');
     expect(await versionOf(repository, 'molotes')).toBe(before);
   });
 
-  it('GET /admin redirige al primer negocio', async () => {
+  it('GET /admin sin sesión pide acceso; con sesión muestra el inicio (REQ-F-007)', async () => {
     const { request: client } = await setupAdmin();
     const res = await client().get('/admin');
     expect(res.status).toBe(303);
-    expect(res.headers.location).toBe('/admin/molotes');
+    expect(res.headers.location).toBe('/admin/login?next=%2Fadmin');
+    const { browser } = await loggedIn();
+    const home = await browser.get('/admin');
+    expect(home.status).toBe(200);
+    expect(home.text).toContain('href="/admin/molotes">Menú de');
+    expect(home.text).toContain('href="/admin/birria">Menú de');
+    expect(home.text).toContain('href="/admin/usuarios">Usuarios</a>');
   });
 
   it('la página de acceso es accesible y no depende de JavaScript', async () => {
@@ -114,7 +123,7 @@ describe('acceso protegido (RF-5)', () => {
     const before = await versionOf(repository, 'molotes');
 
     clock.advance(SESSION_IDLE_MS);
-    const res = await submitForm(browser, 'molotes', fields, { 'menu.highlight': 'Tarde', author: 'Ana' });
+    const res = await submitForm(browser, 'molotes', fields, { 'menu.highlight': 'Tarde' });
     expect(res.status).toBe(303);
     expect(res.headers.location).toBe('/admin/login?next=%2Fadmin%2Fmolotes&expirada=1');
     expect(await versionOf(repository, 'molotes')).toBe(before);
@@ -134,7 +143,7 @@ describe('acceso protegido (RF-5)', () => {
   it('el parámetro next solo admite páginas de administración (sin redirección abierta)', async () => {
     const { browser } = await setupAdmin().then((context) => ({ browser: context.browser() }));
     const res = await login(browser, { next: 'https://evil.example/admin/molotes' });
-    expect(res.headers.location).toBe('/admin/molotes');
+    expect(res.headers.location).toBe('/admin');
     const birria = await login(browser, { next: '/admin/birria' });
     expect(birria.headers.location).toBe('/admin/birria');
   });
@@ -161,7 +170,7 @@ describe('acceso protegido (RF-5)', () => {
       const { fields } = await openForm(browser, 'molotes');
       mutate(fields);
       const before = await versionOf(repository, 'molotes');
-      const res = await submitForm(browser, 'molotes', fields, { author: 'Ana' });
+      const res = await submitForm(browser, 'molotes', fields, {});
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('CSRF_INVALID');
       expect(await versionOf(repository, 'molotes')).toBe(before);
@@ -175,13 +184,13 @@ describe('acceso protegido (RF-5)', () => {
         .post('/admin/molotes')
         .set('Origin', 'https://evil.example')
         .type('form')
-        .send({ ...fields, author: 'Ana', action: 'save' });
+        .send({ ...fields, action: 'save' });
       expect(foreign.status).toBe(403);
       const crossSite = await browser
         .post('/admin/molotes')
         .set('Sec-Fetch-Site', 'cross-site')
         .type('form')
-        .send({ ...fields, author: 'Ana', action: 'save' });
+        .send({ ...fields, action: 'save' });
       expect(crossSite.status).toBe(403);
       const loginCsrf = await browser.post('/admin/login').set('Origin', 'https://evil.example').type('form').send({ username: 'x' });
       expect(loginCsrf.status).toBe(403);
@@ -196,7 +205,7 @@ describe('acceso protegido (RF-5)', () => {
         .set('Origin', 'http://127.0.0.1')
         .set('Host', '127.0.0.1')
         .type('form')
-        .send({ ...fields, author: 'Ana', action: 'save' });
+        .send({ ...fields, action: 'save' });
       expect(res.status).toBe(303);
     });
 
@@ -218,7 +227,7 @@ describe('acceso protegido (RF-5)', () => {
         .post('/admin/molotes')
         .set(BROWSER_NO_REFERRER)
         .type('form')
-        .send({ ...fields, 'menu.highlight': 'Desde el navegador', author: 'Ana', action: 'save' });
+        .send({ ...fields, 'menu.highlight': 'Desde el navegador', action: 'save' });
       expect(save.status).toBe(303);
       expect((await repository.getPublished('molotes')).data.menu.highlight).toBe('Desde el navegador');
 
@@ -227,7 +236,7 @@ describe('acceso protegido (RF-5)', () => {
         .post('/admin/molotes/restaurar-anterior')
         .set(BROWSER_NO_REFERRER)
         .type('form')
-        .send({ _csrf: csrfFrom(confirm.text), author: 'Ana' });
+        .send({ _csrf: csrfFrom(confirm.text) });
       expect(restore.status).toBe(303);
 
       const page = await browser.get('/admin/molotes');
@@ -262,7 +271,7 @@ describe('acceso protegido (RF-5)', () => {
         .post('/admin/molotes')
         .set(headers)
         .type('form')
-        .send({ ...fields, 'menu.highlight': 'Ataque', author: 'X', action: 'save' });
+        .send({ ...fields, 'menu.highlight': 'Ataque', action: 'save' });
       expect(save.status).toBe(403);
       expect(save.body.error.code).toBe('CSRF_INVALID');
       expect(await versionOf(repository, 'molotes')).toBe(before);
@@ -322,7 +331,7 @@ describe('acceso protegido (RF-5)', () => {
     await login(browser, { password: `${ADMIN_PASSWORD}-mal` });
     await login(browser);
     const { fields } = await openForm(browser, 'molotes');
-    await submitForm(browser, 'molotes', fields, { author: 'Ana' });
+    await submitForm(browser, 'molotes', fields, {});
     const logs = JSON.stringify(logger.lines);
     expect(logger.lines.length).toBeGreaterThan(3);
     expect(logs).not.toContain(ADMIN_PASSWORD);
@@ -370,7 +379,7 @@ describe('guardar (RF-6)', () => {
     expect(landingBefore.text.match(/\$50 c\/u/g)).toHaveLength(1);
 
     const { fields } = await openForm(browser, 'molotes');
-    const res = await submitForm(browser, 'molotes', fields, { 'menu.items.0.unitPriceCents': '50.00', author: 'Ana' });
+    const res = await submitForm(browser, 'molotes', fields, { 'menu.items.0.unitPriceCents': '50.00' });
     expect(res.status).toBe(303);
     expect(res.headers.location).toBe('/admin/molotes?ok=save');
 
@@ -386,7 +395,7 @@ describe('guardar (RF-6)', () => {
     const changes = repository.storage.changes;
     expect(changes).toEqual([
       expect.objectContaining({
-        author: 'Ana',
+        
         business: 'molotes',
         action: 'save',
         at: '2026-10-09T12:00:00-06:00',
@@ -399,7 +408,7 @@ describe('guardar (RF-6)', () => {
   it('CA-2: el precio del hero de Birria en 199.50 se muestra como "$199.50 MXN"', async () => {
     const { browser, request: client } = await loggedIn();
     const { fields } = await openForm(browser, 'birria');
-    expect((await submitForm(browser, 'birria', fields, { 'hero.showcase.priceCents': '199.50', author: 'Ana' })).status).toBe(303);
+    expect((await submitForm(browser, 'birria', fields, { 'hero.showcase.priceCents': '199.50' })).status).toBe(303);
     expect((await client().get('/birria')).text).toContain('$199.50 MXN');
   });
 
@@ -411,7 +420,7 @@ describe('guardar (RF-6)', () => {
       'promo.badge': 'Promo de Temporada',
       'promo.title': 'Martes de Molotes 3x2',
       'promo.description': 'Lleva tres y paga dos todos los martes.',
-      author: 'Ana',
+      
     });
     const { text } = await client().get('/molotes');
     for (const value of ['7 Sabores de Barrio', 'Promo de Temporada', 'Martes de Molotes 3x2', 'Lleva tres y paga dos todos los martes.']) {
@@ -422,7 +431,7 @@ describe('guardar (RF-6)', () => {
   it('CA-15: un precio de 45.5 se muestra como "$45.50"', async () => {
     const { browser, request: client } = await loggedIn();
     const { fields } = await openForm(browser, 'molotes');
-    await submitForm(browser, 'molotes', fields, { 'drinks.items.0.priceCents': '45.5', author: 'Ana' });
+    await submitForm(browser, 'molotes', fields, { 'drinks.items.0.priceCents': '45.5' });
     expect((await client().get('/molotes')).text).toContain('$45.50 MXN');
     const page = await browser.get('/admin/molotes');
     expect(formFields(page.text)['drinks.items.0.priceCents']).toBe('45.50');
@@ -431,7 +440,7 @@ describe('guardar (RF-6)', () => {
   it('CA-5 / CA-7 / CA-8: ocultar desde la administración se refleja en la landing', async () => {
     const { browser, request: client } = await loggedIn();
     const molotes = await openForm(browser, 'molotes');
-    await submitForm(browser, 'molotes', molotes.fields, { 'menu.items.7.available': undefined, 'drinks.items.1.available': undefined, author: 'Ana' });
+    await submitForm(browser, 'molotes', molotes.fields, { 'menu.items.7.available': undefined, 'drinks.items.1.available': undefined });
     const molotesHtml = (await client().get('/molotes')).text;
     expect(molotesHtml).not.toContain('Molotes de Huitlacoche con Epazote');
     expect(molotesHtml).not.toContain('Refrescos Familia Coca-Cola');
@@ -442,7 +451,7 @@ describe('guardar (RF-6)', () => {
       'menu.items.3.variants.0.available': undefined,
       'menu.items.4.variants.0.available': undefined,
       'menu.items.4.variants.1.available': undefined,
-      author: 'Ana',
+      
     });
     const birriaHtml = (await client().get('/birria')).text;
     expect(birriaHtml).not.toContain('id="card-birriamen"');
@@ -451,14 +460,20 @@ describe('guardar (RF-6)', () => {
     expect(birriaHtml).not.toContain('Con Carne (');
   });
 
-  it('CA-28: sin el nombre de quien hace el cambio se rechaza y no escribe nada', async () => {
-    const { browser, repository } = await loggedIn();
-    const { fields } = await openForm(browser, 'molotes');
-    const before = await versionOf(repository, 'molotes');
-    const res = await submitForm(browser, 'molotes', fields, { 'menu.highlight': 'Nuevo', author: '   ' });
-    expect(res.status).toBe(422);
-    expect(textOf(res.text)).toContain('Error: Escribe el nombre de quien hace el cambio.');
-    expect(await versionOf(repository, 'molotes')).toBe(before);
+  it('CA-14: el autor es el usuario de la sesión (nombre e identificador) y no hay campo de autor', async () => {
+    const context = await setupAdmin();
+    const ana = await createUser(context.users, { username: 'ana', displayName: 'Ana', businesses: ['molotes'] });
+    const browser = await loginAs(context.browser(), 'ana');
+    const { page, fields } = await openForm(browser, 'molotes');
+    expect(page.text).not.toContain('name="author"');
+    expect(textOf(page.text)).toContain('El cambio se registrará a nombre de Ana.');
+    expect((await submitForm(browser, 'molotes', fields, { 'hero.showcase.title': 'Hero de Ana' })).status).toBe(303);
+    expect(context.repository.storage.changes.at(-1)).toMatchObject({ author: 'Ana', authorId: ana.id, action: 'save', business: 'molotes' });
+    expect(JSON.parse(context.repository.storage.files.get('molotes/current')!).updatedBy).toBe('Ana');
+
+    // Un campo "author" enviado a mano no cambia el autor: el formulario se rechaza.
+    const forged = await submitForm(browser, 'molotes', formFields((await browser.get('/admin/molotes')).text), { author: 'Otra persona' });
+    expect(forged.status).toBe(400);
   });
 
   it('CA-10 / CA-19: un error de validación conserva lo escrito, marca el campo y no depende del color', async () => {
@@ -468,7 +483,7 @@ describe('guardar (RF-6)', () => {
     const res = await submitForm(browser, 'molotes', fields, {
       'menu.items.0.unitPriceCents': '0',
       'menu.items.1.name': 'Nombre nuevo escrito',
-      author: 'Ana',
+      
     });
     expect(res.status).toBe(422);
     expect(await versionOf(repository, 'molotes')).toBe(before);
@@ -476,7 +491,6 @@ describe('guardar (RF-6)', () => {
     const resent = formFields(res.text);
     expect(resent['menu.items.0.unitPriceCents']).toBe('0');
     expect(resent['menu.items.1.name']).toBe('Nombre nuevo escrito');
-    expect(resent.author).toBe('Ana');
     expect(res.text).toMatch(/id="f-menu-items-0-unitPriceCents"[^>]*aria-invalid="true" aria-describedby="f-menu-items-0-unitPriceCents-hint f-menu-items-0-unitPriceCents-error"/);
     expect(res.text).toContain('<p id="f-menu-items-0-unitPriceCents-error" class="admin-field__error mt-1 text-sm font-semibold text-red-800"><strong>Error:</strong> El precio debe ser mayor que $0.</p>');
     expect(res.text).toMatch(/role="alert"[^>]*>\s*<p class="admin-notice__title font-bold">No se guardó nada/);
@@ -486,7 +500,7 @@ describe('guardar (RF-6)', () => {
   it('CA-16: una imagen que no existe se rechaza', async () => {
     const { browser } = await loggedIn();
     const { fields } = await openForm(browser, 'birria');
-    const res = await submitForm(browser, 'birria', fields, { 'menu.items.0.image.src': '/img/birria/no-existe.jpg', author: 'Ana' });
+    const res = await submitForm(browser, 'birria', fields, { 'menu.items.0.image.src': '/img/birria/no-existe.jpg' });
     expect(res.status).toBe(422);
     expect(textOf(res.text)).toContain('La imagen no existe en public/img/.');
   });
@@ -499,7 +513,7 @@ describe('guardar (RF-6)', () => {
     const { browser, repository } = await loggedIn();
     const { fields } = await openForm(browser, 'birria');
     const before = await versionOf(repository, 'birria');
-    const res = await submitForm(browser, 'birria', fields, { ...changes, author: 'Ana' });
+    const res = await submitForm(browser, 'birria', fields, { ...changes });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('STRUCTURE_MODIFIED');
     expect(await versionOf(repository, 'birria')).toBe(before);
@@ -508,24 +522,26 @@ describe('guardar (RF-6)', () => {
   it('rechaza una acción desconocida, cuerpos demasiado grandes y otros tipos de contenido', async () => {
     const { browser } = await loggedIn();
     const { fields } = await openForm(browser, 'molotes');
-    expect((await submitForm(browser, 'molotes', fields, { action: 'borrar', author: 'Ana' })).status).toBe(400);
+    expect((await submitForm(browser, 'molotes', fields, { action: 'borrar' })).status).toBe(400);
 
     const big = await browser
       .post('/admin/molotes')
       .type('form')
-      .send({ ...fields, 'menu.highlight': 'a'.repeat(200 * 1024), author: 'Ana', action: 'save' });
+      .send({ ...fields, 'menu.highlight': 'a'.repeat(200 * 1024), action: 'save' });
     expect(big.status).toBe(413);
     expect(big.body.error.code).toBe('PAYLOAD_TOO_LARGE');
 
-    const json = await browser.post('/admin/molotes').send({ ...fields, author: 'Ana', action: 'save' });
+    const json = await browser.post('/admin/molotes').send({ ...fields, action: 'save' });
     expect(json.status).toBe(415);
   });
 
   it('CA-31: muestra "Último cambio: <fecha> por <nombre>"', async () => {
-    const { browser } = await loggedIn();
+    const context = await setupAdmin();
+    await createUser(context.users, { username: 'lupe', displayName: 'Doña Lupe', businesses: ['birria'] });
+    const browser = await loginAs(context.browser(), 'lupe');
     expect(textOf((await browser.get('/admin/birria')).text)).toContain('Último cambio: ninguno (datos originales).');
     const { fields } = await openForm(browser, 'birria');
-    await submitForm(browser, 'birria', fields, { author: 'Doña Lupe' });
+    await submitForm(browser, 'birria', fields, {});
     expect(textOf((await browser.get('/admin/birria')).text)).toContain('Último cambio: 09/10/2026 12:00 por Doña Lupe');
   });
 });
@@ -533,14 +549,15 @@ describe('guardar (RF-6)', () => {
 describe('edición simultánea (RF-7)', () => {
   async function twoEditors() {
     const context = await setupAdmin();
-    const a = context.browser();
-    const b = context.browser();
-    await login(a);
-    await login(b);
+    // Dos personas con su propia cuenta, editoras de Birria.
+    await createUser(context.users, { username: 'ana', displayName: 'Ana', businesses: ['birria'] });
+    await createUser(context.users, { username: 'beto', displayName: 'Beto', businesses: ['birria'] });
+    const a = await loginAs(context.browser(), 'ana');
+    const b = await loginAs(context.browser(), 'beto');
     const formA = await openForm(a, 'birria');
     const formB = await openForm(b, 'birria');
     context.clock.advance(3 * 60_000);
-    const saved = await submitForm(a, 'birria', formA.fields, { 'promo.title': 'Título de Ana', author: 'Ana' });
+    const saved = await submitForm(a, 'birria', formA.fields, { 'promo.title': 'Título de Ana' });
     expect(saved.status).toBe(303);
     return { ...context, a, b, formB };
   }
@@ -548,7 +565,7 @@ describe('edición simultánea (RF-7)', () => {
   it('CA-32: B no guarda nada y ve quién y cuándo cambió el menú, con dos opciones', async () => {
     const { b, formB, repository } = await twoEditors();
     const version = await versionOf(repository, 'birria');
-    const res = await submitForm(b, 'birria', formB.fields, { 'promo.title': 'Título de Beto', author: 'Beto' });
+    const res = await submitForm(b, 'birria', formB.fields, { 'promo.title': 'Título de Beto' });
 
     expect(res.status).toBe(409);
     expect(await versionOf(repository, 'birria')).toBe(version);
@@ -563,7 +580,7 @@ describe('edición simultánea (RF-7)', () => {
 
   it('CA-33: "Guardar mis cambios de todos modos" sobrescribe y la versión de A queda como anterior', async () => {
     const { b, formB, repository, request: client } = await twoEditors();
-    const conflict = await submitForm(b, 'birria', formB.fields, { 'promo.title': 'Título de Beto', author: 'Beto' });
+    const conflict = await submitForm(b, 'birria', formB.fields, { 'promo.title': 'Título de Beto' });
     const res = await submitForm(b, 'birria', formFields(conflict.text), { action: 'overwrite_after_conflict' });
 
     expect(res.status).toBe(303);
@@ -575,7 +592,7 @@ describe('edición simultánea (RF-7)', () => {
 
   it('CA-33: "Descartar" muestra los datos de A y no escribe nada', async () => {
     const { b, formB, repository } = await twoEditors();
-    await submitForm(b, 'birria', formB.fields, { 'promo.title': 'Título de Beto', author: 'Beto' });
+    await submitForm(b, 'birria', formB.fields, { 'promo.title': 'Título de Beto' });
     const changes = repository.storage.changes.length;
     const page = await b.get('/admin/birria');
     expect(formFields(page.text)['promo.title']).toBe('Título de Ana');
@@ -584,9 +601,9 @@ describe('edición simultánea (RF-7)', () => {
 
   it('RN-6: si otra persona vuelve a guardar antes de sobrescribir, aparece un nuevo aviso', async () => {
     const { a, b, formB } = await twoEditors();
-    const conflict = await submitForm(b, 'birria', formB.fields, { 'promo.title': 'Título de Beto', author: 'Beto' });
+    const conflict = await submitForm(b, 'birria', formB.fields, { 'promo.title': 'Título de Beto' });
     const formA = await openForm(a, 'birria');
-    await submitForm(a, 'birria', formA.fields, { 'promo.title': 'Segundo de Ana', author: 'Ana' });
+    await submitForm(a, 'birria', formA.fields, { 'promo.title': 'Segundo de Ana' });
     const res = await submitForm(b, 'birria', formFields(conflict.text), { action: 'overwrite_after_conflict' });
     expect(res.status).toBe(409);
   });
@@ -596,7 +613,7 @@ describe('restaurar versión anterior (RF-6.5)', () => {
   it('CA-30: pide confirmación, restaura, intercambia versiones y lo registra', async () => {
     const { browser, request: client, repository } = await loggedIn();
     const { fields } = await openForm(browser, 'molotes');
-    await submitForm(browser, 'molotes', fields, { 'menu.highlight': 'Destacado nuevo', author: 'Ana' });
+    await submitForm(browser, 'molotes', fields, { 'menu.highlight': 'Destacado nuevo' });
 
     const page = await browser.get('/admin/molotes');
     expect(page.text).toContain('href="/admin/molotes/restaurar-anterior">Restaurar versión anterior</a>');
@@ -604,25 +621,22 @@ describe('restaurar versión anterior (RF-6.5)', () => {
     expect(confirm.status).toBe(200);
     expect(textOf(confirm.text)).toContain('¿Restaurar la versión anterior?');
 
-    const missingAuthor = await browser.post('/admin/molotes/restaurar-anterior').type('form').send({ _csrf: csrfFrom(confirm.text) });
-    expect(missingAuthor.status).toBe(422);
-
     const res = await browser
       .post('/admin/molotes/restaurar-anterior')
       .type('form')
-      .send({ _csrf: csrfFrom(confirm.text), author: 'Beto' });
+      .send({ _csrf: csrfFrom(confirm.text) });
     expect(res.status).toBe(303);
     expect(res.headers.location).toBe('/admin/molotes?ok=restore_previous');
 
     expect((await client().get('/molotes')).text).toContain(seedData('molotes').menu.highlight);
     expect(JSON.parse(repository.storage.files.get('molotes/previous')!).data.menu.highlight).toBe('Destacado nuevo');
-    expect(repository.storage.changes.at(-1)).toMatchObject({ author: 'Beto', action: 'restore_previous' });
+    expect(repository.storage.changes.at(-1)).toMatchObject({ author: ADMIN_USER, action: 'restore_previous' });
   });
 
   it('restaurar la semilla sin datos dañados no está permitido', async () => {
     const { browser } = await loggedIn();
     const page = await browser.get('/admin/molotes');
-    const res = await browser.post('/admin/molotes/restaurar-semilla').type('form').send({ _csrf: csrfFrom(page.text), author: 'Ana' });
+    const res = await browser.post('/admin/molotes/restaurar-semilla').type('form').send({ _csrf: csrfFrom(page.text) });
     expect(res.status).toBe(409);
     expect(textOf(res.text)).toContain('solo se puede restaurar cuando los datos están dañados');
   });
@@ -646,13 +660,13 @@ describe('archivo dañado (RF-8)', () => {
     const forced = await browser
       .post('/admin/molotes')
       .type('form')
-      .send({ ...formFields(page.text), author: 'Ana', action: 'save' });
+      .send({ ...formFields(page.text), action: 'save' });
     expect(forced.status).toBe(409);
     expect(repository.storage.changes).toHaveLength(0);
 
-    const restore = await browser.post('/admin/molotes/restaurar-semilla').type('form').send({ _csrf: csrfFrom(page.text), author: 'Ana' });
+    const restore = await browser.post('/admin/molotes/restaurar-semilla').type('form').send({ _csrf: csrfFrom(page.text) });
     expect(restore.status).toBe(303);
-    expect(repository.storage.changes.at(-1)).toMatchObject({ author: 'Ana', action: 'restore_seed', business: 'molotes' });
+    expect(repository.storage.changes.at(-1)).toMatchObject({ author: ADMIN_USER, action: 'restore_seed', business: 'molotes' });
 
     const unlocked = await browser.get('/admin/molotes');
     expect(unlocked.text).not.toContain('disabled>');
@@ -666,16 +680,6 @@ describe('archivo dañado (RF-8)', () => {
     const page = await browser.get('/admin/molotes');
     expect(page.text).not.toContain('action="/admin/molotes/restaurar-anterior"');
     expect(page.text).toContain('action="/admin/molotes/restaurar-semilla"');
-  });
-
-  it('la restauración en estado dañado exige el autor', async () => {
-    const { browser, repository } = await loggedIn();
-    repository.storage.files.set('birria/current', '[]');
-    const page = await browser.get('/admin/birria');
-    const res = await browser.post('/admin/birria/restaurar-anterior').type('form').send({ _csrf: csrfFrom(page.text), author: '' });
-    expect(res.status).toBe(422);
-    expect(textOf(res.text)).toContain('Error: Escribe el nombre de quien hace el cambio.');
-    expect(repository.storage.changes).toHaveLength(0);
   });
 });
 

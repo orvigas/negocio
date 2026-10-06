@@ -22,6 +22,7 @@ function pageFields(businessId: BusinessId): FormFields {
     version: '0@seed',
     lastChange: null,
     damaged: null,
+    viewer: { displayName: 'Ana', role: 'admin', businesses: [] },
     faviconBusinessId: businessId,
   }).toString();
   const fields = formFields(html);
@@ -121,8 +122,14 @@ describe('parseAdminForm', () => {
   });
 
   it('ignora los campos de control del formulario', async () => {
-    const result = await parse('molotes', { ...pageFields('molotes'), _csrf: 'x', author: 'Ana', expectedVersion: '1@x', action: 'save' });
+    const result = await parse('molotes', { ...pageFields('molotes'), _csrf: 'x', expectedVersion: '1@x', action: 'save' });
     expect(result.structureError).toBe(false);
+  });
+
+  it('el campo "author" ya no existe: el autor sale de la sesión (REQ-F-007, D-11)', async () => {
+    expect(pageFields('molotes')).not.toHaveProperty('author');
+    const result = await parse('molotes', { ...pageFields('molotes'), author: 'Otra persona' });
+    expect(result.structureError).toBe(true);
   });
 
   it.each([

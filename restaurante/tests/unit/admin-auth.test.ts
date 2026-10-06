@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { SCRYPT_DEFAULTS, createAdminAuthenticator, hashPassword, parsePasswordHash, safeEqualStrings } from '../../src/services/admin-auth.ts';
+import {
+  SCRYPT_DEFAULTS,
+  createUserAuthenticator,
+  hashPassword,
+  parsePasswordHash,
+  safeEqualStrings,
+  verifyPassword,
+} from '../../src/services/admin-auth.ts';
 import { ADMIN_PASSWORD, ADMIN_PASSWORD_HASH, ADMIN_USER } from '../support/admin.ts';
 
 describe('hash de contraseña (DT-2)', () => {
@@ -31,22 +38,66 @@ describe('hash de contraseña (DT-2)', () => {
   });
 });
 
-describe('createAdminAuthenticator', () => {
-  const authenticator = createAdminAuthenticator({ user: ADMIN_USER, passwordHash: ADMIN_PASSWORD_HASH });
-
-  it('acepta solo el usuario y la contraseña configurados', async () => {
-    expect(await authenticator.verify(ADMIN_USER, ADMIN_PASSWORD)).toBe(true);
-    expect(await authenticator.verify(ADMIN_USER, `${ADMIN_PASSWORD}x`)).toBe(false);
-    expect(await authenticator.verify('otro', ADMIN_PASSWORD)).toBe(false);
-    expect(await authenticator.verify(undefined, undefined)).toBe(false);
+describe('verifyPassword', () => {
+  it('acepta solo la contraseña del hash', async () => {
+    expect(await verifyPassword(ADMIN_PASSWORD, ADMIN_PASSWORD_HASH)).toBe(true);
+    expect(await verifyPassword(`${ADMIN_PASSWORD}x`, ADMIN_PASSWORD_HASH)).toBe(false);
+    expect(await verifyPassword(undefined, ADMIN_PASSWORD_HASH)).toBe(false);
   });
 
-  it('falla rápido con credenciales mal formadas', () => {
-    expect(() => createAdminAuthenticator({ user: 'x', passwordHash: 'plano' })).toThrow(/inválidas/);
+  it('un hash mal formado nunca coincide', async () => {
+    expect(await verifyPassword('plano', 'plano')).toBe(false);
   });
 
   it('safeEqualStrings compara contenido sin depender de la longitud', () => {
     expect(safeEqualStrings('abc', 'abc')).toBe(true);
     expect(safeEqualStrings('abc', 'abcd')).toBe(false);
+  });
+});
+
+describe('createUserAuthenticator (REQ-F-007, R-6 y DT-10)', () => {
+  const user = (active: boolean) => ({ id: 1, sessionVersion: 0, active });
+  const source = (active: boolean, calls: string[] = []) => ({
+    async findCredentials(username: string) {
+      calls.push(username);
+      return username.toLowerCase() === ADMIN_USER ? { user: user(active), passwordHash: ADMIN_PASSWORD_HASH } : null;
+    },
+  });
+  const hashParams = { ...SCRYPT_DEFAULTS, N: 2 ** 14 };
+
+  it('devuelve el usuario con la contraseña correcta', async () => {
+    const authenticator = createUserAuthenticator({ users: source(true), hashParams });
+    expect(await authenticator.authenticate(ADMIN_USER, ADMIN_PASSWORD)).toEqual(user(true));
+    expect(await authenticator.authenticate(ADMIN_USER.toUpperCase(), ADMIN_PASSWORD)).toEqual(user(true));
+  });
+
+  it('cuenta inexistente, contraseña incorrecta, cuenta desactivada o datos vacíos -> null', async () => {
+    const active = createUserAuthenticator({ users: source(true), hashParams });
+    const inactive = createUserAuthenticator({ users: source(false), hashParams });
+    expect(await active.authenticate('otro', ADMIN_PASSWORD)).toBeNull();
+    expect(await active.authenticate(ADMIN_USER, `${ADMIN_PASSWORD}x`)).toBeNull();
+    expect(await inactive.authenticate(ADMIN_USER, ADMIN_PASSWORD)).toBeNull();
+    expect(await active.authenticate(undefined, undefined)).toBeNull();
+  });
+
+  it('calcula el hash ficticio al crearse (al arrancar), una sola vez, y no en el primer acceso (DEF-002, DT-10)', async () => {
+    const calls: unknown[] = [];
+    const hash: typeof hashPassword = (password, params) => {
+      calls.push(params);
+      return hashPassword(password, params);
+    };
+    const authenticator = createUserAuthenticator({ users: source(true), hashParams, hash });
+    // Antes de cualquier acceso ya se pidió el hash ficticio, con el costo configurado.
+    expect(calls).toEqual([hashParams]);
+    expect(await authenticator.authenticate('nadie', ADMIN_PASSWORD)).toBeNull();
+    expect(await authenticator.authenticate('otra-persona', ADMIN_PASSWORD)).toBeNull();
+    expect(calls).toHaveLength(1);
+  });
+
+  it('no consulta la base de datos con un usuario vacío', async () => {
+    const calls: string[] = [];
+    const authenticator = createUserAuthenticator({ users: source(true, calls), hashParams });
+    expect(await authenticator.authenticate('   ', ADMIN_PASSWORD)).toBeNull();
+    expect(calls).toEqual([]);
   });
 });

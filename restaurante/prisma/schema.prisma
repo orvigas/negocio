@@ -1,0 +1,80 @@
+// Esquema de la base de datos (REQ-F-007). SQLite en DATA_DIR/restaurante.db.
+// - El cliente se genera en src/generated/prisma (`npm run db:generate`; no se versiona).
+// - Las migraciones se crean con `npm run db:migrate:dev -- --name <nombre>` y las aplica
+//   la propia app al arrancar (src/db/migrate.ts), sin el CLI de Prisma en producción.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "ts"
+  runtime             = "nodejs"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/// Rol de un usuario de /admin (D-2).
+enum Role {
+  admin
+  editor
+}
+
+/// Negocios (mismos ids que src/config/businesses.ts).
+enum Business {
+  molotes
+  birria
+}
+
+/// Cuenta personal de la administración (D-10). No se elimina: se desactiva (D-6).
+model User {
+  id             Int            @id @default(autoincrement())
+  /// Usuario de acceso tal como se escribió.
+  username       String
+  /// Usuario normalizado (NFC y minúsculas): único sin distinguir mayúsculas.
+  usernameKey    String         @unique @map("username_key")
+  displayName    String         @map("display_name")
+  role           Role
+  active         Boolean        @default(true)
+  passwordHash   String         @map("password_hash")
+  /// Cambia al desactivar, cambiar rol/negocios o contraseña: invalida las sesiones abiertas (D-8).
+  sessionVersion Int            @default(0) @map("session_version")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  lastLoginAt    DateTime?      @map("last_login_at")
+  businesses     UserBusiness[]
+  auditActions   UserAudit[]    @relation("actor")
+  auditEvents    UserAudit[]    @relation("target")
+
+  @@map("user")
+}
+
+/// Negocios asignados a un editor (el administrador los tiene todos de forma implícita).
+model UserBusiness {
+  userId   Int      @map("user_id")
+  business Business
+  user     User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([userId, business])
+  @@map("user_business")
+}
+
+/// Registro de la gestión de usuarios (D-12). Nunca guarda contraseñas ni hashes.
+model UserAudit {
+  id        Int      @id @default(autoincrement())
+  at        DateTime @default(now())
+  action    String
+  /// Usuario que hizo la acción; null si fue la consola o el sistema.
+  actorId   Int?     @map("actor_id")
+  /// user | console | system
+  actorKind String   @map("actor_kind")
+  targetId  Int      @map("target_id")
+  /// JSON con los campos cambiados (antes/después), sin contraseñas ni hashes.
+  changes   String?
+  actor     User?    @relation("actor", fields: [actorId], references: [id], onDelete: Restrict)
+  target    User     @relation("target", fields: [targetId], references: [id], onDelete: Restrict)
+
+  @@index([targetId])
+  @@map("user_audit")
+}

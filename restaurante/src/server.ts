@@ -1,5 +1,8 @@
 import { createApp } from './app.ts';
 import { ConfigError, loadConfig } from './config/env.ts';
+import { openDatabase } from './db/client.ts';
+import { createUserRepository } from './repositories/user-repository.ts';
+import { bootstrapAdmin } from './services/admin-bootstrap.ts';
 import { createFileMenuRepository } from './repositories/file-menu-repository.ts';
 import { errorProp } from './utils/errors.ts';
 import { createLogger, serializeError } from './utils/logger.ts';
@@ -28,17 +31,40 @@ try {
   process.exit(1);
 }
 
-if (!config.admin.enabled) {
-  logger.warn('admin_disabled', { reason: 'credentials_missing' });
+// Base de datos (REQ-F-007, R-2): escritura, integridad y migraciones pendientes. Si falla, el
+// servidor no arranca; el log solo lleva códigos (sin SQL, rutas ni stack).
+let database;
+try {
+  database = await openDatabase({ dataDir: config.dataDir });
+} catch (err) {
+  logger.error('database_init_failed', { code: errorProp(err, 'code'), migration: errorProp(err, 'migration') });
+  process.stderr.write(
+    'No se pudo preparar la base de datos en DATA_DIR: revisa permisos de escritura, espacio libre y que el archivo no esté dañado.\n',
+  );
+  process.exit(1);
+}
+if (database.applied.length > 0) logger.info('database_migrated', { applied: database.applied });
+const { prisma } = database;
+const users = createUserRepository({ prisma });
+
+// Primer administrador desde ADMIN_USER/ADMIN_PASSWORD_HASH, solo si no hay usuarios (D-4, D-13).
+let adminStatus;
+try {
+  adminStatus = await bootstrapAdmin({ users, bootstrap: config.adminBootstrap, logger });
+} catch (err) {
+  logger.error('admin_bootstrap_failed', { name: errorProp(err, 'name') });
+  process.stderr.write('No se pudo preparar el primer administrador en la base de datos.\n');
+  await prisma.$disconnect();
+  process.exit(1);
 }
 
-const app = createApp({ config, repository, logger });
+const app = createApp({ config, repository, users, logger });
 const server = app.listen(config.port, () => {
   logger.info('server_started', {
     port: config.port,
     nodeEnv: config.nodeEnv,
     timezone: config.timezone,
-    adminEnabled: config.admin.enabled,
+    adminStatus,
     trustProxy: config.trustProxy,
   });
 });
@@ -46,11 +72,13 @@ const server = app.listen(config.port, () => {
 function shutdown(signal: NodeJS.Signals): void {
   logger.info('server_stopping', { signal });
   server.close((err) => {
-    if (err) {
-      logger.error('server_stop_failed', { err: serializeError(err) });
-      process.exit(1);
-    }
-    process.exit(0);
+    void prisma.$disconnect().finally(() => {
+      if (err) {
+        logger.error('server_stop_failed', { err: serializeError(err) });
+        process.exit(1);
+      }
+      process.exit(0);
+    });
   });
 }
 

@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (Q2, ronda 1, 2026-10-06; ver `## QA Report`. CA-8 se verifica en el PR)
+READY_FOR_MERGE (T4, 2026-10-06; PR https://github.com/orvigas/negocio/pull/26; CI del PR en verde: `calidad` y `docker`)
 
 ## Aprobación
 
@@ -639,6 +639,17 @@ No aplica.
 
 QA_APPROVED
 
+## Pull Request
+
+- PR: https://github.com/orvigas/negocio/pull/26 (base `main`, rama `feature/REQ-F-011-pruebas-integracion-direccion-local-fija`).
+- Commit de la implementación: `7352af1` ("test: estabiliza las pruebas de integración con servidores locales en 127.0.0.1").
+- CI del PR sobre `7352af1` (ejecución https://github.com/orvigas/negocio/actions/runs/37475130605):
+  - `calidad`: pass (1 min 20 s);
+  - `docker`: pass (58 s);
+  - GitGuardian: pass.
+- Con esto se cumple CA-8.
+- Antes del commit, typecheck, lint y `npm test` volvieron a pasar: 42 archivos, `641 passed | 1 expected fail (642)`.
+
 ## Historial de cambios
 
 ### Versión 1
@@ -694,3 +705,11 @@ senior-qa. El usuario aprueba el QA Action Plan (cita textual: "Apruebo el plan 
 - CA-8 queda pendiente para el PR.
 
 Estado: `QA_APPROVED`.
+
+### Commit y Pull Request (2026-10-06)
+
+senior-fullstack, T4.
+
+- Commit `7352af1` y PR #26 contra `main`.
+- CI del PR en verde (`calidad` y `docker`): CA-8 cumple.
+- Estado: `READY_FOR_MERGE`.

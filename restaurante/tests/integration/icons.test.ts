@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { JSDOM } from 'jsdom';
-import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_PUBLIC_DIR, createApp } from '../../src/app.ts';
@@ -12,6 +11,7 @@ import { iconFilePath, type IconKey } from '../../src/content/icons.ts';
 import { getBusinessContent } from '../../src/content/index.ts';
 import { makeConfig, makeRepository } from '../helpers.ts';
 import { login, makeClock, setupAdmin } from '../support/admin.ts';
+import { listenLocal } from '../support/http.ts';
 import { readIcoSizes, readPng } from '../support/png.ts';
 
 // CDMX es UTC-6 todo el año.
@@ -28,9 +28,9 @@ const THEME = { molotes: '#03132b', birria: '#290808' };
 
 const repository = await makeRepository();
 
-function agent({ now = FRIDAY_NOON_MX, config = makeConfig() }: { now?: Date | (() => Date); config?: Config } = {}) {
+async function agent({ now = FRIDAY_NOON_MX, config = makeConfig() }: { now?: Date | (() => Date); config?: Config } = {}) {
   const clock = typeof now === 'function' ? now : () => now;
-  return request(createApp({ config, repository, now: clock }).callback());
+  return (await listenLocal(createApp({ config, repository, now: clock }))).request();
 }
 
 const iconFile = (businessId: BusinessId, key: IconKey) => readFileSync(join(DEFAULT_PUBLIC_DIR, iconFilePath(businessId, key)));
@@ -69,7 +69,7 @@ describe('<head> de cada landing (CA-1, CA-2)', () => {
   it.each(BUSINESS_IDS)('/%s declara solo sus iconos, su manifest y su theme-color', async (businessId) => {
     // Un día del otro negocio: la ruta fija no depende del día.
     const now = businessId === 'molotes' ? SATURDAY_NOON_MX : FRIDAY_NOON_MX;
-    const res = await agent({ now }).get(`/${businessId}`);
+    const res = await (await agent({ now })).get(`/${businessId}`);
     expect(res.status).toBe(200);
     const head = headIcons(res.text);
     expect(head).toEqual(expectedHead(businessId));
@@ -86,7 +86,7 @@ describe('<head> de / según el día (CA-3)', () => {
     ['domingo 23:59:59', SUNDAY_LAST_SECOND_MX, 'birria'],
     ['lunes 00:00:00', MONDAY_FIRST_SECOND_MX, 'molotes'],
   ] as const)('%s -> iconos de %s, idénticos a su ruta fija', async (_label, now, businessId) => {
-    const client = agent({ now });
+    const client = await agent({ now });
     const [root, fixed] = await Promise.all([client.get('/'), client.get(`/${businessId}`)]);
     expect(headIcons(root.text)).toEqual(headIcons(fixed.text));
     expect(headIcons(root.text)).toEqual(expectedHead(businessId));
@@ -95,7 +95,7 @@ describe('<head> de / según el día (CA-3)', () => {
 
 describe('recursos referenciados (CA-4, CA-6)', () => {
   it.each(BUSINESS_IDS)('%s: cada URL del <head> y del manifest responde 200 con su tipo y tamaño', async (businessId) => {
-    const client = agent();
+    const client = await agent();
     const { links } = headIcons((await client.get(`/${businessId}`).expect(200)).text);
 
     const manifestRes = await client.get(links.find((link) => link.rel === 'manifest')!.href!);
@@ -138,7 +138,7 @@ describe('iconos de la raíz según el día (CA-7, CA-8)', () => {
       [SUNDAY_LAST_SECOND_MX, 'birria'],
       [MONDAY_FIRST_SECOND_MX, 'molotes'],
     ] as const) {
-      const res = await agent({ now }).get(path).buffer(true);
+      const res = await (await agent({ now })).get(path).buffer(true);
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toMatch(type);
       expect(Buffer.compare(res.body, iconFile(businessId, key)), `${path} ${businessId}`).toBe(0);
@@ -150,7 +150,7 @@ describe('iconos de la raíz según el día (CA-7, CA-8)', () => {
 
   it('responde 304 si el navegador ya tiene el icono del día, y el nuevo icono tras la medianoche', async () => {
     let now = FRIDAY_LAST_SECOND_MX;
-    const client = agent({ now: () => now });
+    const client = await agent({ now: () => now });
 
     const first = await client.get('/favicon.ico');
     const etag = first.headers.etag;
@@ -166,7 +166,7 @@ describe('iconos de la raíz según el día (CA-7, CA-8)', () => {
   });
 
   it('HEAD /favicon.ico responde 200 sin cuerpo', async () => {
-    const res = await agent().head('/favicon.ico');
+    const res = await (await agent()).head('/favicon.ico');
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/^image\/x-icon/);
   });
@@ -174,12 +174,12 @@ describe('iconos de la raíz según el día (CA-7, CA-8)', () => {
   it('funciona con la administración deshabilitada (sin credenciales)', async () => {
     const config = makeConfig();
     expect(config.adminBootstrap).toBeNull();
-    const res = await agent({ config }).get('/favicon.ico');
+    const res = await (await agent({ config })).get('/favicon.ico');
     expect(res.status).toBe(200);
   });
 
   it('los manifests piden revalidación', async () => {
-    const res = await agent().get('/birria.webmanifest');
+    const res = await (await agent()).get('/birria.webmanifest');
     expect(res.headers['cache-control']).toBe('no-cache');
     expect(res.headers.etag).toBeDefined();
   });
@@ -231,7 +231,7 @@ describe('QA: zona horaria configurable (A-1, CA-3, CA-7, CA-9, CLAUDE.md §11)'
     ['Asia/Tokyo', 'birria'],
   ] as const)('con BUSINESS_TIMEZONE=%s, /, los iconos de la raíz y /admin/login siguen el día de esa zona (%s)', async (timeZone, businessId) => {
     const config = makeConfig({ BUSINESS_TIMEZONE: timeZone });
-    const client = agent({ now: FRIDAY_MX_SATURDAY_TOKYO, config });
+    const client = await agent({ now: FRIDAY_MX_SATURDAY_TOKYO, config });
 
     expect(headIcons((await client.get('/').expect(200)).text)).toEqual(expectedHead(businessId));
 
@@ -252,7 +252,7 @@ describe('QA: zona horaria configurable (A-1, CA-3, CA-7, CA-9, CLAUDE.md §11)'
 
 describe('QA: HEAD y validadores de las rutas de la raíz (A-2, CA-7, CA-8)', () => {
   it('HEAD /apple-touch-icon-precomposed.png responde 200 con image/png, no-cache y sin cuerpo', async () => {
-    const res = await agent().head('/apple-touch-icon-precomposed.png');
+    const res = await (await agent()).head('/apple-touch-icon-precomposed.png');
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/^image\/png/);
     expect(res.headers['cache-control']).toBe('no-cache');
@@ -262,8 +262,8 @@ describe('QA: HEAD y validadores de las rutas de la raíz (A-2, CA-7, CA-8)', ()
   it.each(['/favicon.ico', '/apple-touch-icon.png', '/apple-touch-icon-precomposed.png'])(
     '%s con el ETag del otro negocio responde 200 con el icono del día',
     async (path) => {
-      const birriaEtag = (await agent({ now: SATURDAY_NOON_MX }).get(path)).headers.etag;
-      const res = await agent({ now: FRIDAY_NOON_MX }).get(path).set('If-None-Match', birriaEtag!).buffer(true);
+      const birriaEtag = (await (await agent({ now: SATURDAY_NOON_MX })).get(path)).headers.etag;
+      const res = await (await agent({ now: FRIDAY_NOON_MX })).get(path).set('If-None-Match', birriaEtag!).buffer(true);
       expect(res.status).toBe(200);
       expect(res.headers.etag).not.toBe(birriaEtag);
       const key = path === '/favicon.ico' ? 'ico' : 'appleTouch';

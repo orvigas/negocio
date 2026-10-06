@@ -2,9 +2,9 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE (2026-10-06; PR #28 mergeado en `main`, commit de merge `94760b1`)
 
-Pull Request: https://github.com/orvigas/negocio/pull/28 (CI del commit `dfe6b72`: `calidad` y `docker` en verde).
+Pull Request: https://github.com/orvigas/negocio/pull/28 (CI del commit `dfe6b72`: `calidad` y `docker` en verde; CI del push a `main` de `94760b1`: `calidad` y `docker` en verde).
 
 ## Aprobación
 
@@ -1212,3 +1212,7 @@ Descripción inicial (2026-10-03). Retoma el análisis descartado: reconfirma D-
 ### Pull Request (T4)
 
 2026-10-06, `senior-fullstack`. Commit `dfe6b72` y PR https://github.com/orvigas/negocio/pull/28 contra `main`. CI del PR en verde: `calidad` (2m20s) y `docker` (49s), ejecución https://github.com/orvigas/negocio/actions/runs/37514830674; GitGuardian también en verde. Estado: `READY_FOR_MERGE`. El merge lo hace el usuario.
+
+### Cierre T5
+
+2026-10-06, `senior-fullstack`. El usuario confirma el merge del PR #28 (cita textual: "merge hecho"). Mergeado el 2026-10-06T19:50:08Z (13:50 del 2026-10-06, hora de Ciudad de México); commit de merge `94760b1`. El push a `main` de `94760b1` pasó el CI con `calidad` y `docker` en verde: https://github.com/orvigas/negocio/actions/runs/37521841331. El ticket pasa de `in-progress/` a `done/`. Estado: `DONE`.

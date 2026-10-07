@@ -53,8 +53,9 @@ RUN npm ci --omit=dev --omit=optional --strict-allow-scripts --no-audit --no-fun
 COPY --from=build /app/src ./src
 COPY --from=build /app/public ./public
 COPY --from=build /app/prisma/migrations ./prisma/migrations
-# Comandos de consola: admin:recover y admin:hash-password (scripts/*.ts y su soporte).
-COPY --from=build /app/scripts/*.ts ./scripts/
+# Comandos de consola: admin:recover y admin:hash-password y su soporte. scripts/bot-chat.ts
+# (simulador del bot de WhatsApp, REQ-F-009) es solo de desarrollo: usa el doble de tests/.
+COPY --from=build /app/scripts/admin-recover.ts /app/scripts/hash-password.ts ./scripts/
 COPY --from=build /app/scripts/support ./scripts/support
 # Punto de montaje sugerido para DATA_DIR: un volumen con nombre hereda dueño y permisos.
 RUN mkdir -p /var/lib/restaurante \

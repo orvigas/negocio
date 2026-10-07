@@ -1,3 +1,4 @@
+import { formatPesos } from '../../services/price.ts';
 import type { Renderer, SafeHtml, TemplateData } from '../render.ts';
 import type { LandingViewData } from './index.ts';
 
@@ -12,17 +13,8 @@ export function requireOption<M extends object>(map: M, key: string, kind: strin
   return map[key as keyof M];
 }
 
-const PESOS = new Map(
-  [0, 2].map((digits) => [digits, new Intl.NumberFormat('es-MX', { minimumFractionDigits: digits, maximumFractionDigits: 2 })]),
-);
-
-/** Formatea un importe en centavos como en el diseño: "$45", "$1,500", "$45.50". */
-export function formatPesos(cents: number): string {
-  if (!Number.isSafeInteger(cents) || cents < 0) throw new TypeError(`Importe inválido: ${cents}`);
-  // PESOS tiene formateadores para 0 y 2 decimales, las dos únicas claves posibles.
-  const formatter = PESOS.get(cents % 100 === 0 ? 0 : 2) as Intl.NumberFormat;
-  return `$${formatter.format(cents / 100)}`;
-}
+// Vive en src/services/price.ts (también la usa el bot de WhatsApp, REQ-F-009).
+export { formatPesos };
 
 /** Importe con sufijo de moneda, como en el diseño: "$155 MXN". */
 export const priceMxn = (cents: number): string => `${formatPesos(cents)} MXN`;

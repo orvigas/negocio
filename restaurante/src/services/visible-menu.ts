@@ -20,6 +20,9 @@ import type {
 
 const isAvailable = (entry: { available: boolean }): boolean => entry.available === true;
 
+/** Solo las entradas disponibles, en su orden. La comparten la landing y el bot (REQ-F-009). */
+export const availableOnly = <T extends { available: boolean }>(items: readonly T[]): T[] => items.filter(isAvailable);
+
 /** Producto visible de Birria: con variantes, lleva además el precio y la descripción de la activa. */
 export type VisibleBirriaItem =
   | BirriaChipsItem
@@ -34,21 +37,21 @@ function visibleBirriaItem(item: BirriaItem): VisibleBirriaItem | null {
   return { ...item, variants, priceCents: active.priceCents, description: active.description };
 }
 
+/** Productos visibles de Birria (la landing y el bot, REQ-F-009). */
+export const visibleBirriaItems = (items: readonly BirriaItem[]): VisibleBirriaItem[] =>
+  availableOnly(items)
+    .map(visibleBirriaItem)
+    .filter((item) => item !== null);
+
 const visibleMolotesMenu = (data: MolotesMenuData) => ({
   ...data,
-  menu: { ...data.menu, items: data.menu.items.filter(isAvailable) },
-  drinks: { ...data.drinks, items: data.drinks.items.filter(isAvailable) },
+  menu: { ...data.menu, items: availableOnly(data.menu.items) },
+  drinks: { ...data.drinks, items: availableOnly(data.drinks.items) },
 });
 
 const visibleBirriaMenu = (data: BirriaMenuData) => ({
   ...data,
-  menu: {
-    ...data.menu,
-    items: data.menu.items
-      .filter(isAvailable)
-      .map(visibleBirriaItem)
-      .filter((item) => item !== null),
-  },
+  menu: { ...data.menu, items: visibleBirriaItems(data.menu.items) },
 });
 
 export interface VisibleMenuByBusiness {

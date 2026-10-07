@@ -19,6 +19,23 @@ export const VALID_ENV = Object.freeze({
   WHATSAPP_BIRRIA_MESSAGE: 'Hola, quiero hacer un pedido de birria',
 });
 
+/**
+ * Variables del bot de WhatsApp (REQ-F-009) con valores ficticios. Con el bot, los CTA de las dos
+ * landings usan el mismo número (D-6). Los secretos tienen marcas reconocibles para comprobar que
+ * nunca aparecen en los logs ni en las respuestas.
+ */
+export const BOT_ENV = Object.freeze({
+  WHATSAPP_MOLOTES: '5210000000009',
+  WHATSAPP_BIRRIA: '5210000000009',
+  WHATSAPP_BOT_ACCESS_TOKEN: 'EAATOKENSECRETOdePRUEBA0123456789',
+  WHATSAPP_BOT_PHONE_NUMBER_ID: '106540352242922',
+  WHATSAPP_BOT_APP_SECRET: 'appsecretSECRETOdePRUEBA0123456789',
+  WHATSAPP_BOT_VERIFY_TOKEN: 'verify-token-SECRETO-de-prueba',
+  WHATSAPP_BOT_STAFF_MOLOTES: '5215511110001',
+  WHATSAPP_BOT_STAFF_BIRRIA: '5215522220002',
+  WHATSAPP_BOT_STAFF_TEMPLATE: 'nuevo_pedido',
+});
+
 export function makeConfig(overrides: Env = {}): Config {
   return loadConfig({ ...VALID_ENV, ...overrides });
 }

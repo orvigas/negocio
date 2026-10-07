@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { ConfigError, PROJECT_DIR, loadConfig, type Env } from '../../src/config/env.ts';
-import { VALID_ENV } from '../helpers.ts';
+import { BOT_ENV, VALID_ENV } from '../helpers.ts';
 
 function issuesFor(env: Env): string[] {
   try {
@@ -137,5 +137,70 @@ describe('loadConfig: administración y datos (REQ-F-001)', () => {
   it('acepta TRUST_PROXY=true y DATA_DIR absoluta en producción', () => {
     const config = loadConfig({ ...VALID_ENV, NODE_ENV: 'production', DATA_DIR: '/var/lib/restaurante', TRUST_PROXY: 'true' });
     expect(config).toMatchObject({ dataDir: '/var/lib/restaurante', trustProxy: true, isProduction: true });
+  });
+});
+
+describe('loadConfig: bot de WhatsApp (REQ-F-009, RF-2, CA-4)', () => {
+  const SECRETS = [BOT_ENV.WHATSAPP_BOT_ACCESS_TOKEN, BOT_ENV.WHATSAPP_BOT_APP_SECRET, BOT_ENV.WHATSAPP_BOT_VERIFY_TOKEN];
+
+  it('sin ninguna variable del bot queda deshabilitado (null)', () => {
+    expect(loadConfig(VALID_ENV).whatsappBot).toBeNull();
+  });
+
+  it('con todas las obligatorias queda habilitado con los valores por defecto', () => {
+    const { whatsappBot } = loadConfig({ ...VALID_ENV, ...BOT_ENV });
+    expect(whatsappBot).toEqual({
+      accessToken: BOT_ENV.WHATSAPP_BOT_ACCESS_TOKEN,
+      phoneNumberId: '106540352242922',
+      appSecret: BOT_ENV.WHATSAPP_BOT_APP_SECRET,
+      verifyToken: BOT_ENV.WHATSAPP_BOT_VERIFY_TOKEN,
+      staff: { molotes: '5215511110001', birria: '5215522220002' },
+      staffTemplate: { name: 'nuevo_pedido', language: 'es_MX' },
+      graphApiVersion: 'v26.0',
+    });
+  });
+
+  it('acepta idioma de plantilla y versión de la Graph API', () => {
+    const { whatsappBot } = loadConfig({ ...VALID_ENV, ...BOT_ENV, WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE: 'es', WHATSAPP_GRAPH_API_VERSION: 'v25.0' });
+    expect(whatsappBot).toMatchObject({ staffTemplate: { language: 'es' }, graphApiVersion: 'v25.0' });
+  });
+
+  it('una sola variable exige todas las obligatorias y lista cada problema sin valores', () => {
+    const issues = issuesFor({ ...VALID_ENV, WHATSAPP_BOT_APP_SECRET: BOT_ENV.WHATSAPP_BOT_APP_SECRET });
+    expect(issues).toHaveLength(6);
+    for (const name of ['ACCESS_TOKEN', 'PHONE_NUMBER_ID', 'VERIFY_TOKEN', 'STAFF_MOLOTES', 'STAFF_BIRRIA', 'STAFF_TEMPLATE']) {
+      expect(issues.join('\n')).toContain(`WHATSAPP_BOT_${name} es obligatoria`);
+    }
+    expect(issues.join('\n')).not.toContain(BOT_ENV.WHATSAPP_BOT_APP_SECRET);
+  });
+
+  it('solo una variable opcional también habilita el bot y exige las obligatorias', () => {
+    expect(issuesFor({ ...VALID_ENV, WHATSAPP_GRAPH_API_VERSION: 'v26.0' })).toHaveLength(7);
+  });
+
+  it.each([
+    ['WHATSAPP_BOT_ACCESS_TOKEN', 'con espacios SECRETO'],
+    ['WHATSAPP_BOT_PHONE_NUMBER_ID', '12ab'],
+    ['WHATSAPP_BOT_APP_SECRET', 'corto'],
+    ['WHATSAPP_BOT_APP_SECRET', 'secreto-con-guiones-SECRETO'],
+    ['WHATSAPP_BOT_VERIFY_TOKEN', 'corto'],
+    ['WHATSAPP_BOT_VERIFY_TOKEN', 'token con espacios SECRETO'],
+    ['WHATSAPP_BOT_STAFF_MOLOTES', '+52 55 1111 0001'],
+    ['WHATSAPP_BOT_STAFF_BIRRIA', '123'],
+    ['WHATSAPP_BOT_STAFF_TEMPLATE', 'Nuevo Pedido'],
+    ['WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE', 'español'],
+    ['WHATSAPP_GRAPH_API_VERSION', 'version-x'],
+  ])('rechaza %s inválida sin mostrar el valor', (name, value) => {
+    const issues = issuesFor({ ...VALID_ENV, ...BOT_ENV, [name]: value });
+    expect(issues).toEqual([expect.stringMatching(new RegExp(`^${name} no es válida`))]);
+    expect(issues.join()).not.toContain(value);
+    for (const secret of SECRETS) expect(issues.join()).not.toContain(secret);
+  });
+
+  it('con el bot, los números de las dos landings deben ser el del bot (D-6)', () => {
+    const issues = issuesFor({ ...VALID_ENV, ...BOT_ENV, WHATSAPP_BIRRIA: '5210000000002' });
+    expect(issues).toEqual([expect.stringContaining('WHATSAPP_MOLOTES y WHATSAPP_BIRRIA deben ser el mismo número')]);
+    // Con *_URL en lugar de número no se compara.
+    expect(loadConfig({ ...VALID_ENV, ...BOT_ENV, WHATSAPP_BIRRIA: '', WHATSAPP_BIRRIA_URL: 'https://wa.me/5210000000009' }).whatsappBot).not.toBeNull();
   });
 });

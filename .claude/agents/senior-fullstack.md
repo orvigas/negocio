@@ -60,6 +60,7 @@ Prohibidos salvo petición explícita: React, Vue, Angular, Svelte, jQuery, Alpi
 | ------------------- | -------------------------------------------------------------------------------- |
 | `npm run db:generate` | Genera el cliente de Prisma (`src/generated/prisma`). Necesario antes de `typecheck`, `lint`, `test` y `dev` (en un clon nuevo o al cambiar el esquema). |
 | `npm run db:migrate:dev -- --name <nombre>` | Crea una migración a partir de `prisma/schema.prisma` (solo desarrollo; con un `DATA_DIR` de desarrollo, nunca el de producción). Nunca edites una migración ya aplicada. |
+| `npm run bot:chat [-- --ahora AAAA-MM-DDTHH:MM]` | Conversación con el bot de WhatsApp en la terminal contra el simulador de la Cloud API (sin Meta ni `DATA_DIR`). |
 | `npm test`          | Ejecuta toda la suite.                                                           |
 | `npm run typecheck` | Verifica tipos con `tsc` (sin emitir archivos). Obligatorio antes de dar una tarea por terminada; también corre en la etapa `build` del Dockerfile. |
 | `npm run build:css` | Genera `public/css/{molotes,birria,admin}/main.css` (no se versiona; nunca editar a mano). |
@@ -69,7 +70,14 @@ Prohibidos salvo petición explícita: React, Vue, Angular, Svelte, jQuery, Alpi
 
 ### Persistencia y API
 
-El proyecto **no tiene API pública**: la única API es la API JSON de productos bajo `/admin/api` (REQ-F-008), con sesión. Persistencia:
+El proyecto tiene dos superficies HTTP además de las landings:
+
+- **API JSON de productos** bajo `/admin/api` (REQ-F-008), con sesión.
+- **Webhook del bot de WhatsApp** en `/webhooks/whatsapp` (REQ-F-009). Es el único endpoint público sin sesión: la autenticidad la da la firma `X-Hub-Signature-256` (HMAC-SHA256 del cuerpo crudo con el App Secret) y la verificación con el token de suscripción. Todo cambio en esa ruta mantiene la verificación de la firma antes de procesar nada, la respuesta 200 inmediata y el procesamiento en segundo plano, y la deduplicación por id de mensaje.
+
+El bot vive en `src/services/whatsapp-bot/`. Guarda el estado de la conversación solo en memoria (una instancia; se borra al cerrar o tras 2 h) y lee el catálogo de la caché de productos y el horario de `src/content/hours.ts`. Envía mensajes con `fetch` nativo a la Cloud API de Meta, con una base fija (`https://graph.facebook.com`). Sus textos viven en `src/content/{common,molotes,birria}/bot.ts` y su configuración, en las variables `WHATSAPP_BOT_*` (todas o ninguna). En los logs, el número del cliente va enmascarado y nunca aparecen el texto de los mensajes ni los datos del cliente. Las pruebas nunca llaman a Meta: usan el doble de `tests/support/cloud-api-double.ts` (`tests/setup/no-meta.ts` rechaza cualquier `fetch` a Meta).
+
+Persistencia:
 
 - El contenido estático vive en `src/content/` y la configuración en variables de entorno.
 - Los productos (platillos y bebidas, con sus variantes y chips) se guardan en SQLite (`product`, `product_variant`, `product_chip`; REQ-F-008) mediante `src/repositories/product-repository.ts`: concentra las reglas (`src/services/product-schema.ts`: validación, slug no editable ni reutilizable, límites, versión por producto y posiciones) sobre un store Prisma (`prisma-product-store.ts`) o en memoria (`memory-product-store.ts`, para pruebas). Cada escritura guarda en la misma transacción su entrada en `product_change` (autor verificado). Al arrancar, cada negocio importa sus productos una sola vez (`product_import`) desde `current.json`, `previous.json` o la semilla. Las landings leen una caché en memoria (nunca la base de datos).
@@ -90,13 +98,13 @@ restaurante/
 │   ├── app.ts / server.ts   # App Koa (testeable) y arranque del servidor
 │   ├── config/              # env.ts (validación de variables, tipo Config), businesses.ts
 │   ├── content/             # Contenido por negocio (molotes/, birria/, common/), semillas seed.json, icons.ts, seeds.ts
-│   ├── controllers/         # landing.ts (elige negocio y renderiza), icons.ts, admin.ts, admin-users.ts, admin-account.ts, admin-access.ts
+│   ├── controllers/         # landing.ts (elige negocio y renderiza), icons.ts, admin.ts, admin-users.ts, admin-account.ts, admin-access.ts, whatsapp-webhook.ts
 │   ├── db/                  # client.ts (Prisma + better-sqlite3), migrate.ts (migraciones al arrancar), errors.ts, paths.ts
 │   ├── generated/prisma/    # Cliente de Prisma generado (`npm run db:generate`; no se versiona ni se edita)
 │   ├── middleware/          # error-handler.ts, request-logger.ts, admin-guard.ts
 │   ├── repositories/        # Menús (contrato y reglas, archivos y memoria) y usuarios (user-repository.ts, Prisma)
 │   ├── routes/              # Rutas (@koa/router): index.ts (landings, iconos), admin.ts (/admin)
-│   ├── services/            # business-schedule, whatsapp, menu-schema, visible-menu, price, admin-*, session-store, login-throttle, menu-diff, user-schema, authorization
+│   ├── services/            # business-schedule, whatsapp, menu-schema, visible-menu, price, admin-*, session-store, login-throttle, menu-diff, user-schema, authorization, whatsapp-bot/ (bot de WhatsApp)
 │   ├── styles/              # Fuentes Tailwind: shared/, molotes/, birria/, admin/, components/ (sin uso por ahora)
 │   ├── utils/               # logger.ts (JSON estructurado), datetime.ts, form-body.ts, errors.ts
 │   └── views/               # render.ts + layouts/, pages/, partials/ (.html), landings/ (.ts), admin/ (.ts y .html)
@@ -107,7 +115,7 @@ restaurante/
 │   └── img/{common,molotes,birria}/
 ├── prisma/                  # schema.prisma y migrations/ (SQL versionado)
 ├── prisma.config.ts         # Configuración del CLI de Prisma (solo desarrollo, CI y build)
-├── scripts/                 # hash-password.ts, admin-recover.ts (`npm run admin:recover`), support/, generate-icons.py
+├── scripts/                 # hash-password.ts, admin-recover.ts (`npm run admin:recover`), bot-chat.ts (`npm run bot:chat`, solo desarrollo), support/, generate-icons.py
 ├── tests/                   # unit/, integration/, support/, snapshots/, helpers.ts
 ├── tsconfig.json            # Solo verificación de tipos (`npm run typecheck`)
 ├── vitest.config.ts

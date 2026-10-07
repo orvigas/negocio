@@ -2,7 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
+
+Pull Request: https://github.com/orvigas/negocio/pull/30
 
 ## Aprobación
 
@@ -1625,3 +1627,14 @@ Los dos defectos quedan corregidos y no hay regresiones. CA-26 sigue pendiente d
 - Una ejecución de `npm test` falló de forma intermitente: `ECONNRESET` en la prueba del 413 del webhook (`tests/integration/whatsapp-webhook.test.ts`). Con supertest y un cuerpo real de más de 3 MiB, el servidor responde 413 y corta la conexión mientras el cliente aún escribe.
 - Corrección, solo en la prueba (sin cambios en `src/`): la petición declara `Content-Length` mayor que el límite y envía solo el principio del cuerpo, así que la app responde 413 por la longitud declarada. La aserción no cambia (413).
 - Resultado: la prueba pasa en 3 de 3 ejecuciones del archivo, y `npm test` pasa en 3 de 3 ejecuciones completas (972 pruebas en verde y 1 que falla a propósito). typecheck y lint con código 0.
+
+### Commit y Pull Request T4 (2026-10-07)
+
+`senior-fullstack`: la rama parte de `origin/main` (8006984).
+
+- Validación: `db:generate`, `build:css`, typecheck y lint con código 0; `npm test` con 972 pruebas en verde y 1 que falla a propósito, en 3 de 3 ejecuciones.
+- Commit `a529310`, con rutas explícitas: código, contenido, pruebas, fixtures, documentación, `.claude/agents/senior-fullstack.md` (autorizado por el usuario) y el ticket.
+- PR #30 (https://github.com/orvigas/negocio/pull/30) contra `main`.
+- CI del commit `a529310` en verde (run 37652819800): `calidad` y `docker`.
+
+Estado `READY_FOR_MERGE`.

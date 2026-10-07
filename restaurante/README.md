@@ -18,6 +18,10 @@ vive en `src/content/`; los menús, precios, showcase del hero y promociones se 
 `/admin/molotes` y `/admin/birria` y se guardan en archivos JSON (ver
 [Administración de menús](#administración-de-menús)).
 
+Un solo **bot de WhatsApp** (opcional, conectado a la WhatsApp Cloud API de Meta) atiende a
+los clientes de los dos negocios con la misma regla de días, muestra el menú del día, arma el
+pedido y lo envía al personal (ver [Bot de WhatsApp](#bot-de-whatsapp)).
+
 ## Requisitos
 
 - Node.js >= 24.3 (ver `.nvmrc`; con nvm: `nvm use`). Desde 24.3 Node ejecuta los `.ts` sin
@@ -58,6 +62,7 @@ apruebe con `npm install-scripts approve <paquete>`.
 | `npm run watch:css`  | Compilación de CSS en modo observación                      |
 | `npm run admin:hash-password` | Pide la contraseña de administración (sin mostrarla) e imprime el valor de `ADMIN_PASSWORD_HASH` |
 | `npm run admin:recover -- --usuario <nombre>` | Recupera el acceso de administración por consola (ver [Recuperar el acceso](#recuperar-el-acceso)) |
+| `npm run bot:chat [-- --ahora AAAA-MM-DDTHH:MM]` | Conversación con el bot de WhatsApp en la terminal contra el simulador de la Cloud API, sin Meta (ver [Probar el bot en local](#probar-el-bot-en-local)) |
 | `npm run db:generate` | Genera el cliente de Prisma en `src/generated/prisma` (necesario antes de `typecheck`, `lint`, `test` y `dev`) |
 | `npm run db:migrate:dev -- --name <nombre>` | Crea una migración nueva a partir de `prisma/schema.prisma` (solo desarrollo; usa `DATA_DIR`) |
 | `npm test`           | Tests unitarios e integración (Vitest + Supertest) |
@@ -261,6 +266,7 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `ADMIN_USER`               | No                      | Usuario del **primer administrador** (1-60 caracteres). Solo se usa si la base de datos no tiene usuarios; después se ignora (aviso `admin_bootstrap_ignored` en el log, sin valores). Sin usuarios ni estas variables, `/admin` responde 503 "no disponible"; con solo una de las dos o un hash inválido, la app no arranca |
 | `ADMIN_PASSWORD_HASH`      | No                      | Hash scrypt de la contraseña del primer administrador (`npm run admin:hash-password`). Nunca la contraseña en claro |
 | `TRUST_PROXY`              | No (`false`)            | `true` detrás de nginx con TLS: Koa usa `X-Forwarded-Proto` (HTTPS) y la última IP de `X-Forwarded-For` (límite de intentos) |
+| `WHATSAPP_BOT_*`, `WHATSAPP_GRAPH_API_VERSION` | Todas o ninguna | Bot de WhatsApp; ver [Variables del bot](#variables-del-bot). Sin ninguna, el bot queda deshabilitado |
 
 ## HTTP
 
@@ -274,13 +280,14 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `GET /<archivo>` | Estáticos de `public/` (sin índices ni archivos ocultos)                                   |
 | `/admin/...`     | Administración de menús y productos (ver [Administración de menús](#administración-de-menús))  |
 | `/admin/api/...` | API JSON de productos, con sesión (ver [API de productos](#api-de-productos))                |
+| `GET`/`POST /webhooks/whatsapp` | Webhook del bot de WhatsApp: verificación de la suscripción y recepción de mensajes firmados (ver [Bot de WhatsApp](#bot-de-whatsapp)); 503 si el bot no está configurado |
 
 Las tres rutas HTML usan el mismo controlador (`src/controllers/landing.ts`): con un
 `businessId` fijo renderiza ese negocio y sin él lo resuelve por fecha. Responden con
 `Cache-Control: no-cache`. La `<link rel="canonical">` siempre apunta a la ruta dedicada
 (`/` muestra la canónica del negocio del día), así que no hay contenido duplicado para SEO.
 Cualquier otra ruta responde 404 y los métodos distintos de GET/HEAD, 405 (salvo los POST de
-la administración).
+la administración y del webhook del bot).
 
 Los errores responden JSON con formato común:
 
@@ -290,6 +297,150 @@ Los errores responden JSON con formato común:
 
 Los errores 5xx usan un mensaje genérico; el stack solo se incluye con `NODE_ENV=development`.
 Los logs son JSON por línea en stdout (método, ruta sin query string, estado y duración).
+
+## Bot de WhatsApp
+
+Un solo bot para los dos negocios (REQ-F-009), dentro de esta misma app: Meta envía cada mensaje
+del cliente al webhook `POST /webhooks/whatsapp` y el bot responde con la Cloud API. No hay
+pago, ni panel de pedidos, ni pedidos guardados.
+
+- **Negocio:** el del día en `BUSINESS_TIMEZONE`, con la misma regla que las landings (L-V
+  Moloteando, S-D Birriería El Muñeco). Se fija con el primer mensaje y se mantiene hasta que el
+  pedido se confirma o se cancela, o tras 2 h sin actividad. Si el cliente pide el otro negocio
+  (p. ej. llega desde `/birria` un martes), el bot le indica sus días y atiende con el del día.
+- **Conversación:** solo texto, con números de opción. Palabras clave en cualquier momento,
+  sin distinguir mayúsculas ni acentos (solo si son el mensaje completo): `menú`, `carrito`,
+  `cancelar`, `persona` y `ayuda`. Menú del catálogo de productos (la misma caché y las mismas
+  reglas de visibilidad que la landing; nunca consulta la base de datos), carrito (1 a 20
+  unidades por línea, hasta 15 líneas), aviso de privacidad, nombre, entrega (recoger o a
+  domicilio con dirección), notas, resumen con código de referencia (`M-XXXX` o `B-XXXX`) y
+  confirmación. Antes de confirmar vuelve a comprobar precios y disponibilidad.
+- **Horario:** sale de `src/content/hours.ts` (REQ-F-010). Fuera de horario avisa cuándo abre,
+  deja pedir y marca el resumen "FUERA DE HORARIO". El lunes atiende como Molotes (cerrado; abre
+  el martes). Si el negocio no abre ni ese día ni el siguiente (Molotes el viernes después de las
+  15:00; Birria el domingo después de las 15:00), muestra el menú pero **no toma el pedido** e
+  informa cuándo abre cada negocio. Esa comprobación se hace al empezar el pedido.
+- **Aviso al personal:** siempre con la plantilla aprobada (ver [Plantilla del aviso al
+  personal](#plantilla-del-aviso-al-personal)), una sola vez por pedido. Si falla, el cliente
+  recibe el contacto directo del personal (`https://wa.me/<número>`). "persona" da ese mismo
+  contacto.
+- **Textos:** `src/content/common/bot.ts` (flujo) y `src/content/<negocio>/bot.ts` (lema,
+  palabras del negocio y secciones del menú).
+- **Estado en memoria** (una sola instancia, como las sesiones de `/admin`): si la app se
+  reinicia, la conversación en curso se pierde y el bot empieza de nuevo.
+
+### Prerrequisitos (los provee el dueño)
+
+No hacen falta para desarrollar ni para las pruebas (usan el simulador), pero sí para la puesta
+en producción y la prueba de punta a punta (CA-26, pendiente):
+
+1. Cuenta de Meta Business (verificada si Meta lo pide por volumen o por las plantillas).
+2. App en Meta for Developers con el producto WhatsApp y una cuenta de WhatsApp Business (WABA).
+3. Número dedicado al bot, registrado en la Cloud API y que no esté en uso en la app de WhatsApp.
+4. Token de acceso permanente (de un usuario del sistema), el ID del número y el ID de la WABA.
+5. El secreto de la app (App Secret), para validar la firma.
+6. URL pública con HTTPS para el webhook (el dominio de la VM con nginx).
+7. Plantilla aprobada para el aviso al personal.
+8. Método de pago en Meta para las conversaciones que cobra.
+9. Números de WhatsApp del personal de Molotes y de Birria.
+
+### Variables del bot
+
+Todas o ninguna: sin ninguna, el bot queda deshabilitado (el webhook responde 503 y las landings
+siguen igual). Con alguna, las obligatorias deben estar y ser válidas o la app no arranca (lista
+los problemas sin mostrar valores). Con el bot, `WHATSAPP_MOLOTES` y `WHATSAPP_BIRRIA` deben ser
+el número del bot (el mismo): el botón de cada landing abre ese chat con su propio mensaje
+inicial.
+
+| Variable | Obligatoria | Descripción |
+| --- | --- | --- |
+| `WHATSAPP_BOT_ACCESS_TOKEN` | Sí | Token permanente del usuario del sistema (secreto; sin espacios) |
+| `WHATSAPP_BOT_PHONE_NUMBER_ID` | Sí | ID del número del bot en la Cloud API (solo dígitos; no es el teléfono) |
+| `WHATSAPP_BOT_APP_SECRET` | Sí | Secreto de la app de Meta: valida `X-Hub-Signature-256` (secreto) |
+| `WHATSAPP_BOT_VERIFY_TOKEN` | Sí | Token de verificación del webhook, 16 a 128 caracteres `[A-Za-z0-9._~-]` (secreto; p. ej. `openssl rand -hex 32`) |
+| `WHATSAPP_BOT_STAFF_MOLOTES` | Sí | WhatsApp del personal de Molotes: recibe los pedidos y es el contacto directo (solo dígitos, formato internacional) |
+| `WHATSAPP_BOT_STAFF_BIRRIA` | Sí | Igual, para Birria |
+| `WHATSAPP_BOT_STAFF_TEMPLATE` | Sí | Nombre de la plantilla del aviso al personal (minúsculas, dígitos y `_`) |
+| `WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE` | No (`es_MX`) | Idioma de la plantilla |
+| `WHATSAPP_GRAPH_API_VERSION` | No (`v26.0`) | Versión de la Graph API (formato `vNN.N`) |
+
+La URL de la Graph API (`https://graph.facebook.com`) es fija: el token nunca se envía a otro host.
+
+### Registrar el webhook en Meta
+
+1. Define las variables del bot y despliega la app detrás de nginx con HTTPS (`TRUST_PROXY=true`).
+2. En la app de Meta: WhatsApp → Configuración → Webhook. URL de devolución de llamada:
+   `https://<tu-dominio>/webhooks/whatsapp`; token de verificación: el valor de
+   `WHATSAPP_BOT_VERIFY_TOKEN`. Meta hace `GET` con `hub.mode=subscribe`, `hub.verify_token` y
+   `hub.challenge`; la app devuelve el reto solo si el token coincide (si no, 403).
+3. Suscribe el campo `messages`.
+4. Cada entrega llega con `X-Hub-Signature-256` (HMAC-SHA256 del cuerpo con el App Secret). Sin
+   firma o mal formada responde 401; si no coincide, 403. En ambos casos no se procesa y queda
+   `bot_webhook_signature_invalid` en el log. Las entregas válidas reciben 200 enseguida y se
+   procesan en segundo plano.
+
+Meta reintenta durante días las entregas que no reciben 200 y puede duplicarlas: el bot procesa
+cada mensaje una sola vez (por su id) e **ignora los mensajes de hace más de 2 h**
+(`bot_message_stale`; tras una caída, el cliente tendrá que volver a escribir). Además, ignora
+los mensajes de un mismo número por encima de 20 por minuto (`bot_rate_limited`).
+
+### Plantilla del aviso al personal
+
+El número del personal casi nunca tiene abierta la ventana de 24 h con el bot, así que el aviso
+se envía **siempre** con una plantilla (es gratuita si la ventana está abierta). Créala en el
+Administrador de WhatsApp con:
+
+- **Categoría:** Utility. **Idioma:** Español (México), `es_MX` (o el de
+  `WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE`). **Nombre:** el de `WHATSAPP_BOT_STAFF_TEMPLATE` (p. ej.
+  `nuevo_pedido`).
+- **Tipo de parámetros:** con nombre. **Solo cuerpo** (sin encabezado, pie ni botones):
+
+```text
+Nuevo pedido {{codigo}} de {{negocio}}
+{{horario}}
+Cliente: {{cliente}} ({{whatsapp}})
+Entrega: {{entrega}}
+Pedido: {{lineas}}
+Total: {{total}}
+Notas: {{notas}}
+```
+
+Ejemplos para la revisión de Meta: `codigo` M-4F7K, `negocio` Moloteando, `horario` En horario,
+`cliente` Ana Pérez, `whatsapp` +5215512345678, `entrega` Recoger en sucursal, `lineas`
+2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260; 1 × Aguas Frescas Naturales del Día a
+$35 = $35, `total` $295, `notas` Sin notas.
+
+Los valores nunca llevan saltos de línea ni tabuladores (la API los rechaza): las líneas del
+pedido van separadas por `; `. Si Meta acepta el aviso pero avisa después de que no se entregó
+(estado `failed`, p. ej. plantilla pausada o número del personal sin WhatsApp), el cliente ya
+recibió la confirmación: **ese pedido puede perderse sin aviso**. Queda
+`bot_staff_delivery_failed` (con el negocio y el código de error) en el log; vigílalo.
+
+### Logs y privacidad
+
+Eventos: `bot_conversation_started`, `bot_order_confirmed`, `bot_order_cancelled`,
+`bot_staff_send_failed`, `bot_staff_delivery_failed`, `bot_webhook_signature_invalid`,
+`bot_api_error`, `bot_message_stale`, `bot_message_out_of_order`, `bot_rate_limited`,
+`bot_webhook_ignored` y `bot_conversation_evicted`. El número del cliente va enmascarado (solo
+los 4 últimos dígitos). Nunca se registran el texto de los mensajes, el nombre, la dirección,
+las notas, el código de referencia, los tokens ni el mensaje de error de Meta (solo su código).
+El nombre y la dirección se piden con un aviso de privacidad y se borran de memoria al cerrar la
+conversación. Se recomienda publicar el Aviso de Privacidad del negocio (LFPDPPP).
+
+### Probar el bot en local
+
+```sh
+npm run bot:chat                              # hora actual
+npm run bot:chat -- --ahora 2026-10-09T16:00  # viernes 16:00 (hora del negocio): Molotes no toma pedidos
+```
+
+Arranca la app en 127.0.0.1 con los productos de las semillas (en memoria; no toca `DATA_DIR`)
+y el bot conectado al simulador de la Cloud API (`tests/support/cloud-api-double.ts`). Cada
+línea que escribes llega al webhook como un mensaje firmado; verás las respuestas del bot y el
+aviso que recibiría el personal. Ninguna petición sale a internet. Comandos: `/hora
+AAAA-MM-DDTHH:MM`, `/audio` (mensaje que no es texto) y `/salir`. Solo para desarrollo (no está
+en la imagen de producción). Las pruebas automáticas usan el mismo simulador con entregas de
+ejemplo en `tests/fixtures/whatsapp/`.
 
 ## Menús
 
@@ -583,7 +734,7 @@ restaurante/
 │   ├── server.ts             # Entrada del proceso: valida config, prepara DATA_DIR y la base de datos, primer administrador, importación de productos, escucha en PORT, cierre ordenado
 │   ├── app.ts                # createApp(): app Koa testeable (config, repositorio, logger y `now` inyectables)
 │   ├── config/               # env.ts (carga/validación y tipo Config), businesses.ts (ids de negocio)
-│   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests),
+│   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests), whatsapp-webhook.ts (webhook del bot),
 │   │                         # admin.ts (acceso, inicio y menús), admin-products.ts (productos en HTML), admin-products-api.ts y
 │   │                         # admin-api-access.ts (API JSON), admin-business-view.ts, admin-users.ts, admin-account.ts, admin-access.ts
 │   ├── db/                   # client.ts (Prisma + better-sqlite3), migrate.ts (migraciones al arrancar), errors.ts, paths.ts
@@ -593,8 +744,9 @@ restaurante/
 │   ├── repositories/         # Menús (contrato y reglas, archivos y memoria), productos (reglas + store Prisma y memoria) y usuarios (Prisma)
 │   ├── services/             # business-schedule, whatsapp, menu-schema, price, visible-menu, admin-form,
 │   │                         # menu-diff, admin-auth, session-store, login-throttle, user-schema,
-│   │                         # authorization, admin-bootstrap, product-schema, product-form, slug
-│   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), horarios (hours.ts), semillas seed.json e icons.ts
+│   │                         # authorization, admin-bootstrap, product-schema, product-form, slug,
+│   │                         # whatsapp-bot/ (bot de WhatsApp: webhook, cloud-api, conversation, catalog, schedule, messages, store, bot)
+│   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), textos del bot (bot.ts), horarios (hours.ts), semillas seed.json e icons.ts
 │   ├── utils/                # logger.ts (JSON estructurado), datetime.ts (zona del negocio), form-body.ts, json-body.ts, errors.ts
 │   ├── views/                # render.ts + plantillas HTML
 │   │   ├── layouts/base.html # <head> común (SEO, fuentes, CSS/JS por negocio) y skip link
@@ -625,6 +777,7 @@ restaurante/
 ├── scripts/
 │   ├── hash-password.ts      # `npm run admin:hash-password`
 │   ├── admin-recover.ts      # `npm run admin:recover`
+│   ├── bot-chat.ts           # `npm run bot:chat`: el bot en la terminal contra el simulador (solo desarrollo)
 │   ├── support/read-hidden.ts # Lectura de contraseñas sin eco (compartida)
 │   └── generate-icons.py     # Genera public/img/<negocio>/icons/ (Python 3 + Pillow; solo desarrollo)
 ├── data/                     # DATA_DIR por defecto fuera de producción (ignorado por git)
@@ -635,6 +788,9 @@ restaurante/
 │   ├── support/database.ts   # Bases de datos SQLite temporales (nunca data/)
 │   ├── support/process.ts    # Procesos reales: arranque del servidor y comandos de consola
 │   ├── support/png.ts        # Lectura mínima de PNG/ICO (dimensiones, opacidad, color de fondo)
+│   ├── support/cloud-api-double.ts # Doble de la WhatsApp Cloud API (ninguna prueba llama a Meta)
+│   ├── support/whatsapp.ts   # Entregas del webhook, firma, reloj y bot de prueba
+│   ├── fixtures/whatsapp/    # Entregas de ejemplo del webhook (forma de los ejemplos oficiales)
 │   ├── snapshots/            # HTML de referencia de las landings (regresión visual con la semilla)
 │   ├── unit/                 # config, esquema, precios, formulario, repositorio de archivos, sesión, landings, contenido vs. diseño, JS sobre el HTML real
 │   └── integration/          # Landings (fecha, SEO, CTA, datos editables, datos dañados), administración, estáticos, errores

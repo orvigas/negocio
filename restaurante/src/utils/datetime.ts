@@ -71,3 +71,10 @@ export function formatDisplayDate(iso: string, timeZone: string): string {
   const wall = wallClock(date, timeZone);
   return `${pad(wall.day)}/${pad(wall.month)}/${wall.year} ${pad(wall.hour)}:${pad(wall.minute)}`;
 }
+
+/** Minutos transcurridos desde la medianoche local (0 a 1439) en `timeZone` (REQ-F-009). */
+export function getLocalMinutes(date: Date, timeZone: string): number {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) throw new TypeError('Fecha inválida');
+  const wall = wallClock(date, timeZone);
+  return wall.hour * 60 + wall.minute;
+}

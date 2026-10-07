@@ -41,3 +41,15 @@ export function centsToInput(cents: number): string {
   if (!Number.isSafeInteger(cents) || cents < 0) throw new TypeError(`Importe inválido: ${cents}`);
   return `${Math.trunc(cents / 100)}.${String(cents % 100).padStart(2, '0')}`;
 }
+
+const PESOS = new Map(
+  [0, 2].map((digits) => [digits, new Intl.NumberFormat('es-MX', { minimumFractionDigits: digits, maximumFractionDigits: 2 })]),
+);
+
+/** Formatea un importe en centavos como en el diseño: "$45", "$1,500", "$45.50". */
+export function formatPesos(cents: number): string {
+  if (!Number.isSafeInteger(cents) || cents < 0) throw new TypeError(`Importe inválido: ${cents}`);
+  // PESOS tiene formateadores para 0 y 2 decimales, las dos únicas claves posibles.
+  const formatter = PESOS.get(cents % 100 === 0 ? 0 : 2) as Intl.NumberFormat;
+  return `$${formatter.format(cents / 100)}`;
+}

@@ -26,6 +26,7 @@
     "db:migrate:dev": "prisma migrate dev",
     "admin:hash-password": "node scripts/hash-password.ts",
     "admin:recover": "node --env-file-if-exists=.env scripts/admin-recover.ts",
+    "bot:chat": "node scripts/bot-chat.ts",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0"
   },

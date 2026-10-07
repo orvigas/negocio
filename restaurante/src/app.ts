@@ -18,6 +18,8 @@ import { createImageChecker } from './services/admin-form.ts';
 import { getActiveBusinessId } from './services/business-schedule.ts';
 import { createLoginThrottle } from './services/login-throttle.ts';
 import { createSessionStore } from './services/session-store.ts';
+import { createWhatsAppBot, type WhatsAppBot } from './services/whatsapp-bot/bot.ts';
+import { createCloudApiClient, type FetchLike } from './services/whatsapp-bot/cloud-api.ts';
 import { silentLogger, type Logger } from './utils/logger.ts';
 import { renderAdminUnavailable } from './views/admin/index.ts';
 import { createRenderer } from './views/render.ts';
@@ -41,6 +43,12 @@ export interface AppOptions {
   hashParams?: PasswordHashParams;
   logger?: Logger;
   now?: () => Date;
+  /**
+   * Bot de WhatsApp ya construido (REQ-F-009; las pruebas lo crean con el doble de la Cloud API).
+   * Sin él, si `config.whatsappBot` existe, se crea con `cloudApiFetch` (por defecto, `fetch`).
+   */
+  whatsappBot?: WhatsAppBot | undefined;
+  cloudApiFetch?: FetchLike;
   viewsDir?: string;
   publicDir?: string;
 }
@@ -54,6 +62,8 @@ export function createApp({
   hashParams = SCRYPT_DEFAULTS,
   logger = silentLogger,
   now = () => new Date(),
+  whatsappBot,
+  cloudApiFetch = (url, init) => fetch(url, init),
   viewsDir = DEFAULT_VIEWS_DIR,
   publicDir = DEFAULT_PUBLIC_DIR,
 }: AppOptions): Koa {
@@ -87,7 +97,20 @@ export function createApp({
     : undefined;
   const renderUnavailable = () =>
     renderAdminUnavailable(renderer, { faviconBusinessId: getActiveBusinessId({ now: now(), timeZone: config.timezone }) }).toString();
-  const router = createRouter({ config, renderer, now, repository: menuRepository, products, publicDir, admin });
+  // Bot de WhatsApp (REQ-F-009): solo con su configuración; sin ella, el webhook responde 503.
+  const bot =
+    whatsappBot ??
+    (config.whatsappBot
+      ? createWhatsAppBot({
+          config: config.whatsappBot,
+          timeZone: config.timezone,
+          products,
+          client: createCloudApiClient({ config: config.whatsappBot, fetch: cloudApiFetch, logger }),
+          logger,
+          now,
+        })
+      : undefined);
+  const router = createRouter({ config, renderer, now, repository: menuRepository, products, publicDir, admin, bot, logger });
 
   app.use(createRequestLogger({ logger }));
   app.use(createErrorHandler({ logger, exposeStack: config.nodeEnv === 'development' }));

@@ -88,6 +88,7 @@ const server = app.listen(config.port, () => {
     nodeEnv: config.nodeEnv,
     timezone: config.timezone,
     adminStatus,
+    whatsappBot: config.whatsappBot ? 'enabled' : 'disabled',
     trustProxy: config.trustProxy,
   });
 });

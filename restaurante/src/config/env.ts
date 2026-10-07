@@ -1,7 +1,7 @@
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { BUSINESS_IDS, type BusinessId } from './businesses.ts';
+import { BUSINESS, BUSINESS_IDS, type BusinessId } from './businesses.ts';
 import { parsePasswordHash } from '../services/admin-auth.ts';
 import { normalizeUsername, usernameError } from '../services/user-schema.ts';
 import {
@@ -36,6 +36,25 @@ export interface WhatsAppConfig {
  */
 export type AdminBootstrapConfig = Readonly<{ user: string; passwordHash: string }> | null;
 
+/** Versión de la Graph API por defecto (vigente en 2026-10; REQ-F-009). */
+export const DEFAULT_GRAPH_API_VERSION = 'v26.0';
+export const DEFAULT_STAFF_TEMPLATE_LANGUAGE = 'es_MX';
+
+/**
+ * Bot de WhatsApp (REQ-F-009, RF-2). null si no se definió ninguna de sus variables: el bot queda
+ * deshabilitado y el webhook responde 503. Contiene secretos: nunca se registra ni se muestra.
+ */
+export type WhatsAppBotConfig = Readonly<{
+  accessToken: string;
+  phoneNumberId: string;
+  appSecret: string;
+  verifyToken: string;
+  /** Número de WhatsApp del personal de cada negocio (recibe los pedidos y es el contacto directo). */
+  staff: Readonly<Record<BusinessId, string>>;
+  staffTemplate: Readonly<{ name: string; language: string }>;
+  graphApiVersion: string;
+}> | null;
+
 export interface Config {
   readonly nodeEnv: NodeEnv;
   readonly isProduction: boolean;
@@ -46,6 +65,7 @@ export interface Config {
   readonly dataDir: string;
   readonly trustProxy: boolean;
   readonly adminBootstrap: AdminBootstrapConfig;
+  readonly whatsappBot: WhatsAppBotConfig;
 }
 
 // Se amplía el tipo de la lista para poder buscar un string cualquiera.
@@ -192,6 +212,75 @@ function parseBoolean(raw: string | undefined, name: string, defaultValue: boole
   return undefined;
 }
 
+/** Variables del bot (REQ-F-009). Definir cualquiera habilita el bot y exige las obligatorias. */
+const BOT_VARS = Object.freeze({
+  accessToken: { name: 'WHATSAPP_BOT_ACCESS_TOKEN', pattern: /^\S{1,4096}$/, hint: 'sin espacios, hasta 4096 caracteres' },
+  phoneNumberId: { name: 'WHATSAPP_BOT_PHONE_NUMBER_ID', pattern: /^\d{5,20}$/, hint: 'solo dígitos (5 a 20)' },
+  appSecret: { name: 'WHATSAPP_BOT_APP_SECRET', pattern: /^[A-Za-z0-9]{16,128}$/, hint: 'letras y dígitos (16 a 128)' },
+  verifyToken: { name: 'WHATSAPP_BOT_VERIFY_TOKEN', pattern: /^[A-Za-z0-9._~-]{16,128}$/, hint: 'letras, dígitos y . _ ~ - (16 a 128)' },
+  staffMolotes: { name: 'WHATSAPP_BOT_STAFF_MOLOTES', pattern: PHONE_PATTERN, hint: 'solo dígitos en formato internacional (8 a 15)' },
+  staffBirria: { name: 'WHATSAPP_BOT_STAFF_BIRRIA', pattern: PHONE_PATTERN, hint: 'solo dígitos en formato internacional (8 a 15)' },
+  template: { name: 'WHATSAPP_BOT_STAFF_TEMPLATE', pattern: /^[a-z0-9_]{1,512}$/, hint: 'minúsculas, dígitos y _ (nombre de la plantilla en Meta)' },
+});
+const BOT_OPTIONAL_VARS = Object.freeze({
+  language: { name: 'WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE', pattern: /^[a-z]{2,3}(_[A-Z]{2})?$/, hint: 'código de idioma de la plantilla (p. ej. es_MX)' },
+  graphApiVersion: { name: 'WHATSAPP_GRAPH_API_VERSION', pattern: /^v\d{1,3}\.\d$/, hint: 'versión de la Graph API (p. ej. v26.0)' },
+});
+
+/**
+ * Configuración del bot (REQ-F-009, RF-2): todas o ninguna. Sin ninguna variable vale null; con
+ * alguna, las obligatorias deben estar y ser válidas. Los mensajes nunca incluyen los valores.
+ */
+function parseWhatsAppBot(env: Env, issues: string[]): WhatsAppBotConfig | undefined {
+  const all = [...Object.values(BOT_VARS), ...Object.values(BOT_OPTIONAL_VARS)];
+  if (all.every(({ name }) => readVar(env, name) === undefined)) return null;
+
+  const before = issues.length;
+  const read = ({ name, pattern, hint }: { name: string; pattern: RegExp; hint: string }, required: boolean): string | undefined => {
+    const value = readVar(env, name);
+    if (value === undefined) {
+      if (required) issues.push(`${name} es obligatoria si se configura el bot de WhatsApp (o no definas ninguna WHATSAPP_BOT_*)`);
+      return undefined;
+    }
+    if (!pattern.test(value)) {
+      issues.push(`${name} no es válida: ${hint}`);
+      return undefined;
+    }
+    return value;
+  };
+  const accessToken = read(BOT_VARS.accessToken, true);
+  const phoneNumberId = read(BOT_VARS.phoneNumberId, true);
+  const appSecret = read(BOT_VARS.appSecret, true);
+  const verifyToken = read(BOT_VARS.verifyToken, true);
+  const staffMolotes = read(BOT_VARS.staffMolotes, true);
+  const staffBirria = read(BOT_VARS.staffBirria, true);
+  const template = read(BOT_VARS.template, true);
+  const language = read(BOT_OPTIONAL_VARS.language, false) ?? DEFAULT_STAFF_TEMPLATE_LANGUAGE;
+  const graphApiVersion = read(BOT_OPTIONAL_VARS.graphApiVersion, false) ?? DEFAULT_GRAPH_API_VERSION;
+
+  if (
+    issues.length > before ||
+    accessToken === undefined ||
+    phoneNumberId === undefined ||
+    appSecret === undefined ||
+    verifyToken === undefined ||
+    staffMolotes === undefined ||
+    staffBirria === undefined ||
+    template === undefined
+  ) {
+    return undefined;
+  }
+  return Object.freeze({
+    accessToken,
+    phoneNumberId,
+    appSecret,
+    verifyToken,
+    staff: Object.freeze({ [BUSINESS.MOLOTES]: staffMolotes, [BUSINESS.BIRRIA]: staffBirria }),
+    staffTemplate: Object.freeze({ name: template, language }),
+    graphApiVersion,
+  });
+}
+
 function parseWhatsApp(env: Env, businessId: BusinessId, issues: string[]): WhatsAppConfig | undefined {
   const prefix = `WHATSAPP_${businessId.toUpperCase()}`;
   const url = readVar(env, `${prefix}_URL`);
@@ -256,6 +345,13 @@ export function loadConfig(env: Env = process.env): Config {
   const dataDir = parseDataDir(readVar(env, 'DATA_DIR'), nodeEnv, issues);
   const adminBootstrap = parseAdminBootstrap(env, issues);
   const trustProxy = parseBoolean(readVar(env, 'TRUST_PROXY'), 'TRUST_PROXY', false, issues);
+  const whatsappBot = parseWhatsAppBot(env, issues);
+  // D-6 (REQ-F-009): con el bot, los CTA de las dos landings abren el chat del mismo número (el del bot).
+  const molotesPhone = whatsapp.molotes?.phone;
+  const birriaPhone = whatsapp.birria?.phone;
+  if (whatsappBot && molotesPhone !== undefined && birriaPhone !== undefined && molotesPhone !== birriaPhone) {
+    issues.push('Con el bot de WhatsApp, WHATSAPP_MOLOTES y WHATSAPP_BIRRIA deben ser el mismo número (el del bot)');
+  }
 
   // Cada valor undefined ya dejó su problema en `issues`; las comprobaciones extra solo estrechan tipos.
   if (
@@ -265,6 +361,7 @@ export function loadConfig(env: Env = process.env): Config {
     dataDir === undefined ||
     adminBootstrap === undefined ||
     trustProxy === undefined ||
+    whatsappBot === undefined ||
     !isCompleteWhatsApp(whatsapp)
   ) {
     throw new ConfigError(issues);
@@ -280,5 +377,6 @@ export function loadConfig(env: Env = process.env): Config {
     dataDir,
     trustProxy,
     adminBootstrap,
+    whatsappBot,
   });
 }

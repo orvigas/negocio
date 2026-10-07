@@ -6,8 +6,10 @@ import { manifestPath } from '../content/icons.ts';
 import type { AdminDeps } from '../controllers/admin.ts';
 import { createIconsController } from '../controllers/icons.ts';
 import { createLandingController } from '../controllers/landing.ts';
+import { WEBHOOK_PATH, createWhatsAppWebhook, type WebhookReceiver } from '../controllers/whatsapp-webhook.ts';
 import type { MenuRepository } from '../repositories/menu-repository.ts';
 import type { ProductRepository } from '../repositories/product-repository.ts';
+import type { Logger } from '../utils/logger.ts';
 import type { Renderer } from '../views/render.ts';
 import { createAdminRouter } from './admin.ts';
 
@@ -22,6 +24,7 @@ export type AdminRouteDeps = Omit<AdminDeps, 'config' | 'renderer' | 'now' | 're
  *                 -> iconos del negocio activo del día, con revalidación (REQ-F-002).
  * GET /molotes.webmanifest, /birria.webmanifest -> manifest de cada negocio.
  * /admin/...      -> administración de menús (src/routes/admin.ts), solo si `admin` existe.
+ * GET/POST /webhooks/whatsapp -> webhook del bot de WhatsApp (REQ-F-009); 503 sin `bot`.
  *
  * `admin`: dependencias de la administración (sesiones, límite de intentos, autenticador...);
  * sin ella (credenciales no configuradas) no se montan sus rutas.
@@ -29,6 +32,8 @@ export type AdminRouteDeps = Omit<AdminDeps, 'config' | 'renderer' | 'now' | 're
 export function createRouter({
   admin,
   publicDir,
+  bot,
+  logger,
   ...deps
 }: {
   config: Config;
@@ -38,6 +43,8 @@ export function createRouter({
   products: ProductRepository;
   publicDir: string;
   admin?: AdminRouteDeps | undefined;
+  bot?: WebhookReceiver | undefined;
+  logger: Logger;
 }): Router {
   const router = new Router();
   const icons = createIconsController({ config: deps.config, now: deps.now, publicDir });
@@ -48,6 +55,9 @@ export function createRouter({
   }
   router.get('/favicon.ico', icons.favicon);
   router.get(['/apple-touch-icon.png', '/apple-touch-icon-precomposed.png'], icons.appleTouchIcon);
+  const webhook = createWhatsAppWebhook({ botConfig: deps.config.whatsappBot, bot, logger });
+  router.get(WEBHOOK_PATH, webhook.verify);
+  router.post(WEBHOOK_PATH, webhook.receive);
   if (admin) {
     const adminRouter = createAdminRouter({ ...deps, ...admin });
     router.use(adminRouter.routes(), adminRouter.allowedMethods());

@@ -2,9 +2,11 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE (2026-10-07; PR #30 mergeado en `main`, commit de merge `1c5c43e`)
 
-Pull Request: https://github.com/orvigas/negocio/pull/30
+Pull Request: https://github.com/orvigas/negocio/pull/30 (CI del commit `ff91243`: `calidad` y `docker` en verde; CI del push a `main` de `1c5c43e`: `calidad` y `docker` en verde).
+
+Seguimiento pendiente: CA-26 (prueba de punta a punta con Meta real, incluida la longitud que acepta la plantilla del aviso al personal) queda pendiente de los prerrequisitos de Meta que provee el usuario.
 
 ## Aprobación
 
@@ -1638,3 +1640,9 @@ Los dos defectos quedan corregidos y no hay regresiones. CA-26 sigue pendiente d
 - CI del commit `a529310` en verde (run 37652819800): `calidad` y `docker`.
 
 Estado `READY_FOR_MERGE`.
+
+### Cierre T5
+
+2026-10-07, `senior-fullstack`. El usuario confirma el merge del PR #30 (cita textual: "Merge hecho"). Mergeado el 2026-10-07T16:40:45Z (10:40 del 2026-10-07, hora de Ciudad de México); commit de merge `1c5c43e`. El push a `main` de `1c5c43e` pasó el CI con `calidad` y `docker` en verde: https://github.com/orvigas/negocio/actions/runs/37653936440. El ticket pasa de `in-progress/` a `done/`. Estado: `DONE`.
+
+Queda como seguimiento CA-26: la prueba de punta a punta con Meta real, incluida la comprobación de la longitud que acepta la plantilla del aviso al personal. Depende de los prerrequisitos de Meta del usuario (ver "Prerrequisitos para la QA de punta a punta") y no bloquea el cierre.

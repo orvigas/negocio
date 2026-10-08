@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
+import { MAX_TEXT_LENGTH, type InboundDelivery, type InboundMessage, type InboundStatus, type SignatureCheck } from '../../chat-bot.ts';
+
 /**
  * Webhook de la WhatsApp Cloud API (REQ-F-009, RF-1).
  *
@@ -14,15 +16,11 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 export const SIGNATURE_HEADER = 'X-Hub-Signature-256';
 /** Meta envía payloads de hasta 3 MB. */
 export const MAX_WEBHOOK_BYTES = 3 * 1024 * 1024;
-/** Longitud máxima del texto que procesa el bot (lo demás se recorta; D-12 no pide más de 200). */
-export const MAX_TEXT_LENGTH = 1000;
 
 const SIGNATURE_PATTERN = /^sha256=([0-9a-f]{64})$/i;
 const WA_ID_PATTERN = /^\d{5,20}$/;
 const MESSAGE_ID_PATTERN = /^[\x21-\x7e]{1,256}$/;
 const TIMESTAMP_PATTERN = /^\d{1,12}$/;
-
-export type SignatureCheck = 'valid' | 'missing' | 'malformed' | 'mismatch';
 
 /** Comprueba la firma en tiempo constante. */
 export function checkSignature(rawBody: Buffer, header: string | undefined, appSecret: string): SignatureCheck {
@@ -32,32 +30,6 @@ export function checkSignature(rawBody: Buffer, header: string | undefined, appS
   const expected = createHmac('sha256', appSecret).update(rawBody).digest();
   const received = Buffer.from(match[1], 'hex');
   return received.length === expected.length && timingSafeEqual(received, expected) ? 'valid' : 'mismatch';
-}
-
-/** Mensaje entrante ya validado. `text` solo existe en los mensajes de texto. */
-export interface InboundMessage {
-  readonly id: string;
-  /** `wa_id` del cliente (dígitos). */
-  readonly from: string;
-  /** Segundos desde la época (Unix). */
-  readonly timestamp: number;
-  readonly type: string;
-  readonly text?: string;
-}
-
-/** Estado de un mensaje que envió el bot (entregado, leído, fallido...). */
-export interface InboundStatus {
-  readonly id: string;
-  readonly status: string;
-  /** Código numérico del primer error, si lo hay (nunca su mensaje). */
-  readonly errorCode?: number;
-}
-
-export interface ParsedDelivery {
-  readonly messages: InboundMessage[];
-  readonly statuses: InboundStatus[];
-  /** Cambios descartados (otro objeto, campo o número). */
-  readonly ignored: number;
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -87,10 +59,11 @@ function parseStatus(raw: unknown): InboundStatus | null {
 }
 
 /**
- * Extrae los mensajes y estados dirigidos al número del bot (`phoneNumberId`). Lo que no tiene la
- * forma esperada se descarta sin error: Meta reintentaría durante días una entrega rechazada.
+ * Extrae los mensajes y estados dirigidos al número del bot (`accountId`: el ID del número en la
+ * Cloud API). Lo que no tiene la forma esperada se descarta sin error: Meta reintentaría durante
+ * días una entrega rechazada.
  */
-export function parseDelivery(payload: unknown, phoneNumberId: string): ParsedDelivery {
+export function parseDelivery(payload: unknown, accountId: string): InboundDelivery {
   const messages: InboundMessage[] = [];
   const statuses: InboundStatus[] = [];
   let ignored = 0;
@@ -100,7 +73,7 @@ export function parseDelivery(payload: unknown, phoneNumberId: string): ParsedDe
     for (const change of asArray(isObject(entry) ? entry.changes : undefined)) {
       const value = isObject(change) && change.field === 'messages' ? change.value : undefined;
       const metadata = isObject(value) ? value.metadata : undefined;
-      if (!isObject(value) || !isObject(metadata) || metadata.phone_number_id !== phoneNumberId) {
+      if (!isObject(value) || !isObject(metadata) || metadata.phone_number_id !== accountId) {
         ignored += 1;
         continue;
       }

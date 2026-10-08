@@ -18,8 +18,8 @@ import { createImageChecker } from './services/admin-form.ts';
 import { getActiveBusinessId } from './services/business-schedule.ts';
 import { createLoginThrottle } from './services/login-throttle.ts';
 import { createSessionStore } from './services/session-store.ts';
-import { createWhatsAppBot, type WhatsAppBot } from './services/whatsapp-bot/bot.ts';
-import { createCloudApiClient, type FetchLike } from './services/whatsapp-bot/cloud-api.ts';
+import { createBotOrchestrator, type BotOrchestrator } from './services/whatsapp-bot/orchestrator.ts';
+import { createChatBot, type FetchLike } from './services/whatsapp-bot/providers/select.ts';
 import { silentLogger, type Logger } from './utils/logger.ts';
 import { renderAdminUnavailable } from './views/admin/index.ts';
 import { createRenderer } from './views/render.ts';
@@ -44,11 +44,12 @@ export interface AppOptions {
   logger?: Logger;
   now?: () => Date;
   /**
-   * Bot de WhatsApp ya construido (REQ-F-009; las pruebas lo crean con el doble de la Cloud API).
-   * Sin él, si `config.whatsappBot` existe, se crea con `cloudApiFetch` (por defecto, `fetch`).
+   * Bot de WhatsApp ya construido (REQ-F-009; las pruebas lo crean con el doble del proveedor).
+   * Sin él, si `config.whatsappBot` existe, se crea con el proveedor configurado (REQ-F-012) y
+   * `providerFetch` (por defecto, `fetch`).
    */
-  whatsappBot?: WhatsAppBot | undefined;
-  cloudApiFetch?: FetchLike;
+  bot?: BotOrchestrator | undefined;
+  providerFetch?: FetchLike;
   viewsDir?: string;
   publicDir?: string;
 }
@@ -62,8 +63,8 @@ export function createApp({
   hashParams = SCRYPT_DEFAULTS,
   logger = silentLogger,
   now = () => new Date(),
-  whatsappBot,
-  cloudApiFetch = (url, init) => fetch(url, init),
+  bot: injectedBot,
+  providerFetch = (url, init) => fetch(url, init),
   viewsDir = DEFAULT_VIEWS_DIR,
   publicDir = DEFAULT_PUBLIC_DIR,
 }: AppOptions): Koa {
@@ -98,18 +99,21 @@ export function createApp({
   const renderUnavailable = () =>
     renderAdminUnavailable(renderer, { faviconBusinessId: getActiveBusinessId({ now: now(), timeZone: config.timezone }) }).toString();
   // Bot de WhatsApp (REQ-F-009): solo con su configuración; sin ella, el webhook responde 503.
+  // El proveedor (Meta o Twilio) se elige en providers/select.ts (REQ-F-012, RF-1.3).
   const bot =
-    whatsappBot ??
+    injectedBot ??
     (config.whatsappBot
-      ? createWhatsAppBot({
-          config: config.whatsappBot,
+      ? createBotOrchestrator({
+          chatBot: createChatBot(config.whatsappBot, { fetch: providerFetch, logger }),
+          staff: config.whatsappBot.staff,
           timeZone: config.timezone,
           products,
-          client: createCloudApiClient({ config: config.whatsappBot, fetch: cloudApiFetch, logger }),
           logger,
           now,
         })
       : undefined);
+  // D-13 (REQ-F-012): solo el proveedor, ningún otro valor.
+  if (bot) logger.info('bot_provider_selected', { provider: bot.chatBot.provider });
   const router = createRouter({ config, renderer, now, repository: menuRepository, products, publicDir, admin, bot, logger });
 
   app.use(createRequestLogger({ logger }));

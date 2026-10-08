@@ -27,7 +27,7 @@ async function start({ at = mx(`${WEEK.tue}T10:00`) } = {}) {
     products: (await makeProductRepository()).repository,
     logger: h.logger,
     now: () => h.clock.now,
-    whatsappBot: h.bot,
+    bot: h.bot,
   });
   const server = await listenLocal(app);
 
@@ -266,7 +266,7 @@ describe('arranque real con la configuración del bot (CA-4)', () => {
   }
 
   it('configuración incompleta -> código 1 con la lista de problemas y sin valores', async () => {
-    const server = await startServer({ DATA_DIR: await dataDir(), WHATSAPP_BOT_APP_SECRET: BOT_ENV.WHATSAPP_BOT_APP_SECRET, WHATSAPP_BOT_VERIFY_TOKEN: 'corto' });
+    const server = await startServer({ DATA_DIR: await dataDir(), WHATSAPP_BOT_PROVIDER: 'meta', WHATSAPP_BOT_APP_SECRET: BOT_ENV.WHATSAPP_BOT_APP_SECRET, WHATSAPP_BOT_VERIFY_TOKEN: 'corto' });
     cleanups.push(async () => void (await server.stop()));
     expect(server.started).toBe(false);
     expect(await server.exited).toBe(1);

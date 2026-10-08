@@ -6,7 +6,7 @@ import { manifestPath } from '../content/icons.ts';
 import type { AdminDeps } from '../controllers/admin.ts';
 import { createIconsController } from '../controllers/icons.ts';
 import { createLandingController } from '../controllers/landing.ts';
-import { WEBHOOK_PATH, createWhatsAppWebhook, type WebhookReceiver } from '../controllers/whatsapp-webhook.ts';
+import { WEBHOOK_PATH, createWhatsAppWebhook, type WebhookBot } from '../controllers/whatsapp-webhook.ts';
 import type { MenuRepository } from '../repositories/menu-repository.ts';
 import type { ProductRepository } from '../repositories/product-repository.ts';
 import type { Logger } from '../utils/logger.ts';
@@ -43,7 +43,7 @@ export function createRouter({
   products: ProductRepository;
   publicDir: string;
   admin?: AdminRouteDeps | undefined;
-  bot?: WebhookReceiver | undefined;
+  bot?: WebhookBot | undefined;
   logger: Logger;
 }): Router {
   const router = new Router();
@@ -55,7 +55,7 @@ export function createRouter({
   }
   router.get('/favicon.ico', icons.favicon);
   router.get(['/apple-touch-icon.png', '/apple-touch-icon-precomposed.png'], icons.appleTouchIcon);
-  const webhook = createWhatsAppWebhook({ botConfig: deps.config.whatsappBot, bot, logger });
+  const webhook = createWhatsAppWebhook({ bot, logger });
   router.get(WEBHOOK_PATH, webhook.verify);
   router.post(WEBHOOK_PATH, webhook.receive);
   if (admin) {

@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { WhatsAppBotConfig } from '../../src/config/env.ts';
+import type { MetaBotConfig } from '../../src/config/env.ts';
 import type { ProductRepository } from '../../src/repositories/product-repository.ts';
-import { createWhatsAppBot } from '../../src/services/whatsapp-bot/bot.ts';
-import { createCloudApiClient } from '../../src/services/whatsapp-bot/cloud-api.ts';
-import { parseDelivery } from '../../src/services/whatsapp-bot/webhook.ts';
+import { createBotOrchestrator } from '../../src/services/whatsapp-bot/orchestrator.ts';
+import { parseDelivery } from '../../src/services/whatsapp-bot/providers/meta/webhook.ts';
+import { createChatBot } from '../../src/services/whatsapp-bot/providers/select.ts';
 import { BOT_ENV, makeConfig, makeRecordingLogger } from '../helpers.ts';
 import { createCloudApiDouble } from './cloud-api-double.ts';
 import { makeProductRepository } from './products.ts';
@@ -26,7 +26,7 @@ export type FixtureName = 'text' | 'image' | 'audio' | 'sticker' | 'location' | 
 export const loadFixture = (name: FixtureName): any => JSON.parse(readFileSync(join(FIXTURES_DIR, `${name}.json`), 'utf8'));
 
 export const CUSTOMER = '5215500001234';
-export const PHONE_NUMBER_ID = BOT_ENV.WHATSAPP_BOT_PHONE_NUMBER_ID;
+export const PHONE_NUMBER_ID = BOT_ENV.WHATSAPP_BOT_ACCOUNT_ID;
 export const STAFF = Object.freeze({ molotes: BOT_ENV.WHATSAPP_BOT_STAFF_MOLOTES, birria: BOT_ENV.WHATSAPP_BOT_STAFF_BIRRIA });
 
 /** Fecha y hora en Ciudad de México (UTC-6, sin horario de verano): mx('2026-10-06T10:00'). */
@@ -62,13 +62,13 @@ export function inboundPayload(
 export const sign = (body: string, secret: string = BOT_ENV.WHATSAPP_BOT_APP_SECRET): string =>
   `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
 
-export const botConfig = (): NonNullable<WhatsAppBotConfig> => {
+export const botConfig = (): MetaBotConfig => {
   const { whatsappBot } = makeConfig(BOT_ENV);
-  if (!whatsappBot) throw new Error('BOT_ENV debe habilitar el bot');
+  if (whatsappBot?.provider !== 'meta') throw new Error('BOT_ENV debe habilitar el bot con Meta');
   return whatsappBot;
 };
 
-/** Bot real con el doble de la Cloud API, reloj controlado y productos en memoria (semillas). */
+/** Bot real con Meta (WhatsAppBot), el doble de la Cloud API, reloj controlado y productos en memoria (semillas). */
 export async function makeBotHarness({ at = mx(`${WEEK.tue}T10:00`), products }: { at?: Date; products?: Pick<ProductRepository, 'getPublished'> } = {}) {
   const clock = { now: at };
   const double = createCloudApiDouble();
@@ -76,11 +76,11 @@ export async function makeBotHarness({ at = mx(`${WEEK.tue}T10:00`), products }:
   const config = botConfig();
   const productRepository = products ?? (await makeProductRepository()).repository;
   let codes = 0;
-  const bot = createWhatsAppBot({
-    config,
+  const bot = createBotOrchestrator({
+    chatBot: createChatBot(config, { fetch: double.fetch, logger, retryDelayMs: 0 }),
+    staff: config.staff,
     timeZone: 'America/Mexico_City',
     products: productRepository,
-    client: createCloudApiClient({ config, fetch: double.fetch, logger, retryDelayMs: 0 }),
     logger,
     now: () => clock.now,
     newCode: (prefix) => `${prefix}-T${String((codes += 1)).padStart(3, '0')}`,

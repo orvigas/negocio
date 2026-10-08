@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { BUSINESS_HOURS } from '../../src/content/hours.ts';
-import { createCloudApiClient } from '../../src/services/whatsapp-bot/cloud-api.ts';
+import { createCloudApiClient } from '../../src/services/whatsapp-bot/providers/meta/cloud-api.ts';
 import { staffTemplateParams, type OrderDetails } from '../../src/services/whatsapp-bot/messages.ts';
 import { maskPhone } from '../../src/services/whatsapp-bot/phone.ts';
 import { acceptsOrders, describeHours, describeOpening, isOpen, nextOpening } from '../../src/services/whatsapp-bot/schedule.ts';
 import { createConversationStore, createExpiringMap, createRateLimiter } from '../../src/services/whatsapp-bot/store.ts';
 import { chunkText, codePointLength, normalizeInput, parseNumber } from '../../src/services/whatsapp-bot/text.ts';
-import { checkSignature, parseDelivery } from '../../src/services/whatsapp-bot/webhook.ts';
+import { checkSignature, parseDelivery } from '../../src/services/whatsapp-bot/providers/meta/webhook.ts';
 import { getLocalMinutes } from '../../src/utils/datetime.ts';
 import { BOT_ENV, makeRecordingLogger } from '../helpers.ts';
 import { createCloudApiDouble, graphError, networkError, timeout } from '../support/cloud-api-double.ts';
@@ -86,7 +86,7 @@ describe('lectura de las entregas (RF-1)', () => {
 });
 
 describe('cliente de la Cloud API (RF-7.3, RF-8)', () => {
-  const config = { accessToken: BOT_ENV.WHATSAPP_BOT_ACCESS_TOKEN, phoneNumberId: PHONE_NUMBER_ID, graphApiVersion: 'v26.0' };
+  const config = { accessToken: BOT_ENV.WHATSAPP_BOT_ACCESS_TOKEN, accountId: PHONE_NUMBER_ID, graphApiVersion: 'v26.0' };
   const setup = () => {
     const double = createCloudApiDouble();
     const logger = makeRecordingLogger();
@@ -318,8 +318,12 @@ describe('estado en memoria acotado', () => {
   });
 });
 
-describe('ninguna prueba llama a Meta (RF-11.1)', () => {
+describe('ninguna prueba llama a Meta ni a Twilio (REQ-F-009 RF-11.1; REQ-F-012 RF-8.1)', () => {
   it('el fetch global de las pruebas rechaza la Graph API', async () => {
     await expect(fetch('https://graph.facebook.com/v26.0/1/messages', { method: 'POST' })).rejects.toThrow(/Una prueba intentó llamar a Meta/);
+  });
+
+  it('el fetch global de las pruebas rechaza la API de Twilio', async () => {
+    await expect(fetch('https://api.twilio.com/2010-04-01/Accounts/AC1/Messages.json', { method: 'POST' })).rejects.toThrow(/Una prueba intentó llamar a Twilio/);
   });
 });

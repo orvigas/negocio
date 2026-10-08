@@ -1,0 +1,19 @@
+{
+  "Latitude": "19.4326",
+  "Longitude": "-99.1332",
+  "SmsMessageSid": "SM44444444444444444444444444444444",
+  "NumMedia": "0",
+  "ProfileName": "Cliente Ficticio",
+  "MessageType": "location",
+  "SmsSid": "SM44444444444444444444444444444444",
+  "WaId": "5215500001234",
+  "SmsStatus": "received",
+  "Body": "",
+  "To": "whatsapp:+14155238886",
+  "NumSegments": "1",
+  "ReferralNumMedia": "0",
+  "MessageSid": "SM44444444444444444444444444444444",
+  "AccountSid": "AC0123456789abcdef0123456789abcdef",
+  "From": "whatsapp:+5215500001234",
+  "ApiVersion": "2010-04-01"
+}

@@ -1,0 +1,14 @@
+{
+  "ChannelPrefix": "whatsapp",
+  "ApiVersion": "2010-04-01",
+  "ErrorCode": "63015",
+  "MessageStatus": "undelivered",
+  "SmsSid": "SM55555555555555555555555555555555",
+  "SmsStatus": "undelivered",
+  "ChannelInstallSid": "XE66666666666666666666666666666666",
+  "To": "whatsapp:+5215511110001",
+  "From": "whatsapp:+14155238886",
+  "MessageSid": "SM55555555555555555555555555555555",
+  "AccountSid": "AC0123456789abcdef0123456789abcdef",
+  "ChannelToAddress": "+5215511110001"
+}

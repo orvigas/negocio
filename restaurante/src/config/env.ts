@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { BUSINESS, BUSINESS_IDS, type BusinessId } from './businesses.ts';
 import { parsePasswordHash } from '../services/admin-auth.ts';
 import { normalizeUsername, usernameError } from '../services/user-schema.ts';
+import { BOT_PROVIDERS, type BotProvider } from '../services/whatsapp-bot/chat-bot.ts';
 import {
   MAX_MESSAGE_LENGTH,
   PHONE_PATTERN,
@@ -40,20 +41,42 @@ export type AdminBootstrapConfig = Readonly<{ user: string; passwordHash: string
 export const DEFAULT_GRAPH_API_VERSION = 'v26.0';
 export const DEFAULT_STAFF_TEMPLATE_LANGUAGE = 'es_MX';
 
-/**
- * Bot de WhatsApp (REQ-F-009, RF-2). null si no se definió ninguna de sus variables: el bot queda
- * deshabilitado y el webhook responde 503. Contiene secretos: nunca se registra ni se muestra.
- */
-export type WhatsAppBotConfig = Readonly<{
-  accessToken: string;
-  phoneNumberId: string;
-  appSecret: string;
-  verifyToken: string;
+/** Datos comunes a los dos proveedores del bot (REQ-F-012, RF-2). */
+interface BotConfigBase {
+  /** Meta: ID del número en la Cloud API. Twilio: Account SID. */
+  readonly accountId: string;
+  /** Meta: token permanente. Twilio: Auth Token (también firma el webhook). Secreto. */
+  readonly accessToken: string;
   /** Número de WhatsApp del personal de cada negocio (recibe los pedidos y es el contacto directo). */
-  staff: Readonly<Record<BusinessId, string>>;
-  staffTemplate: Readonly<{ name: string; language: string }>;
-  graphApiVersion: string;
-}> | null;
+  readonly staff: Readonly<Record<BusinessId, string>>;
+}
+
+/** Bot con la WhatsApp Cloud API de Meta (producción). */
+export interface MetaBotConfig extends BotConfigBase {
+  readonly provider: 'meta';
+  readonly appSecret: string;
+  readonly verifyToken: string;
+  readonly staffTemplate: Readonly<{ name: string; language: string }>;
+  readonly graphApiVersion: string;
+}
+
+/** Bot con Twilio (desarrollo; nunca en producción, D-5). */
+export interface TwilioBotConfig extends BotConfigBase {
+  readonly provider: 'twilio';
+  /** URL pública completa del webhook, tal como está configurada en Twilio (firma y StatusCallback). */
+  readonly webhookUrl: string;
+  /** Content Template (`HX…`) del aviso al personal; sin él, el aviso va como texto libre (D-6). */
+  readonly staffContentSid: string | undefined;
+  /** Número emisor (dígitos de WHATSAPP_MOLOTES, el número del bot; D-8). */
+  readonly sender: string;
+}
+
+/**
+ * Bot de WhatsApp (REQ-F-009 RF-2; REQ-F-012 RF-2). null si no se definió ninguna variable de datos
+ * del bot: el bot queda deshabilitado y el webhook responde 503. Contiene secretos: nunca se
+ * registra ni se muestra.
+ */
+export type ChatBotConfig = MetaBotConfig | TwilioBotConfig | null;
 
 export interface Config {
   readonly nodeEnv: NodeEnv;
@@ -65,7 +88,7 @@ export interface Config {
   readonly dataDir: string;
   readonly trustProxy: boolean;
   readonly adminBootstrap: AdminBootstrapConfig;
-  readonly whatsappBot: WhatsAppBotConfig;
+  readonly whatsappBot: ChatBotConfig;
 }
 
 // Se amplía el tipo de la lista para poder buscar un string cualquiera.
@@ -212,73 +235,168 @@ function parseBoolean(raw: string | undefined, name: string, defaultValue: boole
   return undefined;
 }
 
-/** Variables del bot (REQ-F-009). Definir cualquiera habilita el bot y exige las obligatorias. */
-const BOT_VARS = Object.freeze({
-  accessToken: { name: 'WHATSAPP_BOT_ACCESS_TOKEN', pattern: /^\S{1,4096}$/, hint: 'sin espacios, hasta 4096 caracteres' },
-  phoneNumberId: { name: 'WHATSAPP_BOT_PHONE_NUMBER_ID', pattern: /^\d{5,20}$/, hint: 'solo dígitos (5 a 20)' },
-  appSecret: { name: 'WHATSAPP_BOT_APP_SECRET', pattern: /^[A-Za-z0-9]{16,128}$/, hint: 'letras y dígitos (16 a 128)' },
-  verifyToken: { name: 'WHATSAPP_BOT_VERIFY_TOKEN', pattern: /^[A-Za-z0-9._~-]{16,128}$/, hint: 'letras, dígitos y . _ ~ - (16 a 128)' },
-  staffMolotes: { name: 'WHATSAPP_BOT_STAFF_MOLOTES', pattern: PHONE_PATTERN, hint: 'solo dígitos en formato internacional (8 a 15)' },
-  staffBirria: { name: 'WHATSAPP_BOT_STAFF_BIRRIA', pattern: PHONE_PATTERN, hint: 'solo dígitos en formato internacional (8 a 15)' },
-  template: { name: 'WHATSAPP_BOT_STAFF_TEMPLATE', pattern: /^[a-z0-9_]{1,512}$/, hint: 'minúsculas, dígitos y _ (nombre de la plantilla en Meta)' },
-});
-const BOT_OPTIONAL_VARS = Object.freeze({
-  language: { name: 'WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE', pattern: /^[a-z]{2,3}(_[A-Z]{2})?$/, hint: 'código de idioma de la plantilla (p. ej. es_MX)' },
-  graphApiVersion: { name: 'WHATSAPP_GRAPH_API_VERSION', pattern: /^v\d{1,3}\.\d$/, hint: 'versión de la Graph API (p. ej. v26.0)' },
-});
+type VarRule = Readonly<{ name: string; pattern: RegExp; hint: string }>;
+
+const STAFF_HINT = 'solo dígitos en formato internacional (8 a 15)';
 
 /**
- * Configuración del bot (REQ-F-009, RF-2): todas o ninguna. Sin ninguna variable vale null; con
- * alguna, las obligatorias deben estar y ser válidas. Los mensajes nunca incluyen los valores.
+ * Variables del bot (REQ-F-009; REQ-F-012 RF-2). Definir cualquiera de ellas habilita el bot;
+ * `WHATSAPP_BOT_PROVIDER` no lo habilita por sí sola (D-2). Un valor vacío cuenta como no definido.
  */
-function parseWhatsAppBot(env: Env, issues: string[]): WhatsAppBotConfig | undefined {
-  const all = [...Object.values(BOT_VARS), ...Object.values(BOT_OPTIONAL_VARS)];
-  if (all.every(({ name }) => readVar(env, name) === undefined)) return null;
+const BOT_VARS = Object.freeze({
+  provider: 'WHATSAPP_BOT_PROVIDER',
+  accountId: 'WHATSAPP_BOT_ACCOUNT_ID',
+  accessToken: 'WHATSAPP_BOT_ACCESS_TOKEN',
+  appSecret: 'WHATSAPP_BOT_APP_SECRET',
+  verifyToken: 'WHATSAPP_BOT_VERIFY_TOKEN',
+  staffMolotes: 'WHATSAPP_BOT_STAFF_MOLOTES',
+  staffBirria: 'WHATSAPP_BOT_STAFF_BIRRIA',
+  template: 'WHATSAPP_BOT_STAFF_TEMPLATE',
+  language: 'WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE',
+  webhookUrl: 'WHATSAPP_BOT_WEBHOOK_URL',
+  graphApiVersion: 'WHATSAPP_GRAPH_API_VERSION',
+});
+/** Nombre anterior de WHATSAPP_BOT_ACCOUNT_ID (D-1): sin compatibilidad, falla con un aviso claro. */
+const LEGACY_PHONE_NUMBER_ID = 'WHATSAPP_BOT_PHONE_NUMBER_ID';
+const ENABLING_VARS = Object.values(BOT_VARS).filter((name) => name !== BOT_VARS.provider);
 
-  const before = issues.length;
-  const read = ({ name, pattern, hint }: { name: string; pattern: RegExp; hint: string }, required: boolean): string | undefined => {
-    const value = readVar(env, name);
-    if (value === undefined) {
-      if (required) issues.push(`${name} es obligatoria si se configura el bot de WhatsApp (o no definas ninguna WHATSAPP_BOT_*)`);
-      return undefined;
-    }
-    if (!pattern.test(value)) {
-      issues.push(`${name} no es válida: ${hint}`);
-      return undefined;
-    }
-    return value;
-  };
-  const accessToken = read(BOT_VARS.accessToken, true);
-  const phoneNumberId = read(BOT_VARS.phoneNumberId, true);
-  const appSecret = read(BOT_VARS.appSecret, true);
-  const verifyToken = read(BOT_VARS.verifyToken, true);
-  const staffMolotes = read(BOT_VARS.staffMolotes, true);
-  const staffBirria = read(BOT_VARS.staffBirria, true);
-  const template = read(BOT_VARS.template, true);
-  const language = read(BOT_OPTIONAL_VARS.language, false) ?? DEFAULT_STAFF_TEMPLATE_LANGUAGE;
-  const graphApiVersion = read(BOT_OPTIONAL_VARS.graphApiVersion, false) ?? DEFAULT_GRAPH_API_VERSION;
+/** Reglas de formato de cada proveedor (D-3). */
+const META_RULES = Object.freeze({
+  accountId: { name: BOT_VARS.accountId, pattern: /^\d{5,20}$/, hint: 'con meta, el ID del número en la Cloud API (solo dígitos, 5 a 20)' },
+  accessToken: { name: BOT_VARS.accessToken, pattern: /^\S{1,4096}$/, hint: 'con meta, sin espacios y hasta 4096 caracteres' },
+  appSecret: { name: BOT_VARS.appSecret, pattern: /^[A-Za-z0-9]{16,128}$/, hint: 'letras y dígitos (16 a 128)' },
+  verifyToken: { name: BOT_VARS.verifyToken, pattern: /^[A-Za-z0-9._~-]{16,128}$/, hint: 'letras, dígitos y . _ ~ - (16 a 128)' },
+  template: { name: BOT_VARS.template, pattern: /^[a-z0-9_]{1,512}$/, hint: 'con meta, minúsculas, dígitos y _ (nombre de la plantilla en Meta)' },
+  language: { name: BOT_VARS.language, pattern: /^[a-z]{2,3}(_[A-Z]{2})?$/, hint: 'código de idioma de la plantilla (p. ej. es_MX)' },
+  graphApiVersion: { name: BOT_VARS.graphApiVersion, pattern: /^v\d{1,3}\.\d$/, hint: 'versión de la Graph API (p. ej. v26.0)' },
+} satisfies Record<string, VarRule>);
+const TWILIO_RULES = Object.freeze({
+  accountId: { name: BOT_VARS.accountId, pattern: /^AC[0-9a-fA-F]{32}$/, hint: 'con twilio, el Account SID (AC seguido de 32 caracteres hexadecimales)' },
+  accessToken: { name: BOT_VARS.accessToken, pattern: /^[0-9a-fA-F]{32}$/, hint: 'con twilio, el Auth Token (32 caracteres hexadecimales)' },
+  template: { name: BOT_VARS.template, pattern: /^HX[0-9a-fA-F]{32}$/, hint: 'con twilio, el ContentSid del Content Template (HX seguido de 32 caracteres hexadecimales)' },
+} satisfies Record<string, VarRule>);
+const STAFF_RULES = Object.freeze({
+  molotes: { name: BOT_VARS.staffMolotes, pattern: PHONE_PATTERN, hint: STAFF_HINT },
+  birria: { name: BOT_VARS.staffBirria, pattern: PHONE_PATTERN, hint: STAFF_HINT },
+} satisfies Record<BusinessId, VarRule>);
 
-  if (
-    issues.length > before ||
-    accessToken === undefined ||
-    phoneNumberId === undefined ||
-    appSecret === undefined ||
-    verifyToken === undefined ||
-    staffMolotes === undefined ||
-    staffBirria === undefined ||
-    template === undefined
-  ) {
+/** Ruta del webhook del bot (la misma con los dos proveedores; D-10). */
+export const BOT_WEBHOOK_PATH = '/webhooks/whatsapp';
+
+const isBotProvider = (value: string): value is BotProvider => (BOT_PROVIDERS as readonly string[]).includes(value);
+
+/** URL del webhook para Twilio: https, sin credenciales, query ni fragmento, con la ruta exacta. */
+function isValidWebhookUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  return url.protocol === 'https:' && url.username === '' && url.password === '' && url.search === '' && url.hash === '' && !raw.includes('?') && !raw.includes('#') && url.pathname === BOT_WEBHOOK_PATH;
+}
+
+/**
+ * Proveedor del bot (D-4, D-5, D-12): sin distinguir mayúsculas; si está definido se valida
+ * siempre, y con NODE_ENV=production nunca puede ser twilio, esté o no habilitado el bot.
+ */
+function parseBotProvider(env: Env, nodeEnv: string, issues: string[]): BotProvider | undefined {
+  const raw = readVar(env, BOT_VARS.provider);
+  if (raw === undefined) return undefined;
+  const provider = raw.toLowerCase();
+  if (!isBotProvider(provider)) {
+    issues.push(`${BOT_VARS.provider} debe ser uno de: ${BOT_PROVIDERS.join(', ')}`);
     return undefined;
   }
-  return Object.freeze({
-    accessToken,
-    phoneNumberId,
-    appSecret,
-    verifyToken,
-    staff: Object.freeze({ [BUSINESS.MOLOTES]: staffMolotes, [BUSINESS.BIRRIA]: staffBirria }),
-    staffTemplate: Object.freeze({ name: template, language }),
-    graphApiVersion,
-  });
+  if (provider === 'twilio' && nodeEnv === 'production') {
+    issues.push(`${BOT_VARS.provider}=twilio no se permite con NODE_ENV=production: en producción el bot usa meta`);
+    return undefined;
+  }
+  return provider;
+}
+
+/**
+ * Configuración del bot (REQ-F-012, RF-2). Sin ninguna variable de datos vale null; con alguna,
+ * el proveedor y sus obligatorias deben estar y ser válidas. Las variables que solo usa el otro
+ * proveedor se ignoran (D-15). Los mensajes nunca incluyen los valores.
+ */
+function parseChatBot(env: Env, nodeEnv: string, sender: string | undefined, issues: string[]): ChatBotConfig | undefined {
+  const before = issues.length;
+  if (readVar(env, LEGACY_PHONE_NUMBER_ID) !== undefined) {
+    issues.push(`${LEGACY_PHONE_NUMBER_ID} ya no se usa: renómbrala a ${BOT_VARS.accountId}`);
+  }
+  const provider = parseBotProvider(env, nodeEnv, issues);
+  if (ENABLING_VARS.every((name) => readVar(env, name) === undefined)) return issues.length > before ? undefined : null;
+
+  const required = (name: string): string | undefined => {
+    const value = readVar(env, name);
+    if (value === undefined) issues.push(`${name} es obligatoria si se configura el bot de WhatsApp (o no definas ninguna WHATSAPP_BOT_*)`);
+    return value;
+  };
+  const check = ({ name, pattern, hint }: VarRule, value: string | undefined): string | undefined => {
+    if (value === undefined) return undefined;
+    if (pattern.test(value)) return value;
+    issues.push(`${name} no es válida: ${hint}`);
+    return undefined;
+  };
+  const optional = (rule: VarRule): string | undefined => check(rule, readVar(env, rule.name));
+  const requiredRule = (rule: VarRule): string | undefined => check(rule, required(rule.name));
+
+  if (readVar(env, BOT_VARS.provider) === undefined) issues.push(`${BOT_VARS.provider} es obligatoria si se configura el bot de WhatsApp (meta o twilio)`);
+  // Comunes: se exigen aunque el proveedor falte o no sea válido (lista completa de problemas).
+  const rawAccountId = required(BOT_VARS.accountId);
+  const rawAccessToken = required(BOT_VARS.accessToken);
+  const staffMolotes = requiredRule(STAFF_RULES.molotes);
+  const staffBirria = requiredRule(STAFF_RULES.birria);
+  if (provider === undefined) return undefined;
+  const staff =
+    staffMolotes === undefined || staffBirria === undefined ? undefined : Object.freeze({ [BUSINESS.MOLOTES]: staffMolotes, [BUSINESS.BIRRIA]: staffBirria });
+
+  if (provider === 'meta') {
+    const accountId = check(META_RULES.accountId, rawAccountId);
+    const accessToken = check(META_RULES.accessToken, rawAccessToken);
+    const appSecret = requiredRule(META_RULES.appSecret);
+    const verifyToken = requiredRule(META_RULES.verifyToken);
+    const template = requiredRule(META_RULES.template);
+    const language = optional(META_RULES.language) ?? DEFAULT_STAFF_TEMPLATE_LANGUAGE;
+    const graphApiVersion = optional(META_RULES.graphApiVersion) ?? DEFAULT_GRAPH_API_VERSION;
+    if (
+      issues.length > before ||
+      staff === undefined ||
+      accountId === undefined ||
+      accessToken === undefined ||
+      appSecret === undefined ||
+      verifyToken === undefined ||
+      template === undefined
+    ) {
+      return undefined;
+    }
+    return Object.freeze({
+      provider,
+      accountId,
+      accessToken,
+      appSecret,
+      verifyToken,
+      staff,
+      staffTemplate: Object.freeze({ name: template, language }),
+      graphApiVersion,
+    });
+  }
+
+  const accountId = check(TWILIO_RULES.accountId, rawAccountId);
+  const accessToken = check(TWILIO_RULES.accessToken, rawAccessToken);
+  const staffContentSid = optional(TWILIO_RULES.template);
+  const rawWebhookUrl = required(BOT_VARS.webhookUrl);
+  if (rawWebhookUrl !== undefined && !isValidWebhookUrl(rawWebhookUrl)) {
+    issues.push(`${BOT_VARS.webhookUrl} no es válida: URL https completa del webhook, sin credenciales, query ni fragmento, terminada en ${BOT_WEBHOOK_PATH}`);
+  }
+  if (sender === undefined) {
+    issues.push('Con twilio, WHATSAPP_MOLOTES es obligatoria como número: es el número emisor del bot');
+  }
+  if (issues.length > before || staff === undefined || accountId === undefined || accessToken === undefined || rawWebhookUrl === undefined || sender === undefined) {
+    return undefined;
+  }
+  return Object.freeze({ provider, accountId, accessToken, staff, webhookUrl: rawWebhookUrl, staffContentSid, sender });
 }
 
 function parseWhatsApp(env: Env, businessId: BusinessId, issues: string[]): WhatsAppConfig | undefined {
@@ -345,7 +463,7 @@ export function loadConfig(env: Env = process.env): Config {
   const dataDir = parseDataDir(readVar(env, 'DATA_DIR'), nodeEnv, issues);
   const adminBootstrap = parseAdminBootstrap(env, issues);
   const trustProxy = parseBoolean(readVar(env, 'TRUST_PROXY'), 'TRUST_PROXY', false, issues);
-  const whatsappBot = parseWhatsAppBot(env, issues);
+  const whatsappBot = parseChatBot(env, nodeEnv, whatsapp.molotes?.phone, issues);
   // D-6 (REQ-F-009): con el bot, los CTA de las dos landings abren el chat del mismo número (el del bot).
   const molotesPhone = whatsapp.molotes?.phone;
   const birriaPhone = whatsapp.birria?.phone;

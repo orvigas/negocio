@@ -1,4 +1,4 @@
-import type { FetchLike } from '../../src/services/whatsapp-bot/cloud-api.ts';
+import type { FetchLike } from '../../src/services/whatsapp-bot/providers/http-send.ts';
 
 /**
  * Doble de la WhatsApp Cloud API (REQ-F-009, RF-11): un `fetch` falso que registra cada petición

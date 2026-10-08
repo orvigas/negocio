@@ -1,15 +1,14 @@
 import { createHmac, randomBytes, randomInt } from 'node:crypto';
 
 import type { BusinessId } from '../../config/businesses.ts';
-import type { WhatsAppBotConfig } from '../../config/env.ts';
 import type { ProductRepository } from '../../repositories/product-repository.ts';
 import { errorProp } from '../../utils/errors.ts';
 import { silentLogger, type Logger } from '../../utils/logger.ts';
 import { buildWhatsAppLink } from '../whatsapp.ts';
 import { buildCatalog } from './catalog.ts';
-import type { CloudApiClient } from './cloud-api.ts';
+import type { ChatBot, InboundDelivery, InboundMessage } from './chat-bot.ts';
 import { handleTurn, type Conversation, type TurnContext, type TurnInput } from './conversation.ts';
-import { cartTotal, confirmedMessage, staffFailedMessage, staffTemplateParams, type OrderDetails } from './messages.ts';
+import { cartTotal, confirmedMessage, staffFailedMessage, staffNoticeText, staffTemplateParams, type OrderDetails } from './messages.ts';
 import { maskPhone } from './phone.ts';
 import {
   CONVERSATION_IDLE_MS,
@@ -22,19 +21,24 @@ import {
   createExpiringMap,
   createRateLimiter,
 } from './store.ts';
-import type { InboundMessage, ParsedDelivery } from './webhook.ts';
+import { chunkText } from './text.ts';
 
 /**
- * Orquestador del bot de WhatsApp (REQ-F-009).
+ * Orquestador del bot de WhatsApp (REQ-F-009): la conversación compartida, independiente del
+ * proveedor (REQ-F-012, RF-1.5; DT-2). Recibe un `ChatBot` (Meta o Twilio) y nunca importa código
+ * de un proveedor concreto.
  *
  * - `receive` no espera: deduplica por id de mensaje (RF-1.4), descarta los mensajes de hace más
  *   de 2 h (PT-4 A) y los que superan el límite por número (DT-15), y encola el resto en una
  *   cola por cliente (los mensajes de un mismo cliente se procesan uno tras otro, en orden).
  * - Cada mensaje pasa por la máquina de estados (conversation.ts) y sus respuestas se envían con
- *   la Cloud API. Un pedido confirmado se envía al personal **una sola vez** con la plantilla
- *   (DT-6); si falla, el cliente recibe el contacto directo (D-18).
+ *   el `ChatBot`, partidas según su límite de longitud (DT-7). Un pedido confirmado se envía al
+ *   personal **una sola vez** (DT-6; D-6 de REQ-F-012); si falla, el cliente recibe el contacto
+ *   directo (D-18).
+ * - Si el proveedor no envía la hora del mensaje (Twilio), la antigüedad y el orden se calculan
+ *   con la hora de recepción (D-14 de REQ-F-012).
  * - Los estados (`statuses`) no cambian el flujo (RF-1.5); solo se registra el fallo tardío de un
- *   aviso al personal (PT-3 A).
+ *   aviso al personal (PT-3 A; `failed` o `undelivered`).
  * - Logs sin datos personales (RF-9): número enmascarado, nunca textos, nombre, dirección, notas,
  *   código de referencia ni tokens.
  */
@@ -42,12 +46,19 @@ import type { InboundMessage, ParsedDelivery } from './webhook.ts';
 /** Alfabeto del código de referencia, sin caracteres ambiguos (0/O, 1/I/L). */
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 export const STALE_MESSAGE_MS = CONVERSATION_IDLE_MS;
+/** Estados que indican que un mensaje enviado no llegó (Meta: failed; Twilio: failed o undelivered). */
+const FAILED_STATUSES = new Set(['failed', 'undelivered']);
+
+/** Mensaje en cola, ya con su hora (la del proveedor o la de recepción). */
+type QueuedMessage = InboundMessage & { readonly timestamp: number };
 
 export const randomReferenceCode = (prefix: string): string =>
   `${prefix}-${Array.from({ length: 4 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('')}`;
 
-export interface WhatsAppBot {
-  receive(delivery: ParsedDelivery): void;
+export interface BotOrchestrator {
+  /** Proveedor con el que conversa (el webhook lo usa para la firma y el formato). */
+  readonly chatBot: ChatBot;
+  receive(delivery: InboundDelivery): void;
   /** Se cumple cuando no queda ningún mensaje en proceso (pruebas y cierre ordenado). */
   drain(): Promise<void>;
   hasConversation(waId: string): boolean;
@@ -57,27 +68,28 @@ export interface WhatsAppBot {
   readonly rateTrackedCount: number;
 }
 
-export interface WhatsAppBotOptions {
-  config: NonNullable<WhatsAppBotConfig>;
+export interface BotOrchestratorOptions {
+  chatBot: ChatBot;
+  /** Número de WhatsApp del personal de cada negocio. */
+  staff: Readonly<Record<BusinessId, string>>;
   timeZone: string;
   products: Pick<ProductRepository, 'getPublished'>;
-  client: CloudApiClient;
   logger?: Logger;
   now?: () => Date;
   newCode?: (prefix: string) => string;
   newId?: () => string;
 }
 
-export function createWhatsAppBot({
-  config,
+export function createBotOrchestrator({
+  chatBot,
+  staff,
   timeZone,
   products,
-  client,
   logger = silentLogger,
   now = () => new Date(),
   newCode = randomReferenceCode,
   newId = () => randomBytes(4).toString('hex'),
-}: WhatsAppBotOptions): WhatsAppBot {
+}: BotOrchestratorOptions): BotOrchestrator {
   const conversations = createConversationStore();
   const seen = createExpiringMap<true>({ ttlMs: SEEN_TTL_MS, max: MAX_SEEN });
   const staffMessages = createExpiringMap<BusinessId>({ ttlMs: STAFF_MESSAGE_TTL_MS, max: MAX_STAFF_MESSAGES });
@@ -88,27 +100,29 @@ export function createWhatsAppBot({
   const queues = new Map<string, Promise<void>>();
   const pending = new Set<Promise<void>>();
 
-  const staffContact = (business: BusinessId): string => buildWhatsAppLink({ phone: config.staff[business] });
+  const staffContact = (business: BusinessId): string => buildWhatsAppLink({ phone: staff[business] });
 
   async function reply(to: string, messages: readonly string[]): Promise<void> {
-    // En orden: el cliente debe leerlos en la secuencia en que se escribieron.
+    // En orden: el cliente debe leerlos en la secuencia en que se escribieron. Cada texto se
+    // parte por líneas según el límite del proveedor (nunca corta un producto; DT-7).
     for (const body of messages) {
-      const result = await client.sendText(to, body);
-      if (!result.ok) return;
+      for (const part of chunkText(body, chatBot.maxTextLength)) {
+        const result = await chatBot.sendText(to, part);
+        if (!result.ok) return;
+      }
     }
   }
 
   /** Aviso al personal (RF-7): una sola vez; con un fallo, D-18. La conversación se cierra. */
   async function notifyStaff(waId: string, conversation: Conversation, order: OrderDetails): Promise<void> {
     const fields = { conversationId: conversation.id, business: order.business, customer: maskPhone(waId) };
-    const result = await client.sendTemplate(config.staff[order.business], {
-      name: config.staffTemplate.name,
-      language: config.staffTemplate.language,
+    const result = await chatBot.sendStaffNotice(staff[order.business], {
       params: staffTemplateParams(order, waId),
+      text: staffNoticeText(order, waId),
     });
     conversations.delete(waId);
     if (result.ok) {
-      if (result.messageId) staffMessages.set(result.messageId, order.business, now().getTime());
+      for (const messageId of result.messageIds) staffMessages.set(messageId, order.business, now().getTime());
       logger.info('bot_order_confirmed', { ...fields, lines: order.lines.length, totalCents: cartTotal(order.lines), offHours: order.offHoursOpening !== null });
       await reply(waId, [confirmedMessage(order)]);
     } else {
@@ -117,7 +131,7 @@ export function createWhatsAppBot({
     }
   }
 
-  async function processMessage(message: InboundMessage): Promise<void> {
+  async function processMessage(message: QueuedMessage): Promise<void> {
     const time = now();
     const stored = conversations.get(message.from, time.getTime());
     if (stored && message.timestamp < stored.lastTimestamp) {
@@ -154,7 +168,7 @@ export function createWhatsAppBot({
     if (result.order && conversation) await notifyStaff(message.from, conversation, result.order);
   }
 
-  function enqueue(message: InboundMessage): void {
+  function enqueue(message: QueuedMessage): void {
     const previous = queues.get(message.from) ?? Promise.resolve();
     const run = previous
       .then(() => processMessage(message))
@@ -170,21 +184,27 @@ export function createWhatsAppBot({
     });
   }
 
-  function handleStatuses(delivery: ParsedDelivery, time: number): void {
+  function handleStatuses(delivery: InboundDelivery, time: number): void {
     for (const status of delivery.statuses) {
-      if (status.status !== 'failed') continue;
+      if (!FAILED_STATUSES.has(status.status)) continue;
       const business = staffMessages.get(status.id, time);
       if (business !== undefined) logger.error('bot_staff_delivery_failed', { business, errorCode: status.errorCode });
     }
   }
 
   return {
+    chatBot,
+
     receive(delivery) {
       const time = now().getTime();
       conversations.sweep(time);
       rateLimiter.sweep(time);
       handleStatuses(delivery, time);
-      const messages = [...delivery.messages].sort((a, b) => a.timestamp - b.timestamp);
+      // D-14 (REQ-F-012): sin hora del proveedor, la de recepción.
+      const receivedAt = Math.floor(time / 1000);
+      const messages: QueuedMessage[] = delivery.messages
+        .map((message) => ({ ...message, timestamp: message.timestamp ?? receivedAt }))
+        .sort((a, b) => a.timestamp - b.timestamp);
       for (const message of messages) {
         if (seen.get(message.id, time)) continue;
         seen.set(message.id, true, time);

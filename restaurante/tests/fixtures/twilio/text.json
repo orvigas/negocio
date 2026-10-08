@@ -1,0 +1,17 @@
+{
+  "SmsMessageSid": "SM11111111111111111111111111111111",
+  "NumMedia": "0",
+  "ProfileName": "Cliente Ficticio",
+  "MessageType": "text",
+  "SmsSid": "SM11111111111111111111111111111111",
+  "WaId": "5215500001234",
+  "SmsStatus": "received",
+  "Body": "Hola",
+  "To": "whatsapp:+14155238886",
+  "NumSegments": "1",
+  "ReferralNumMedia": "0",
+  "MessageSid": "SM11111111111111111111111111111111",
+  "AccountSid": "AC0123456789abcdef0123456789abcdef",
+  "From": "whatsapp:+5215500001234",
+  "ApiVersion": "2010-04-01"
+}

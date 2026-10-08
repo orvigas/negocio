@@ -1,0 +1,19 @@
+{
+  "MediaContentType0": "image/jpeg",
+  "SmsMessageSid": "MM22222222222222222222222222222222",
+  "NumMedia": "1",
+  "ProfileName": "Cliente Ficticio",
+  "MessageType": "image",
+  "SmsSid": "MM22222222222222222222222222222222",
+  "WaId": "5215500001234",
+  "SmsStatus": "received",
+  "Body": "Mira esta foto",
+  "To": "whatsapp:+14155238886",
+  "NumSegments": "1",
+  "ReferralNumMedia": "0",
+  "MessageSid": "MM22222222222222222222222222222222",
+  "AccountSid": "AC0123456789abcdef0123456789abcdef",
+  "From": "whatsapp:+5215500001234",
+  "MediaUrl0": "https://api.twilio.com/2010-04-01/Accounts/AC0123456789abcdef0123456789abcdef/Messages/MM22222222222222222222222222222222/Media/ME33333333333333333333333333333333",
+  "ApiVersion": "2010-04-01"
+}

@@ -300,9 +300,27 @@ Los logs son JSON por línea en stdout (método, ruta sin query string, estado y
 
 ## Bot de WhatsApp
 
-Un solo bot para los dos negocios (REQ-F-009), dentro de esta misma app: Meta envía cada mensaje
-del cliente al webhook `POST /webhooks/whatsapp` y el bot responde con la Cloud API. No hay
-pago, ni panel de pedidos, ni pedidos guardados.
+Un solo bot para los dos negocios (REQ-F-009), dentro de esta misma app: el proveedor envía cada
+mensaje del cliente al webhook `POST /webhooks/whatsapp` y el bot responde con la API del
+proveedor. No hay pago, ni panel de pedidos, ni pedidos guardados.
+
+**Proveedores (REQ-F-012).** El bot funciona con uno de dos proveedores, elegido con
+`WHATSAPP_BOT_PROVIDER` (un solo proveedor activo por arranque):
+
+- **`meta`** — WhatsApp Cloud API de Meta. Es el proveedor de **producción**.
+- **`twilio`** — API de WhatsApp de Twilio, incluido su sandbox. Solo para **desarrollo**: con
+  `NODE_ENV=production` y `twilio` la app no arranca, esté o no habilitado el bot.
+
+Cada proveedor es una implementación de la interfaz `ChatBot`
+(`src/services/whatsapp-bot/chat-bot.ts`): `WhatsAppBot` (Meta, `providers/meta/`) y `TwilioBot`
+(Twilio, `providers/twilio/`). `ChatBot` cubre solo lo que depende del proveedor: verificación y
+firma del webhook, formato de las entregas, respuesta al proveedor, envío y longitud máxima de un
+mensaje. La conversación (máquina de estados, catálogo, horario, carrito, textos, deduplicación,
+colas, límite por número y logs) existe una sola vez en el orquestador
+(`src/services/whatsapp-bot/orchestrator.ts`), que no importa código de ningún proveedor. El
+único módulo que conoce las dos implementaciones es `providers/select.ts`; la app, las rutas y
+el webhook solo usan `ChatBot`. Cambiar de proveedor es cambiar las variables y reiniciar; al
+arrancar queda `bot_provider_selected` con el proveedor en el log.
 
 - **Negocio:** el del día en `BUSINESS_TIMEZONE`, con la misma regla que las landings (L-V
   Moloteando, S-D Birriería El Muñeco). Se fija con el primer mensaje y se mantiene hasta que el
@@ -320,19 +338,22 @@ pago, ni panel de pedidos, ni pedidos guardados.
   el martes). Si el negocio no abre ni ese día ni el siguiente (Molotes el viernes después de las
   15:00; Birria el domingo después de las 15:00), muestra el menú pero **no toma el pedido** e
   informa cuándo abre cada negocio. Esa comprobación se hace al empezar el pedido.
-- **Aviso al personal:** siempre con la plantilla aprobada (ver [Plantilla del aviso al
-  personal](#plantilla-del-aviso-al-personal)), una sola vez por pedido. Si falla, el cliente
+- **Aviso al personal:** una sola vez por pedido. Con Meta, siempre con la plantilla aprobada
+  (ver [Plantilla del aviso al personal](#plantilla-del-aviso-al-personal)); con Twilio, con un
+  Content Template o como texto libre (ver [Twilio](#twilio-desarrollo)). Si falla, el cliente
   recibe el contacto directo del personal (`https://wa.me/<número>`). "persona" da ese mismo
   contacto.
+- **Mensajes largos:** se parten por líneas según el límite del proveedor (4096 caracteres con
+  Meta, 1600 con Twilio), sin cortar nunca un producto del menú.
 - **Textos:** `src/content/common/bot.ts` (flujo) y `src/content/<negocio>/bot.ts` (lema,
   palabras del negocio y secciones del menú).
 - **Estado en memoria** (una sola instancia, como las sesiones de `/admin`): si la app se
   reinicia, la conversación en curso se pierde y el bot empieza de nuevo.
 
-### Prerrequisitos (los provee el dueño)
+### Prerrequisitos de Meta (los provee el dueño)
 
 No hacen falta para desarrollar ni para las pruebas (usan el simulador), pero sí para la puesta
-en producción y la prueba de punta a punta (CA-26, pendiente):
+en producción y la prueba de punta a punta con Meta (CA-26 de REQ-F-009, pendiente):
 
 1. Cuenta de Meta Business (verificada si Meta lo pide por volumen o por las plantillas).
 2. App en Meta for Developers con el producto WhatsApp y una cuenta de WhatsApp Business (WABA).
@@ -346,29 +367,40 @@ en producción y la prueba de punta a punta (CA-26, pendiente):
 
 ### Variables del bot
 
-Todas o ninguna: sin ninguna, el bot queda deshabilitado (el webhook responde 503 y las landings
-siguen igual). Con alguna, las obligatorias deben estar y ser válidas o la app no arranca (lista
-los problemas sin mostrar valores). Con el bot, `WHATSAPP_MOLOTES` y `WHATSAPP_BIRRIA` deben ser
-el número del bot (el mismo): el botón de cada landing abre ese chat con su propio mensaje
-inicial.
+El bot queda habilitado si defines al menos una variable de datos del bot (todas las de la tabla
+salvo `WHATSAPP_BOT_PROVIDER`, que no lo habilita por sí sola; un valor vacío cuenta como no
+definido). Sin ninguna, el bot queda deshabilitado (el webhook responde 503 y las landings siguen
+igual). Habilitado, el proveedor y sus obligatorias deben estar y ser válidas o la app no arranca
+(lista los problemas sin mostrar valores). Las variables que solo usa el otro proveedor se
+ignoran. Con el bot, `WHATSAPP_MOLOTES` y `WHATSAPP_BIRRIA` deben ser el número del bot (el
+mismo): el botón de cada landing abre ese chat con su propio mensaje inicial.
 
-| Variable | Obligatoria | Descripción |
+Los dos proveedores comparten los nombres de los datos de la cuenta. `WHATSAPP_BOT_PHONE_NUMBER_ID`
+se renombró a **`WHATSAPP_BOT_ACCOUNT_ID`**, sin compatibilidad: si la anterior sigue definida, la
+app no arranca y pide renombrarla.
+
+| Variable | Meta (`meta`) | Twilio (`twilio`) |
 | --- | --- | --- |
-| `WHATSAPP_BOT_ACCESS_TOKEN` | Sí | Token permanente del usuario del sistema (secreto; sin espacios) |
-| `WHATSAPP_BOT_PHONE_NUMBER_ID` | Sí | ID del número del bot en la Cloud API (solo dígitos; no es el teléfono) |
-| `WHATSAPP_BOT_APP_SECRET` | Sí | Secreto de la app de Meta: valida `X-Hub-Signature-256` (secreto) |
-| `WHATSAPP_BOT_VERIFY_TOKEN` | Sí | Token de verificación del webhook, 16 a 128 caracteres `[A-Za-z0-9._~-]` (secreto; p. ej. `openssl rand -hex 32`) |
-| `WHATSAPP_BOT_STAFF_MOLOTES` | Sí | WhatsApp del personal de Molotes: recibe los pedidos y es el contacto directo (solo dígitos, formato internacional) |
-| `WHATSAPP_BOT_STAFF_BIRRIA` | Sí | Igual, para Birria |
-| `WHATSAPP_BOT_STAFF_TEMPLATE` | Sí | Nombre de la plantilla del aviso al personal (minúsculas, dígitos y `_`) |
-| `WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE` | No (`es_MX`) | Idioma de la plantilla |
-| `WHATSAPP_GRAPH_API_VERSION` | No (`v26.0`) | Versión de la Graph API (formato `vNN.N`) |
+| `WHATSAPP_BOT_PROVIDER` | `meta` | `twilio` (sin distinguir mayúsculas). Obligatoria con el bot habilitado |
+| `WHATSAPP_BOT_ACCOUNT_ID` | Obligatoria: ID del número del bot en la Cloud API (solo dígitos; no es el teléfono) | Obligatoria: Account SID (`AC` + 32 hexadecimales) |
+| `WHATSAPP_BOT_ACCESS_TOKEN` | Obligatoria: token permanente del usuario del sistema (secreto; sin espacios) | Obligatoria: Auth Token (secreto; 32 hexadecimales). Autentica los envíos y firma el webhook |
+| `WHATSAPP_BOT_STAFF_MOLOTES` | Obligatoria: WhatsApp del personal de Molotes; recibe los pedidos y es el contacto directo (solo dígitos, formato internacional) | Igual (se envía como `whatsapp:+<dígitos>`) |
+| `WHATSAPP_BOT_STAFF_BIRRIA` | Igual, para Birria | Igual, para Birria |
+| `WHATSAPP_BOT_STAFF_TEMPLATE` | Obligatoria: nombre de la plantilla del aviso (minúsculas, dígitos y `_`) | Opcional: `ContentSid` (`HX…`) de un Content Template; sin ella, el aviso va como texto libre |
+| `WHATSAPP_BOT_APP_SECRET` | Obligatoria: secreto de la app de Meta; valida `X-Hub-Signature-256` (secreto) | No aplica (se ignora) |
+| `WHATSAPP_BOT_VERIFY_TOKEN` | Obligatoria: token de verificación del webhook, 16 a 128 caracteres `[A-Za-z0-9._~-]` (secreto; p. ej. `openssl rand -hex 32`) | No aplica |
+| `WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE` | Opcional (`es_MX`): idioma de la plantilla | No aplica |
+| `WHATSAPP_GRAPH_API_VERSION` | Opcional (`v26.0`): versión de la Graph API (formato `vNN.N`) | No aplica |
+| `WHATSAPP_BOT_WEBHOOK_URL` | No aplica | Obligatoria: URL https completa del webhook, exactamente la configurada en Twilio, terminada en `/webhooks/whatsapp`, sin query ni fragmento |
+| `WHATSAPP_MOLOTES` | Número del bot (igual a `WHATSAPP_BIRRIA`) | Igual, y además es el número emisor (`From`): con el sandbox, `14155238886` |
 
-La URL de la Graph API (`https://graph.facebook.com`) es fija: el token nunca se envía a otro host.
+Las bases de las API son fijas (`https://graph.facebook.com` y `https://api.twilio.com`): los
+tokens nunca se envían a otro host, ni van en una URL ni en un log.
 
-### Registrar el webhook en Meta
+### Registrar el webhook en Meta (producción)
 
-1. Define las variables del bot y despliega la app detrás de nginx con HTTPS (`TRUST_PROXY=true`).
+1. Define las variables del bot con `WHATSAPP_BOT_PROVIDER=meta` y despliega la app detrás de
+   nginx con HTTPS (`TRUST_PROXY=true`).
 2. En la app de Meta: WhatsApp → Configuración → Webhook. URL de devolución de llamada:
    `https://<tu-dominio>/webhooks/whatsapp`; token de verificación: el valor de
    `WHATSAPP_BOT_VERIFY_TOKEN`. Meta hace `GET` con `hub.mode=subscribe`, `hub.verify_token` y
@@ -416,31 +448,100 @@ pedido van separadas por `; `. Si Meta acepta el aviso pero avisa después de qu
 recibió la confirmación: **ese pedido puede perderse sin aviso**. Queda
 `bot_staff_delivery_failed` (con el negocio y el código de error) en el log; vigílalo.
 
+### Twilio (desarrollo)
+
+Sirve para probar el bot de punta a punta desde tu computadora con el **sandbox de WhatsApp de
+Twilio**, sin la cuenta de Meta. Nunca se usa en producción.
+
+**Prerrequisitos (los provee el desarrollador):**
+
+1. Una cuenta de Twilio con el sandbox de WhatsApp activado (Console → Messaging → Try it out →
+   Send a WhatsApp message).
+2. El **Account SID** y el **Auth Token** de la cuenta (Console → Account info). El Auth Token es
+   secreto: solo va en tu `.env` local, nunca en el repositorio, en un ticket ni en el chat.
+3. Desde el teléfono de prueba **y desde los teléfonos del personal**, envía al número del
+   sandbox (+1 415 523 8886) el mensaje `join <palabra>` que muestra la consola. **La unión
+   caduca** (a los pocos días): si un teléfono deja de recibir mensajes, vuelve a enviar
+   `join <palabra>`. Si el personal no está unido, el aviso falla, el cliente recibe el contacto
+   directo y el log registra el error (`bot_staff_send_failed` o `bot_staff_delivery_failed`,
+   con el código de Twilio).
+4. Un **túnel HTTPS** hacia la app local (p. ej. `cloudflared tunnel --url http://localhost:3000`
+   o `ngrok http 3000`).
+
+**Configuración:**
+
+1. En `.env`: `WHATSAPP_BOT_PROVIDER=twilio`, el Account SID en `WHATSAPP_BOT_ACCOUNT_ID`, el
+   Auth Token en `WHATSAPP_BOT_ACCESS_TOKEN`, los teléfonos del personal en
+   `WHATSAPP_BOT_STAFF_MOLOTES` y `WHATSAPP_BOT_STAFF_BIRRIA`, y en `WHATSAPP_BOT_WEBHOOK_URL` la
+   URL del túnel con la ruta: `https://<túnel>/webhooks/whatsapp`.
+2. Cambia `WHATSAPP_MOLOTES` y `WHATSAPP_BIRRIA` al número del sandbox (`14155238886`): es el
+   número emisor del bot y el chat que abren los botones de las landings.
+3. En la consola del sandbox (Sandbox settings), en **"When a message comes in"**, pon
+   exactamente la misma URL (`https://<túnel>/webhooks/whatsapp`, método `POST`). El campo
+   "Status callback URL" del sandbox puede quedar vacío: cada envío del bot ya pide su
+   `StatusCallback` a esa misma URL.
+4. Arranca con `npm run dev`. Cada vez que cambie la URL del túnel, actualiza las dos cosas
+   (`.env` y la consola) y reinicia.
+
+**Cómo funciona con Twilio:**
+
+- Twilio no verifica el webhook por `GET`: con Twilio, `GET /webhooks/whatsapp` responde 405.
+- Cada entrega llega como formulario con `X-Twilio-Signature`: HMAC-SHA1 en Base64, con el Auth
+  Token, de la **URL configurada** (`WHATSAPP_BOT_WEBHOOK_URL`, nunca la que reconstruye la
+  petición: detrás de un túnel o de nginx cambia) seguida de los parámetros ordenados. Sin firma
+  o mal formada responde 401; si no coincide (p. ej. la URL del túnel cambió y no actualizaste
+  `.env`), 403. En ambos casos no se procesa y queda `bot_webhook_signature_invalid` en el log.
+  Las entregas válidas reciben 200 con TwiML vacío y se procesan en segundo plano; el bot
+  responde con la API de mensajes.
+- Twilio no envía la hora del mensaje: la antigüedad y el orden se calculan con la hora de
+  recepción. Cada mensaje se procesa una sola vez (por su `MessageSid`). Un mensaje con adjuntos
+  o sin texto recibe "Por ahora solo entiendo mensajes de texto".
+- **Aviso al personal:** con `WHATSAPP_BOT_STAFF_TEMPLATE` (un `ContentSid` `HX…`), se envía con
+  ese Content Template y sus variables numeradas en este orden: `{{1}}` código, `{{2}}` negocio,
+  `{{3}}` horario, `{{4}}` cliente, `{{5}}` WhatsApp, `{{6}}` entrega, `{{7}}` líneas (separadas
+  por `; `), `{{8}}` total y `{{9}}` notas. Sin ella, se envía como **texto libre** con el mismo
+  contenido (una línea por producto). Si un pedido muy grande supera 1600 caracteres, el texto va
+  en varias partes ordenadas; si alguna falla, el cliente recibe el contacto directo.
+- **Limitaciones del sandbox:** no admite plantillas propias (el aviso va como texto libre) y el
+  texto libre solo se entrega si el personal escribió al sandbox en las últimas 24 h. Si la
+  ventana venció, Twilio acepta el envío pero lo rechaza después: llega como `StatusCallback`
+  `failed` o `undelivered` y queda `bot_staff_delivery_failed` en el log (el cliente ya recibió
+  la confirmación). Antes de probar, que el personal le escriba al sandbox.
+- El sandbox no reproduce las plantillas ni la facturación de Meta: no sustituye la prueba de
+  punta a punta con Meta.
+
 ### Logs y privacidad
 
-Eventos: `bot_conversation_started`, `bot_order_confirmed`, `bot_order_cancelled`,
-`bot_staff_send_failed`, `bot_staff_delivery_failed`, `bot_webhook_signature_invalid`,
+Eventos: `bot_provider_selected` (al arrancar, solo con el proveedor), `bot_conversation_started`,
+`bot_order_confirmed`, `bot_order_cancelled`, `bot_staff_send_failed`,
+`bot_staff_delivery_failed`, `bot_webhook_signature_invalid`, `bot_webhook_verify_failed`,
 `bot_api_error`, `bot_message_stale`, `bot_message_out_of_order`, `bot_rate_limited`,
 `bot_webhook_ignored` y `bot_conversation_evicted`. El número del cliente va enmascarado (solo
 los 4 últimos dígitos). Nunca se registran el texto de los mensajes, el nombre, la dirección,
-las notas, el código de referencia, los tokens ni el mensaje de error de Meta (solo su código).
+las notas, el código de referencia, los tokens, el Account SID ni el mensaje de error del
+proveedor (solo su código).
 El nombre y la dirección se piden con un aviso de privacidad y se borran de memoria al cerrar la
 conversación. Se recomienda publicar el Aviso de Privacidad del negocio (LFPDPPP).
 
 ### Probar el bot en local
 
 ```sh
-npm run bot:chat                              # hora actual
+npm run bot:chat                              # simula Meta, hora actual
 npm run bot:chat -- --ahora 2026-10-09T16:00  # viernes 16:00 (hora del negocio): Molotes no toma pedidos
+npm run bot:chat -- --proveedor twilio        # simula Twilio (aviso al personal en texto libre)
 ```
 
-Arranca la app en 127.0.0.1 con los productos de las semillas (en memoria; no toca `DATA_DIR`)
-y el bot conectado al simulador de la Cloud API (`tests/support/cloud-api-double.ts`). Cada
-línea que escribes llega al webhook como un mensaje firmado; verás las respuestas del bot y el
-aviso que recibiría el personal. Ninguna petición sale a internet. Comandos: `/hora
-AAAA-MM-DDTHH:MM`, `/audio` (mensaje que no es texto) y `/salir`. Solo para desarrollo (no está
-en la imagen de producción). Las pruebas automáticas usan el mismo simulador con entregas de
-ejemplo en `tests/fixtures/whatsapp/`.
+Arranca la app en 127.0.0.1 con los productos de las semillas (en memoria; no toca `DATA_DIR`
+ni tu `.env`) y el bot del proveedor elegido conectado a su simulador
+(`tests/support/cloud-api-double.ts` o `tests/support/twilio-api-double.ts`). Cada línea que
+escribes llega al webhook como un mensaje firmado igual que los del proveedor; verás las
+respuestas del bot y el aviso que recibiría el personal. Ninguna petición sale a internet.
+Comandos: `/hora AAAA-MM-DDTHH:MM`, `/audio` (mensaje que no es texto) y `/salir`. Solo para
+desarrollo (no está en la imagen de producción). Las pruebas automáticas usan los mismos
+simuladores con entregas de ejemplo en `tests/fixtures/whatsapp/` (Meta) y
+`tests/fixtures/twilio/` (Twilio), y una batería de contrato
+(`tests/integration/chat-bot-contract.test.ts`) recorre los mismos casos con los dos
+proveedores. Ninguna prueba llama a Meta ni a Twilio (`tests/setup/no-meta.ts` lo impide).
 
 ## Menús
 
@@ -745,7 +846,8 @@ restaurante/
 │   ├── services/             # business-schedule, whatsapp, menu-schema, price, visible-menu, admin-form,
 │   │                         # menu-diff, admin-auth, session-store, login-throttle, user-schema,
 │   │                         # authorization, admin-bootstrap, product-schema, product-form, slug,
-│   │                         # whatsapp-bot/ (bot de WhatsApp: webhook, cloud-api, conversation, catalog, schedule, messages, store, bot)
+│   │                         # whatsapp-bot/ (bot de WhatsApp: chat-bot (interfaz ChatBot), orchestrator, conversation, catalog,
+│   │                         #   schedule, messages, store, text; providers/: select, http-send, meta/ (WhatsAppBot), twilio/ (TwilioBot))
 │   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), textos del bot (bot.ts), horarios (hours.ts), semillas seed.json e icons.ts
 │   ├── utils/                # logger.ts (JSON estructurado), datetime.ts (zona del negocio), form-body.ts, json-body.ts, errors.ts
 │   ├── views/                # render.ts + plantillas HTML
@@ -789,8 +891,12 @@ restaurante/
 │   ├── support/process.ts    # Procesos reales: arranque del servidor y comandos de consola
 │   ├── support/png.ts        # Lectura mínima de PNG/ICO (dimensiones, opacidad, color de fondo)
 │   ├── support/cloud-api-double.ts # Doble de la WhatsApp Cloud API (ninguna prueba llama a Meta)
-│   ├── support/whatsapp.ts   # Entregas del webhook, firma, reloj y bot de prueba
-│   ├── fixtures/whatsapp/    # Entregas de ejemplo del webhook (forma de los ejemplos oficiales)
+│   ├── support/twilio-api-double.ts # Doble de la API de mensajes de Twilio (ninguna prueba llama a Twilio)
+│   ├── support/whatsapp.ts   # Entregas del webhook de Meta, firma, reloj y bot de prueba
+│   ├── support/twilio.ts     # Entregas (formulario) y firma de Twilio, y bot de prueba con Twilio
+│   ├── support/chat-bot-drivers.ts # Drivers por proveedor de la batería de contrato de ChatBot
+│   ├── fixtures/whatsapp/    # Entregas de ejemplo del webhook de Meta (forma de los ejemplos oficiales)
+│   ├── fixtures/twilio/      # Entregas de ejemplo del webhook de Twilio (formulario y StatusCallback)
 │   ├── snapshots/            # HTML de referencia de las landings (regresión visual con la semilla)
 │   ├── unit/                 # config, esquema, precios, formulario, repositorio de archivos, sesión, landings, contenido vs. diseño, JS sobre el HTML real
 │   └── integration/          # Landings (fecha, SEO, CTA, datos editables, datos dañados), administración, estáticos, errores

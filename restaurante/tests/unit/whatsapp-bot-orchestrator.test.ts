@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseDelivery } from '../../src/services/whatsapp-bot/webhook.ts';
+import { parseDelivery } from '../../src/services/whatsapp-bot/providers/meta/webhook.ts';
 import { graphError, networkError, timeout } from '../support/cloud-api-double.ts';
 import { makeProductRepository } from '../support/products.ts';
 import { CUSTOMER, STAFF, WEEK, inboundPayload, loadFixture, makeBotHarness, mx, newMessageId, type BotHarness } from '../support/whatsapp.ts';
@@ -106,7 +106,7 @@ describe('limitador por número sin datos personales (RN-5, DEF-001)', () => {
     const payload = inboundPayload('text', { text: 'Hola', at: h.clock.now });
     const template = payload.entry[0].changes[0].value.messages[0];
     payload.entry[0].changes[0].value.messages = Array.from({ length: 1100 }, (_, i) => ({ ...template, id: newMessageId(), from: String(5215500100000 + i) }));
-    h.bot.receive(parseDelivery(payload, h.config.phoneNumberId));
+    h.bot.receive(parseDelivery(payload, h.config.accountId));
     await h.bot.drain();
     expect(h.bot.rateTrackedCount).toBe(1000);
   });

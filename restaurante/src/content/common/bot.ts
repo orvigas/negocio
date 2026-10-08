@@ -60,6 +60,12 @@ export const botText = Object.freeze({
   person: 'Para hablar con una persona de *{negocio}*, escribe a: {contacto}',
   staffHours: 'En horario',
   staffOffHours: 'FUERA DE HORARIO, abre {apertura}',
+  /**
+   * Aviso al personal como texto libre (REQ-F-012, D-6: Twilio sin Content Template). Mismo
+   * contenido que los parámetros de la plantilla de Meta (REQ-F-009 CA-14).
+   */
+  staffNotice:
+    '*Nuevo pedido {codigo}* - {negocio}\n{horario}\nCliente: {cliente}\nWhatsApp: {whatsapp}\nEntrega: {entrega}\n{lineas}\nTotal: {total}\nNotas: {notas}',
   priceEach: 'c/u',
   piece: 'pieza',
   order: 'orden de {cantidad}',

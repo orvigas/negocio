@@ -154,6 +154,9 @@ const templateParam = (value: string): string => {
   return clean === '' ? '-' : clean;
 };
 
+/** Línea del pedido en el aviso al personal: "2 × Agua a $35 = $70". */
+const staffLine = (line: CartLine): string => `${line.quantity} × ${lineLabel(line)} a ${formatPesos(line.unitPriceCents)} = ${formatPesos(lineSubtotal(line))}`;
+
 /** Parámetros con nombre de la plantilla del aviso al personal (DT-6; README). */
 export function staffTemplateParams(order: OrderDetails, customerWaId: string): Record<string, string> {
   const params = {
@@ -163,11 +166,18 @@ export function staffTemplateParams(order: OrderDetails, customerWaId: string): 
     cliente: order.name,
     whatsapp: `+${customerWaId}`,
     entrega: deliveryText(order),
-    lineas: order.lines
-      .map((line) => `${line.quantity} × ${lineLabel(line)} a ${formatPesos(line.unitPriceCents)} = ${formatPesos(lineSubtotal(line))}`)
-      .join('; '),
+    lineas: order.lines.map(staffLine).join('; '),
     total: formatPesos(cartTotal(order.lines)),
     notas: order.notes === '' ? botText.noNotes : order.notes,
   };
   return Object.fromEntries(Object.entries(params).map(([key, value]) => [key, templateParam(value)]));
+}
+
+/**
+ * Aviso al personal como texto libre (REQ-F-012, D-6), con los mismos datos que la plantilla
+ * (REQ-F-009 CA-14): una línea por producto, el resto sin saltos de línea del cliente.
+ */
+export function staffNoticeText(order: OrderDetails, customerWaId: string): string {
+  const params = staffTemplateParams(order, customerWaId);
+  return fill(botText.staffNotice, { ...params, lineas: order.lines.map((line) => templateParam(staffLine(line))).join('\n') });
 }

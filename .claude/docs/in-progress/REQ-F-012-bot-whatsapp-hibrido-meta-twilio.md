@@ -2,7 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
+
+Pull Request: https://github.com/orvigas/negocio/pull/32 (contra `main`). CI del commit `37a2bdc`: `calidad` en verde (2m52s), `docker` en verde (1m14s) y GitGuardian en verde.
 
 ## Aprobación
 
@@ -1181,3 +1183,10 @@ Análisis inicial con las preguntas 1 a 11 y las propuestas P-1 a P-5.
   - `typecheck`, `lint` y `npm test` pasan (1085 pruebas y 1 `expected fail` ya existente);
   - no encuentra defectos.
 - CA-16 y Docker quedan pendientes, aceptados por el usuario. Estado: `QA_APPROVED`.
+
+### Commit y Pull Request (2026-10-08)
+
+- Commit `37a2bdc` (`feat: permite usar el bot de WhatsApp con Meta en producción o con Twilio en desarrollo`). Incluye la implementación, las dos pruebas de QA, el ticket y la guía del agente actualizada por la sesión principal con autorización del usuario. No incluye `.env`.
+- Pull Request #32: https://github.com/orvigas/negocio/pull/32. CI: `calidad`, `docker` y GitGuardian en verde. Con el job `docker` en verde queda cubierto el pendiente de Docker (CA-15).
+- Sigue pendiente CA-16 (punta a punta con el sandbox de Twilio), aceptado por el usuario como verificación manual.
+- Estado: `READY_FOR_MERGE`.

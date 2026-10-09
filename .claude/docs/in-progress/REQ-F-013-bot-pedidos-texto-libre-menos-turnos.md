@@ -2,7 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
+
+Pull Request: https://github.com/orvigas/negocio/pull/35 (CI en verde: `calidad` y `docker`).
 
 ## Aprobación
 
@@ -2008,3 +2010,19 @@ Análisis inicial, con las preguntas 1 a 13 y la medición del flujo actual.
 - 7 pruebas de QA nuevas. No queda ningún `it.fails` de QA.
 - Sin defectos nuevos. OBS-6 se acepta como pendiente, según el criterio de cierre del usuario.
 - Estado: `QA_APPROVED`.
+
+### Commit y Pull Request (2026-10-09, senior-fullstack)
+
+- QA_APPROVED en la ronda 4.
+- Antes del commit se volvieron a ejecutar las validaciones:
+  - `npm run typecheck`: código 0;
+  - `npm run lint`: código 0;
+  - `npm test`: código 0; 1367 pasan y 1 fallo esperado (REQ-F-011).
+- Commit `194a778` ("feat: permite pedir por WhatsApp en texto libre con menos mensajes") en `feature/REQ-F-013-bot-pedidos-texto-libre-menos-turnos`. Incluye:
+  - la implementación y sus correcciones;
+  - el ticket;
+  - las pruebas de QA;
+  - la línea de `.claude/agents/senior-fullstack.md` sobre el intérprete, autorizada por el usuario.
+- Pull Request: https://github.com/orvigas/negocio/pull/35, contra `main`.
+- CI del PR (run 37949999642): `calidad` pass (3m2s), `docker` pass (1m46s) y GitGuardian pass.
+- Estado: `READY_FOR_MERGE`.

@@ -69,7 +69,7 @@ describe.each(PROVIDER_DRIVERS)('conteo de mensajes con $provider (REQ-F-013, D-
     expect(greeting).toHaveLength(1);
     expect(greeting[0]?.length).toBeLessThanOrEqual(1600);
     expect(greeting[0]).toContain('Menú de Moloteando');
-    expect(greeting[0]).not.toContain('1. Ver el menú');
+    expect(greeting[0]).not.toContain('1. 📋 Ver el menú');
     const cart = (await s.write('2 órdenes de queso y una coca')).join('\n');
     expect(cart).toContain('- 2 × Molotes de Queso Oaxaca (orden de 3)');
     expect(cart).toContain('- 1 × Refrescos Familia Coca-Cola · Coca-Cola');

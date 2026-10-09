@@ -376,8 +376,15 @@ arrancar queda `bot_provider_selected` con el proveedor en el log.
 - **Mensajes largos:** se parten por líneas según el límite del proveedor (4096 caracteres con
   Meta, 1600 con Twilio), sin cortar nunca un producto del menú.
 - **Textos:** `src/content/common/bot.ts` (flujo y vocabulario común) y
-  `src/content/<negocio>/bot.ts` (lema, palabras del negocio, secciones del menú y vocabulario
-  del negocio).
+  `src/content/<negocio>/bot.ts` (lema, palabras del negocio, secciones del menú, emojis de los
+  productos y vocabulario del negocio).
+- **Emojis:** los textos llevan emojis de comida y bebida con moderación: acompañan a la palabra,
+  nunca la sustituyen, y como mucho dos por línea. El emoji de cada producto del menú se define
+  por slug en `emojis` de `src/content/<negocio>/bot.ts`; un producto sin emoji se muestra sin
+  él. El intérprete los ignora, así que un cliente que copie un texto del bot (el ejemplo de
+  pedido, una línea del menú o "🏪 Recoger en sucursal") se entiende igual. No van en los
+  parámetros de la plantilla de Meta, cuyo texto fija la plantilla aprobada; el aviso en texto
+  libre de Twilio empieza con 🔔.
 - **Logs del intérprete:** cada mensaje interpretado deja `bot_order_interpreted` con el
   `conversationId`, el negocio y solo contadores (`recognized`, `ambiguous`, `unrecognized`,
   `rejected`, `unavailable`, `otherBusiness`), nunca el texto del cliente ni los detalles.

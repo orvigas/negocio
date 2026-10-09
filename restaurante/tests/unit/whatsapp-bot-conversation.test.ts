@@ -53,7 +53,7 @@ describe('selección del negocio (RF-3)', () => {
     const tuesday = await makeBotHarness({ at: mx(`${WEEK.tue}T10:00`) });
     const greetingTue = await tuesday.ask('Hola');
     expect(greetingTue).toContain('Moloteando');
-    expect(greetingTue).toContain('1. Ver el menú');
+    expect(greetingTue).toContain('1. 📋 Ver el menú');
     expect(greetingTue).toContain('Estamos abiertos hasta las 15:00');
 
     const saturday = await makeBotHarness({ at: mx(`${WEEK.sat}T10:00`) });
@@ -126,13 +126,13 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     const h = await makeBotHarness();
     await h.ask('Hola');
     const menu = await h.ask('1');
-    expect(menu).toContain('*Molotes*\n1. Molotes de Queso Oaxaca — pieza $45 · orden de 3 $130');
-    expect(menu).toContain('*Bebidas*\n9. Aguas Frescas Naturales del Día — $35');
+    expect(menu).toContain('*Molotes*\n1. 🧀 Molotes de Queso Oaxaca — pieza $45 · orden de 3 $130');
+    expect(menu).toContain('*Bebidas*\n9. 🍹 Aguas Frescas Naturales del Día — $35');
 
     const birria = await makeBotHarness({ at: mx(`${WEEK.sat}T10:00`) });
     await birria.ask('Hola');
     const birriaMenu = await birria.ask('1');
-    expect(birriaMenu).toContain('4. Tazón de Consomé Chico — Con Carne $80 · Sin Carne $45');
+    expect(birriaMenu).toContain('4. 🍲 Tazón de Consomé Chico — Con Carne $80 · Sin Carne $45');
   });
 
   it('CA-9: no muestra productos no disponibles ni eliminados, ni variantes no disponibles', async () => {
@@ -349,9 +349,9 @@ describe('opciones del cliente (D-10, D-15, RF-4.7 a RF-4.9)', () => {
     await h.ask('Hola');
     const reply = await h.ask('qué tal 🤔');
     expect(reply).toContain('No entendí tu mensaje.');
-    expect(reply).toContain('2. Hacer un pedido');
+    expect(reply).toContain('2. 🛒 Hacer un pedido');
     // REQ-F-013, RF-4.9: la ayuda invita a escribir el pedido con un ejemplo.
-    expect(await h.ask('Ayuda')).toContain('Puedes escribir tu pedido con tus palabras, por ejemplo: *2 molotes de queso y una coca*');
+    expect(await h.ask('Ayuda')).toContain('Puedes escribir tu pedido con tus palabras, por ejemplo: *2 molotes de queso 🧀 y una coca 🥤*');
   });
 
   it('palabras clave sin distinguir acentos ni mayúsculas: "MENÚ" y "Menu"', async () => {

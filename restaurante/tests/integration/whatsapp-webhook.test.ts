@@ -51,8 +51,9 @@ async function start({ at = mx(`${WEEK.tue}T10:00`) } = {}) {
 }
 
 async function order(write: (text: string) => Promise<string>, { delivery = '2' } = {}): Promise<void> {
-  for (const text of ['Hola', '2', '1', '2', '2', '1', '9', '1', '4', 'Ana Pérez', delivery]) await write(text);
-  if (delivery === '2') await write('Calle Secreta 742, Colonia Oculta');
+  // REQ-F-013, RF-5 y RF-6: los datos en un mensaje y la nota en el resumen.
+  for (const text of ['Hola', '2', '1', '2', '2', '1', '9', '1', '4']) await write(text);
+  await write(delivery === '2' ? 'Ana Pérez, domicilio, Calle Secreta 742, Colonia Oculta' : 'Ana Pérez, recoger');
   await write('Tocar el timbre azul');
 }
 

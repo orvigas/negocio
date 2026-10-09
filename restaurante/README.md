@@ -340,13 +340,29 @@ arrancar queda `bot_provider_selected` con el proveedor en el log.
   Moloteando, S-D Birriería El Muñeco). Se fija con el primer mensaje y se mantiene hasta que el
   pedido se confirma o se cancela, o tras 2 h sin actividad. Si el cliente pide el otro negocio
   (p. ej. llega desde `/birria` un martes), el bot le indica sus días y atiende con el del día.
-- **Conversación:** solo texto, con números de opción. Palabras clave en cualquier momento,
-  sin distinguir mayúsculas ni acentos (solo si son el mensaje completo): `menú`, `carrito`,
-  `cancelar`, `persona` y `ayuda`. Menú del catálogo de productos (la misma caché y las mismas
-  reglas de visibilidad que la landing; nunca consulta la base de datos), carrito (1 a 20
-  unidades por línea, hasta 15 líneas), aviso de privacidad, nombre, entrega (recoger o a
-  domicilio con dirección), notas, resumen con código de referencia (`M-XXXX` o `B-XXXX`) y
-  confirmación. Antes de confirmar vuelve a comprobar precios y disponibilidad.
+- **Conversación (REQ-F-013):** solo texto. El cliente escribe su pedido como lo diría ("2
+  molotes de papa y una coca", "3 quesabirrias y un consomé chico con carne") y los números de
+  opción siguen funcionando. Flujo típico, 4 mensajes del cliente: el mensaje de la landing (el
+  bot saluda y muestra el menú), el pedido (el bot agrega lo que entendió, muestra el carrito y
+  pide los datos con el aviso de privacidad), los datos en un mensaje ("Ana, recoger" o "Ana,
+  domicilio, Calle 5 #10, Centro"; el bot pide solo lo que falte) y "sí" en el resumen. En el
+  resumen, cualquier otro texto es una nota ("sin notas" la borra) y "agrega …" o "quita …"
+  editan el carrito. Lo ambiguo ("uno de epazote", "consomé") se pregunta en un solo mensaje y
+  lo que no entiende lo dice. "x2" o "2x" junto al producto es la cantidad. Sin separadores ("2
+  tacos 1 coca") separa por las cantidades si cada parte es un producto; si no, no agrega esa
+  parte y pide escribirla con comas. "1 de 3 de tinga" es 1 orden de 3 (si la orden del
+  catálogo no es de 3, pregunta). En un producto sin orden, "2 órdenes de 3 tacos" son 6 tacos;
+  sin la palabra "orden" ("una de 3 de tacos") o sin número ("una orden de tacos"), pregunta
+  cuántos y no agrega esa línea. Un fragmento como "…, con carne" o "…, grande" completa la
+  línea anterior. Cada línea puede llevar un detalle de hasta 60 caracteres ("sin
+  cebolla", "coca sin azúcar") que no cambia el precio y llega al personal. Palabras clave en
+  cualquier momento, sin distinguir mayúsculas ni acentos (solo si son el mensaje completo):
+  `menú`, `carrito`, `cancelar`, `persona` y `ayuda` ("cancela la coca" quita la coca, no
+  cancela el pedido). Menú del catálogo de productos (la misma caché y las mismas reglas de
+  visibilidad que la landing; nunca consulta la base de datos), carrito (1 a 20 unidades por
+  línea, hasta 15 líneas), resumen con código de referencia (`M-XXXX` o `B-XXXX`) y
+  confirmación. Antes de confirmar vuelve a comprobar precios y disponibilidad. Ver
+  [Vocabulario del bot](#vocabulario-del-bot).
 - **Horario:** sale de `src/content/hours.ts` (REQ-F-010). Fuera de horario avisa cuándo abre,
   deja pedir y marca el resumen "FUERA DE HORARIO". El lunes atiende como Molotes (cerrado; abre
   el martes). Si el negocio no abre ni ese día ni el siguiente (Molotes el viernes después de las
@@ -359,8 +375,12 @@ arrancar queda `bot_provider_selected` con el proveedor en el log.
   contacto.
 - **Mensajes largos:** se parten por líneas según el límite del proveedor (4096 caracteres con
   Meta, 1600 con Twilio), sin cortar nunca un producto del menú.
-- **Textos:** `src/content/common/bot.ts` (flujo) y `src/content/<negocio>/bot.ts` (lema,
-  palabras del negocio y secciones del menú).
+- **Textos:** `src/content/common/bot.ts` (flujo y vocabulario común) y
+  `src/content/<negocio>/bot.ts` (lema, palabras del negocio, secciones del menú y vocabulario
+  del negocio).
+- **Logs del intérprete:** cada mensaje interpretado deja `bot_order_interpreted` con el
+  `conversationId`, el negocio y solo contadores (`recognized`, `ambiguous`, `unrecognized`,
+  `rejected`, `unavailable`, `otherBusiness`), nunca el texto del cliente ni los detalles.
 - **Estado en memoria** (una sola instancia, como las sesiones de `/admin`): si la app se
   reinicia, la conversación en curso se pierde y el bot empieza de nuevo.
 
@@ -376,8 +396,61 @@ en producción y la prueba de punta a punta con Meta (CA-26 de REQ-F-009, pendie
 5. El secreto de la app (App Secret), para validar la firma.
 6. URL pública con HTTPS para el webhook (el dominio de la VM con nginx).
 7. Plantilla aprobada para el aviso al personal.
-8. Método de pago en Meta para las conversaciones que cobra.
+8. Método de pago en Meta (ver [Costos de Meta y Twilio](#costos-de-meta-y-twilio)): sin él,
+   Meta deja de entregar las respuestas del bot al agotar el cupo gratuito del mes.
 9. Números de WhatsApp del personal de Molotes y de Birria.
+
+### Vocabulario del bot
+
+El intérprete de pedidos es determinista y propio (`src/services/whatsapp-bot/interpreter/`):
+no usa IA ni servicios externos y se puede sustituir por otro que cumpla la interfaz
+`OrderInterpreter` (`interpreter/types.ts`; opción `interpreter` de `createBotOrchestrator`).
+
+- **Reconocimiento por nombre:** cada producto se reconoce por las palabras de su nombre y de
+  sus variantes, sin distinguir mayúsculas, acentos, singular o plural ni género ("chico" =
+  "Chica"), con tolerancia a errores de ortografía (1 letra en palabras de 4 a 7 letras, 2 en
+  palabras de 8 o más; si dos productos empatan, el bot pregunta). Un producto nuevo o renombrado
+  en `/admin` se reconoce sin tocar nada.
+- **Vocabulario común** (`botVocabulary` en `src/content/common/bot.ts`): cantidades en palabra
+  ("una", "media docena"), relleno que se ignora ("hola", "quiero", "por favor"), intención de
+  pedir, palabras de entrega, de confirmación, para terminar, para quitar y para agregar. Las
+  palabras clave están en `botKeywords`.
+- **Vocabulario de cada negocio** (`vocabulary` en `src/content/<negocio>/bot.ts`):
+  - `example`: el ejemplo de la invitación a pedir;
+  - `separatedExample`: el ejemplo con comas que se da cuando un mensaje sin separadores no se
+    puede separar con seguridad ("2 tacos, 1 coca");
+  - `genericWords`: palabras que no identifican un producto ("molote" en Molotes, "birria" en
+    Birria, porque aparecen en todos los nombres o en el mensaje de la landing);
+  - `products`, por slug del producto: `synonyms` (otras formas de llamarlo), `variants`
+    (sinónimos por etiqueta de variante) y `details` (detalles reconocidos: identifican el
+    producto y quedan como detalle; con `variant`, fijan esa variante).
+
+**Añadir un sinónimo:** agrégalo, en minúsculas y sin acentos, en el slug del producto (el slug
+aparece en `/admin/api` o en la base de datos y no cambia nunca). Por ejemplo, para que
+"quesadilla" se entienda como el Queso Oaxaca:
+
+```ts
+products: Object.freeze({
+  'queso-oaxaca': { synonyms: ['quesillo', 'quesadilla'] },
+}),
+```
+
+Agrega la frase a la batería de `tests/unit/whatsapp-bot-interpreter.test.ts` y ejecuta
+`npm test`: la prueba también comprueba que el vocabulario esté normalizado y que sus slugs
+existan en las semillas. Un sinónimo de un slug que ya no existe se ignora sin error.
+
+### Costos de Meta y Twilio
+
+Consultados el 2026-10-08 (cambian con el tiempo; revisa las páginas de precios de Meta y de
+Twilio):
+
+- **Meta** (tarifas vigentes desde el 1 de octubre de 2026, México, en USD por mensaje
+  entregado): marketing 0.0397, utility 0.0085 y servicio (las respuestas del bot dentro de la
+  ventana de 24 h) 0.0085. Desde esa fecha Meta vuelve a cobrar los mensajes de servicio, con un
+  cupo gratuito de 1000 al mes por número de negocio. El aviso al personal es una plantilla
+  utility y se cobra. Los mensajes del cliente no se cobran. Con el flujo de REQ-F-013, un pedido
+  usa unos 4 mensajes del bot.
+- **Twilio:** 0.005 USD por mensaje (entrante o saliente), más las tarifas de Meta.
 
 ### Variables del bot
 
@@ -433,8 +506,8 @@ los mensajes de un mismo número por encima de 20 por minuto (`bot_rate_limited`
 ### Plantilla del aviso al personal
 
 El número del personal casi nunca tiene abierta la ventana de 24 h con el bot, así que el aviso
-se envía **siempre** con una plantilla (es gratuita si la ventana está abierta). Créala en el
-Administrador de WhatsApp con:
+se envía **siempre** con una plantilla utility, que se cobra (ver
+[Costos de Meta y Twilio](#costos-de-meta-y-twilio)). Créala en el Administrador de WhatsApp con:
 
 - **Categoría:** Utility. **Idioma:** Español (México), `es_MX` (o el de
   `WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE`). **Nombre:** el de `WHATSAPP_BOT_STAFF_TEMPLATE` (p. ej.
@@ -457,7 +530,13 @@ Ejemplos para la revisión de Meta: `codigo` M-4F7K, `negocio` Moloteando, `hora
 $35 = $35, `total` $295, `notas` Sin notas.
 
 Los valores nunca llevan saltos de línea ni tabuladores (la API los rechaza): las líneas del
-pedido van separadas por `; `. Si Meta acepta el aviso pero avisa después de que no se entregó
+pedido van separadas por `; ` y llevan su detalle (`2 × Taco de Birria con Tortilla de Mano ·
+sin cebolla a $40 = $80`). El cuerpo de la plantilla admite como máximo 1024 caracteres: si un
+pedido muy grande no cabe, `lineas` se abrevia por niveles (sin precio unitario, detalles más
+cortos y, al final, cada línea recortada con el prefijo "(abreviado)"). Nunca se omite una línea,
+una cantidad ni el total, y queda `bot_staff_notice_compacted` en el log. Este texto de la
+plantilla debe coincidir con `STAFF_TEMPLATE_BODY` (`src/services/whatsapp-bot/messages.ts`);
+una prueba lo comprueba. Si Meta acepta el aviso pero avisa después de que no se entregó
 (estado `failed`, p. ej. plantilla pausada o número del personal sin WhatsApp), el cliente ya
 recibió la confirmación: **ese pedido puede perderse sin aviso**. Queda
 `bot_staff_delivery_failed` (con el negocio y el código de error) en el log; vigílalo.

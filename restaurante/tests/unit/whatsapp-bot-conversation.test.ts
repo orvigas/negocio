@@ -38,13 +38,14 @@ async function add(h: BotHarness, product: number, quantity: number, option?: nu
   return h.ask(String(quantity));
 }
 
-/** Del carrito al resumen: nombre, entrega (1 recoger, 2 domicilio), dirección y notas. */
-async function checkout(h: BotHarness, { delivery = 1, address = 'Calle Falsa 123, Centro', notes = '0' } = {}): Promise<string> {
+/**
+ * Del carrito al resumen (REQ-F-013, RF-5): "4", los datos en un solo mensaje y, si se pide, una
+ * nota escrita en el resumen (RF-6.2).
+ */
+async function checkout(h: BotHarness, { delivery = 1, address = 'Calle Falsa 123, Centro', notes = '' } = {}): Promise<string> {
   await h.ask('4');
-  await h.ask('Ana Pérez');
-  await h.ask(String(delivery));
-  if (delivery === 2) await h.ask(address);
-  return h.ask(notes);
+  const summary = await h.ask(delivery === 2 ? `Ana Pérez, domicilio, ${address}` : 'Ana Pérez, recoger');
+  return notes === '' ? summary : h.ask(notes);
 }
 
 describe('selección del negocio (RF-3)', () => {
@@ -156,7 +157,7 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     const h = await makeBotHarness();
     await h.ask('Hola');
     await h.ask('2');
-    expect(await add(h, 1, 2, 2)).toContain('Agregado: 2 × Molotes de Queso Oaxaca (orden de 3)');
+    expect(await add(h, 1, 2, 2)).toContain('Agregado:\n- 2 × Molotes de Queso Oaxaca (orden de 3)');
     await h.ask('1');
     const cart = await add(h, 9, 1);
     expect(cart).toContain('1. 2 × Molotes de Queso Oaxaca (orden de 3) — $130 c/u = $260');
@@ -258,32 +259,31 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     expect(await other.ask('carrito')).toContain('15 × Aguas Frescas');
   });
 
-  it('CA-13: a domicilio pide la dirección y la valida (5 a 200 caracteres)', async () => {
+  it('CA-13: a domicilio pide la dirección y la valida (5 a 200 caracteres); la nota se escribe en el resumen (REQ-F-013, RF-5.4, RF-6.2)', async () => {
     const h = await makeBotHarness();
     await h.ask('Hola');
     await h.ask('2');
     await add(h, 9, 1);
     await h.ask('4');
-    await h.ask('Ana');
-    expect(await h.ask('2')).toContain('¿Cuál es la dirección de entrega?');
+    expect(await h.ask('Ana, domicilio')).toContain('¿Cuál es la dirección de entrega?');
     expect(await h.ask('Av')).toContain('La dirección debe tener entre 5 y 200 caracteres.');
     expect(await h.ask('x'.repeat(201))).toContain('La dirección debe tener entre 5 y 200 caracteres.');
-    expect(await h.ask('Calle Falsa 123')).toContain('¿Alguna nota');
+    expect(await h.ask('Calle Falsa 123')).toContain('Escribe *sí* para confirmar, o escribe una nota');
     const summary = await h.ask('Sin cebolla 🌶️');
     expect(summary).toContain('Entrega: A domicilio: Calle Falsa 123');
     expect(summary).toContain('Notas: Sin cebolla 🌶️');
     expect(summary).toContain('El personal te confirmará el costo del envío.');
   });
 
-  it('valida el nombre (1 a 60, contando emojis como un carácter) y muestra el aviso de privacidad antes', async () => {
+  it('valida el nombre (1 a 60, contando emojis como un carácter) y muestra el aviso de privacidad antes (REQ-F-013, RF-5.1)', async () => {
     const h = await makeBotHarness();
     await h.ask('Hola');
     await h.ask('2');
     await add(h, 9, 1);
     const privacy = await h.ask('4');
     expect(privacy).toContain('Solo se usan para este pedido y no se guardan.');
-    expect(await h.ask('A'.repeat(61))).toContain('El nombre debe tener entre 1 y 60 caracteres.');
-    expect(await h.ask(`${'😀'.repeat(60)}`)).toContain('¿Cómo lo quieres?');
+    expect(await h.ask(`${'A'.repeat(61)}, recoger`)).toContain('El nombre debe tener entre 1 y 60 caracteres.');
+    expect(await h.ask(`${'😀'.repeat(60)}`)).toContain(`Nombre: ${'😀'.repeat(60)}`);
   });
 
   it('CA-20: sin productos disponibles lo dice y ofrece hablar con una persona', async () => {
@@ -333,7 +333,7 @@ describe('opciones del cliente (D-10, D-15, RF-4.7 a RF-4.9)', () => {
     await h.deliver(inboundPayload(kind, { at: h.clock.now }));
     const reply = h.double.textsTo(CUSTOMER).slice(before).join('\n');
     expect(reply).toContain('Por ahora solo entiendo mensajes de texto.');
-    expect(reply).toContain('Escribe el número de un producto');
+    expect(reply).toContain('el número de un producto');
   });
 
   it('un primer mensaje que no es texto saluda y avisa', async () => {
@@ -350,7 +350,8 @@ describe('opciones del cliente (D-10, D-15, RF-4.7 a RF-4.9)', () => {
     const reply = await h.ask('qué tal 🤔');
     expect(reply).toContain('No entendí tu mensaje.');
     expect(reply).toContain('2. Hacer un pedido');
-    expect(await h.ask('Ayuda')).toContain('Respondo a números de opción y a palabras clave.');
+    // REQ-F-013, RF-4.9: la ayuda invita a escribir el pedido con un ejemplo.
+    expect(await h.ask('Ayuda')).toContain('Puedes escribir tu pedido con tus palabras, por ejemplo: *2 molotes de queso y una coca*');
   });
 
   it('palabras clave sin distinguir acentos ni mayúsculas: "MENÚ" y "Menu"', async () => {
@@ -366,7 +367,7 @@ describe('opciones del cliente (D-10, D-15, RF-4.7 a RF-4.9)', () => {
     await h.ask('2');
     await add(h, 9, 1);
     await h.ask('4');
-    expect(await h.ask('Persona Cancelar López')).toContain('¿Cómo lo quieres?');
+    expect(await h.ask('Persona Cancelar López, recoger')).toContain('Nombre: Persona Cancelar López');
   });
 
   it('opción 3: horario y ubicación del contenido del negocio', async () => {

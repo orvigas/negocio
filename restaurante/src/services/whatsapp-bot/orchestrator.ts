@@ -8,7 +8,9 @@ import { buildWhatsAppLink } from '../whatsapp.ts';
 import { buildCatalog } from './catalog.ts';
 import type { ChatBot, InboundDelivery, InboundMessage } from './chat-bot.ts';
 import { handleTurn, type Conversation, type TurnContext, type TurnInput } from './conversation.ts';
-import { cartTotal, confirmedMessage, staffFailedMessage, staffNoticeText, staffTemplateParams, type OrderDetails } from './messages.ts';
+import { createDeterministicInterpreter } from './interpreter/deterministic.ts';
+import type { OrderInterpreter } from './interpreter/types.ts';
+import { buildStaffTemplate, cartTotal, confirmedMessage, staffFailedMessage, staffNoticeText, type OrderDetails } from './messages.ts';
 import { maskPhone } from './phone.ts';
 import {
   CONVERSATION_IDLE_MS,
@@ -40,7 +42,8 @@ import { chunkText } from './text.ts';
  * - Los estados (`statuses`) no cambian el flujo (RF-1.5); solo se registra el fallo tardío de un
  *   aviso al personal (PT-3 A; `failed` o `undelivered`).
  * - Logs sin datos personales (RF-9): número enmascarado, nunca textos, nombre, dirección, notas,
- *   código de referencia ni tokens.
+ *   código de referencia ni tokens. Cada mensaje interpretado deja `bot_order_interpreted` solo con
+ *   contadores (REQ-F-013, RF-11).
  */
 
 /** Alfabeto del código de referencia, sin caracteres ambiguos (0/O, 1/I/L). */
@@ -78,6 +81,8 @@ export interface BotOrchestratorOptions {
   now?: () => Date;
   newCode?: (prefix: string) => string;
   newId?: () => string;
+  /** Intérprete de pedidos en texto libre (REQ-F-013, D-2); por defecto, el determinista. */
+  interpreter?: OrderInterpreter;
 }
 
 export function createBotOrchestrator({
@@ -89,6 +94,7 @@ export function createBotOrchestrator({
   now = () => new Date(),
   newCode = randomReferenceCode,
   newId = () => randomBytes(4).toString('hex'),
+  interpreter = createDeterministicInterpreter(),
 }: BotOrchestratorOptions): BotOrchestrator {
   const conversations = createConversationStore();
   const seen = createExpiringMap<true>({ ttlMs: SEEN_TTL_MS, max: MAX_SEEN });
@@ -116,8 +122,11 @@ export function createBotOrchestrator({
   /** Aviso al personal (RF-7): una sola vez; con un fallo, D-18. La conversación se cierra. */
   async function notifyStaff(waId: string, conversation: Conversation, order: OrderDetails): Promise<void> {
     const fields = { conversationId: conversation.id, business: order.business, customer: maskPhone(waId) };
+    const template = buildStaffTemplate(order, waId);
+    // DT-1 (REQ-F-013): `lineas` se compactó para que la plantilla no pase de 1024 caracteres.
+    if (template.level > 0) logger.warn('bot_staff_notice_compacted', { conversationId: conversation.id, business: order.business, level: template.level });
     const result = await chatBot.sendStaffNotice(staff[order.business], {
-      params: staffTemplateParams(order, waId),
+      params: template.params,
       text: staffNoticeText(order, waId),
     });
     conversations.delete(waId);
@@ -146,6 +155,7 @@ export function createBotOrchestrator({
       staffContact,
       newCode,
       newId,
+      interpreter,
     };
     const result = handleTurn(stored?.conversation ?? null, input, ctx);
     const conversation = result.conversation;
@@ -153,6 +163,8 @@ export function createBotOrchestrator({
     const fields = { conversationId: id, customer: maskPhone(message.from) };
 
     if (result.started && conversation) logger.info('bot_conversation_started', { ...fields, business: conversation.business });
+    const business = conversation?.business ?? stored?.conversation.business;
+    for (const counts of result.interpretations) logger.info('bot_order_interpreted', { conversationId: id, business, ...counts });
     if (conversation) {
       const lastTimestamp = Math.max(message.timestamp, stored?.lastTimestamp ?? 0);
       if (conversations.set(message.from, { conversation, lastSeen: time.getTime(), lastTimestamp })) {

@@ -237,7 +237,7 @@ describe('texto, teléfono y plantilla', () => {
     const order: OrderDetails = {
       code: 'M-AB12',
       business: 'molotes',
-      lines: [{ slug: 'a', optionKey: 'unico', productName: 'Agua', optionLabel: '', unitPriceCents: 3500, quantity: 2 }],
+      lines: [{ slug: 'a', optionKey: 'unico', productName: 'Agua', optionLabel: '', unitPriceCents: 3500, quantity: 2, detail: '' }],
       name: 'Ana\tPérez',
       delivery: 'delivery',
       address: 'Calle 1\n\nCol.     Centro',

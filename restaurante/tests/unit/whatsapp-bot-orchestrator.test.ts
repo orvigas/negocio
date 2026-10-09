@@ -11,7 +11,8 @@ import { CUSTOMER, STAFF, WEEK, inboundPayload, loadFixture, makeBotHarness, mx,
  */
 
 async function readyToConfirm(h: BotHarness): Promise<void> {
-  for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez', '1', '0']) await h.ask(text);
+  // REQ-F-013 (RF-5, RF-6): los datos en un solo mensaje y la nota, si la hay, en el resumen.
+  for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez, recoger']) await h.ask(text);
 }
 
 describe('entregas repetidas, desordenadas y viejas', () => {
@@ -58,7 +59,7 @@ describe('entregas repetidas, desordenadas y viejas', () => {
     expect(h.double.textsTo(CUSTOMER)).toHaveLength(20);
     expect(h.logger.lines.filter((line) => line.msg === 'bot_rate_limited')).toHaveLength(1);
     h.clock.now = new Date(h.clock.now.getTime() + 60_000);
-    expect(await h.ask('ayuda')).toContain('Respondo a números');
+    expect(await h.ask('ayuda')).toContain('Puedes escribir tu pedido'); // REQ-F-013, RF-4.9
   });
 });
 

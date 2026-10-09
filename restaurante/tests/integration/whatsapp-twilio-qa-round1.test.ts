@@ -73,7 +73,8 @@ async function start({ env = {}, fetch }: { env?: Record<string, string>; fetch?
   }
 
   async function order(): Promise<void> {
-    for (const text of ['Hola', '2', '1', '2', '2', '1', '9', '1', '4', 'Ana Pérez', '2', 'Calle Secreta 742, Colonia Oculta', 'Tocar el timbre azul']) await write(text);
+    // REQ-F-013 (RF-5, RF-6): los datos en un solo mensaje y la nota, si la hay, en el resumen.
+    for (const text of ['Hola', '2', '1', '2', '2', '1', '9', '1', '4', 'Ana Pérez, domicilio, Calle Secreta 742, Colonia Oculta', 'Tocar el timbre azul']) await write(text);
   }
 
   return { bot, clock, double, logger, server, post, postRaw, write, order };
@@ -118,8 +119,8 @@ describe('QA firma de Twilio (S-1 a S-7, L-1 a L-3)', () => {
     await write('Hola');
     // Nombre con emojis, acentos, + y &: aparece tal cual en el resumen al personal.
     for (const text of ['2', '1', '2', '2', '1', '9', '1', '4']) await write(text);
-    await write('José Ñúñez 🌮 +1 & Cía');
-    await write('1');
+    // REQ-F-013, RF-5 y RF-6: los datos en un mensaje y la nota en el resumen.
+    await write('José Ñúñez 🌮 +1 & Cía, recoger');
     await write('Sin cebolla ¿ok? 🌶️');
     const tail = (await write('1')) + double.textsTo(STAFF.molotes).join('\n');
     expect(double.sent.some((m) => m.text?.includes('José Ñúñez 🌮 +1 & Cía'))).toBe(true);

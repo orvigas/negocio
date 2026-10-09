@@ -56,7 +56,8 @@ async function start(driver: ProviderDriver) {
 describe.each(PROVIDER_DRIVERS)('contrato de ChatBot con $provider (CA-19)', (driver) => {
   it('pedido completo: un solo aviso al personal del negocio y la confirmación al cliente', async () => {
     const { bot, double, write } = await start(driver);
-    for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez', '1', '0']) await write(text);
+    // REQ-F-013 (RF-5, RF-6): los datos en un solo mensaje y la nota, si la hay, en el resumen.
+    for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez, recoger']) await write(text);
     expect(await write('1')).toContain('¡Listo! Tu pedido *M-T001* fue enviado a Moloteando');
     expect(double.staffNoticesTo(STAFF.molotes)).toEqual([{ codigo: 'M-T001' }]);
     expect(double.staffNoticesTo(STAFF.birria)).toEqual([]);

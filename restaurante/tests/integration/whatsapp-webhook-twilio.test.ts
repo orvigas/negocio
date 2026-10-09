@@ -53,7 +53,8 @@ async function start({ env = {} }: { env?: Record<string, string> } = {}) {
   }
 
   async function order(): Promise<void> {
-    for (const text of ['Hola', '2', '1', '2', '2', '1', '9', '1', '4', 'Ana Pérez', '2', 'Calle Secreta 742, Colonia Oculta', 'Tocar el timbre azul']) await write(text);
+    // REQ-F-013 (RF-5, RF-6): los datos en un solo mensaje y la nota, si la hay, en el resumen.
+    for (const text of ['Hola', '2', '1', '2', '2', '1', '9', '1', '4', 'Ana Pérez, domicilio, Calle Secreta 742, Colonia Oculta', 'Tocar el timbre azul']) await write(text);
   }
 
   return { bot, double, logger, server, post, write, order };

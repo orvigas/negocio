@@ -14,6 +14,9 @@
  * el aviso que recibiría el personal. Ninguna petición sale a internet. Solo para desarrollo
  * (no se incluye en la imagen de producción).
  *
+ * Escribe como lo haría el cliente, en texto libre ("2 molotes de queso y una coca", "Ana,
+ * recoger", "sí") o con los números de opción (REQ-F-013).
+ *
  * Comandos: /hora <AAAA-MM-DDTHH:MM> cambia el reloj, /audio envía un mensaje que no es texto,
  * /salir termina. La zona horaria es BUSINESS_TIMEZONE (por defecto, America/Mexico_City).
  */

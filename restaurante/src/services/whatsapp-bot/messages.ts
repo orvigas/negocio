@@ -1,6 +1,6 @@
 import { BUSINESS_IDS, type BusinessId } from '../../config/businesses.ts';
 import { commonContent } from '../../content/index.ts';
-import { botText, getBotContent } from '../../content/bot.ts';
+import { botText, getBotContent, getBotVocabulary } from '../../content/bot.ts';
 import { getBusinessHours } from '../../content/hours.ts';
 import { formatPesos } from '../price.ts';
 import type { BotCatalog, CatalogOption } from './catalog.ts';
@@ -19,6 +19,8 @@ export interface CartLine {
   readonly optionLabel: string;
   readonly unitPriceCents: number;
   readonly quantity: number;
+  /** Sabor o indicación (REQ-F-013, RF-8): hasta 60 caracteres, '' si no hay. No cambia el precio. */
+  readonly detail: string;
 }
 
 export type DeliveryMethod = 'pickup' | 'delivery';
@@ -41,18 +43,23 @@ const nameOf = (business: BusinessId): string => getBotContent(business).name;
 export const lineSubtotal = (line: CartLine): number => line.unitPriceCents * line.quantity;
 export const cartTotal = (lines: readonly CartLine[]): number => lines.reduce((sum, line) => sum + lineSubtotal(line), 0);
 
-const productLabel = (name: string, optionLabel: string): string => (optionLabel === '' ? name : `${name} (${optionLabel})`);
-export const lineLabel = (line: CartLine): string => productLabel(line.productName, line.optionLabel);
+export const productLabel = (name: string, optionLabel: string): string => (optionLabel === '' ? name : `${name} (${optionLabel})`);
+/** "Refrescos Familia Coca-Cola · Coca-Cola Sin Azúcar" (REQ-F-013, RF-8.3). */
+export const lineLabel = (line: Pick<CartLine, 'productName' | 'optionLabel' | 'detail'>): string =>
+  `${productLabel(line.productName, line.optionLabel)}${line.detail === '' ? '' : ` · ${line.detail}`}`;
+
+/** Ejemplo de pedido del negocio (REQ-F-013, RF-4.1). */
+export const exampleOf = (business: BusinessId): string => getBotVocabulary(business).example;
 
 /** "2 × Molotes de Queso Oaxaca (orden de 3) — $130 c/u = $260". */
 export const formatLine = (line: CartLine): string =>
   `${line.quantity} × ${lineLabel(line)} — ${formatPesos(line.unitPriceCents)} ${botText.priceEach} = ${formatPesos(lineSubtotal(line))}`;
 
-const formatOption = (option: CatalogOption): string =>
+export const formatOption = (option: CatalogOption): string =>
   option.label === '' ? formatPesos(option.priceCents) : `${option.label} ${formatPesos(option.priceCents)}`;
 
-/** Saludo con el estado del horario y las opciones iniciales (RF-4.1, RF-6.2). */
-export function greeting(business: BusinessId, now: Date, timeZone: string): string {
+/** Saludo con el estado del horario, sin opciones (REQ-F-013: va antes del menú o del carrito). */
+export function greetingHeader(business: BusinessId, now: Date, timeZone: string): string {
   const content = getBotContent(business);
   const hours = getBusinessHours(business);
   const opening = { apertura: describeOpening(nextOpening(business, now, timeZone)) };
@@ -60,8 +67,17 @@ export function greeting(business: BusinessId, now: Date, timeZone: string): str
   if (isOpen(business, now, timeZone)) status = fill(botText.openNow, { cierre: hours.closes });
   else if (acceptsOrders(business, now, timeZone)) status = fill(botText.closedNow, opening);
   else status = fill(botText.closedNoOrders, opening);
-  return [fill(botText.greeting, { negocio: content.name, lema: content.tagline }), status, '', botText.rootOptions, '', botText.keywordsHint].join('\n');
+  return [fill(botText.greeting, { negocio: content.name, lema: content.tagline }), status].join('\n');
 }
+
+/** Saludo con las opciones iniciales y la invitación a escribir el pedido (RF-4.1, RF-6.2; REQ-F-013 RF-4.1). */
+export const greeting = (business: BusinessId, now: Date, timeZone: string): string =>
+  [greetingHeader(business, now, timeZone), '', botText.rootOptions, fill(botText.orderInvite, { ejemplo: exampleOf(business) }), '', botText.keywordsHint].join('\n');
+
+/** Ayuda breve (REQ-F-013, RF-4.9). */
+export const helpText = (business: BusinessId): string => fill(botText.help, { ejemplo: exampleOf(business) });
+
+export const menuPrompt = (business: BusinessId): string => fill(botText.menuPrompt, { ejemplo: exampleOf(business) });
 
 /** Días y horario del otro negocio (RF-3.4, CA-8). */
 export const otherBusinessNote = (business: BusinessId): string => {
@@ -86,7 +102,10 @@ export function ordersClosed(business: BusinessId, now: Date, timeZone: string):
 export const personContact = (business: BusinessId, contact: string): string => fill(botText.person, { negocio: nameOf(business), contacto: contact });
 
 /** Menú numerado por secciones (RF-4.2), partido en mensajes de hasta 4096 caracteres. */
-export function menuMessages(business: BusinessId, catalog: BotCatalog): string[] {
+export const menuMessages = (business: BusinessId, catalog: BotCatalog): string[] => chunkText(menuText(business, catalog));
+
+/** Menú numerado como un solo texto (el orquestador lo parte según el proveedor; DT-7 de REQ-F-012). */
+export function menuText(business: BusinessId, catalog: BotCatalog): string {
   const content = getBotContent(business);
   const lines = [fill(botText.menuTitle, { negocio: content.name })];
   let number = 0;
@@ -97,8 +116,8 @@ export function menuMessages(business: BusinessId, catalog: BotCatalog): string[
       lines.push(`${number}. ${product.name} — ${product.options.map(formatOption).join(' · ')}`);
     }
   }
-  lines.push('', botText.menuPrompt);
-  return chunkText(lines.join('\n'));
+  lines.push('', menuPrompt(business));
+  return lines.join('\n');
 }
 
 export const menuEmpty = (business: BusinessId): string => fill(botText.menuEmpty, { negocio: nameOf(business) });
@@ -112,6 +131,17 @@ export function cartView(lines: readonly CartLine[]): string {
 }
 
 export const cartWithOptions = (lines: readonly CartLine[]): string => `${cartView(lines)}\n\n${botText.cartOptions}`;
+
+/** Petición de los datos con el aviso de privacidad, en un solo mensaje (REQ-F-013, RF-5.1). */
+export const dataRequest = (): string => `${botText.askData}\n${botText.privacy}`;
+
+/** Una sola pregunta para todas las líneas ambiguas, con un bloque por línea (REQ-F-013, RF-3.2). */
+export function clarifyQuestion(blocks: readonly { readonly fragment: string; readonly options: readonly string[] }[]): string {
+  const body = blocks.map((block, index) =>
+    fill(botText.clarifyBlock, { numero: index + 1, fragmento: block.fragment, opciones: block.options.map((option, at) => `${at + 1}. ${option}`).join('\n') }),
+  );
+  return [botText.clarifyTitle, ...body, fill(botText.clarifyHint, { ejemplo: blocks.length === 1 ? '1' : blocks.map((_, index) => String(index === 0 ? 2 : 1)).join(', ') })].join('\n\n');
+}
 
 export const removePrompt = (lines: readonly CartLine[]): string =>
   fill(botText.removePrompt, { lineas: lines.map((line, index) => `${index + 1}. ${lineLabel(line)}`).join('\n') });
@@ -157,21 +187,90 @@ const templateParam = (value: string): string => {
 /** Línea del pedido en el aviso al personal: "2 × Agua a $35 = $70". */
 const staffLine = (line: CartLine): string => `${line.quantity} × ${lineLabel(line)} a ${formatPesos(line.unitPriceCents)} = ${formatPesos(lineSubtotal(line))}`;
 
-/** Parámetros con nombre de la plantilla del aviso al personal (DT-6; README). */
-export function staffTemplateParams(order: OrderDetails, customerWaId: string): Record<string, string> {
-  const params = {
+/**
+ * Cuerpo de la plantilla del aviso al personal tal como se crea en el Administrador de WhatsApp
+ * (README, "Plantilla del aviso al personal"; una prueba comprueba que coinciden).
+ */
+export const STAFF_TEMPLATE_BODY = [
+  'Nuevo pedido {{codigo}} de {{negocio}}',
+  '{{horario}}',
+  'Cliente: {{cliente}} ({{whatsapp}})',
+  'Entrega: {{entrega}}',
+  'Pedido: {{lineas}}',
+  'Total: {{total}}',
+  'Notas: {{notas}}',
+].join('\n');
+
+/** Longitud máxima del cuerpo de una plantilla de WhatsApp (documentada para el cuerpo; DT-1 la aplica al cuerpo ya rellenado). */
+export const MAX_TEMPLATE_BODY_CHARS = 1024;
+
+/**
+ * Recorta a `max` caracteres con "…" al final, por puntos de código: nunca parte un emoji (DEF-004).
+ * Un emoji cuenta como 2 unidades en `length`, así que el resultado nunca mide más de `max` puntos de
+ * código y su `length` puede quedar por debajo de `max`.
+ */
+function clip(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const kept: string[] = [];
+  let length = 0;
+  for (const char of text) {
+    if (length + char.length > Math.max(0, max - 1)) break;
+    kept.push(char);
+    length += char.length;
+  }
+  return `${kept.join('')}…`;
+}
+
+/**
+ * Niveles de `lineas` (REQ-F-013, DT-1): completo; sin precio unitario; detalles a 20 caracteres;
+ * cada línea abreviada a su parte. Nunca se omite una línea, una cantidad ni el total.
+ */
+const STAFF_LINE_LEVELS: readonly ((line: CartLine) => string)[] = [
+  staffLine,
+  (line) => `${line.quantity} × ${lineLabel(line)} = ${formatPesos(lineSubtotal(line))}`,
+  (line) => `${line.quantity} × ${lineLabel({ ...line, detail: clip(line.detail, 20) })} = ${formatPesos(lineSubtotal(line))}`,
+];
+const ABBREVIATED = '(abreviado) ';
+const SEPARATOR = '; ';
+
+function compactLines(lines: readonly CartLine[], budget: number): { text: string; level: number } {
+  for (const [level, format] of STAFF_LINE_LEVELS.entries()) {
+    const text = lines.map((line) => templateParam(format(line))).join(SEPARATOR);
+    if (text.length <= budget) return { text, level };
+  }
+  const last = STAFF_LINE_LEVELS[STAFF_LINE_LEVELS.length - 1] ?? staffLine;
+  const share = Math.max(8, Math.floor((budget - ABBREVIATED.length - SEPARATOR.length * (lines.length - 1)) / Math.max(1, lines.length)));
+  const text = `${ABBREVIATED}${lines.map((line) => clip(templateParam(last(line)), share)).join(SEPARATOR)}`;
+  return { text, level: STAFF_LINE_LEVELS.length };
+}
+
+/** Parámetros de la plantilla y nivel de compactación de `lineas` (0 = completo; DT-1). */
+export function buildStaffTemplate(order: OrderDetails, customerWaId: string): { params: Record<string, string>; level: number } {
+  const others = {
     codigo: order.code,
     negocio: nameOf(order.business),
     horario: order.offHoursOpening === null ? botText.staffHours : fill(botText.staffOffHours, { apertura: order.offHoursOpening }),
     cliente: order.name,
     whatsapp: `+${customerWaId}`,
     entrega: deliveryText(order),
-    lineas: order.lines.map(staffLine).join('; '),
     total: formatPesos(cartTotal(order.lines)),
     notas: order.notes === '' ? botText.noNotes : order.notes,
   };
-  return Object.fromEntries(Object.entries(params).map(([key, value]) => [key, templateParam(value)]));
+  const clean = Object.fromEntries(Object.entries(others).map(([key, value]) => [key, templateParam(value)]));
+  const fixed = STAFF_TEMPLATE_BODY.replace(/\{\{\w+\}\}/g, '').length;
+  const budget = MAX_TEMPLATE_BODY_CHARS - fixed - Object.values(clean).reduce((sum, value) => sum + value.length, 0);
+  const { text, level } = compactLines(order.lines, budget);
+  // El mismo orden de siempre (README): codigo, negocio, horario, cliente, whatsapp, entrega, lineas, total, notas.
+  const { total, notas, ...first } = clean;
+  return { params: { ...first, lineas: templateParam(text), total: total ?? '', notas: notas ?? '' }, level };
 }
+
+/** Parámetros con nombre de la plantilla del aviso al personal (DT-6; README). */
+export const staffTemplateParams = (order: OrderDetails, customerWaId: string): Record<string, string> => buildStaffTemplate(order, customerWaId).params;
+
+/** Rellena el cuerpo de la plantilla (pruebas y medición de DT-1). */
+export const hydrateStaffTemplate = (params: Readonly<Record<string, string>>): string =>
+  STAFF_TEMPLATE_BODY.replace(/\{\{(\w+)\}\}/g, (match, key: string) => params[key] ?? match);
 
 /**
  * Aviso al personal como texto libre (REQ-F-012, D-6), con los mismos datos que la plantilla

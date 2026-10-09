@@ -315,7 +315,7 @@ describe('resumen, notas y confirmación (CA-13, RF-6)', () => {
     expect(edited).toContain('- 1 × Refrescos Familia Coca-Cola · Coca-Cola');
     expect(edited).toContain('*Total: $125*');
     expect(edited).toContain('Notas: sin picante, por favor');
-    expect(await h.ask('no')).toBe('Escribe *sí* para confirmar, o escribe una nota para agregarla. *cancelar* para cancelar.');
+    expect(await h.ask('no')).toBe('✅ Escribe *sí* para confirmar, o escribe una nota para agregarla. *cancelar* para cancelar.');
     const removed = await h.ask('sin la coca');
     expect(removed).toContain('Quitado: Refrescos Familia Coca-Cola · Coca-Cola.');
     expect(removed).toContain('*Total: $90*');
@@ -350,7 +350,7 @@ describe('resumen, notas y confirmación (CA-13, RF-6)', () => {
   it.each(['no', 'no gracias'])('"%s" en el resumen ni cancela ni confirma (RF-6.5)', async (word) => {
     const h = await makeBotHarness();
     await toSummary(h, '2 de queso');
-    expect(await h.ask(word)).toBe('Escribe *sí* para confirmar, o escribe una nota para agregarla. *cancelar* para cancelar.');
+    expect(await h.ask(word)).toBe('✅ Escribe *sí* para confirmar, o escribe una nota para agregarla. *cancelar* para cancelar.');
     expect(h.double.templatesTo(STAFF.molotes)).toHaveLength(0);
     expect(h.bot.hasConversation(CUSTOMER)).toBe(true);
   });

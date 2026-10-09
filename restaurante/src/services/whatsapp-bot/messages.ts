@@ -101,6 +101,9 @@ export function ordersClosed(business: BusinessId, now: Date, timeZone: string):
 
 export const personContact = (business: BusinessId, contact: string): string => fill(botText.person, { negocio: nameOf(business), contacto: contact });
 
+/** "🧀 Molotes de Queso Oaxaca"; sin emoji asignado, solo el nombre. */
+const withEmoji = (emoji: string | undefined, text: string): string => (emoji === undefined || emoji === '' ? text : `${emoji} ${text}`);
+
 /** Menú numerado por secciones (RF-4.2), partido en mensajes de hasta 4096 caracteres. */
 export const menuMessages = (business: BusinessId, catalog: BotCatalog): string[] => chunkText(menuText(business, catalog));
 
@@ -113,7 +116,7 @@ export function menuText(business: BusinessId, catalog: BotCatalog): string {
     lines.push('', `*${content.sections[section.category]}*`);
     for (const product of section.products) {
       number += 1;
-      lines.push(`${number}. ${product.name} — ${product.options.map(formatOption).join(' · ')}`);
+      lines.push(`${number}. ${withEmoji(content.emojis[product.slug], product.name)} — ${product.options.map(formatOption).join(' · ')}`);
     }
   }
   lines.push('', menuPrompt(business));
@@ -155,7 +158,7 @@ export function summary(order: OrderDetails): string {
     fill(botText.summaryTitle, { codigo: order.code, negocio: nameOf(order.business) }),
     ...order.lines.map(formatLine),
     `*Total: ${formatPesos(cartTotal(order.lines))}*`,
-    `Entrega: ${deliveryText(order)}`,
+    `${botText.deliveryIcons[order.delivery]} Entrega: ${deliveryText(order)}`,
     `Nombre: ${order.name}`,
     `Notas: ${order.notes === '' ? botText.noNotes : order.notes}`,
   ];

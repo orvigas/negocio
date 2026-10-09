@@ -4,34 +4,39 @@
  * src/services/whatsapp-bot/messages.ts. El cliente escribe su pedido con sus palabras y los
  * números de opción siguen funcionando (REQ-F-013, D-1); las palabras clave funcionan en cualquier
  * paso como mensaje completo (D-10).
+ *
+ * Emojis: acompañan a la palabra y nunca la sustituyen, como mucho dos por línea. El intérprete los
+ * ignora (separan palabras), así que un cliente que copie un texto del bot se entiende igual. No van
+ * en los textos que llegan a los parámetros de la plantilla de Meta (`pickup`, `delivery`,
+ * `staffHours`, `staffOffHours`, `noNotes`): su texto lo fija la plantilla aprobada.
  */
 export const botText = Object.freeze({
-  greeting: '¡Hola! Te atiende el asistente de *{negocio}*. {lema}',
-  openNow: 'Estamos abiertos hasta las {cierre}.',
-  closedNow: 'En este momento estamos cerrados. Abrimos {apertura}. Puedes ver el menú y dejar tu pedido: lo atenderemos cuando abramos.',
+  greeting: '¡Hola! 👋 Te atiende el asistente de *{negocio}*. {lema}',
+  openNow: '🕒 Estamos abiertos hasta las {cierre}.',
+  closedNow: '🌙 En este momento estamos cerrados. Abrimos {apertura}. Puedes ver el menú y dejar tu pedido: lo atenderemos cuando abramos.',
   /** Fuera de horario y sin pedidos (D-16): el negocio no abre hoy ni mañana. */
-  closedNoOrders: 'En este momento estamos cerrados. Abrimos {apertura}. Puedes ver el menú; los pedidos se reciben desde el día anterior a la apertura.',
-  rootOptions: '¿Qué deseas hacer?\n1. Ver el menú\n2. Hacer un pedido\n3. Horario y ubicación\n4. Hablar con una persona',
-  keywordsHint: 'En cualquier momento puedes escribir: *menú*, *carrito*, *cancelar*, *persona* o *ayuda*.',
+  closedNoOrders: '🌙 En este momento estamos cerrados. Abrimos {apertura}. Puedes ver el menú; los pedidos se reciben desde el día anterior a la apertura.',
+  rootOptions: '¿Qué deseas hacer?\n1. 📋 Ver el menú\n2. 🛒 Hacer un pedido\n3. 🕒 Horario y ubicación\n4. 🙋 Hablar con una persona',
+  keywordsHint: '💬 En cualquier momento puedes escribir: *menú*, *carrito*, *cancelar*, *persona* o *ayuda*.',
   help: 'Puedes escribir tu pedido con tus palabras, por ejemplo: *{ejemplo}*. También respondo a números de opción y a palabras clave.',
-  notUnderstood: 'No entendí tu mensaje.',
+  notUnderstood: 'No entendí tu mensaje. 🤔',
   textOnly: 'Por ahora solo entiendo mensajes de texto.',
-  hoursAndLocation: '*{negocio}* atiende {horario}.\nUbicación: {mapa}',
+  hoursAndLocation: '🕒 *{negocio}* atiende {horario}.\n📍 Ubicación: {mapa}',
   otherBusiness: '*{otro}* atiende {horarioOtro}. Hoy te atiende *{negocio}*.',
-  menuTitle: '*Menú de {negocio}*',
+  menuTitle: '📋 *Menú de {negocio}*',
   menuPrompt: 'Escríbeme tu pedido, por ejemplo: *{ejemplo}*. También puedes escribir el número de un producto.',
   /** Invitación del saludo (REQ-F-013, RF-4.1). */
   orderInvite: 'O escríbeme tu pedido, por ejemplo: *{ejemplo}*.',
   menuEmpty: 'Por ahora no tenemos productos disponibles. Escribe *persona* para hablar con alguien de {negocio}.',
   ordersClosed:
-    'Por ahora *{negocio}* no está tomando pedidos: abre {apertura}. *{otro}* abre {aperturaOtro}.\nPuedes ver el menú (escribe *menú*) o hablar con una persona (escribe *persona*).',
+    '🌙 Por ahora *{negocio}* no está tomando pedidos: abre {apertura}. *{otro}* abre {aperturaOtro}.\nPuedes ver el menú (escribe *menú*) o hablar con una persona (escribe *persona*).',
   chooseOption: '¿Cuál opción de *{producto}*?\n{opciones}',
   askQuantity: '¿Cuántas de *{producto}*? Escribe un número del 1 al {max}.',
   invalidNumber: 'Escribe solo el número de una de las opciones.',
   invalidQuantity: 'La cantidad debe ser un número entero del 1 al {max}.',
   lineTooLarge: 'Con esa cantidad tendrías más de {max} de *{producto}*. Elige una cantidad menor.',
   tooManyLines: 'Tu pedido ya tiene {max} productos distintos, el máximo. Quita uno antes de agregar otro.',
-  added: 'Agregado:\n{lineas}',
+  added: '✅ Agregado:\n{lineas}',
   notAdded: 'No agregué:\n{lineas}',
   notUnderstoodFragment: '- No entendí: "{fragmento}".',
   unavailableLine: '- {producto}: no está disponible por ahora.',
@@ -50,7 +55,7 @@ export const botText = Object.freeze({
   dataHint: 'Si es tu nombre, escribe también si es para *recoger* o *a domicilio* (con tu dirección), por ejemplo: *Ana, recoger*.',
   /** Petición de los datos con el aviso de privacidad (REQ-F-013, RF-5.1; D-17 de REQ-F-009). */
   askData:
-    'Si es todo, envíame tu nombre y si es para *recoger* o *a domicilio* (con tu dirección). Por ejemplo: *Ana, recoger* o *Ana, domicilio, Calle 5 #10, Centro*.',
+    'Si es todo, envíame tu nombre y si es para 🏪 *recoger* o 🛵 *a domicilio* (con tu dirección). Por ejemplo: *Ana, recoger* o *Ana, domicilio, Calle 5 #10, Centro*.',
   /** Una sola pregunta para todas las líneas ambiguas (REQ-F-013, RF-3.2). */
   clarifyTitle: 'Necesito que me aclares:',
   clarifyBlock: '*{numero}) {fragmento}*\n{opciones}',
@@ -58,37 +63,39 @@ export const botText = Object.freeze({
   clarifyDiscarded: 'Dejé sin agregar lo que te había preguntado y tomé tu nuevo mensaje.',
   dataOrProducts: 'Tu mensaje trae productos y datos de entrega. ¿Qué hago?\n1. Agregar los productos\n2. Son mis datos (nombre y entrega)',
   removeNotFound: 'No encontré "{texto}" en tu carrito.',
-  cartTitle: '*Tu pedido*',
-  cartEmpty: 'Tu carrito está vacío.',
+  cartTitle: '🛒 *Tu pedido*',
+  cartEmpty: '🛒 Tu carrito está vacío.',
   cartOptions: '1. Agregar otro producto\n2. Quitar un producto\n3. Vaciar el carrito\n4. Terminar mi pedido',
   removePrompt: '¿Qué producto quitas? Escribe su número.\n{lineas}',
   removeWhich: '¿Cuál quitas? Escribe su número.\n{lineas}',
   removed: 'Quitado: {producto}.',
-  emptied: 'Listo, vacié tu carrito.',
-  privacy: 'Para preparar y entregar tu pedido necesito tu nombre y, si es a domicilio, tu dirección. Solo se usan para este pedido y no se guardan.',
+  emptied: '🧹 Listo, vacié tu carrito.',
+  privacy: '🔒 Para preparar y entregar tu pedido necesito tu nombre y, si es a domicilio, tu dirección. Solo se usan para este pedido y no se guardan.',
   askName: '¿A nombre de quién es el pedido?',
   invalidName: 'El nombre debe tener entre 1 y {max} caracteres.',
-  askDelivery: '¿Cómo lo quieres?\n1. Recoger en sucursal\n2. A domicilio',
+  askDelivery: '¿Cómo lo quieres?\n1. 🏪 Recoger en sucursal\n2. 🛵 A domicilio',
   askAddress: '¿Cuál es la dirección de entrega? (calle, número, colonia y referencias)',
   invalidAddress: 'La dirección debe tener entre {min} y {max} caracteres.',
   invalidNotes: 'Las notas pueden tener hasta {max} caracteres.',
+  /** Íconos de la forma de entrega en el resumen del cliente (no van al aviso al personal). */
+  deliveryIcons: Object.freeze({ pickup: '🏪', delivery: '🛵' }),
   pickup: 'Recoger en sucursal',
   delivery: 'A domicilio: {direccion}',
   deliveryCost: 'El personal te confirmará el costo del envío.',
   noNotes: 'Sin notas',
-  summaryTitle: '*Resumen de tu pedido {codigo}*\n{negocio}',
-  offHours: 'FUERA DE HORARIO: tu pedido se atenderá cuando abramos, {apertura}.',
+  summaryTitle: '📝 *Resumen de tu pedido {codigo}*\n{negocio}',
+  offHours: '🌙 FUERA DE HORARIO: tu pedido se atenderá cuando abramos, {apertura}.',
   /** Indicación del resumen (REQ-F-013, RF-6.1): confirmar, nota o cancelar. */
-  confirmPrompt: 'Escribe *sí* para confirmar, o escribe una nota para agregarla. *cancelar* para cancelar.',
+  confirmPrompt: '✅ Escribe *sí* para confirmar, o escribe una nota para agregarla. *cancelar* para cancelar.',
   catalogChanged: 'Algunos productos cambiaron desde que los agregaste:',
   lineRemoved: '- {producto} ya no está disponible y lo quité.',
   linePriceChanged: '- {producto} cambió de precio: ahora {precio}.',
   cartNowEmpty: 'Tu carrito quedó vacío.',
-  confirmed: '¡Listo! Tu pedido *{codigo}* fue enviado a {negocio}. El personal te escribirá para confirmarlo.',
+  confirmed: '¡Listo! 🙌 Tu pedido *{codigo}* fue enviado a {negocio}. El personal te escribirá para confirmarlo. 😋',
   staffFailed:
     'No pude enviar tu pedido *{codigo}* al personal de {negocio}. Por favor escríbeles directamente: {contacto}',
-  cancelled: 'Pedido cancelado. Cuando quieras, escríbenos de nuevo.',
-  person: 'Para hablar con una persona de *{negocio}*, escribe a: {contacto}',
+  cancelled: 'Pedido cancelado. Cuando quieras, escríbenos de nuevo. 👋',
+  person: '🙋 Para hablar con una persona de *{negocio}*, escribe a: {contacto}',
   staffHours: 'En horario',
   staffOffHours: 'FUERA DE HORARIO, abre {apertura}',
   /**
@@ -96,7 +103,7 @@ export const botText = Object.freeze({
    * contenido que los parámetros de la plantilla de Meta (REQ-F-009 CA-14).
    */
   staffNotice:
-    '*Nuevo pedido {codigo}* - {negocio}\n{horario}\nCliente: {cliente}\nWhatsApp: {whatsapp}\nEntrega: {entrega}\n{lineas}\nTotal: {total}\nNotas: {notas}',
+    '🔔 *Nuevo pedido {codigo}* - {negocio}\n{horario}\nCliente: {cliente}\nWhatsApp: {whatsapp}\nEntrega: {entrega}\n{lineas}\nTotal: {total}\nNotas: {notas}',
   priceEach: 'c/u',
   piece: 'pieza',
   order: 'orden de {cantidad}',

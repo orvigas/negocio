@@ -8,7 +8,23 @@ export const molotesBot = Object.freeze({
   name: molotesContent.name,
   /** Prefijo del código de referencia del pedido (D-19). */
   codePrefix: 'M',
-  tagline: 'Molotes artesanales recién fritos, con crema, queso y salsas caseras.',
+  tagline: 'Molotes artesanales recién fritos 🔥, con crema, queso y salsas caseras.',
+  /**
+   * Emoji de cada producto en el menú del bot, por slug. Un producto sin emoji se muestra sin él.
+   * Solo es presentación: el intérprete no lo usa.
+   */
+  emojis: Object.freeze({
+    'queso-oaxaca': '🧀',
+    'tinga-de-pollo': '🍗',
+    'papas-con-chorizo': '🥔',
+    'champinones-epazote': '🍄',
+    'hongos-zetas-epazote': '🍄',
+    'picadillo-de-cerdo': '🥕',
+    'chicharron-prensado': '🔥',
+    'huitlacoche-epazote': '🌽',
+    'aguas-frescas': '🍹',
+    refrescos: '🥤',
+  } as Readonly<Record<string, string>>),
   /** Palabras (normalizadas: minúsculas y sin acentos) que identifican a este negocio (RF-3.4). */
   keywords: Object.freeze(['molote', 'molotes', 'moloteando']),
   /** Títulos de las secciones del menú por categoría (las bebidas van aparte, RF-4.2). */
@@ -20,7 +36,7 @@ export const molotesBot = Object.freeze({
    */
   vocabulary: Object.freeze({
     /** Ejemplo de la invitación a pedir (RF-4.1). */
-    example: '2 molotes de queso y una coca',
+    example: '2 molotes de queso 🧀 y una coca 🥤',
     /** Ejemplo con comas para "escríbelo separado con comas" (REQ-F-013, OBS-2). */
     separatedExample: '2 de queso, 1 coca',
     /** Palabras que no identifican un producto: todos los platillos son "Molotes de…" (R-5.1). */

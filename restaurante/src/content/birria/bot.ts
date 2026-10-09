@@ -8,7 +8,19 @@ export const birriaBot = Object.freeze({
   name: birriaContent.name,
   /** Prefijo del código de referencia del pedido (D-19). */
   codePrefix: 'B',
-  tagline: 'Birria de res al estilo tradicional, quesabirrias y consomé.',
+  tagline: 'Birria de res al estilo tradicional, quesabirrias y consomé 🍲.',
+  /**
+   * Emoji de cada producto en el menú del bot, por slug. Un producto sin emoji se muestra sin él.
+   * Solo es presentación: el intérprete no lo usa.
+   */
+  emojis: Object.freeze({
+    quesabirria: '🧀',
+    'taco-de-birria': '🌮',
+    'consome-grande': '🍲',
+    'consome-chico': '🍲',
+    birriamen: '🍜',
+    bebidas: '🥤',
+  } as Readonly<Record<string, string>>),
   /** Palabras (normalizadas: minúsculas y sin acentos) que identifican a este negocio (RF-3.4). */
   keywords: Object.freeze(['birria', 'birrieria', 'muneco', 'quesabirria']),
   /** Títulos de las secciones del menú por categoría. */
@@ -20,7 +32,7 @@ export const birriaBot = Object.freeze({
    */
   vocabulary: Object.freeze({
     /** Ejemplo de la invitación a pedir (RF-4.1). */
-    example: '3 quesabirrias y un consomé chico con carne',
+    example: '3 quesabirrias 🧀 y un consomé chico con carne 🍲',
     /** Ejemplo con comas para "escríbelo separado con comas" (REQ-F-013, OBS-2). */
     separatedExample: '2 tacos, 1 coca',
     /** "birria" no identifica un producto: el mensaje de la landing es "…un pedido de birria" (R-5.1). */

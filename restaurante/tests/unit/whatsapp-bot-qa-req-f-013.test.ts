@@ -337,7 +337,7 @@ describe('QA REQ-F-013: RF-6.3 con la precisión aprobada ("sí por favor")', ()
   it.each(['no gracias', 'no quiero', 'No, gracias'])('"%s" se trata como "no": repite la indicación sin cancelar ni guardar nota', async (text) => {
     const h = await toSummary('molotes', '2 de queso');
     const reply = await h.ask(text);
-    expect(reply).toBe('Escribe *sí* para confirmar, o escribe una nota para agregarla. *cancelar* para cancelar.');
+    expect(reply).toBe('✅ Escribe *sí* para confirmar, o escribe una nota para agregarla. *cancelar* para cancelar.');
     expect(await h.ask('sí')).toContain('fue enviado');
   });
 });
@@ -405,7 +405,7 @@ describe('QA REQ-F-013: números por paso (RF-4.4, X-4) y palabras clave', () =>
 
   it('saludo sin intención: "1" muestra el menú; "2" empieza el pedido', async () => {
     const h = await makeBotHarness({ at: TUESDAY });
-    expect(await h.ask('Hola')).toContain('1. Ver el menú');
+    expect(await h.ask('Hola')).toContain('1. 📋 Ver el menú');
     expect(await h.ask('1')).toContain('*Menú de Moloteando*');
   });
 

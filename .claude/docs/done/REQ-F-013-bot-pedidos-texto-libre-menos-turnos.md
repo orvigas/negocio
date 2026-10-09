@@ -2,9 +2,9 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE (2026-10-09; PR #35 mergeado en `main`, commit de merge `b0da83f`)
 
-Pull Request: https://github.com/orvigas/negocio/pull/35 (CI en verde: `calidad` y `docker`).
+Pull Request: https://github.com/orvigas/negocio/pull/35. CI del PR: `calidad` y `docker` en verde en `194a778` y `668e70c`. CI del push a `main` de `b0da83f`: en verde.
 
 ## Aprobación
 
@@ -2026,3 +2026,17 @@ Análisis inicial, con las preguntas 1 a 13 y la medición del flujo actual.
 - Pull Request: https://github.com/orvigas/negocio/pull/35, contra `main`.
 - CI del PR (run 37949999642): `calidad` pass (3m2s), `docker` pass (1m46s) y GitGuardian pass.
 - Estado: `READY_FOR_MERGE`.
+
+### Cierre T5
+
+2026-10-09, `senior-fullstack`. El usuario confirma el merge del PR #35. Cita textual: "PR Fusionado".
+
+- **Merge:** el 2026-10-09T15:32:43Z (09:32 del 2026-10-09, hora de Ciudad de México), con el commit `b0da83f`.
+- **CI del push a `main`:** `b0da83f` en verde: https://github.com/orvigas/negocio/actions/runs/37952536480.
+- **Siguen pendientes, sin bloquear el cierre:**
+  - CA-26 de REQ-F-009: la prueba con Meta real (límite de la plantilla);
+  - las observaciones aceptadas OBS-3, OBS-5, OBS-6 y la del producto con " y " en el nombre.
+
+El ticket pasa de `in-progress/` a `done/`. Se borra la rama `feature/REQ-F-013-bot-pedidos-texto-libre-menos-turnos`, local y remota. El usuario tiene autorizado borrar las ramas de feature ya mergeadas.
+
+Estado: `DONE`.

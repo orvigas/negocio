@@ -6,7 +6,7 @@ DONE (2026-10-08; PR #32 mergeado en `main`, commit de merge `728a9b9`)
 
 Pull Request: https://github.com/orvigas/negocio/pull/32. CI del commit `db57c71`: `calidad` y `docker` en verde. CI del push a `main` de `728a9b9`: en verde.
 
-CA-16 (punta a punta con el sandbox de Twilio) quedó verificado por el usuario. Ver "Cierre T5".
+CA-16 (punta a punta con el sandbox de Twilio): cumplido, según lo verificó el usuario (un pedido de cada negocio y el aviso al personal recibido). Ver "Cierre T5".
 
 ## Aprobación
 
@@ -772,7 +772,7 @@ Sin impacto: una HMAC y un parseo de formulario por entrega, sin nuevas lecturas
 | CA-14 | Cumple | `.env.example` y README según RF-7. Con el `.env` local actualizado, `node --env-file-if-exists=.env src/server.ts` arrancó: landing 200, webhook 503, `"whatsappBot":"disabled"`. |
 | CA-15 | Parcial | `typecheck`, `lint` y `npm test` pasan. `docker compose run --rm test` no se pudo ejecutar porque el daemon de Docker no estaba en marcha. El CI se comprobará en T4. |
 | CA-15b | Cumple | `tests/integration/bot-chat.test.ts`: pedido completo con `--proveedor twilio` y con Meta por defecto; un proveedor desconocido termina con código 1. |
-| CA-16 | Pendiente (al implementar) | Depende de la cuenta de Twilio, el sandbox y el túnel del usuario. Verificado después por el usuario: ver "Cierre T5". |
+| CA-16 | Pendiente (al implementar) | Depende de la cuenta de Twilio, el sandbox y el túnel del usuario. Cumplido después, según lo verificó el usuario: ver "Cierre T5". |
 | CA-17 | Cumple | `chat-bot-boundaries.test.ts`: solo `providers/select.ts` importa las clases; `app.ts`, rutas y controladores no importan de `providers/meta` ni de `providers/twilio`. |
 | CA-18 | Cumple | `class WhatsAppBot implements ChatBot` y `class TwilioBot implements ChatBot`; `npm run typecheck` termina con 0. |
 | CA-19 | Cumple | `chat-bot-contract.test.ts` (`describe.each` sobre Meta y Twilio): pedido completo, cancelación, "persona", mensaje que no es texto y entrega duplicada. |
@@ -1200,7 +1200,12 @@ Análisis inicial con las preguntas 1 a 11 y las propuestas P-1 a P-5.
 - **Merge:** el 2026-10-08T23:47:52Z (17:47 del 2026-10-08, hora de Ciudad de México), con el commit `728a9b9`.
 - **CI del push a `main`:** `728a9b9` en verde: https://github.com/orvigas/negocio/actions/runs/37861406746.
 
-**CA-16: verificado por el usuario.** Probó el bot real con el sandbox de Twilio y confirmó que funciona ("ya funcionó"). El usuario no detalló el alcance de la prueba: no confirmó un pedido de cada negocio ni la llegada del aviso al personal. Lo que se observó en esa prueba:
+**CA-16: cumplido, según lo verificó el usuario.** El usuario probó el bot real con el sandbox de Twilio. Citas textuales:
+
+- "ya funcionó, hice el merge del PR";
+- "sí, hice un pedido de cada negocio y llegó el aviso".
+
+Con eso, un pedido completo de cada negocio (Molotes y Birria) llegó por el sandbox y el personal recibió el aviso, que es lo que pide CA-16. Lo que se observó en la prueba:
 
 - Al principio, el envío fallaba con 401 y el código 20003 de Twilio. Era una restricción de la cuenta de Twilio del usuario, no del código: las credenciales se leían bien, pero Twilio rechazaba crear mensajes. El usuario lo resolvió en su cuenta.
 - La sesión principal cambió en el `.env` local `WHATSAPP_MOLOTES` y `WHATSAPP_BIRRIA` al número del sandbox (`14155238886`). Con números distintos la app no arranca, por la regla D-6 de REQ-F-009. Así lo indican la nota del `.env` y el README.

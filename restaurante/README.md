@@ -22,6 +22,16 @@ Un solo **bot de WhatsApp** (opcional, conectado a la WhatsApp Cloud API de Meta
 los clientes de los dos negocios con la misma regla de días, muestra el menú del día, arma el
 pedido y lo envía al personal (ver [Bot de WhatsApp](#bot-de-whatsapp)).
 
+## Guías
+
+Paso a paso, con enlaces a las secciones de este README:
+
+- [Entorno de desarrollo](docs/desarrollo.md): instalación, `.env`, `DATA_DIR`, arranque,
+  calidad (typecheck, lint y pruebas), `bot:chat` y el bot real con el sandbox de Twilio.
+- [Despliegue a producción en la VM](docs/despliegue.md): `.env` de producción con Meta, `DATA_DIR`
+  en el disco persistente, migraciones, webhook de Meta, comprobaciones, actualización, rollback y
+  copias de seguridad.
+
 ## Requisitos
 
 - Node.js >= 24.3 (ver `.nvmrc`; con nvm: `nvm use`). Desde 24.3 Node ejecuta los `.ts` sin
@@ -144,6 +154,10 @@ docker compose run --rm test   # código de salida 0 si todo pasa; distinto de 0
 
 ### Producción
 
+La VM no usa esta imagen: se despliega con Node directo (ver
+[Despliegue a producción en la VM](docs/despliegue.md)). Esta sección describe la imagen
+`production`, que el [CI](#ci) construye en cada cambio.
+
 ```sh
 docker build --target production -t restaurante:prod .
 docker volume create restaurante-data
@@ -174,7 +188,7 @@ docker run -d --name restaurante -p 3000:3000 \
   (`prisma/migrations`) y los comandos de consola (`scripts/`). Pesa unos 260 MB.
 - Recuperar el acceso dentro del contenedor:
   `docker exec -it restaurante node scripts/admin-recover.ts --usuario <nombre>`.
-- `/admin` exige HTTPS en producción (ver [Seguridad](#seguridad)): un despliegue con Docker
+- `/admin` exige HTTPS en producción (ver [Seguridad](#seguridad-1)): un despliegue con Docker
   necesita un proxy con TLS y `TRUST_PROXY=true`, fuera del alcance actual.
 
 ## CI

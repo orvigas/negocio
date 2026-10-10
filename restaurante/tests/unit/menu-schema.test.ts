@@ -86,6 +86,12 @@ describe('imageSrcError', () => {
       expect(imageSrcError(src)).not.toBeNull();
     },
   );
+
+  it('acepta hasta 255 caracteres y rechaza más (REQ-F-014, P-3: cabe en la columna image_src)', () => {
+    const path = (length: number) => `/img/${'a'.repeat(length - '/img/'.length - '.jpg'.length)}.jpg`;
+    expect(imageSrcError(path(255))).toBeNull();
+    expect(imageSrcError(path(256))).toBe('La ruta es demasiado larga (máximo 255 caracteres).');
+  });
 });
 
 describe('validateMenuDocument', () => {

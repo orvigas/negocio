@@ -15,6 +15,7 @@ import {
   submitForm,
   type Browser,
 } from '../support/admin.ts';
+import { adminSql } from '../support/database.ts';
 
 /**
  * REQ-F-007: fallo de la base de datos con el servidor en marcha (R-3, DT-9; CA-5) y ausencia de
@@ -27,10 +28,8 @@ describe('la base de datos falla con el servidor en marcha (CA-5)', () => {
     const session = await loginAs(context.browser(), ADMIN_USER, ADMIN_PASSWORD);
     expect((await session.get('/admin/molotes')).status).toBe(200);
 
-    // Fallo real de SQLite: la tabla de usuarios desaparece.
-    await context.prisma.$executeRawUnsafe('DROP TABLE "user_audit"');
-    await context.prisma.$executeRawUnsafe('DROP TABLE "user_business"');
-    await context.prisma.$executeRawUnsafe('DROP TABLE "user"');
+    // Fallo real de MySQL: la tabla de usuarios desaparece (DDL con el usuario admin de pruebas).
+    await adminSql(context.database.name, 'DROP TABLE product_change', 'DROP TABLE user_audit', 'DROP TABLE user_business', 'DROP TABLE user');
 
     const responses = [
       await session.get('/admin/molotes'),
@@ -44,7 +43,7 @@ describe('la base de datos falla con el servidor en marcha (CA-5)', () => {
       expect(res.headers['cache-control']).toBe('no-store');
       expect(res.text).toMatch(/role="alert"[^>]*>\s*<p class="admin-notice__title font-bold">No se pudo acceder a los datos de la administración\.<\/p>/);
       // Sin detalles técnicos.
-      expect(res.text).not.toMatch(/prisma|sqlite|SELECT|no such table|\/src\//i);
+      expect(res.text).not.toMatch(/prisma|mysql|SELECT|doesn't exist|\/src\//i);
     }
     for (const path of ['/', '/molotes', '/birria']) expect((await context.request().get(path)).status).toBe(200);
 
@@ -52,7 +51,7 @@ describe('la base de datos falla con el servidor en marcha (CA-5)', () => {
     expect(logged.length).toBeGreaterThan(0);
     for (const line of logged) {
       expect(Object.keys(line).sort()).toEqual(['code', 'level', 'msg', 'name', 'originalCode', 'path']);
-      expect(JSON.stringify(line)).not.toMatch(/SELECT|INSERT|no such table|\/src\//i);
+      expect(JSON.stringify(line)).not.toMatch(/SELECT|INSERT|doesn't exist|\/src\//i);
     }
   });
 
@@ -75,7 +74,7 @@ function brokenPrisma(): Parameters<typeof createUserRepository>[0]['prisma'] {
   const failure = Object.assign(new Error('Invalid `prisma.user.count()` invocation in /app/src/x.ts: file is not a database'), {
     name: 'PrismaClientKnownRequestError',
     code: 'P2039',
-    meta: { driverAdapterError: { cause: { originalCode: 'SQLITE_NOTADB' } } },
+    meta: { driverAdapterError: { cause: { originalCode: '45028' } } },
   });
   // Doble mínimo: solo se usa `user.count`.
   return { user: { count: () => Promise.reject(failure) } } as unknown as Parameters<typeof createUserRepository>[0]['prisma'];
@@ -145,7 +144,9 @@ describe('sin secretos en logs ni respuestas (CA-17)', () => {
     await track(login(context.browser(), { username: 'beto', password: USER_PASSWORD }));
 
     const hashes = (await context.prisma.user.findMany({ select: { passwordHash: true } })).map((user) => user.passwordHash);
-    const secrets = [ADMIN_PASSWORD, ADMIN_PASSWORD_HASH, anaPassword, resetPassword, ownPassword, USER_PASSWORD, ...hashes, ...sessionIds];
+    // REQ-F-014 (CA-8): tampoco la contraseña ni el usuario de la base, ni su URL.
+    const { password: databasePassword, user: databaseUser } = context.database.config;
+    const secrets = [ADMIN_PASSWORD, ADMIN_PASSWORD_HASH, anaPassword, resetPassword, ownPassword, USER_PASSWORD, ...hashes, ...sessionIds, databasePassword, databaseUser, 'mysql://'];
     expect(sessionIds.size).toBeGreaterThan(2);
     expect(csrfTokens.size).toBeGreaterThan(1);
 

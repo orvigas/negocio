@@ -25,6 +25,8 @@ export const DRINK_TONES = Object.freeze(['amber', 'red']);
 export const AUTHOR_MAX_LENGTH = 60;
 export const KEY_PATTERN = /^[a-z0-9-]{1,60}$/;
 export const ICON_PATTERN = /^[a-z0-9_]{1,40}$/;
+/** Máximo de la ruta de imagen (REQ-F-014, P-3): cabe en la columna `image_src` (VARCHAR(255)). */
+export const IMAGE_SRC_MAX_LENGTH = 255;
 export const IMAGE_SRC_PATTERN = /^\/img\/[A-Za-z0-9/_.-]+\.(?:jpg|jpeg|png|webp)$/;
 const IMAGE_SIZE = Object.freeze({ min: 1, max: 4000 });
 
@@ -404,6 +406,7 @@ export function imageSrcError(value: unknown): string | null {
   if (typeof value !== 'string' || !IMAGE_SRC_PATTERN.test(value) || value.includes('..') || value.includes('//')) {
     return 'La ruta debe empezar con /img/, terminar en .jpg, .jpeg, .png o .webp y no contener "..".';
   }
+  if (value.length > IMAGE_SRC_MAX_LENGTH) return `La ruta es demasiado larga (máximo ${IMAGE_SRC_MAX_LENGTH} caracteres).`;
   return null;
 }
 

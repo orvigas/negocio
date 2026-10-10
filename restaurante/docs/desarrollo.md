@@ -14,9 +14,8 @@ Todos los comandos se ejecutan desde la carpeta `restaurante/` salvo que se indi
 | Node.js >= 24.3 | Ejecutar la app, las pruebas y los scripts | Versión en `.nvmrc` (`24`); con nvm: `nvm use`. Las versiones 24.0 a 24.2 funcionan, pero escriben un `ExperimentalWarning` en cada arranque |
 | npm | Dependencias y scripts | El que trae Node 24 |
 | git | Clonar y trabajar en ramas | |
-| Docker con Compose v2 | Opcional: pruebas en contenedor y build de la imagen | Ver [Docker](../README.md#docker) |
+| Docker con Compose v2 | **MySQL 8.4 local** (`npm run db:up`), pruebas en contenedor y build de las imágenes | Sin Docker necesitas un MySQL 8.4 propio con utf8mb4 y `utf8mb4_es_0900_as_cs` (ver el [paso 4](#4-mysql-local-y-carpeta-de-datos-data_dir)) |
 | `cloudflared` o `ngrok` | Opcional: solo para probar el bot real con Twilio | Ver el [paso 8](#8-bot-real-con-el-sandbox-de-twilio) |
-| `sqlite3` | Opcional: consultar la base de datos local | |
 | Python 3 + Pillow | Opcional: solo para regenerar los iconos | Ver [Iconos](../README.md#iconos-favicons-y-pantalla-de-inicio) |
 
 ## 2. Clonar e instalar
@@ -27,6 +26,7 @@ cd negocio/restaurante
 nvm use                               # o asegúrate de tener Node >= 24.3
 npm ci --strict-allow-scripts         # mismas dependencias que el lockfile, igual que CI y Docker
 npm run db:generate                   # cliente de Prisma en src/generated/prisma (no se versiona)
+npm run db:up                         # MySQL 8.4 local (ver el paso 4)
 ```
 
 - `npm ci` instala exactamente lo que dice `package-lock.json`. Usa `npm install` solo cuando
@@ -51,7 +51,14 @@ en `.env.example` y en [Configuración](../README.md#configuración). Para empez
 NODE_ENV=development
 WHATSAPP_MOLOTES=<número internacional, solo dígitos>
 WHATSAPP_BIRRIA=<número internacional, solo dígitos>
+DATABASE_URL=mysql://restaurante_app:app-dev@127.0.0.1:3307/restaurante
+MIGRATION_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante
+SHADOW_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante_shadow
 ```
+
+- Las tres URL de la base ya vienen así en `.env.example` y apuntan al MySQL local del paso 4
+  (credenciales de desarrollo, no secretas). `DATABASE_URL` es obligatoria: sin ella la app no
+  arranca. Si cambias la contraseña, codifica los caracteres especiales (`@` -> `%40`).
 
 - Deja vacías las variables `WHATSAPP_BOT_*`: con todas vacías el bot queda deshabilitado y las
   landings funcionan igual (el webhook responde 503).
@@ -63,21 +70,42 @@ WHATSAPP_BIRRIA=<número internacional, solo dígitos>
 - Si la app no arranca, termina con código 1 y lista los problemas de configuración (sin mostrar
   valores). Corrige `.env` y vuelve a arrancar.
 
-## 4. Carpeta de datos (`DATA_DIR`)
+## 4. MySQL local y carpeta de datos (`DATA_DIR`)
 
-En desarrollo, `DATA_DIR` vacío usa la carpeta `data/` del proyecto (ignorada por git). Ahí se
-guardan los JSON de página de cada negocio y la base de datos `restaurante.db` (usuarios y
-productos). Estructura y reglas en [Archivos de datos](../README.md#archivos-de-datos-data_dir) y
+La base de datos es MySQL 8.4 (usuarios de `/admin` y productos). `compose.yaml` trae uno local:
+
+```sh
+npm run db:up        # levanta mysql-dev (Docker), solo en 127.0.0.1:3307, y espera a que esté listo
+npm run db:migrate   # aplica las migraciones (prisma migrate deploy con MIGRATION_DATABASE_URL)
+npm run db:down      # lo detiene (los datos quedan en el volumen mysql-dev-data)
+```
+
+- El primer `db:up` crea (con `docker/mysql/initdb/01-usuarios.sh`) la base `restaurante` en
+  utf8mb4 con `utf8mb4_es_0900_as_cs`, la base sombra `restaurante_shadow` y los usuarios
+  `restaurante_app` (solo datos: el de la app), `restaurante_migrator` (DDL: migraciones) y los de
+  las pruebas. Solo escucha en `127.0.0.1`: nunca es accesible desde otra máquina.
+- La app **no migra**: si falta una migración, no arranca (`database_init_failed` con
+  `MIGRATIONS_PENDING`). Ejecuta `npm run db:migrate` después de cada `git pull` que traiga
+  migraciones nuevas.
+- **Empezar de cero:** `docker compose down -v` borra el volumen (pierdes los usuarios y
+  productos locales); después `npm run db:up` y `npm run db:migrate`.
+- **Sin Docker:** un MySQL 8.4 propio con `character-set-server=utf8mb4`,
+  `collation-server=utf8mb4_es_0900_as_cs` y modo estricto, y los mismos usuarios que crea
+  `docker/mysql/initdb/01-usuarios.sh`.
+
+`DATA_DIR` vacío usa la carpeta `data/` del proyecto (ignorada por git). Ahí se guardan los JSON
+de página de cada negocio y `changes.jsonl`. Estructura y reglas en
+[Archivos de datos](../README.md#archivos-de-datos-data_dir) y
 [Base de datos](../README.md#base-de-datos).
 
-- En el primer arranque se crea sola: copia la semilla de cada negocio, crea `restaurante.db`,
-  aplica las migraciones e importa los productos una sola vez.
-- **Empezar de cero:** con el servidor parado, borra `data/` (pierdes los usuarios y productos
-  locales) y vuelve a arrancar.
+- En el primer arranque se crea sola: copia la semilla de cada negocio, y los productos se
+  importan a la base una sola vez.
 - Para experimentar sin tocar tus datos, apunta `DATA_DIR` a otra ruta absoluta (fuera de `src/`
   y de `public/`).
-- **Nunca** apuntes `DATA_DIR` a una copia de producción mientras desarrollas una migración.
-- Las pruebas no usan `data/`: crean bases temporales.
+- **Nunca** apuntes `DATABASE_URL` ni `MIGRATION_DATABASE_URL` a una base de producción mientras
+  desarrollas.
+- Las pruebas no usan `data/` ni la base `restaurante`: usan sus propias bases `restaurante_test_*`
+  ([paso 6](#6-comprobar-la-calidad-antes-de-terminar)).
 
 ## 5. Compilar el CSS y arrancar
 
@@ -97,7 +125,7 @@ npm run dev         # servidor con recarga en http://localhost:3000
 - Si editas estilos o clases en plantillas, vuelve a ejecutar `npm run build:css` o deja
   `npm run watch:css` corriendo en otra terminal.
 - Los logs son JSON por línea en la terminal. Al arrancar verás `server_started` (y
-  `database_migrated` si se aplicó alguna migración).
+  `database_waiting` si MySQL todavía estaba arrancando).
 - ¿Perdiste la contraseña del administrador local? `npm run admin:recover -- --usuario <nombre>`
   (ver [Recuperar el acceso](../README.md#recuperar-el-acceso)).
 
@@ -109,8 +137,13 @@ Los mismos pasos que la comprobación `calidad` del [CI](../README.md#ci):
 npm run typecheck   # debe terminar con 0
 npm run lint        # debe terminar con 0, sin errores ni avisos (lint:fix aplica correcciones)
 npm run build:css   # las pruebas leen el CSS generado
-npm test            # suite completa (Vitest)
+npm run db:up       # MySQL local (si no está en marcha)
+npm test            # suite completa (Vitest) contra MySQL 8.4
 ```
+
+- Las pruebas usan MySQL real con sus propias bases `restaurante_test_*` (nunca la de desarrollo
+  ni una real; una salvaguarda lo impide). Sin MySQL, `npm test` falla y dice cómo levantarlo.
+  Detalles en [Pruebas con base de datos](../README.md#pruebas-con-base-de-datos).
 
 - Para reproducir el CI completo, incluido el build de la imagen, ver
   [Reproducirlo en local](../README.md#reproducirlo-en-local).
@@ -118,10 +151,11 @@ npm test            # suite completa (Vitest)
   [Pruebas](../README.md#pruebas)).
 - Las pruebas HTTP siguen la regla de [Pruebas HTTP](../README.md#pruebas-http-servidor-en-127001)
   (`listenLocal`, nunca `app.callback()`).
-- **Cambios en la base de datos:** edita `prisma/schema.prisma`, ejecuta
-  `npm run db:migrate:dev -- --name <nombre>` (con un `DATA_DIR` de desarrollo) y
-  `npm run db:generate`. Versiona la carpeta nueva de `prisma/migrations/` y nunca edites una
-  migración ya aplicada.
+- **Cambios en la base de datos:** edita `prisma/schema.prisma` (con la longitud de cada texto),
+  ejecuta `npm run db:migrate:dev -- --name <nombre>` contra el MySQL local, **revisa a mano** el
+  `migration.sql` (cambia `utf8mb4_unicode_ci` por `utf8mb4_es_0900_as_cs` en cada
+  `CREATE TABLE`), y después `npm run db:migrate` y `npm run db:generate`. Versiona la carpeta
+  nueva de `prisma/migrations/` y nunca edites una migración ya aplicada.
 
 ## 7. Bot de WhatsApp sin cuentas: `bot:chat`
 

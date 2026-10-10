@@ -1,5 +1,5 @@
 import { JSDOM } from 'jsdom';
-import { afterAll } from 'vitest';
+import { afterEach } from 'vitest';
 
 import type { Test } from 'supertest';
 
@@ -12,7 +12,7 @@ import { createProductRepository, type ProductStore } from '../../src/repositori
 import { createUserRepository, type UserRepository } from '../../src/repositories/user-repository.ts';
 import { createImageChecker } from '../../src/services/admin-form.ts';
 import { bootstrapAdmin } from '../../src/services/admin-bootstrap.ts';
-import { makeDatabase } from './database.ts';
+import { makeDatabase, type MakeDatabaseOptions } from './database.ts';
 import { listenLocal, type Browser } from './http.ts';
 import { sourcesFrom } from './products.ts';
 
@@ -27,6 +27,8 @@ export interface SetupOptions<R extends MenuRepository> {
   wrapUsers?: (users: UserRepository) => UserRepository;
   /** Sustituye al store de productos real (p. ej. uno que falla con el servidor en marcha). */
   wrapProductStore?: (store: ProductStore) => ProductStore;
+  /** Destino de la conexión a la base (p. ej. un proxy TCP para cortarla, REQ-F-014 CA-10). */
+  routeDatabase?: MakeDatabaseOptions['route'];
 }
 import { SCRYPT_DEFAULTS, hashPassword } from '../../src/services/admin-auth.ts';
 import { makeConfig, makeRecordingLogger, makeRepository, type RecordingLogger } from '../helpers.ts';
@@ -42,9 +44,10 @@ export const ADMIN_ENV = Object.freeze({ ADMIN_USER, ADMIN_PASSWORD_HASH });
 /** Costo de scrypt de las contraseñas creadas en las pruebas (el mínimo aceptado). */
 export const TEST_HASH_PARAMS = Object.freeze({ ...SCRYPT_DEFAULTS, N: 2 ** 14 });
 
-// Cada setupAdmin crea una base de datos temporal; se borran al terminar el archivo de pruebas.
+// Cada setupAdmin toma una base de pruebas del trabajador (MySQL, REQ-F-014); se libera al
+// terminar cada prueba.
 const databaseCleanups: (() => Promise<void>)[] = [];
-afterAll(async () => {
+afterEach(async () => {
   while (databaseCleanups.length > 0) await databaseCleanups.pop()?.();
 });
 
@@ -68,7 +71,7 @@ export function makeClock(start = FRIDAY_NOON_MX): Clock {
 
 /**
  * App de pruebas con administración habilitada, repositorio de menús en memoria (CA-38) y una
- * base de datos SQLite temporal con el primer administrador creado desde ADMIN_ENV (REQ-F-007).
+ * base de datos MySQL de pruebas con el primer administrador creado desde ADMIN_ENV (REQ-F-007).
  */
 export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
   env = {},
@@ -77,11 +80,12 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
   logger = makeRecordingLogger(),
   wrapUsers = (users) => users,
   wrapProductStore = (store) => store,
+  routeDatabase,
 }: SetupOptions<R> = {}) {
   // Sin repositorio propio se usa el de memoria, que es el tipo por defecto de R.
   const repo = (repository ?? (await makeRepository({ now: clock.now }))) as R;
   const config = makeConfig({ ...ADMIN_ENV, ...env });
-  const database = await makeDatabase();
+  const database = await makeDatabase(routeDatabase ? { route: routeDatabase } : {});
   databaseCleanups.push(database.cleanup);
   const realUsers = createUserRepository({ prisma: database.prisma, now: clock.now });
   await bootstrapAdmin({ users: realUsers, bootstrap: config.adminBootstrap, logger });
@@ -105,7 +109,8 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
     products,
     users: realUsers,
     prisma: database.prisma,
-    dataDir: database.dataDir,
+    /** Base de pruebas (nombre y conexión del usuario de la app). */
+    database: { name: database.name, config: database.config },
     /** Cliente nuevo con su propio almacén de cookies (un "navegador"). */
     browser: () => server.browser(),
     request: () => server.request(),

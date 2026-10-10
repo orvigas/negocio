@@ -7,6 +7,11 @@ volver a una versión anterior y respaldar sus datos. Los detalles de cada tema 
 > **A definir.** El repositorio no describe la infraestructura de la VM. Lo marcado como
 > **"a definir"** depende de decisiones que aún no están documentadas (lista completa en
 > [Pendientes](#pendientes-a-definir)). Esta guía no las supone.
+>
+> **Base de datos (REQ-F-014):** la app usa **MySQL 8.4** (ya no SQLite). El despliegue en el
+> VPS con Docker (compose de producción, usuarios de MySQL, respaldos y publicación de imágenes)
+> se documentará en REQ-F-016, REQ-F-019, REQ-F-021 y REQ-F-023; las instrucciones de SQLite de
+> esta guía se retiraron. Lo que no depende de esos tickets sigue vigente.
 
 ## Antes de empezar
 
@@ -17,9 +22,10 @@ volver a una versión anterior y respaldar sus datos. Los detalles de cada tema 
   interfaces.
 - Delante, un proxy inverso con TLS (nginx según el README): `/admin` y la API solo funcionan
   por HTTPS en producción, y Meta exige HTTPS para el webhook.
-- Los datos editables viven **fuera del código**, en `DATA_DIR`, sobre el disco persistente de
-  la VM: JSON de página de cada negocio, `changes.jsonl` y la base SQLite `restaurante.db`
-  (usuarios, auditoría y productos). Un despliegue nunca los sobrescribe.
+- Los datos editables viven **fuera del código**: los JSON de página de cada negocio y
+  `changes.jsonl` en `DATA_DIR`, sobre el disco persistente, y los usuarios, su auditoría y los
+  productos en **MySQL 8.4** (utf8mb4 con `utf8mb4_es_0900_as_cs`). Un despliegue nunca los
+  sobrescribe.
 - Estado en memoria (una sola instancia): sesiones de `/admin`, límite de intentos y
   conversaciones del bot. **Cada reinicio cierra las sesiones y corta las conversaciones en
   curso.** No ejecutes dos instancias a la vez.
@@ -43,7 +49,9 @@ para desarrollo ([Entorno de desarrollo](desarrollo.md#8-bot-real-con-el-sandbox
 - Proxy inverso con TLS (nginx), dominio y certificado: **a definir**.
 - Solo el proxy debe recibir tráfico de internet; el puerto 3000 no debe quedar expuesto. Reglas
   de firewall: **a definir**.
-- `sqlite3` (CLI) en la VM para los respaldos en caliente ([paso 10](#10-copias-de-seguridad)).
+- MySQL 8.4 con utf8mb4, `utf8mb4_es_0900_as_cs` y modo estricto, una base vacía y dos usuarios:
+  uno solo de datos para la app (`DATABASE_URL`) y otro con DDL para las migraciones
+  (`MIGRATION_DATABASE_URL`). Cómo se crean en el VPS: REQ-F-016.
 
 ## 2. Prerrequisitos de Meta
 
@@ -65,8 +73,8 @@ persistente, fuera del código (nunca dentro de `src/` ni de `public/`). Ejemplo
 
 - Crea la carpeta con dueño el usuario del sistema que ejecuta la app (**a definir**) y
   permisos `700`.
-- La primera vez la app la llena sola: copia las semillas, crea `restaurante.db`, aplica las
-  migraciones e importa los productos una sola vez
+- La primera vez la app la llena sola: copia las semillas y, con la base ya migrada
+  ([paso 7](#7-migraciones-de-la-base-de-datos)), importa los productos una sola vez
   ([Archivos de datos](../README.md#archivos-de-datos-data_dir)).
 
 ## 4. `.env` de producción
@@ -103,6 +111,8 @@ WHATSAPP_GRAPH_API_VERSION=                   # opcional (v26.0)
 
 # --- Datos ---
 DATA_DIR=/var/lib/restaurante                 # ruta absoluta en el disco persistente
+# Base de datos (usuario solo de datos; caracteres especiales codificados: @ -> %40)
+DATABASE_URL='mysql://<usuario-app>:<contraseña>@<host>:3306/<base>'
 
 # --- Primer administrador (solo se usan si la base no tiene usuarios) ---
 ADMIN_USER=<usuario>
@@ -155,14 +165,20 @@ renovación del certificado son **a definir**.
 
 ## 7. Migraciones de la base de datos
 
-No hay un paso manual: **la app aplica las migraciones pendientes al arrancar**
-(`src/db/migrate.ts`), cada una en una transacción. En producción no hace falta el CLI de Prisma.
+**La app no migra** (REQ-F-014): las migraciones las aplica un proceso aparte, antes de arrancar
+la app, con el usuario de MySQL con DDL:
 
-- Log `database_migrated` con las migraciones aplicadas (solo si había alguna).
-- Si una falla, la base está dañada o no se puede escribir, la app no arranca (código 1) y
-  registra `database_init_failed` con un código.
-- **Haz un respaldo de `restaurante.db` antes de cada actualización**
-  ([paso 10](#10-copias-de-seguridad)): una base migrada no arranca con el código anterior.
+- con la imagen `migrate`: `docker run --rm -e MIGRATION_DATABASE_URL=... restaurante:migrate`
+  (termina con 0 si todo se aplicó);
+- o desde el código, con las dependencias de desarrollo: `MIGRATION_DATABASE_URL=... npx prisma migrate deploy`.
+
+Al arrancar, la app verifica la base (conexión con reintentos hasta 60 s, credenciales, utf8mb4
+y colación, modo estricto y migraciones al día). Si algo falla, no arranca (código 1) y registra
+`database_init_failed` con un código (p. ej. `MIGRATIONS_PENDING`).
+
+- **Respalda la base antes de cada actualización:** una base migrada no arranca con el código
+  anterior (`DATABASE_NEWER_THAN_CODE`) y el DDL de MySQL no es transaccional (una migración que
+  falla a mitad queda incompleta: `MIGRATION_INCOMPLETE`). Procedimiento de respaldo: REQ-F-019.
 
 Detalles en [Base de datos](../README.md#base-de-datos).
 
@@ -191,8 +207,8 @@ Firma, reintentos y deduplicación en
 5. **Bot de punta a punta:** escribe al número del bot, haz un pedido de prueba y comprueba que
    el personal del negocio recibe el aviso. Busca en el log `bot_staff_send_failed`,
    `bot_staff_delivery_failed` o `bot_api_error`.
-6. **Datos:** `DATA_DIR` contiene `molotes/`, `birria/` y `restaurante.db` en el disco
-   persistente.
+6. **Datos:** `DATA_DIR` contiene `molotes/` y `birria/` en el disco persistente, y la base de
+   MySQL tiene los productos importados (log `products_imported`).
 
 Vigila después `bot_staff_delivery_failed` (un pedido confirmado que no llegó al personal) y
 `bot_webhook_signature_invalid` ([Logs y privacidad](../README.md#logs-y-privacidad)). Dónde se
@@ -200,31 +216,29 @@ guardan y consultan los logs en la VM es **a definir**.
 
 ## 10. Copias de seguridad
 
-Respaldar `DATA_DIR` es responsabilidad de quien opera la VM. Sin respaldo, perder
-`restaurante.db` es perder los usuarios, su auditoría y los productos.
+Respaldar los datos es responsabilidad de quien opera el servidor. Sin respaldo, perder la base
+de MySQL es perder los usuarios, su auditoría y los productos.
 
 | Qué | Cómo |
 | --- | ---- |
-| `restaurante.db` (en marcha) | `sqlite3 <DATA_DIR>/restaurante.db ".backup /ruta/respaldo/restaurante-<fecha>.db"`. No copies el archivo en marcha: el respaldo puede quedar incompleto |
-| `restaurante.db` (parada) | Copia `restaurante.db` junto con `-wal` y `-shm` si existen |
+| Base de datos MySQL | `mysqldump` en utf8mb4 (`--single-transaction`). Procedimiento, cifrado, destino y prueba de restauración: **REQ-F-019** |
 | JSON de página y registro | Copia `molotes/`, `birria/` y `changes.jsonl` (`changes.jsonl` crece sin límite: rótalo) |
-| `.env` de producción | Copia cifrada o en un gestor de secretos, fuera de la VM |
+| `.env` de producción | Copia cifrada o en un gestor de secretos, fuera del servidor |
 
 - **Siempre** antes de cada actualización, y además con regularidad.
-- **Restaurar:** para la app, reemplaza `restaurante.db` por el respaldo (borra los `-wal` y
-  `-shm` sobrantes) y los JSON si hace falta, comprueba dueño y permisos, y arranca.
-- Frecuencia, destino (fuera de la VM), retención y prueba periódica de restauración: **a
-  definir**.
+- Frecuencia, destino (fuera del servidor), retención y prueba periódica de restauración:
+  REQ-F-019.
 
 ## 11. Actualizar a una versión nueva
 
 1. Confirma que la versión nueva está en `main` con el CI en verde.
 2. Avisa: el reinicio cierra las sesiones de `/admin` y corta las conversaciones del bot.
-3. Respalda `restaurante.db` y los JSON ([paso 10](#10-copias-de-seguridad)).
+3. Respalda la base de MySQL y los JSON ([paso 10](#10-copias-de-seguridad)).
 4. Revisa si la versión trae variables nuevas o renombradas (`.env.example` y el README) y
    ajusta el `.env`.
 5. Despliega: `git fetch && git checkout <nueva versión>`, `npm ci --strict-allow-scripts`,
-   `npm run db:generate`, `npm run build:css` y reinicia el proceso. Anota la versión anterior
+   `npm run db:generate`, `npm run build:css`, aplica las migraciones
+   ([paso 7](#7-migraciones-de-la-base-de-datos)) y reinicia el proceso. Anota la versión anterior
    para poder volver.
 6. Repite las [comprobaciones](#9-comprobaciones-después-de-desplegar).
 
@@ -232,8 +246,8 @@ Respaldar `DATA_DIR` es responsabilidad de quien opera la VM. Sin respaldo, perd
 
 1. Para la app.
 2. Si la versión nueva aplicó migraciones, el código anterior **no arranca** con esa base
-   (`DATABASE_NEWER_THAN_CODE`): restaura el respaldo de `restaurante.db` hecho en el paso 3 de
-   la actualización. Los cambios hechos en la administración desde entonces se pierden.
+   (`DATABASE_NEWER_THAN_CODE`): restaura el respaldo de la base hecho en el paso 3 de la
+   actualización. Los cambios hechos en la administración desde entonces se pierden.
 3. Los JSON de página sirven tal como están.
 4. Arranca la versión anterior: `git checkout <versión anterior>`,
    `npm ci --strict-allow-scripts`, `npm run db:generate`, `npm run build:css` y reinicia el
@@ -255,9 +269,9 @@ Ver [Recuperar el acceso](../README.md#recuperar-el-acceso).
 
 | Síntoma | Causa probable | Qué hacer |
 | ------- | -------------- | --------- |
-| La app termina con código 1 y una lista de problemas | Configuración inválida (falta `DATA_DIR`, ruta relativa, número mal escrito, variable del bot ausente) | Corrige el `.env` según la lista |
+| La app termina con código 1 y una lista de problemas | Configuración inválida (falta `DATA_DIR` o `DATABASE_URL`, ruta relativa, número mal escrito, variable del bot ausente) | Corrige el `.env` según la lista |
 | "twilio no se permite con NODE_ENV=production" | `.env` de desarrollo copiado a producción | `WHATSAPP_BOT_PROVIDER=meta` y sus variables |
-| `database_init_failed` | Sin permisos en `DATA_DIR`, base dañada, migración fallida o base más nueva que el código | Revisa dueño y permisos; restaura el respaldo si hace falta |
+| `database_init_failed` | MySQL inalcanzable (`DATABASE_UNREACHABLE`), credenciales (`DATABASE_AUTH_FAILED`), colación o modo estricto incorrectos, migraciones pendientes, incompletas, modificadas o base más nueva que el código | Según el código: revisa `DATABASE_URL` y MySQL, aplica las migraciones ([paso 7](#7-migraciones-de-la-base-de-datos)) o restaura el respaldo |
 | `/admin` responde 503 y `admin_requires_https` | Acceso por HTTP o falta `TRUST_PROXY=true` / `X-Forwarded-Proto` | Revisa el proxy ([paso 6](#6-proxy-inverso-con-tls)) |
 | `/admin` responde 503 "no disponible" y `admin_disabled` al arrancar | La base no tiene usuarios ni `ADMIN_USER`/`ADMIN_PASSWORD_HASH` | Define las dos variables o usa `admin:recover` |
 | Meta no verifica el webhook (403) | `WHATSAPP_BOT_VERIFY_TOKEN` no coincide con el de Meta | Usa el mismo valor en los dos lados |
@@ -277,7 +291,9 @@ Datos de la infraestructura de producción que no están en el repositorio:
 6. Cómo llega el código a la VM (p. ej. clon con clave de despliegue) y cómo se identifican las
    versiones (etiquetas o commits).
 7. Dónde se guarda el `.env` de producción y la copia de sus secretos.
-8. Copias de seguridad: frecuencia, destino fuera de la VM, retención y prueba de restauración.
+8. Copias de seguridad: frecuencia, destino fuera de la VM, retención y prueba de restauración
+   (REQ-F-019).
+9. MySQL en el VPS: contenedor, configuración endurecida y usuarios de la base (REQ-F-016).
 9. Dónde se guardan, rotan y consultan los logs (stdout de la app y `changes.jsonl`).
 10. Datos de Meta del [paso 2](#2-prerrequisitos-de-meta): siguen pendientes hasta la prueba de
     punta a punta con Meta.

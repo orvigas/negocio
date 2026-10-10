@@ -17,6 +17,8 @@ export const VALID_ENV = Object.freeze({
   WHATSAPP_MOLOTES_MESSAGE: 'Hola, quiero hacer un pedido de molotes',
   WHATSAPP_BIRRIA: '5210000000002',
   WHATSAPP_BIRRIA_MESSAGE: 'Hola, quiero hacer un pedido de birria',
+  // Obligatoria (REQ-F-014). makeConfig no conecta: las pruebas usan la base de tests/support/database.ts.
+  DATABASE_URL: 'mysql://restaurante_test_app:test-dev@127.0.0.1:3307/restaurante_test',
 });
 
 /**

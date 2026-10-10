@@ -36,7 +36,7 @@ La fuente de verdad es `restaurante/package.json`. No agregues dependencias sin 
 - Variables de entorno con `node --env-file-if-exists=.env` (sin dotenv), validadas a mano en `src/config/env.ts`.
 - Recarga en desarrollo con `node --watch` (sin Nodemon).
 - Plantillas HTML con el renderizador propio `src/views/render.ts` (`{{ clave }}` escapa; `{{{ clave }}}` solo para la salida de otro render). Sin EJS ni Pug.
-- Base de datos: SQLite con Prisma 7 (`@prisma/client` + `@prisma/adapter-better-sqlite3`, versiones exactas; REQ-F-007). Esquema en `prisma/schema.prisma`, migraciones en `prisma/migrations/`. El cliente se genera en `src/generated/prisma` con `npm run db:generate` (no se versiona; ESLint lo ignora). La app aplica las migraciones al arrancar con su propio aplicador (`src/db/migrate.ts`): el CLI de Prisma solo existe en desarrollo, CI y las etapas `build`/`test` de Docker.
+- Base de datos: MySQL 8.4 LTS con Prisma 7 (`@prisma/client` + `@prisma/adapter-mariadb` + `mariadb`, versiones exactas; REQ-F-007 y REQ-F-014), en utf8mb4 con la colación `utf8mb4_es_0900_as_cs` en la base, las tablas y las columnas. Esquema en `prisma/schema.prisma`, con cada texto en `@db.VarChar(n)` o `@db.MediumText` explícito. Migraciones en `prisma/migrations/`: cada `CREATE TABLE` generado se revisa a mano para fijar `DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_es_0900_as_cs`, porque Prisma escribe `utf8mb4_unicode_ci` (`tests/unit/migrations-collation.test.ts` lo impide). El cliente se genera en `src/generated/prisma` con `npm run db:generate` (no se versiona; ESLint lo ignora). La app nunca modifica el esquema. Las migraciones las aplica el proceso aparte `migrate` (`prisma migrate deploy` con `MIGRATION_DATABASE_URL` y un usuario con DDL; imagen `migrate` del Dockerfile, o `npm run db:migrate` en local). La app, con `DATABASE_URL` y un usuario solo DML, solo verifica al arrancar (`src/db/verify.ts`: conexión con reintentos hasta 60 s, credenciales, utf8mb4 y colación, modo estricto y estado de `_prisma_migrations`). Si algo falla, termina con código 1 y `database_init_failed`. El CLI de Prisma solo existe en desarrollo, en el CI y en las etapas `build`, `test` y `migrate` de Docker.
 - Scripts de instalación de dependencias: solo los aprobados en `allowScripts` de `package.json` (`npm ci --strict-allow-scripts` en CI y Docker). Una dependencia nueva con script de instalación exige revisarlo y aprobarlo o denegarlo.
 
 ### Frontend
@@ -53,15 +53,19 @@ Prohibidos salvo petición explícita: React, Vue, Angular, Svelte, jQuery, Alpi
 
 - Vitest, Supertest (integración HTTP) y jsdom (módulos de `public/js`). Las pruebas también están en TypeScript (`tests/**/*.ts`) e importan los `.js` del frontend sin tiparlos.
 - Para la selección de landing, controla la fecha con los fake timers de Vitest (`vi.setSystemTime`) y la zona horaria con `BUSINESS_TIMEZONE`.
+- Las pruebas con base de datos corren contra MySQL 8.4 real (`npm run db:up`), con una base `restaurante_test_*` por trabajador; regla en `.claude/rules/testing.md`.
 
 ### Comandos (desde `restaurante/`)
 
 | Comando             | Uso                                                                              |
 | ------------------- | -------------------------------------------------------------------------------- |
 | `npm run db:generate` | Genera el cliente de Prisma (`src/generated/prisma`). Necesario antes de `typecheck`, `lint`, `test` y `dev` (en un clon nuevo o al cambiar el esquema). |
-| `npm run db:migrate:dev -- --name <nombre>` | Crea una migración a partir de `prisma/schema.prisma` (solo desarrollo; con un `DATA_DIR` de desarrollo, nunca el de producción). Nunca edites una migración ya aplicada. |
+| `npm run db:up` | Levanta el MySQL local de `compose.yaml`, solo en `127.0.0.1:3307`; lo necesitan `dev` y `test`. |
+| `npm run db:down` | Detiene el MySQL local (los datos quedan en su volumen). |
+| `npm run db:migrate` | Aplica las migraciones al MySQL local con `MIGRATION_DATABASE_URL`. |
+| `npm run db:migrate:dev -- --name <nombre>` | Crea una migración a partir de `prisma/schema.prisma` (solo desarrollo, contra el MySQL local con `MIGRATION_DATABASE_URL` y `SHADOW_DATABASE_URL`, nunca contra producción). Revisa a mano la colación de cada `CREATE TABLE`. Nunca edites una migración ya aplicada. |
 | `npm run bot:chat [-- --ahora AAAA-MM-DDTHH:MM] [--proveedor meta\|twilio]` | Conversación con el bot de WhatsApp en la terminal contra el simulador del proveedor (Meta por defecto; sin Meta, Twilio ni `DATA_DIR`). |
-| `npm test`          | Ejecuta toda la suite.                                                           |
+| `npm test`          | Ejecuta toda la suite. Requiere el MySQL local (`npm run db:up`).                |
 | `npm run typecheck` | Verifica tipos con `tsc` (sin emitir archivos). Obligatorio antes de dar una tarea por terminada; también corre en la etapa `build` del Dockerfile. |
 | `npm run build:css` | Genera `public/css/{molotes,birria,admin}/main.css` (no se versiona; nunca editar a mano). |
 | `npm run dev`       | Servidor con recarga.                                                            |
@@ -80,9 +84,9 @@ El bot vive en `src/services/whatsapp-bot/` en dos capas. El proveedor va detrá
 Persistencia:
 
 - El contenido estático vive en `src/content/` y la configuración en variables de entorno.
-- Los productos (platillos y bebidas, con sus variantes y chips) se guardan en SQLite (`product`, `product_variant`, `product_chip`; REQ-F-008) mediante `src/repositories/product-repository.ts`: concentra las reglas (`src/services/product-schema.ts`: validación, slug no editable ni reutilizable, límites, versión por producto y posiciones) sobre un store Prisma (`prisma-product-store.ts`) o en memoria (`memory-product-store.ts`, para pruebas). Cada escritura guarda en la misma transacción su entrada en `product_change` (autor verificado). Al arrancar, cada negocio importa sus productos una sola vez (`product_import`) desde `current.json`, `previous.json` o la semilla. Las landings leen una caché en memoria (nunca la base de datos).
+- Los productos (platillos y bebidas, con sus variantes y chips) se guardan en MySQL (`product`, `product_variant`, `product_chip`; REQ-F-008) mediante `src/repositories/product-repository.ts`: concentra las reglas (`src/services/product-schema.ts`: validación, slug no editable ni reutilizable, límites, versión por producto y posiciones) sobre un store Prisma (`prisma-product-store.ts`) o en memoria (`memory-product-store.ts`, para pruebas). Cada escritura guarda en la misma transacción su entrada en `product_change` (autor verificado). Al arrancar, cada negocio importa sus productos una sola vez (`product_import`) desde `current.json`, `previous.json` o la semilla. Las landings leen una caché en memoria (nunca la base de datos).
 - Hero, texto destacado y promociones se guardan como archivos JSON bajo `DATA_DIR`, mediante el repositorio de menús de `src/repositories/` (semillas versionadas en `src/content/<negocio>/seed.json`). Los JSON conservan el formato v1 con las listas de productos congeladas (ya no se usan ni se editan; no cambies esas listas en las semillas). Cada línea de `changes.jsonl` lleva el autor verificado (`author` = nombre visible, `authorId`).
-- La base de datos SQLite `DATA_DIR/restaurante.db` (Prisma; REQ-F-007) guarda los usuarios de `/admin`, sus negocios asignados y la auditoría de su gestión (`user_audit`). Acceso solo mediante `src/repositories/user-repository.ts`, que impone en transacciones las reglas (siempre un administrador activo, `sessionVersion`, auditoría sin contraseñas ni hashes) y convierte los errores inesperados en `DatabaseUnavailableError` (503 en `/admin`; nunca se registra el `message` de Prisma). Al arrancar: comprobación de escritura e integridad y migraciones (fallo rápido con código 1).
+- La base de datos MySQL (Prisma; REQ-F-007 y REQ-F-014) guarda los usuarios de `/admin`, sus negocios asignados y la auditoría de su gestión (`user_audit`). Acceso solo mediante `src/repositories/user-repository.ts`, que impone en transacciones las reglas (siempre un administrador activo, con transacciones `Serializable` y reintento acotado ante interbloqueo, `sessionVersion`, auditoría sin contraseñas ni hashes) y convierte los errores inesperados en `DatabaseUnavailableError` (503 en `/admin`; nunca se registra el `message` de Prisma). Al arrancar: verificación de la base sin migrar nada (fallo rápido con código 1).
 - Autenticación de `/admin`: cuentas personales con roles **administrador** (todo, incluida la gestión de usuarios) y **editor** (solo sus negocios asignados). Contraseñas en scrypt. Sesión en memoria (una instancia) ligada al usuario y a su `sessionVersion`, CSRF, límite de intentos, HTTPS en producción. `ADMIN_USER`/`ADMIN_PASSWORD_HASH` solo crean el primer administrador si no hay usuarios; la recuperación es `npm run admin:recover`. Toda ruta nueva de `/admin` usa `src/controllers/admin-access.ts` (sesión → permiso → body → CSRF) y la autorización de `src/services/authorization.ts`.
 - API JSON de productos bajo `/admin/api` (`src/routes/admin-api.ts`): sin lectura pública; toda ruta exige sesión y permiso sobre el negocio, y las escrituras, el token CSRF en la cabecera `X-CSRF-Token` (se obtiene con `GET /admin/api/sesion`). Usa `src/controllers/admin-api-access.ts` (sesión 401 → permiso 403 → origen y CSRF 403) y responde errores JSON con el formato centralizado.
 
@@ -99,7 +103,7 @@ restaurante/
 │   ├── config/              # env.ts (validación de variables, tipo Config), businesses.ts
 │   ├── content/             # Contenido por negocio (molotes/, birria/, common/), semillas seed.json, icons.ts, seeds.ts
 │   ├── controllers/         # landing.ts (elige negocio y renderiza), icons.ts, admin.ts, admin-users.ts, admin-account.ts, admin-access.ts, whatsapp-webhook.ts
-│   ├── db/                  # client.ts (Prisma + better-sqlite3), migrate.ts (migraciones al arrancar), errors.ts, paths.ts
+│   ├── db/                  # client.ts (Prisma + adaptador MariaDB/MySQL), verify.ts (verificación al arrancar), errors.ts
 │   ├── generated/prisma/    # Cliente de Prisma generado (`npm run db:generate`; no se versiona ni se edita)
 │   ├── middleware/          # error-handler.ts, request-logger.ts, admin-guard.ts
 │   ├── repositories/        # Menús (contrato y reglas, archivos y memoria) y usuarios (user-repository.ts, Prisma)
@@ -113,7 +117,7 @@ restaurante/
 │   ├── js/modules/          # Módulos ES reutilizables
 │   ├── js/{molotes,birria}/ # Punto de entrada por landing
 │   └── img/{common,molotes,birria}/
-├── prisma/                  # schema.prisma y migrations/ (SQL versionado)
+├── prisma/                  # schema.prisma y migrations/ (SQL de MySQL versionado)
 ├── prisma.config.ts         # Configuración del CLI de Prisma (solo desarrollo, CI y build)
 ├── scripts/                 # hash-password.ts, admin-recover.ts (`npm run admin:recover`), bot-chat.ts (`npm run bot:chat`, solo desarrollo), support/, generate-icons.py
 ├── tests/                   # unit/, integration/, support/, snapshots/, helpers.ts

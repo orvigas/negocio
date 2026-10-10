@@ -1,27 +1,28 @@
 import { describe, expect, it } from 'vitest';
 
 import { ADMIN_PASSWORD, login, setupAdmin } from '../support/admin.ts';
+import { adminSql } from '../support/database.ts';
 import { VALID_INPUTS } from '../support/products.ts';
 
 /**
  * Los logs y las respuestas de la API de productos no filtran secretos ni detalles internos
  * (REQ-F-008, CA-24, DT-15 y la regla de logging). Ampliación de QA aprobada por el usuario (P-2).
  *
- * Se recorre una sesión completa con SQLite real (acceso, token CSRF, escrituras correctas,
+ * Se recorre una sesión completa con MySQL real (acceso, token CSRF, escrituras correctas,
  * 403, 409, 413, 415, 422 y fallos reales de la base con el servidor en marcha) y se comprueba
  * que ni el log ni los cuerpos de respuesta contienen la contraseña, el token CSRF, la cookie de
- * sesión, el mensaje de SQLite o Prisma, SQL, rutas del sistema ni stack traces.
+ * sesión, el mensaje de MySQL o Prisma, SQL, credenciales de la base, rutas del sistema ni stack traces.
  */
 
 const API = '/admin/api';
 const MOLOTES = `${API}/molotes/productos`;
-const SQLITE_MESSAGE = 'qa-mensaje-interno-de-sqlite';
+const MYSQL_MESSAGE = 'qa-mensaje-interno-de-mysql';
 
 describe('logs y respuestas sin secretos ni detalles internos (P-2)', () => {
   it('una sesión completa con errores y fallos reales de la base no filtra nada', async () => {
     // Entorno por defecto de las pruebas (no development: ahí el manejador de errores expone el stack a propósito).
     const context = await setupAdmin();
-    const { prisma, logger, dataDir } = context;
+    const { logger, database } = context;
     const browser = context.browser();
     const bodies: string[] = [];
     const track = <T extends { text: string; status: number }>(res: T): T => {
@@ -54,14 +55,15 @@ describe('logs y respuestas sin secretos ni detalles internos (P-2)', () => {
     expect(track(await browser.post(MOLOTES).set('X-CSRF-Token', csrf).set('Content-Type', 'application/json').send('{"name":')).status).toBe(400);
     expect(track(await browser.post(MOLOTES).set('X-CSRF-Token', csrf).send({ name: 'x'.repeat(40 * 1024) })).status).toBe(413);
 
-    // Fallo real de SQLite en una escritura: el mensaje del trigger llega en el error de Prisma.
-    await prisma.$executeRawUnsafe(`CREATE TRIGGER qa_fail BEFORE INSERT ON product_change BEGIN SELECT RAISE(ABORT, '${SQLITE_MESSAGE}'); END`);
+    // Fallo real de MySQL en una escritura: el mensaje del trigger llega en el error de Prisma.
+    // (El usuario de la app no tiene DDL: el trigger lo crea el usuario admin de pruebas.)
+    await adminSql(database.name, `CREATE TRIGGER qa_fail BEFORE INSERT ON product_change FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '${MYSQL_MESSAGE}'`);
     const failedWrite = track(await browser.put(`${MOLOTES}/${id}`).set('X-CSRF-Token', csrf).send({ ...body, version: 2 }));
     expect(failedWrite.status).toBe(503);
     expect(failedWrite.body).toEqual({ error: { code: 'DATABASE_UNAVAILABLE', message: 'Base de datos no disponible' } });
 
-    // Fallo real de SQLite en una lectura (la tabla deja de existir) por la API y por el HTML.
-    await prisma.$executeRawUnsafe('ALTER TABLE product RENAME TO product_qa_renombrada');
+    // Fallo real de MySQL en una lectura (la tabla deja de existir) por la API y por el HTML.
+    await adminSql(database.name, 'RENAME TABLE product TO product_qa_renombrada');
     const failedRead = track(await browser.get(MOLOTES));
     expect(failedRead.status).toBe(503);
     expect(failedRead.body.error.code).toBe('DATABASE_UNAVAILABLE');
@@ -71,19 +73,20 @@ describe('logs y respuestas sin secretos ni detalles internos (P-2)', () => {
     expect(logger.lines).toContainEqual(expect.objectContaining({ msg: 'database_unavailable' }));
 
     const logText = JSON.stringify(logger.lines);
-    const secrets = [ADMIN_PASSWORD, csrf, ...cookieValues];
+    // Ni la contraseña de la base ni su usuario (CA-8, REQ-F-014).
+    const secrets = [ADMIN_PASSWORD, csrf, ...cookieValues, database.config.password, database.config.user];
     const internals = [
-      SQLITE_MESSAGE,
+      MYSQL_MESSAGE,
       'product_qa_renombrada',
-      'no such table',
-      'RAISE(',
+      "doesn't exist",
+      'SIGNAL',
       'SELECT ',
       'INSERT INTO',
       'UPDATE "',
       'prisma.',
       'Invalid `',
-      dataDir,
-      'restaurante.db',
+      database.name,
+      'mysql://',
       '/Users/',
       '\\n    at ',
       '"stack"',

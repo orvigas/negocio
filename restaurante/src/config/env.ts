@@ -78,6 +78,18 @@ export interface TwilioBotConfig extends BotConfigBase {
  */
 export type ChatBotConfig = MetaBotConfig | TwilioBotConfig | null;
 
+/**
+ * Conexión a MySQL (REQ-F-014, RF-5), a partir de DATABASE_URL. Contiene la contraseña: nunca se
+ * registra ni se incluye en errores o respuestas.
+ */
+export interface DatabaseConfig {
+  readonly host: string;
+  readonly port: number;
+  readonly user: string;
+  readonly password: string;
+  readonly database: string;
+}
+
 export interface Config {
   readonly nodeEnv: NodeEnv;
   readonly isProduction: boolean;
@@ -86,6 +98,7 @@ export interface Config {
   readonly siteUrl: string | undefined;
   readonly whatsapp: Readonly<Record<BusinessId, WhatsAppConfig>>;
   readonly dataDir: string;
+  readonly database: DatabaseConfig;
   readonly trustProxy: boolean;
   readonly adminBootstrap: AdminBootstrapConfig;
   readonly whatsappBot: ChatBotConfig;
@@ -423,17 +436,57 @@ function parseWhatsApp(env: Env, businessId: BusinessId, issues: string[]): What
   return Object.freeze({ url, phone, message, href: buildWhatsAppLink({ url, phone, message }) });
 }
 
+const DATABASE_NAME = /^[A-Za-z0-9_]{1,64}$/;
+const DATABASE_URL_FORMAT = 'mysql://usuario:contraseña@host:puerto/base, sin parámetros; los caracteres especiales de la contraseña van codificados (%40 para @)';
+
 /**
- * Solo la carpeta de datos, con las mismas reglas que loadConfig (REQ-F-007): la usa el comando
- * de recuperación, que no necesita el resto de la configuración (WhatsApp, etc.).
+ * URL de MySQL (REQ-F-014, RF-5): `mysql://usuario:contraseña@host[:puerto]/base`, sin parámetros
+ * (las opciones de conexión las fija src/db/client.ts). Los mensajes nunca incluyen el valor.
+ * Exportada para el soporte de pruebas, que valida sus propias URL con las mismas reglas.
+ */
+export function parseDatabaseUrl(raw: string | undefined, name: string, issues: string[]): DatabaseConfig | undefined {
+  if (raw === undefined) {
+    issues.push(`${name} es obligatoria (${DATABASE_URL_FORMAT})`);
+    return undefined;
+  }
+  const invalid = (): undefined => {
+    issues.push(`${name} no es válida (${DATABASE_URL_FORMAT})`);
+    return undefined;
+  };
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return invalid();
+  }
+  if (url.protocol !== 'mysql:' || url.hostname === '' || url.username === '' || url.search !== '' || url.hash !== '') return invalid();
+  const port = url.port === '' ? 3306 : Number(url.port);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return invalid();
+  const database = url.pathname.replace(/^\//, '');
+  if (!DATABASE_NAME.test(database)) return invalid();
+  let user: string;
+  let password: string;
+  try {
+    user = decodeURIComponent(url.username);
+    password = decodeURIComponent(url.password);
+  } catch {
+    return invalid();
+  }
+  // IPv6 entre corchetes en la URL ([::1]); el driver espera la dirección sin ellos.
+  const host = url.hostname.replace(/^\[(.*)\]$/, '$1');
+  return Object.freeze({ host, port, user, password, database });
+}
+
+/**
+ * Solo la conexión a la base de datos (REQ-F-014, RF-11): la usa el comando de recuperación, que
+ * no necesita el resto de la configuración (WhatsApp, etc.).
  * @throws {ConfigError}
  */
-export function loadDataDir(env: Env = process.env): string {
+export function loadDatabaseConfig(env: Env = process.env): DatabaseConfig {
   const issues: string[] = [];
-  const nodeEnv = readVar(env, 'NODE_ENV') ?? DEFAULTS.NODE_ENV;
-  const dataDir = parseDataDir(readVar(env, 'DATA_DIR'), nodeEnv, issues);
-  if (issues.length > 0 || dataDir === undefined) throw new ConfigError(issues);
-  return dataDir;
+  const database = parseDatabaseUrl(readVar(env, 'DATABASE_URL'), 'DATABASE_URL', issues);
+  if (issues.length > 0 || database === undefined) throw new ConfigError(issues);
+  return database;
 }
 
 /** @throws {ConfigError} */
@@ -461,6 +514,7 @@ export function loadConfig(env: Env = process.env): Config {
   }
 
   const dataDir = parseDataDir(readVar(env, 'DATA_DIR'), nodeEnv, issues);
+  const database = parseDatabaseUrl(readVar(env, 'DATABASE_URL'), 'DATABASE_URL', issues);
   const adminBootstrap = parseAdminBootstrap(env, issues);
   const trustProxy = parseBoolean(readVar(env, 'TRUST_PROXY'), 'TRUST_PROXY', false, issues);
   const whatsappBot = parseChatBot(env, nodeEnv, whatsapp.molotes?.phone, issues);
@@ -477,6 +531,7 @@ export function loadConfig(env: Env = process.env): Config {
     !isNodeEnv(nodeEnv) ||
     port === undefined ||
     dataDir === undefined ||
+    database === undefined ||
     adminBootstrap === undefined ||
     trustProxy === undefined ||
     whatsappBot === undefined ||
@@ -493,6 +548,7 @@ export function loadConfig(env: Env = process.env): Config {
     siteUrl,
     whatsapp: Object.freeze(whatsapp),
     dataDir,
+    database,
     trustProxy,
     adminBootstrap,
     whatsappBot,

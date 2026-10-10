@@ -1,6 +1,7 @@
 import { DEFAULT_PUBLIC_DIR, createApp } from './app.ts';
 import { ConfigError, loadConfig } from './config/env.ts';
-import { openDatabase } from './db/client.ts';
+import { createPrismaClient } from './db/client.ts';
+import { probeOf, queryOf, verifyDatabase } from './db/verify.ts';
 import { createPrismaProductStore } from './repositories/prisma-product-store.ts';
 import { createProductRepository } from './repositories/product-repository.ts';
 import { createUserRepository } from './repositories/user-repository.ts';
@@ -34,20 +35,20 @@ try {
   process.exit(1);
 }
 
-// Base de datos (REQ-F-007, R-2): escritura, integridad y migraciones pendientes. Si falla, el
-// servidor no arranca; el log solo lleva códigos (sin SQL, rutas ni stack).
-let database;
+// Base de datos (REQ-F-014, RF-6): la app no migra; verifica conexión (reintentos hasta 60 s),
+// credenciales, modo estricto, utf8mb4 y colación, y que las migraciones estén al día. Si falla, el
+// servidor no arranca; el log solo lleva códigos (sin SQL, URL, credenciales ni stack).
+const prisma = createPrismaClient(config.database);
 try {
-  database = await openDatabase({ dataDir: config.dataDir });
+  await verifyDatabase({ probe: probeOf(config.database), query: queryOf(prisma), logger });
 } catch (err) {
-  logger.error('database_init_failed', { code: errorProp(err, 'code'), migration: errorProp(err, 'migration') });
+  logger.error('database_init_failed', { code: errorProp(err, 'code'), migration: errorProp(err, 'migration'), object: errorProp(err, 'object') });
   process.stderr.write(
-    'No se pudo preparar la base de datos en DATA_DIR: revisa permisos de escritura, espacio libre y que el archivo no esté dañado.\n',
+    `No se pudo usar la base de datos (${String(errorProp(err, 'code'))}): revisa DATABASE_URL, que MySQL esté en marcha y que las migraciones estén aplicadas (proceso migrate o npm run db:migrate).\n`,
   );
+  await prisma.$disconnect();
   process.exit(1);
 }
-if (database.applied.length > 0) logger.info('database_migrated', { applied: database.applied });
-const { prisma } = database;
 const users = createUserRepository({ prisma });
 
 // Primer administrador desde ADMIN_USER/ADMIN_PASSWORD_HASH, solo si no hay usuarios (D-4, D-13).
@@ -76,7 +77,7 @@ try {
   });
 } catch (err) {
   logger.error('products_init_failed', { name: errorProp(err, 'name'), code: errorProp(errorProp(err, 'details'), 'code') ?? errorProp(err, 'code') });
-  process.stderr.write('No se pudieron preparar los productos en la base de datos de DATA_DIR.\n');
+  process.stderr.write('No se pudieron preparar los productos en la base de datos.\n');
   await prisma.$disconnect();
   process.exit(1);
 }

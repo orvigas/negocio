@@ -2,7 +2,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { ConfigError, PROJECT_DIR, loadConfig, type Env } from '../../src/config/env.ts';
+import { ConfigError, PROJECT_DIR, loadConfig, loadDatabaseConfig, type Env } from '../../src/config/env.ts';
 import { BOT_ENV, TWILIO_BOT_ENV, VALID_ENV } from '../helpers.ts';
 
 function issuesFor(env: Env): string[] {
@@ -27,7 +27,7 @@ describe('loadConfig', () => {
   });
 
   it('aplica valores por defecto para NODE_ENV, PORT y BUSINESS_TIMEZONE', () => {
-    const config = loadConfig({ WHATSAPP_MOLOTES: '5210000000001', WHATSAPP_BIRRIA: '5210000000002' });
+    const config = loadConfig({ WHATSAPP_MOLOTES: '5210000000001', WHATSAPP_BIRRIA: '5210000000002', DATABASE_URL: VALID_ENV.DATABASE_URL });
     expect(config).toMatchObject({ nodeEnv: 'development', port: 3000, timezone: 'America/Mexico_City' });
   });
 
@@ -69,7 +69,8 @@ describe('loadConfig', () => {
 
   it('exige URL o número para cada negocio y reporta todos los problemas juntos', () => {
     const issues = issuesFor({ PORT: 'x' });
-    expect(issues).toHaveLength(3);
+    expect(issues).toHaveLength(4);
+    expect(issues.join('\n')).toMatch(/DATABASE_URL es obligatoria/);
     expect(issues.join('\n')).toMatch(/PORT/);
     expect(issues.join('\n')).toMatch(/WHATSAPP_MOLOTES_URL o WHATSAPP_MOLOTES/);
     expect(issues.join('\n')).toMatch(/WHATSAPP_BIRRIA_URL o WHATSAPP_BIRRIA/);
@@ -117,6 +118,8 @@ describe('loadConfig: administración y datos (REQ-F-001)', () => {
     [{ ADMIN_USER: 'dueno' }, /ADMIN_USER y ADMIN_PASSWORD_HASH juntas/],
     [{ ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER y ADMIN_PASSWORD_HASH juntas/],
     [{ ADMIN_USER: 'dueno', ADMIN_PASSWORD_HASH: 'contraseña-en-claro' }, /ADMIN_PASSWORD_HASH no tiene un formato válido/],
+    // Sal de más de 64 bytes (REQ-F-014, P-3): no cabría en la columna password_hash.
+    [{ ADMIN_USER: 'dueno', ADMIN_PASSWORD_HASH: `scrypt$16384$8$1$${'A'.repeat(88)}$aGFzaGhhc2hoYXNoaGFzaGhhc2hoYXNoaGFzaGhhc2g` }, /ADMIN_PASSWORD_HASH no tiene un formato válido/],
     [{ ADMIN_USER: 'x'.repeat(61), ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER no es un usuario válido/],
     [{ ADMIN_USER: 'due\u0007no', ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER no es un usuario válido/],
     [{ TRUST_PROXY: 'yes' }, /TRUST_PROXY debe ser true o false/],
@@ -303,5 +306,38 @@ describe('loadConfig: proveedor del bot y Twilio (REQ-F-012, RF-2)', () => {
     expect(issues.join()).not.toContain('106540352242922');
     // Aunque sea la única variable del bot.
     expect(issuesFor({ ...VALID_ENV, WHATSAPP_BOT_PHONE_NUMBER_ID: '106540352242922' })).toEqual(['WHATSAPP_BOT_PHONE_NUMBER_ID ya no se usa: renómbrala a WHATSAPP_BOT_ACCOUNT_ID']);
+  });
+});
+
+describe('DATABASE_URL (REQ-F-014, RF-5 y CA-8)', () => {
+  it('se valida y queda separada en sus partes (la contraseña decodificada)', () => {
+    const config = loadConfig({ ...VALID_ENV, DATABASE_URL: 'mysql://app_rw:p%40ss%3Aw%2Frd%25x@mysql:3306/restaurante' });
+    expect(config.database).toEqual({ host: 'mysql', port: 3306, user: 'app_rw', password: 'p@ss:w/rd%x', database: 'restaurante' });
+  });
+
+  it('el puerto es 3306 por defecto y admite IPv6', () => {
+    expect(loadDatabaseConfig({ DATABASE_URL: 'mysql://u:p@db.interno/restaurante' }).port).toBe(3306);
+    expect(loadDatabaseConfig({ DATABASE_URL: 'mysql://u:p@[::1]:3307/restaurante' })).toMatchObject({ host: '::1', port: 3307 });
+  });
+
+  it('es obligatoria', () => {
+    expect(issuesFor({ ...VALID_ENV, DATABASE_URL: '' })).toEqual([expect.stringContaining('DATABASE_URL es obligatoria')]);
+  });
+
+  it.each([
+    ['otro motor', 'postgres://u:clave-secreta@db/restaurante'],
+    ['sin host', 'mysql://u:clave-secreta@/restaurante'],
+    ['sin usuario', 'mysql://:clave-secreta@db/restaurante'],
+    ['sin base', 'mysql://u:clave-secreta@db'],
+    ['base con barra', 'mysql://u:clave-secreta@db/a/b'],
+    ['con parámetros', 'mysql://u:clave-secreta@db/restaurante?ssl=false'],
+    ['puerto fuera de rango', 'mysql://u:clave-secreta@db:70000/restaurante'],
+    ['codificación rota', 'mysql://u:clave-secreta%zz@db/restaurante'],
+    ['no es URL', 'clave-secreta'],
+  ])('%s -> error de configuración sin el valor', (_case, value) => {
+    const issues = issuesFor({ ...VALID_ENV, DATABASE_URL: value });
+    expect(issues).toEqual([expect.stringContaining('DATABASE_URL no es válida')]);
+    expect(issues.join('\n')).not.toContain('clave-secreta');
+    expect(() => loadDatabaseConfig({ DATABASE_URL: value })).toThrow(ConfigError);
   });
 });

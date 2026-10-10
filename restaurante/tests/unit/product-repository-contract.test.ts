@@ -17,7 +17,7 @@ import { ANA, LUIS, VALID_INPUTS, makeProductRepository, seedSources } from '../
 
 /**
  * Contrato del repositorio de productos (REQ-F-008, RF-9): las mismas pruebas contra el store
- * de memoria y el de Prisma/SQLite (base temporal).
+ * de memoria y el de Prisma/MySQL (base de pruebas).
  */
 
 const cleanups: (() => Promise<void>)[] = [];

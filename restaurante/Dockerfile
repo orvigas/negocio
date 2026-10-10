@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Imagen de la app (REQ-F-003). Etapas:
+# Imagen de la app (REQ-F-003 y REQ-F-014). Etapas:
 #   base       -> Node 24 Alpine y directorio de trabajo.
 #   deps       -> todas las dependencias (npm ci); solo depende de package*.json. Los scripts
 #                 de instalación solo corren si están aprobados en `allowScripts` de
@@ -9,14 +9,17 @@
 #                 verificación de tipos (npm run typecheck; REQ-F-004) y CSS compilado con
 #                 Tailwind. Si hay errores de tipos, no se construye ninguna de las imágenes
 #                 siguientes.
-#   test       -> suite completa (npm test). Uso: docker compose run --rm test
+#   test       -> suite completa (npm test) contra MySQL. Uso: docker compose run --rm test
+#                 (compose.yaml levanta mysql-dev y pasa TEST_DATABASE_URL/TEST_ADMIN_DATABASE_URL).
 #                 Necesita el contexto adicional "design" (../_stich_source_, que define
 #                 compose.yaml): tests/unit/content.test.ts compara la semilla con el diseño.
-#   production -> dependencias de producción, código, CSS, migraciones y scripts de consola;
-#                 usuario no root. Node 24 ejecuta los .ts directamente (type stripping), sin
-#                 compilar y sin TypeScript ni el CLI de Prisma instalados: la app aplica las
-#                 migraciones al arrancar (src/db/migrate.ts) sobre DATA_DIR/restaurante.db.
-# La configuración (WHATSAPP_*, DATA_DIR, ADMIN_*, ...) se inyecta al ejecutar, nunca aquí.
+#   migrate    -> solo aplica las migraciones (prisma migrate deploy) con MIGRATION_DATABASE_URL
+#                 (usuario de MySQL con DDL; REQ-F-014, D-3). Proceso puntual: termina con 0 o 1.
+#   production -> dependencias de producción, código, CSS, migraciones (la app las lee para
+#                 verificar el estado de la base, no las aplica) y scripts de consola; usuario no
+#                 root. Node 24 ejecuta los .ts directamente (type stripping), sin compilar y sin
+#                 TypeScript ni el CLI de Prisma instalados.
+# La configuración (DATABASE_URL, WHATSAPP_*, DATA_DIR, ADMIN_*, ...) se inyecta al ejecutar, nunca aquí.
 
 FROM node:24-alpine AS base
 WORKDIR /app
@@ -42,6 +45,18 @@ ENV NODE_ENV=test \
     CI=true
 CMD ["npm", "test"]
 
+FROM base AS migrate
+ENV NODE_ENV=production
+COPY package.json package-lock.json ./
+# Sin --omit=optional: npm instala el CLI de Prisma (par opcional de @prisma/client) y su schema
+# engine, sin las herramientas de desarrollo (vitest, eslint, tailwind...).
+RUN npm ci --omit=dev --strict-allow-scripts --no-audit --no-fund && npm cache clean --force
+COPY prisma/schema.prisma ./prisma/schema.prisma
+COPY prisma/migrations ./prisma/migrations
+COPY prisma.config.ts ./
+USER node
+ENTRYPOINT ["node_modules/.bin/prisma", "migrate", "deploy"]
+
 FROM base AS production
 ENV NODE_ENV=production \
     PORT=3000
@@ -57,7 +72,8 @@ COPY --from=build /app/prisma/migrations ./prisma/migrations
 # (simulador del bot de WhatsApp, REQ-F-009) es solo de desarrollo: usa el doble de tests/.
 COPY --from=build /app/scripts/admin-recover.ts /app/scripts/hash-password.ts ./scripts/
 COPY --from=build /app/scripts/support ./scripts/support
-# Punto de montaje sugerido para DATA_DIR: un volumen con nombre hereda dueño y permisos.
+# Punto de montaje sugerido para DATA_DIR (JSON de página y changes.jsonl): un volumen con nombre
+# hereda dueño y permisos.
 RUN mkdir -p /var/lib/restaurante \
     && chown node:node /var/lib/restaurante \
     && chmod 700 /var/lib/restaurante

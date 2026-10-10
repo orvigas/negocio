@@ -3,6 +3,7 @@ import { createServer } from 'node:net';
 
 import { PROJECT_DIR } from '../../src/config/env.ts';
 import { VALID_ENV } from '../helpers.ts';
+import { appDatabaseUrl, makeDatabase } from './database.ts';
 
 /**
  * Procesos de Node reales para las pruebas de arranque y del comando de consola (REQ-F-007).
@@ -52,12 +53,17 @@ export function freePort(): Promise<number> {
   });
 }
 
-/** Arranca `node src/server.ts` y espera a `server_started` (o a que termine). */
+/**
+ * Arranca `node src/server.ts` y espera a `server_started` (o a que termine). Sin DATABASE_URL en
+ * `env`, usa una base de pruebas migrada y vacía del trabajador (REQ-F-014), que se libera cuando
+ * el proceso termina.
+ */
 export async function startServer(env: Record<string, string>, timeoutMs = 30_000) {
   const port = await freePort();
+  const database = env.DATABASE_URL === undefined ? await makeDatabase() : null;
   const child = spawn(process.execPath, ['src/server.ts'], {
     cwd: PROJECT_DIR,
-    env: baseEnv({ ...VALID_ENV, PORT: String(port), ...env }),
+    env: baseEnv({ ...VALID_ENV, PORT: String(port), ...(database ? { DATABASE_URL: appDatabaseUrl(database.name) } : {}), ...env }),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let stdout = '';
@@ -65,6 +71,7 @@ export async function startServer(env: Record<string, string>, timeoutMs = 30_00
   child.stdout.setEncoding('utf8').on('data', (chunk: string) => (stdout += chunk));
   child.stderr.setEncoding('utf8').on('data', (chunk: string) => (stderr += chunk));
   const exited = new Promise<number | null>((resolve) => child.on('close', resolve));
+  void exited.then(() => database?.cleanup());
   const started = await new Promise<boolean>((resolve) => {
     const timer = setTimeout(() => resolve(false), timeoutMs);
     const check = () => {

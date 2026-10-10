@@ -5,7 +5,7 @@ import { ADMIN_USER, createUser, login, loginAs, setupAdmin, type Browser } from
 import { VALID_INPUTS } from '../support/products.ts';
 
 /**
- * Matriz completa de permisos de la API de productos con SQLite real (REQ-F-008, CA-13, CA-15,
+ * Matriz completa de permisos de la API de productos con MySQL real (REQ-F-008, CA-13, CA-15,
  * D-5′, D-19 y RN-8). Ampliación de QA aprobada por el usuario (P-1).
  *
  * Actores: administrador, editor de Molotes, editor de Birria y editor de ambos negocios.

@@ -13,7 +13,7 @@ import {
 } from './product-repository.ts';
 
 /**
- * Store de productos sobre Prisma/SQLite (REQ-F-008, DT-1 y DT-5).
+ * Store de productos sobre Prisma/MySQL (REQ-F-008 y REQ-F-014).
  *
  * - Variantes y chips se reemplazan completos en cada escritura, dentro de la misma transacción.
  * - `replace` usa la versión en el WHERE: si otro proceso cambió el producto, no escribe nada.

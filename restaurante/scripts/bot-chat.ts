@@ -109,6 +109,8 @@ const config = loadConfig({
   WHATSAPP_BOT_PROVIDER: provider,
   WHATSAPP_BOT_STAFF_MOLOTES: '5215511110001',
   WHATSAPP_BOT_STAFF_BIRRIA: '5215522220002',
+  // Obligatoria en la configuración (REQ-F-014), pero el simulador nunca conecta: usa el store en memoria.
+  DATABASE_URL: 'mysql://simulador:simulador@127.0.0.1/simulador',
   ...providerEnv,
 });
 const botConfig = config.whatsappBot;

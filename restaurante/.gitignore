@@ -26,7 +26,7 @@ data/
 # Cliente de Prisma generado (`npm run db:generate`; REQ-F-007)
 src/generated/
 
-# Bases de datos SQLite (viven en DATA_DIR, nunca en el repositorio)
+# Restos locales de la antigua base SQLite (antes de REQ-F-014): nunca en el repositorio
 *.db
 *.db-wal
 *.db-shm

@@ -23,6 +23,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json",
     "db:generate": "prisma generate",
+    "db:up": "docker compose up -d --wait mysql-dev",
+    "db:down": "docker compose stop mysql-dev",
+    "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "admin:hash-password": "node scripts/hash-password.ts",
     "admin:recover": "node --env-file-if-exists=.env scripts/admin-recover.ts",
@@ -32,20 +35,19 @@
   },
   "dependencies": {
     "@koa/router": "^15.7.0",
-    "@prisma/adapter-better-sqlite3": "7.10.0",
+    "@prisma/adapter-mariadb": "7.10.0",
     "@prisma/client": "7.10.0",
-    "better-sqlite3": "12.11.1",
     "helmet": "^8.3.0",
     "koa": "^3.2.1",
     "koa-helmet": "^9.0.0",
-    "koa-static": "^5.0.0"
+    "koa-static": "^5.0.0",
+    "mariadb": "3.4.5"
   },
   "devDependencies": {
     "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
     "@eslint/js": "^10.0.1",
     "@tailwindcss/cli": "^4.3.3",
     "@tailwindcss/forms": "^0.5.11",
-    "@types/better-sqlite3": "9.6.0",
     "@types/jsdom": "^30.0.0",
     "@types/koa": "^3.0.3",
     "@types/koa-static": "^4.0.4",
@@ -62,7 +64,6 @@
     "vitest": "^5.0.3"
   },
   "allowScripts": {
-    "better-sqlite3@12.11.1": true,
     "prisma@7.10.0": true,
     "@prisma/engines@7.10.0": true,
     "@parcel/watcher": false,

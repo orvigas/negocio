@@ -10,7 +10,7 @@ node_modules/
 public/css/*
 !public/css/.gitkeep
 
-# Bases SQLite locales (se recrean con `npm run db:setup`; las pruebas usan data/test.db)
+# Datos locales (DATA_DIR por defecto fuera de producción)
 data/
 
 # Logs y cobertura

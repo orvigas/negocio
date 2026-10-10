@@ -1,5 +1,45 @@
-# Pruebas en contenedor (REQ-F-003): docker compose run --rm test
+# Servicios locales (REQ-F-003 y REQ-F-014). Solo para desarrollo, pruebas y CI; el compose de
+# producción es otro (REQ-F-016).
+#
+#   npm run db:up                 -> MySQL de desarrollo y pruebas (solo en 127.0.0.1:3307)
+#   docker compose run --rm test  -> suite completa en contenedor, contra mysql-dev
+#
+# Las contraseñas por defecto son solo de desarrollo (no son secretos: MySQL solo escucha en
+# 127.0.0.1 y en la red interna de las pruebas). Se pueden cambiar con las variables
+# RESTAURANTE_DB_*_PASSWORD antes de crear el volumen.
 services:
+  mysql-dev:
+    # MySQL 8.4 LTS fijado por digest (índice multiplataforma).
+    image: mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_es_0900_as_cs
+      - --default-time-zone=+00:00
+      - --skip-log-bin
+      - --mysqlx=OFF
+      # Solo desarrollo: menos fsync (las pruebas crean y vacían bases continuamente).
+      - --innodb-flush-log-at-trx-commit=2
+    environment:
+      MYSQL_ROOT_PASSWORD: ${RESTAURANTE_DB_ROOT_PASSWORD:-root-dev}
+      RESTAURANTE_DB_APP_PASSWORD: ${RESTAURANTE_DB_APP_PASSWORD:-app-dev}
+      RESTAURANTE_DB_MIGRATOR_PASSWORD: ${RESTAURANTE_DB_MIGRATOR_PASSWORD:-migrator-dev}
+      RESTAURANTE_DB_TEST_PASSWORD: ${RESTAURANTE_DB_TEST_PASSWORD:-test-dev}
+    # Solo en loopback: nunca accesible desde otras máquinas.
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - mysql-dev-data:/var/lib/mysql
+      - ./docker/mysql/initdb:/docker-entrypoint-initdb.d:ro
+    networks:
+      - default
+      - db-test
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 2s
+      timeout: 5s
+      start_period: 60s
+      retries: 30
+
   test:
     build:
       context: .
@@ -11,5 +51,19 @@ services:
     image: restaurante:test
     # Reconstruye en cada ejecución (el código va dentro de la imagen; la caché lo hace rápido).
     pull_policy: build
-    # Las pruebas no usan la red.
-    network_mode: none
+    environment:
+      TEST_DATABASE_URL: mysql://restaurante_test_app:${RESTAURANTE_DB_TEST_PASSWORD:-test-dev}@mysql-dev:3306/restaurante_test
+      TEST_ADMIN_DATABASE_URL: mysql://restaurante_test_admin:${RESTAURANTE_DB_TEST_PASSWORD:-test-dev}@mysql-dev:3306/restaurante_test
+    depends_on:
+      mysql-dev:
+        condition: service_healthy
+    # Solo la red interna con MySQL: las pruebas no salen a internet.
+    networks:
+      - db-test
+
+networks:
+  db-test:
+    internal: true
+
+volumes:
+  mysql-dev-data:

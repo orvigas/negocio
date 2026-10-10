@@ -30,7 +30,8 @@ const scrypt = promisify(scryptCallback) as (
 
 export const SCRYPT_DEFAULTS = Object.freeze({ N: 2 ** 15, r: 8, p: 1, saltLength: 16, keyLength: 32 });
 
-const LIMITS = Object.freeze({ minLogN: 14, maxLogN: 20, maxR: 32, maxP: 16, minSalt: 16, minKey: 32, maxKey: 64 });
+// maxSalt (REQ-F-014, P-3): el hash completo cabe en la columna `password_hash` (VARCHAR(255)).
+const LIMITS = Object.freeze({ minLogN: 14, maxLogN: 20, maxR: 32, maxP: 16, minSalt: 16, maxSalt: 64, minKey: 32, maxKey: 64 });
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 const POSITIVE_INT = /^[1-9]\d*$/;
 
@@ -55,7 +56,7 @@ export function parsePasswordHash(text: unknown): ParsedPasswordHash | null {
 
   const salt = Buffer.from(rawSalt, 'base64url');
   const hash = Buffer.from(rawHash, 'base64url');
-  if (salt.length < LIMITS.minSalt || hash.length < LIMITS.minKey || hash.length > LIMITS.maxKey) return null;
+  if (salt.length < LIMITS.minSalt || salt.length > LIMITS.maxSalt || hash.length < LIMITS.minKey || hash.length > LIMITS.maxKey) return null;
   return { N, r, p, salt, hash };
 }
 

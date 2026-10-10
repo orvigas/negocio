@@ -1,7 +1,13 @@
-// Esquema de la base de datos (REQ-F-007 y REQ-F-008). SQLite en DATA_DIR/restaurante.db.
+// Esquema de la base de datos (REQ-F-007, REQ-F-008 y REQ-F-014): MySQL 8.4 en utf8mb4 con la
+// colación utf8mb4_es_0900_as_cs en la base, las tablas y las columnas.
 // - El cliente se genera en src/generated/prisma (`npm run db:generate`; no se versiona).
-// - Las migraciones se crean con `npm run db:migrate:dev -- --name <nombre>` y las aplica
-//   la propia app al arrancar (src/db/migrate.ts), sin el CLI de Prisma en producción.
+// - Cada texto lleva su longitud explícita (@db.VarChar con el máximo que permite la validación de
+//   la app, que también cuenta puntos de código) o @db.MediumText.
+// - Las migraciones se crean con `npm run db:migrate:dev -- --name <nombre>` y se REVISAN A MANO:
+//   Prisma escribe `COLLATE utf8mb4_unicode_ci` en cada CREATE TABLE y hay que cambiarlo por
+//   utf8mb4_es_0900_as_cs (tests/unit/migrations-collation.test.ts lo comprueba).
+// - Las aplica el proceso aparte `migrate` (prisma migrate deploy, usuario con DDL); la app solo
+//   verifica el estado al arrancar (src/db/verify.ts).
 
 generator client {
   provider            = "prisma-client"
@@ -12,7 +18,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
 }
 
 /// Rol de un usuario de /admin (D-2).
@@ -31,13 +37,15 @@ enum Business {
 model User {
   id             Int            @id @default(autoincrement())
   /// Usuario de acceso tal como se escribió.
-  username       String
+  username       String         @db.VarChar(60)
   /// Usuario normalizado (NFC y minúsculas): único sin distinguir mayúsculas.
-  usernameKey    String         @unique @map("username_key")
-  displayName    String         @map("display_name")
+  /// Hasta 120 puntos de código: toLowerCase() convierte «İ» en dos.
+  usernameKey    String         @unique @map("username_key") @db.VarChar(128)
+  displayName    String         @map("display_name") @db.VarChar(60)
   role           Role
   active         Boolean        @default(true)
-  passwordHash   String         @map("password_hash")
+  /// scrypt$N$r$p$sal$hash (sal ≤ 64 bytes; ver services/admin-auth.ts).
+  passwordHash   String         @map("password_hash") @db.VarChar(255)
   /// Cambia al desactivar, cambiar rol/negocios o contraseña: invalida las sesiones abiertas (D-8).
   sessionVersion Int            @default(0) @map("session_version")
   createdAt      DateTime       @default(now()) @map("created_at")
@@ -65,14 +73,14 @@ model UserBusiness {
 model UserAudit {
   id        Int      @id @default(autoincrement())
   at        DateTime @default(now())
-  action    String
+  action    String   @db.VarChar(32)
   /// Usuario que hizo la acción; null si fue la consola o el sistema.
   actorId   Int?     @map("actor_id")
   /// user | console | system
-  actorKind String   @map("actor_kind")
+  actorKind String   @map("actor_kind") @db.VarChar(16)
   targetId  Int      @map("target_id")
   /// JSON con los campos cambiados (antes/después), sin contraseñas ni hashes.
-  changes   String?
+  changes   String?  @db.MediumText
   actor     User?    @relation("actor", fields: [actorId], references: [id], onDelete: Restrict)
   target    User     @relation("target", fields: [targetId], references: [id], onDelete: Restrict)
 
@@ -100,28 +108,28 @@ model Product {
   id              Int              @id @default(autoincrement())
   business        Business
   category        ProductCategory
-  slug            String
-  name            String
-  description     String?
+  slug            String           @db.VarChar(64)
+  name            String           @db.VarChar(80)
+  description     String?          @db.VarChar(400)
   /// Badge (Molotes) o tag (Birria).
-  label           String?
+  label           String?          @db.VarChar(40)
   priceCents      Int?             @map("price_cents")
-  priceUnit       String?          @map("price_unit")
+  priceUnit       String?          @map("price_unit") @db.VarChar(40)
   available       Boolean          @default(false)
   /// Orden dentro de su negocio y categoría (1 = primero), entre los no eliminados.
   position        Int
-  imageSrc        String?          @map("image_src")
-  imageAlt        String?          @map("image_alt")
+  imageSrc        String?          @map("image_src") @db.VarChar(255)
+  imageAlt        String?          @map("image_alt") @db.VarChar(150)
   imageWidth      Int?             @map("image_width")
   imageHeight     Int?             @map("image_height")
-  tone            String?
+  tone            String?          @db.VarChar(20)
   orderPriceCents Int?             @map("order_price_cents")
   orderQuantity   Int?             @map("order_quantity")
-  icon            String?
+  icon            String?          @db.VarChar(40)
   detailsType     DetailsType?     @map("details_type")
-  detailsLabel    String?          @map("details_label")
-  portion         String?
-  portionExtra    String?          @map("portion_extra")
+  detailsLabel    String?          @map("details_label") @db.VarChar(40)
+  portion         String?          @db.VarChar(40)
+  portionExtra    String?          @map("portion_extra") @db.VarChar(40)
   /// Aumenta con cada escritura (control de concurrencia, D-7′).
   version         Int              @default(1)
   createdAt       DateTime         @default(now()) @map("created_at")
@@ -142,9 +150,9 @@ model ProductVariant {
   id          Int     @id @default(autoincrement())
   productId   Int     @map("product_id")
   position    Int
-  label       String
+  label       String  @db.VarChar(40)
   priceCents  Int     @map("price_cents")
-  description String
+  description String  @db.VarChar(400)
   available   Boolean
   product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
@@ -157,7 +165,7 @@ model ProductChip {
   id        Int     @id @default(autoincrement())
   productId Int     @map("product_id")
   position  Int
-  text      String
+  text      String  @db.VarChar(40)
   highlight Boolean
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
@@ -171,15 +179,15 @@ model ProductChange {
   at        DateTime
   business  Business
   productId Int      @map("product_id")
-  slug      String
+  slug      String   @db.VarChar(64)
   /// create | update | delete | restore | reorder | overwrite_after_conflict | import
-  action    String
+  action    String   @db.VarChar(32)
   /// Usuario autenticado; null si fue el sistema (importación).
   actorId   Int?     @map("actor_id")
   /// Nombre visible en el momento del cambio (D-20).
-  actorName String   @map("actor_name")
+  actorName String   @map("actor_name") @db.VarChar(60)
   /// JSON: [{ field, before, after }].
-  changes   String
+  changes   String   @db.MediumText
   product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   actor     User?    @relation(fields: [actorId], references: [id], onDelete: Restrict)
 
@@ -193,7 +201,7 @@ model ProductImport {
   business   Business @id
   importedAt DateTime @map("imported_at")
   /// current | previous | seed
-  source     String
+  source     String   @db.VarChar(16)
   count      Int
 
   @@map("product_import")

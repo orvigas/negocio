@@ -19,7 +19,7 @@ import { silentLogger, type Logger } from '../utils/logger.ts';
  * Repositorio de productos (REQ-F-008, RF-9).
  *
  * Una sola implementación de las reglas (validación, slug, límites, versión, posiciones y
- * registro) sobre un `ProductStore` con dos implementaciones: Prisma/SQLite
+ * registro) sobre un `ProductStore` con dos implementaciones: Prisma/MySQL
  * (prisma-product-store.ts) y memoria (memory-product-store.ts, para las pruebas). Las mismas
  * pruebas de contrato corren contra las dos.
  *

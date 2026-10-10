@@ -11,17 +11,18 @@ import {
 } from '../../src/repositories/user-repository.ts';
 import { allowedBusinesses } from '../../src/services/authorization.ts';
 import { ADMIN_PASSWORD_HASH } from '../support/admin.ts';
-import { makeDatabase } from '../support/database.ts';
+import { adminSql, makeDatabase } from '../support/database.ts';
 
-/** Reglas de los usuarios sobre SQLite real (REQ-F-007, D-6 a D-8, D-12, DT-7, DT-8 y DT-16). */
+/** Reglas de los usuarios sobre MySQL real (REQ-F-007, D-6 a D-8, D-12, DT-7, DT-8 y DT-16). */
 
 let prisma: Database;
 let users: UserRepository;
 let cleanup: () => Promise<void>;
+let databaseName: string;
 const SYSTEM = { kind: 'system' } as const;
 
 beforeEach(async () => {
-  ({ prisma, cleanup } = await makeDatabase());
+  ({ prisma, cleanup, name: databaseName } = await makeDatabase());
   users = createUserRepository({ prisma });
 });
 afterEach(() => cleanup());
@@ -162,13 +163,25 @@ describe('recuperación por consola (D-5)', () => {
   });
 });
 
+describe('fechas (REQ-F-014, RF-12)', () => {
+  it('se guardan en UTC con milisegundos, sin depender de la zona horaria de MySQL', async () => {
+    const at = new Date('2026-10-09T18:00:00.123Z');
+    const clocked = createUserRepository({ prisma, now: () => at });
+    const user = await clocked.create(editor('ana'), SYSTEM);
+    expect(user.createdAt).toEqual(at);
+    expect((await auditRows())[0]?.at).toEqual(at);
+    const rows = (await adminSql(databaseName, 'SELECT DATE_FORMAT(created_at, "%Y-%m-%d %H:%i:%s.%f") AS created, DATE_FORMAT(at, "%Y-%m-%d %H:%i:%s.%f") AS audited FROM user JOIN user_audit ON user_audit.target_id = user.id')) as Record<string, string>[];
+    expect(rows).toEqual([{ created: '2026-10-09 18:00:00.123000', audited: '2026-10-09 18:00:00.123000' }]);
+  });
+});
+
 describe('errores', () => {
   it('usuario inexistente -> UserNotFoundError', async () => {
     await expect(users.setActive(999, false, SYSTEM)).rejects.toBeInstanceOf(UserNotFoundError);
   });
 
   it('base de datos caída -> DatabaseUnavailableError sin mensaje técnico (DT-9)', async () => {
-    await prisma.$executeRawUnsafe('DROP TABLE "user_audit"');
+    await adminSql(databaseName, 'DROP TABLE user_audit');
     const err: unknown = await users.create(editor('ana'), SYSTEM).catch((error: unknown) => error);
     expect(err).toBeInstanceOf(DatabaseUnavailableError);
     const unavailable = err as DatabaseUnavailableError;

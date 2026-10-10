@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { DEFAULT_PUBLIC_DIR, createApp } from '../../src/app.ts';
 import { loadSeedDocument } from '../../src/content/seeds.ts';
-import { openDatabase } from '../../src/db/client.ts';
+import { createPrismaClient } from '../../src/db/client.ts';
 import { createFileMenuRepository } from '../../src/repositories/file-menu-repository.ts';
 import { createPrismaProductStore } from '../../src/repositories/prisma-product-store.ts';
 import { createProductRepository, type ProductStore } from '../../src/repositories/product-repository.ts';
@@ -14,19 +14,35 @@ import { createImageChecker } from '../../src/services/admin-form.ts';
 import type { MenuDocument } from '../../src/services/menu-schema.ts';
 import { makeConfig, makeRecordingLogger } from '../helpers.ts';
 import { FRIDAY_NOON_MX } from '../support/admin.ts';
-import { makeTempDir } from '../support/database.ts';
+import { makeDatabase, makeTempDir, type TestDatabase } from '../support/database.ts';
 import { listenLocal } from '../support/http.ts';
 import { ANA, VALID_INPUTS } from '../support/products.ts';
 
 /**
  * Landings con los productos de la base de datos (REQ-F-008, RF-3 y RF-4): DATA_DIR temporal con
- * los JSON reales (repositorio de archivos) y SQLite, igual que en src/server.ts.
+ * los JSON reales (repositorio de archivos) y MySQL, igual que en src/server.ts. Cada DATA_DIR tiene
+ * su base de pruebas; volver a llamar a start() con el mismo DATA_DIR equivale a reiniciar el servidor.
  */
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
   while (cleanups.length > 0) await cleanups.pop()?.();
 });
+
+const databases = new Map<string, TestDatabase>();
+afterEach(async () => {
+  for (const database of databases.values()) await database.cleanup();
+  databases.clear();
+});
+
+async function databaseFor(dataDir: string): Promise<TestDatabase> {
+  let database = databases.get(dataDir);
+  if (!database) {
+    database = await makeDatabase();
+    databases.set(dataDir, database);
+  }
+  return database;
+}
 
 async function newDataDir(): Promise<string> {
   const { dir, cleanup } = await makeTempDir('landing-products-');
@@ -39,7 +55,8 @@ async function start(dataDir: string, { wrapStore = (store: ProductStore) => sto
   const logger = makeRecordingLogger();
   const menus = createFileMenuRepository({ dataDir, timezone: 'America/Mexico_City' });
   await menus.init();
-  const { prisma } = await openDatabase({ dataDir });
+  // Cliente nuevo en cada arranque, sobre la base de este DATA_DIR.
+  const prisma = createPrismaClient((await databaseFor(dataDir)).config);
   cleanups.push(() => prisma.$disconnect());
   if ((await prisma.user.count({ where: { id: ANA.id } })) === 0) {
     await prisma.user.create({ data: { id: ANA.id, username: 'ana', usernameKey: 'ana', displayName: 'Ana', role: 'admin', passwordHash: 'x', updatedAt: new Date() } });
@@ -62,7 +79,9 @@ describe('importación y landings (RF-3, RF-4)', () => {
   it('CA-1: en un DATA_DIR sin productos importa la semilla y las landings no cambian (snapshots)', async () => {
     const dataDir = await newDataDir();
     const { client, prisma, logger } = await start(dataDir);
-    expect(await prisma.productImport.findMany({ orderBy: { business: 'asc' } })).toMatchObject([
+    // En MySQL un ENUM se ordena por su posición en la lista, no por el texto: se ordena aquí.
+    const imports = (await prisma.productImport.findMany()).sort((a, b) => a.business.localeCompare(b.business));
+    expect(imports).toMatchObject([
       { business: 'birria', source: 'seed', count: 6 },
       { business: 'molotes', source: 'seed', count: 10 },
     ]);
@@ -225,7 +244,7 @@ describe('fallo de la base de datos con el servidor en marcha (CA-35, D-15)', ()
     let failing = false;
     const { client, products } = await start(await newDataDir(), {
       wrapStore: (store) => ({
-        listBusiness: (business) => (failing ? Promise.reject(new Error('SQLITE_IOERR')) : store.listBusiness(business)),
+        listBusiness: (business) => (failing ? Promise.reject(new Error('ER_LOCK_WAIT_TIMEOUT')) : store.listBusiness(business)),
         lastChanges: (business) => store.lastChanges(business),
         lastBusinessChange: (business) => store.lastBusinessChange(business),
         transaction: (task) => store.transaction(task),

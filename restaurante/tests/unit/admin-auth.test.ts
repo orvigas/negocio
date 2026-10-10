@@ -33,6 +33,14 @@ describe('hash de contraseña (DT-2)', () => {
     expect(parsePasswordHash(value)).toBeNull();
   });
 
+  it('la sal admite de 16 a 64 bytes (REQ-F-014, P-3: el hash cabe en password_hash)', () => {
+    const hash = Buffer.alloc(32, 1).toString('base64url');
+    const withSalt = (bytes: number) => `scrypt$16384$8$1$${Buffer.alloc(bytes, 2).toString('base64url')}$${hash}`;
+    expect(parsePasswordHash(withSalt(64))).not.toBeNull();
+    expect(withSalt(64).length).toBeLessThanOrEqual(255);
+    expect(parsePasswordHash(withSalt(65))).toBeNull();
+  });
+
   it('rechaza una contraseña vacía al generar', async () => {
     await expect(hashPassword('')).rejects.toThrow(/vacía/);
   });

@@ -421,7 +421,7 @@ describe('disponibilidad (CA-23, CA-24, M-1, M-6)', () => {
       listBusiness: async (business) => {
         if (failing) {
           const { DatabaseUnavailableError } = await import('../../src/db/errors.ts');
-          throw new DatabaseUnavailableError({ name: 'PrismaClientKnownRequestError', code: 'P2039', originalCode: 'SQLITE_IOERR' });
+          throw new DatabaseUnavailableError({ name: 'PrismaClientKnownRequestError', code: 'P2039', originalCode: '1205' });
         }
         return store.listBusiness(business);
       },
@@ -431,8 +431,8 @@ describe('disponibilidad (CA-23, CA-24, M-1, M-6)', () => {
     const res = await browser.get(products('molotes'));
     expect(res.status).toBe(503);
     expect(res.body).toEqual({ error: { code: 'DATABASE_UNAVAILABLE', message: 'Base de datos no disponible' } });
-    expect(JSON.stringify(res.body)).not.toMatch(/SQLITE|prisma|stack|\//i);
-    expect(logger.lines).toContainEqual(expect.objectContaining({ msg: 'database_unavailable', originalCode: 'SQLITE_IOERR' }));
+    expect(JSON.stringify(res.body)).not.toMatch(/1205|mysql|prisma|stack|\//i);
+    expect(logger.lines).toContainEqual(expect.objectContaining({ msg: 'database_unavailable', originalCode: '1205' }));
     // La landing sigue respondiendo con la caché.
     expect((await client().get('/molotes')).status).toBe(200);
   });

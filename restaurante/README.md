@@ -26,8 +26,8 @@ pedido y lo envía al personal (ver [Bot de WhatsApp](#bot-de-whatsapp)).
 
 Paso a paso, con enlaces a las secciones de este README:
 
-- [Entorno de desarrollo](docs/desarrollo.md): instalación, `.env`, `DATA_DIR`, arranque,
-  calidad (typecheck, lint y pruebas), `bot:chat` y el bot real con el sandbox de Twilio.
+- [Entorno de desarrollo](docs/desarrollo.md): instalación, MySQL local, `.env`, `DATA_DIR`,
+  arranque, calidad (typecheck, lint y pruebas), `bot:chat` y el bot real con el sandbox de Twilio.
 - [Despliegue a producción en la VM](docs/despliegue.md): `.env` de producción con Meta, `DATA_DIR`
   en el disco persistente, migraciones, webhook de Meta, comprobaciones, actualización, rollback y
   copias de seguridad.
@@ -37,8 +37,10 @@ Paso a paso, con enlaces a las secciones de este README:
 - Node.js >= 24.3 (ver `.nvmrc`; con nvm: `nvm use`). Desde 24.3 Node ejecuta los `.ts` sin
   avisos; las versiones 24.0 a 24.2 escriben un `ExperimentalWarning` en stderr.
 - npm
-- Opcional: Docker con Compose v2 para ejecutar las pruebas o construir la imagen sin
-  instalar Node (ver [Docker](#docker)).
+- Docker con Compose v2 (o un MySQL 8.4 propio): la base de datos es MySQL 8.4 y el
+  `compose.yaml` del proyecto levanta uno local solo en `127.0.0.1:3307` (`npm run db:up`). Sin
+  MySQL no arrancan la app ni las pruebas. Docker también sirve para ejecutar las pruebas o
+  construir las imágenes sin instalar Node (ver [Docker](#docker)).
 
 ## Puesta en marcha
 
@@ -46,18 +48,21 @@ Paso a paso, con enlaces a las secciones de este README:
 nvm use
 npm install
 npm run db:generate    # genera el cliente de Prisma (src/generated/prisma; no se versiona)
-cp .env.example .env   # completa al menos WHATSAPP_MOLOTES(_URL) y WHATSAPP_BIRRIA(_URL)
+cp .env.example .env   # completa al menos WHATSAPP_MOLOTES(_URL) y WHATSAPP_BIRRIA(_URL); trae DATABASE_URL local
+npm run db:up          # MySQL 8.4 local (Docker), solo en 127.0.0.1:3307
+npm run db:migrate     # aplica las migraciones (MIGRATION_DATABASE_URL del .env)
 npm run admin:hash-password   # opcional: genera ADMIN_PASSWORD_HASH para crear el primer administrador
 npm run build:css
 npm run dev            # http://localhost:3000 (administración: http://localhost:3000/admin)
 ```
 
 En la primera ejecución se crea la carpeta de datos (`DATA_DIR`, por defecto `data/`) con
-una copia de la semilla de cada negocio y la base de datos `restaurante.db` (usuarios de la
-administración), con sus migraciones aplicadas. Ver [Base de datos](#base-de-datos).
+una copia de la semilla de cada negocio, y los productos se importan una sola vez a la base de
+datos MySQL. La app no migra: verifica al arrancar que la base esté lista. Ver
+[Base de datos](#base-de-datos).
 
 `npm install` solo ejecuta los scripts de instalación aprobados en `allowScripts` de
-`package.json` (`better-sqlite3`, `prisma` y `@prisma/engines`; `@parcel/watcher` y `fsevents`
+`package.json` (`prisma` y `@prisma/engines`; `@parcel/watcher` y `fsevents`
 están denegados porque no los necesitan). Si una dependencia nueva trae un script de
 instalación, `npm ci --strict-allow-scripts` (CI y Docker) falla hasta que se revise y se
 apruebe con `npm install-scripts approve <paquete>`.
@@ -74,8 +79,10 @@ apruebe con `npm install-scripts approve <paquete>`.
 | `npm run admin:recover -- --usuario <nombre>` | Recupera el acceso de administración por consola (ver [Recuperar el acceso](#recuperar-el-acceso)) |
 | `npm run bot:chat [-- --ahora AAAA-MM-DDTHH:MM]` | Conversación con el bot de WhatsApp en la terminal contra el simulador de la Cloud API, sin Meta (ver [Probar el bot en local](#probar-el-bot-en-local)) |
 | `npm run db:generate` | Genera el cliente de Prisma en `src/generated/prisma` (necesario antes de `typecheck`, `lint`, `test` y `dev`) |
-| `npm run db:migrate:dev -- --name <nombre>` | Crea una migración nueva a partir de `prisma/schema.prisma` (solo desarrollo; usa `DATA_DIR`) |
-| `npm test`           | Tests unitarios e integración (Vitest + Supertest) |
+| `npm run db:up` / `npm run db:down` | Levanta / detiene el MySQL 8.4 local de `compose.yaml` (solo en `127.0.0.1:3307`; datos en el volumen `mysql-dev-data`) |
+| `npm run db:migrate` | Aplica las migraciones pendientes (`prisma migrate deploy`) con `MIGRATION_DATABASE_URL` |
+| `npm run db:migrate:dev -- --name <nombre>` | Crea una migración nueva a partir de `prisma/schema.prisma` (solo desarrollo, contra el MySQL local con `MIGRATION_DATABASE_URL` y `SHADOW_DATABASE_URL`). Revisa a mano la colación de cada `CREATE TABLE` (ver [Base de datos](#base-de-datos)) |
+| `npm test`           | Tests unitarios e integración (Vitest + Supertest) contra MySQL 8.4 real (requiere `npm run db:up`; ver [Pruebas](#pruebas-con-base-de-datos)) |
 | `npm run typecheck`  | Verificación de tipos con `tsc` (`tsconfig.json`, sin generar archivos); termina con código distinto de 0 si hay errores. No forma parte de `npm test` |
 | `npm run test:watch` | Vitest en modo observación                                  |
 | `npm run lint`       | ESLint (`eslint.config.ts`): backend en TypeScript con información de tipos (typescript-eslint) y `public/js` con las reglas de JavaScript para navegador. No modifica archivos; termina con código distinto de 0 si hay errores o avisos. No forma parte de `npm test` ni del Dockerfile, pero sí del [CI](#ci) |
@@ -109,11 +116,31 @@ const browser = server.browser();       // cliente con cookies (sesión y CSRF d
 - Excepción: las pruebas de arranque (`tests/integration/server-startup.test.ts`) lanzan el
   proceso de producción (`src/server.ts`), que escucha en todas las interfaces; se prueba tal cual.
 
+### Pruebas con base de datos
+
+La suite corre contra **MySQL 8.4 real** (REQ-F-014), nunca contra una base de desarrollo o de
+producción. Antes de `npm test`: `npm run db:up` (el MySQL local de `compose.yaml`).
+
+- `TEST_DATABASE_URL` (usuario solo DML: el mismo tipo de usuario que usa la app) y
+  `TEST_ADMIN_DATABASE_URL` (DDL: solo el soporte de pruebas crea, migra, vacía y borra bases).
+  Sin ellas se usan las del MySQL local (`127.0.0.1:3307`, credenciales de desarrollo).
+- **Salvaguarda** (`tests/support/test-database-config.ts`, en el `globalSetup` y en cada
+  archivo): las dos URL solo pueden apuntar a `127.0.0.1`, `localhost`, `::1` o `mysql-dev` y a
+  bases con el prefijo `restaurante_test`; cualquier otra hace fallar la suite antes de conectar.
+- Sin MySQL, la suite falla con el mensaje de cómo levantarlo. Ninguna prueba se salta.
+- Cada ejecución tiene su id y cada trabajador de Vitest sus bases
+  (`restaurante_test_<id>_<trabajador>`), migradas con el CLI real de Prisma la primera vez y
+  vaciadas (`TRUNCATE`) antes de cada uso: dos ejecuciones en paralelo no se pisan. Si una prueba
+  altera el esquema (DROP, ALTER, triggers), la base se vuelve a crear (se compara con la base de
+  referencia `restaurante_test_<id>_ref`). Al terminar se borran.
+- Usa `makeDatabase()`, `setupAdmin()` o `makeScratchDatabase()` de `tests/support/` (y
+  `adminSql()` para el DDL de una prueba); nunca conexiones propias ni `DATABASE_URL`.
+- La suite tarda unos 55 s (antes, con SQLite, unos 16 s).
+
 ## Docker
 
-Opcional. El despliegue actual en la VM **no cambia** (Node + nginx, sin contenedores) y las
-instrucciones sin Docker siguen vigentes. Los archivos están en esta carpeta: `Dockerfile`,
-`.dockerignore` y `compose.yaml`.
+Los archivos están en esta carpeta: `Dockerfile`, `.dockerignore`, `compose.yaml` (MySQL local
+`mysql-dev` y el servicio `test`) y `docker/mysql/initdb/` (bases y usuarios del MySQL local).
 
 El `Dockerfile` es multi-stage y todas las etapas parten de `node:24-alpine` (flotante dentro de
 la versión 24: una reconstrucción puede traer un parche más reciente de Node o Alpine):
@@ -124,6 +151,7 @@ la versión 24: una reconstrucción puede traer un parche más reciente de Node 
 | `deps`       | `npm ci` con solo `package.json` y `package-lock.json` (caché de dependencias) |
 | `build`      | Código + `npm run typecheck` + `npm run build:css` (si hay errores de tipos o Tailwind falla, el build de la imagen falla) |
 | `test`       | `build` + diseño fuente; comando por defecto `npm test`                        |
+| `migrate`    | Dependencias de producción + CLI de Prisma, `prisma/` y `prisma.config.ts`; usuario `node`; ejecuta `prisma migrate deploy` con `MIGRATION_DATABASE_URL` y termina |
 | `production` | Dependencias de producción (sin `typescript` ni `@types/*`), `src/` (`.ts`) y `public/` con el CSS compilado; usuario `node`; arranca con `node src/server.ts` |
 
 El `.dockerignore` deja fuera `node_modules/`, `.env*` (salvo `.env.example`), `data/`, el CSS
@@ -137,7 +165,8 @@ docker compose run --rm test   # código de salida 0 si todo pasa; distinto de 0
 ```
 
 - Construye el target `test` en cada ejecución (`pull_policy: build`; gracias a la caché solo se
-  repiten las capas afectadas) y ejecuta `vitest run` completo, sin red (`network_mode: none`).
+  repiten las capas afectadas), levanta `mysql-dev` y ejecuta `vitest run` completo contra él.
+  El contenedor de pruebas solo está en la red interna `db-test` (sin salida a internet).
 - El código va dentro de la imagen (sin volúmenes): los cambios locales se incluyen al
   reconstruir automáticamente.
 - Las pruebas de contenido comparan la semilla con `../_stich_source_/`, que compose pasa como
@@ -160,15 +189,22 @@ La VM no usa esta imagen: se despliega con Node directo (ver
 
 ```sh
 docker build --target production -t restaurante:prod .
+docker build --target migrate -t restaurante:migrate .
+# Migraciones (usuario con DDL), antes de arrancar la app:
+docker run --rm -e MIGRATION_DATABASE_URL='mysql://migrador:...@mysql:3306/restaurante' restaurante:migrate
 docker volume create restaurante-data
 docker run -d --name restaurante -p 3000:3000 \
   -e WHATSAPP_MOLOTES=5215512345678 -e WHATSAPP_BIRRIA=5215512345678 \
+  -e DATABASE_URL='mysql://app:...@mysql:3306/restaurante' \
   -e DATA_DIR=/var/lib/restaurante -v restaurante-data:/var/lib/restaurante \
   restaurante:prod
 ```
 
+El compose de producción (red interna con MySQL, secretos y usuarios de la base) es
+REQ-F-016.
+
 - La configuración se inyecta **al ejecutar** (`-e` o `--env-file .env`), nunca en el build. Se
-  valida igual que sin Docker: si falta una variable obligatoria (`WHATSAPP_*`, `DATA_DIR`), el
+  valida igual que sin Docker: si falta una variable obligatoria (`WHATSAPP_*`, `DATABASE_URL`, `DATA_DIR`), el
   contenedor termina con código 1 y lista los problemas sin mostrar valores.
 - `NODE_ENV=production` y `PORT=3000` vienen definidos en la imagen; la app corre con el usuario
   `node` (UID 1000) y el código es de solo lectura para él.
@@ -182,10 +218,13 @@ docker run -d --name restaurante -p 3000:3000 \
 - El contenedor arranca con `node src/server.ts`: Node 24 ejecuta el TypeScript directamente,
   sin compilar y sin TypeScript instalado en la imagen.
 - `docker stop` envía `SIGTERM` y la app cierra el servidor y la base de datos ordenadamente.
-- Al arrancar, la app crea o abre `DATA_DIR/restaurante.db` y aplica las migraciones pendientes
-  (log `database_migrated`); si la base de datos no está disponible, el contenedor termina con
-  código 1. La imagen no incluye el CLI de Prisma: lleva el cliente generado, las migraciones
-  (`prisma/migrations`) y los comandos de consola (`scripts/`). Pesa unos 260 MB.
+- Al arrancar, la app **verifica** la base de `DATABASE_URL` (no migra; ver
+  [Base de datos](#base-de-datos)); si no está lista, el contenedor termina con código 1 y el log
+  `database_init_failed`. La imagen no incluye el CLI de Prisma ni SQLite: lleva el cliente
+  generado, las migraciones (`prisma/migrations`, solo para comprobar su estado) y los comandos
+  de consola (`scripts/`). Pesa unos 250 MB.
+- La imagen `migrate` (target `migrate`) solo ejecuta `prisma migrate deploy` con
+  `MIGRATION_DATABASE_URL` (usuario con DDL) y termina: 0 si todo se aplicó, 1 si no.
 - Recuperar el acceso dentro del contenedor:
   `docker exec -it restaurante node scripts/admin-recover.ts --usuario <nombre>`.
 - `/admin` exige HTTPS en producción (ver [Seguridad](#seguridad-1)): un despliegue con Docker
@@ -203,7 +242,7 @@ cada cambio. No necesita secretos ni `.env`: las pruebas usan su propia configur
 - En cada push a `main` (por ejemplo, al hacer merge de un PR).
 - Un push nuevo al mismo PR cancela la ejecución anterior de ese PR; las de `main` nunca se
   cancelan.
-- Cada comprobación tiene un tiempo máximo de 15 minutos.
+- Cada comprobación tiene un tiempo máximo de 20 minutos.
 
 ### Qué comprueba
 
@@ -213,8 +252,8 @@ ejecutan; un fallo en una no afecta a la otra.
 
 | Comprobación | Pasos, en orden |
 | ------------ | --------------- |
-| `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado) y `npm test` |
-| `docker`     | Build del target `production` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64` y sin publicar la imagen |
+| `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado), `npm run db:up` (MySQL 8.4 de `compose.yaml`), `prisma migrate diff` (el esquema y las migraciones no divergen) y `npm test` (contra MySQL) |
+| `docker`     | Build de los targets `production` y `migrate` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite y que `migrate` aplica el esquema sobre una base vacía con código 0 |
 
 La caché de npm se invalida al cambiar `package-lock.json`; la de Docker reutiliza las capas que
 no cambian. El runner usa UTC; la selección de landing depende de `BUSINESS_TIMEZONE`, no de la
@@ -225,8 +264,10 @@ zona del sistema.
 Desde esta carpeta (`restaurante/`):
 
 ```sh
-npm ci --strict-allow-scripts && npm run db:generate && npm run typecheck && npm run lint && npm run build:css && npm test   # calidad
+npm ci --strict-allow-scripts && npm run db:generate && npm run typecheck && npm run lint && npm run build:css && npm run db:up && npm test   # calidad
+SHADOW_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante_shadow npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code   # divergencia
 docker buildx build --platform linux/amd64 --target production .              # docker
+docker buildx build --platform linux/amd64 --target migrate .
 ```
 
 Si un paso falla en GitHub por un problema de red (npm o Docker Hub), vuelve a ejecutarlo desde
@@ -276,7 +317,10 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `WHATSAPP_BIRRIA_URL`      | Esta o el número        | Igual que arriba, para Birria                                      |
 | `WHATSAPP_BIRRIA`          | Esta o la URL           | Igual que arriba, para Birria                                      |
 | `WHATSAPP_BIRRIA_MESSAGE`  | No                      | Igual que arriba, para Birria                                      |
-| `DATA_DIR`                 | Solo en producción (ruta absoluta) | Carpeta de los datos editables (por defecto `data/` del proyecto fuera de producción). No puede estar dentro de `src/` ni de `public/` |
+| `DATABASE_URL`             | Sí                      | Conexión a MySQL de la app: `mysql://usuario:contraseña@host[:puerto]/base`, sin parámetros; usuario solo DML. Los caracteres especiales van codificados (`@` -> `%40`, `:` -> `%3A`, `/` -> `%2F`, `%` -> `%25`). Secreta: nunca aparece en logs ni errores. Ver [Base de datos](#base-de-datos) |
+| `MIGRATION_DATABASE_URL`   | Solo para migrar        | Conexión con DDL para `npm run db:migrate`, `db:migrate:dev` y la imagen `migrate`. La app no la lee |
+| `SHADOW_DATABASE_URL`      | Solo `db:migrate:dev`   | Base sombra de Prisma para crear migraciones (desarrollo y CI) |
+| `DATA_DIR`                 | Solo en producción (ruta absoluta) | Carpeta de los datos editables: JSON de página y `changes.jsonl` (por defecto `data/` del proyecto fuera de producción). No puede estar dentro de `src/` ni de `public/` |
 | `ADMIN_USER`               | No                      | Usuario del **primer administrador** (1-60 caracteres). Solo se usa si la base de datos no tiene usuarios; después se ignora (aviso `admin_bootstrap_ignored` en el log, sin valores). Sin usuarios ni estas variables, `/admin` responde 503 "no disponible"; con solo una de las dos o un hash inválido, la app no arranca |
 | `ADMIN_PASSWORD_HASH`      | No                      | Hash scrypt de la contraseña del primer administrador (`npm run admin:hash-password`). Nunca la contraseña en claro |
 | `TRUST_PROXY`              | No (`false`)            | `true` detrás de nginx con TLS: Koa usa `X-Forwarded-Proto` (HTTPS) y la última IP de `X-Forwarded-For` (límite de intentos) |
@@ -649,7 +693,7 @@ Los datos editables de cada landing están en dos sitios (REQ-F-008):
 
 | Qué | Dónde | Semilla versionada |
 | --- | ----- | ------------------ |
-| **Productos**: platillos y bebidas de Molotes, platillos de Birria (con sus variantes o chips) | Base de datos SQLite (`DATA_DIR/restaurante.db`, tablas `product`, `product_variant`, `product_chip`) | Las listas de `src/content/<negocio>/seed.json` (solo para la importación inicial) |
+| **Productos**: platillos y bebidas de Molotes, platillos de Birria (con sus variantes o chips) | Base de datos MySQL (tablas `product`, `product_variant`, `product_chip`) | Las listas de `src/content/<negocio>/seed.json` (solo para la importación inicial) |
 | **Página**: showcase del hero, texto destacado del menú ("8 Sabores de Barrio") y promoción | JSON por negocio (`DATA_DIR/<negocio>/current.json`) | `src/content/<negocio>/seed.json` |
 
 - **Modelo común de producto** (`src/services/product-schema.ts`): negocio, categoría
@@ -803,8 +847,10 @@ npm run admin:recover -- --usuario <nombre>                                  # s
 docker exec -it restaurante node scripts/admin-recover.ts --usuario <nombre>  # en el contenedor
 ```
 
-Pide la contraseña nueva dos veces sin mostrarla (al menos 12 caracteres) y trabaja sobre el
-`.db` de `DATA_DIR` (aplica antes las migraciones pendientes). Si el usuario no existe, crea un
+Pide la contraseña nueva dos veces sin mostrarla (al menos 12 caracteres) y trabaja sobre la base
+de `DATABASE_URL`. No migra: antes verifica la base (hasta 10 s de espera) y, si no está lista
+(sin migrar, inalcanzable, credenciales inválidas), termina con código 1 y un mensaje con el
+código, sin detalles técnicos. Si el usuario no existe, crea un
 administrador; si existe, lo reactiva, lo deja como administrador y le cambia la contraseña.
 Funciona con el servidor parado o en marcha: en ese caso sus sesiones abiertas se cierran. Queda
 en la auditoría como `console_recovery`. Si la base de datos no tenía usuarios, `/admin` se
@@ -851,8 +897,7 @@ DATA_DIR/
 │   ├── damaged-<fecha>.json    # archivo dañado aislado para revisarlo
 │   └── damaged.marker.json     # existe mientras los datos estén dañados y nadie elija una opción
 ├── birria/ (igual)
-├── changes.jsonl               # registro de cambios de los datos de página: una línea JSON por guardado o restauración
-└── restaurante.db              # base de datos SQLite (usuarios y productos); con -wal y -shm mientras está abierta
+└── changes.jsonl               # registro de cambios de los datos de página: una línea JSON por guardado o restauración
 ```
 
 - **Productos en los JSON:** desde REQ-F-008 los JSON conservan su formato, pero sus listas de
@@ -883,36 +928,54 @@ DATA_DIR/
 
 ### Base de datos
 
-- **Archivo:** `DATA_DIR/restaurante.db` (SQLite en modo WAL, con `restaurante.db-wal` y
-  `restaurante.db-shm` junto a él). Nunca va en el repositorio ni en las imágenes.
-- **Esquema y migraciones:** `prisma/schema.prisma` y `prisma/migrations/`. Al arrancar, la app
-  comprueba que el archivo se pueda escribir y no esté dañado y aplica las migraciones pendientes
-  (`src/db/migrate.ts`), cada una en una transacción: si una falla, se revierte entera. Las
-  registra en `_prisma_migrations` con el mismo formato que `prisma migrate deploy`, así que el
-  CLI de Prisma reconoce la base (una prueba lo verifica). En producción no hace falta el CLI.
-- **Fallo al arrancar:** archivo dañado, sin permisos de escritura, una migración que falla o una
-  base más nueva que el código (por ejemplo, al volver a una versión anterior): el servidor no
-  arranca, termina con código 1 y el log registra `database_init_failed` con un código, sin SQL
-  ni rutas.
+- **Motor:** MySQL 8.4 LTS (REQ-F-014) con Prisma 7 y el adaptador oficial
+  `@prisma/adapter-mariadb` (driver `mariadb`). Guarda los usuarios de `/admin`, sus negocios, su
+  auditoría y los productos. Los JSON de página y `changes.jsonl` siguen en `DATA_DIR`.
+- **Español completo:** utf8mb4 con la colación `utf8mb4_es_0900_as_cs` (español moderno: la ñ va
+  después de la n; distingue acentos y mayúsculas) en la base, las tablas y las columnas, y en la
+  conexión. Cualquier texto con ñ, acentos, ¿¡«», € o emojis se guarda y se devuelve idéntico. La
+  única excepción es `_prisma_migrations`, la tabla interna de Prisma (la crea siempre con
+  `utf8mb4_unicode_ci`; solo guarda nombres de migración, checksums y logs): solo se le exige
+  utf8mb4. El usuario de acceso es único sin distinguir mayúsculas porque la app lo normaliza
+  (NFC y minúsculas) antes de guardarlo: "jose" y "josé" son usuarios distintos.
+- **Longitudes:** cada texto tiene en el esquema la longitud máxima que permite la validación de
+  la app (`@db.VarChar(n)`, que cuenta caracteres igual que la app) o `@db.MediumText` (JSON de
+  cambios). Con el modo estricto de MySQL, un texto más largo da error; nunca se recorta.
+- **Menor privilegio:** la app usa `DATABASE_URL` con un usuario solo DML (`SELECT`, `INSERT`,
+  `UPDATE`, `DELETE`) y **nunca migra**. Las migraciones las aplica un proceso aparte con un
+  usuario con DDL (`MIGRATION_DATABASE_URL`): `npm run db:migrate` en local o la imagen `migrate`
+  (`prisma migrate deploy`).
+- **Verificación al arrancar** (`src/db/verify.ts`): conexión (reintenta hasta 60 s si MySQL aún
+  arranca), credenciales, modo estricto (`STRICT_TRANS_TABLES`), utf8mb4 y colación de la base,
+  las tablas y las columnas, y estado de las migraciones. Si algo falla, el servidor termina con
+  código 1 y el log `database_init_failed` con un código estable, sin SQL, URL, credenciales ni
+  stack: `DATABASE_UNREACHABLE`, `DATABASE_AUTH_FAILED`, `DATABASE_ACCESS_DENIED`,
+  `DATABASE_NOT_STRICT`, `DATABASE_CHARSET_INVALID` (con la tabla o columna), `MIGRATIONS_PENDING`,
+  `MIGRATION_INCOMPLETE`, `MIGRATION_MODIFIED`, `DATABASE_NEWER_THAN_CODE`,
+  `MIGRATIONS_UNREADABLE` o `DATABASE_ERROR`. Mientras espera registra `database_waiting`.
 - **Migraciones nuevas (desarrollo):** cambia `prisma/schema.prisma`, ejecuta
-  `npm run db:migrate:dev -- --name <nombre>` (con un `DATA_DIR` de desarrollo) y
-  `npm run db:generate`. Versiona la carpeta nueva de `prisma/migrations/`; nunca edites una
-  migración ya aplicada (la app no arrancaría: `MIGRATION_MODIFIED`).
+  `npm run db:migrate:dev -- --name <nombre>` (contra el MySQL local) y **revisa a mano** el
+  `migration.sql`: Prisma escribe `COLLATE utf8mb4_unicode_ci` en cada `CREATE TABLE` y hay que
+  cambiarlo por `utf8mb4_es_0900_as_cs` (`tests/unit/migrations-collation.test.ts` falla hasta
+  hacerlo). Después `npm run db:migrate` y `npm run db:generate`. Versiona la carpeta nueva de
+  `prisma/migrations/`; nunca edites una migración ya aplicada (`MIGRATION_MODIFIED`). En MySQL el
+  DDL no es transaccional: una migración que falla a mitad queda incompleta
+  (`MIGRATION_INCOMPLETE`) y la salida es restaurar el respaldo. Prefiere migraciones pequeñas.
+- **Último administrador con concurrencia:** las escrituras de usuarios son transacciones
+  `Serializable`; ante un interbloqueo se reintentan (hasta 3 intentos) y la operación rechazada
+  recibe el aviso de siempre (409) o, si no se resuelve, 503 sin cambios.
+- **Fallo con el servidor en marcha:** `/admin` responde 503 (HTML), la API 503 JSON
+  `DATABASE_UNAVAILABLE`, las landings siguen en 200 desde la caché y el log registra
+  `database_unavailable` solo con códigos. Al volver MySQL, todo se recupera sin reiniciar.
 - **Productos:** tablas `product`, `product_variant`, `product_chip`, `product_import` (la
   importación única) y `product_change`: el registro de cambios de productos, escrito en la misma
   transacción que el cambio (fecha, usuario y su nombre visible, negocio, slug, acción —`create`,
   `update`, `delete`, `restore`, `reorder`, `overwrite_after_conflict`, `import`— y campos con su
   valor anterior y el nuevo). No tiene pantalla: se consulta en la base de datos. Si se edita la
   base a mano con el servidor en marcha, reinícialo para que las landings lo vean.
-- **Respaldos (recomendado antes de cada actualización):** son responsabilidad de quien opera la VM. Copia `restaurante.db` con el
-  servidor parado (junto con `-wal` y `-shm` si existen) o, en marcha, con
-  `sqlite3 DATA_DIR/restaurante.db ".backup /ruta/respaldo.db"`. Copiar el archivo en marcha
-  puede dar un respaldo incompleto. Si se pierde el `.db` sin respaldo, se pierden los usuarios,
-  su auditoría y **los productos** (en un `.db` nuevo se vuelven a importar desde los JSON, con los
-  datos congelados de la primera importación); el acceso se recupera con `npm run admin:recover`.
-- **Volver a una versión anterior de la app:** el código anterior no arranca con una base ya
-  migrada (`DATABASE_NEWER_THAN_CODE`). Hay que restaurar el respaldo del `.db` hecho antes de
-  actualizar; los JSON siguen sirviendo tal como estén.
+- **Respaldos y despliegue en el VPS:** fuera de este ticket (REQ-F-016, REQ-F-019 y REQ-F-021).
+  Una base migrada no arranca con un código anterior (`DATABASE_NEWER_THAN_CODE`): respalda la
+  base antes de cada actualización.
 
 ### Recuperación de datos dañados
 
@@ -938,7 +1001,7 @@ restaurante/
 │   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests), whatsapp-webhook.ts (webhook del bot),
 │   │                         # admin.ts (acceso, inicio y menús), admin-products.ts (productos en HTML), admin-products-api.ts y
 │   │                         # admin-api-access.ts (API JSON), admin-business-view.ts, admin-users.ts, admin-account.ts, admin-access.ts
-│   ├── db/                   # client.ts (Prisma + better-sqlite3), migrate.ts (migraciones al arrancar), errors.ts, paths.ts
+│   ├── db/                   # client.ts (Prisma + adaptador MariaDB/MySQL), verify.ts (verificación al arrancar), errors.ts
 │   ├── generated/prisma/     # Cliente de Prisma generado por `npm run db:generate` (ignorado por git)
 │   ├── routes/               # Router (@koa/router): index.ts (landings), admin.ts (/admin), admin-api.ts (/admin/api)
 │   ├── middleware/           # Manejo centralizado de errores, log de requests, protección de /admin
@@ -974,8 +1037,8 @@ restaurante/
 │       └── birria/           # icons/: ídem
 ├── prisma/
 │   ├── schema.prisma         # Esquema de la base de datos (usuarios, negocios asignados, auditoría y productos)
-│   └── migrations/           # Migraciones SQL versionadas (las aplica la app al arrancar)
-├── prisma.config.ts          # Configuración del CLI de Prisma (solo desarrollo, CI y build)
+│   └── migrations/           # Migraciones SQL de MySQL versionadas (las aplica el proceso migrate, nunca la app)
+├── prisma.config.ts          # Configuración del CLI de Prisma (solo desarrollo, CI y las etapas build/test/migrate)
 ├── scripts/
 │   ├── hash-password.ts      # `npm run admin:hash-password`
 │   ├── admin-recover.ts      # `npm run admin:recover`
@@ -985,9 +1048,10 @@ restaurante/
 ├── data/                     # DATA_DIR por defecto fuera de producción (ignorado por git)
 ├── tests/
 │   ├── helpers.ts            # Config válida, semillas y repositorio en memoria para pruebas
-│   ├── support/admin.ts      # App con administración (base de datos temporal), usuarios, inicio de sesión y formularios
+│   ├── setup/                # no-meta.ts (ninguna llamada a Meta ni Twilio), database-global.ts y database-guard.ts (MySQL de pruebas y salvaguarda)
+│   ├── support/admin.ts      # App con administración (base de datos de prueba), usuarios, inicio de sesión y formularios
 │   ├── support/products.ts   # Entradas válidas de producto y repositorios de productos para pruebas
-│   ├── support/database.ts   # Bases de datos SQLite temporales (nunca data/)
+│   ├── support/database.ts   # Bases MySQL de prueba por trabajador (restaurante_test_*; nunca una base real) y database-admin.ts, test-database-config.ts (salvaguarda), tcp-proxy.ts
 │   ├── support/process.ts    # Procesos reales: arranque del servidor y comandos de consola
 │   ├── support/png.ts        # Lectura mínima de PNG/ICO (dimensiones, opacidad, color de fondo)
 │   ├── support/cloud-api-double.ts # Doble de la WhatsApp Cloud API (ninguna prueba llama a Meta)
@@ -1003,9 +1067,10 @@ restaurante/
 ├── tsconfig.json             # TypeScript estricto solo para verificar tipos (`npm run typecheck`; sin emitir archivos)
 ├── vitest.config.ts          # Configuración de Vitest
 ├── eslint.config.ts          # Configuración de ESLint (`npm run lint`)
-├── Dockerfile                # Imagen multi-stage (base, deps, build, test, production); ver [Docker](#docker)
+├── Dockerfile                # Imagen multi-stage (base, deps, build, test, migrate, production); ver [Docker](#docker)
 ├── .dockerignore             # Excluye secretos, datos, dependencias y artefactos locales del build
-└── compose.yaml              # Servicio `test`: `docker compose run --rm test`
+├── docker/mysql/initdb/      # Bases y usuarios del MySQL local (solo desarrollo y pruebas)
+└── compose.yaml              # MySQL local `mysql-dev` (`npm run db:up`) y servicio `test` (`docker compose run --rm test`)
 ```
 
 ### Plantillas

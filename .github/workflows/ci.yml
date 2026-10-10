@@ -1,5 +1,8 @@
-# CI (REQ-F-006): tipos, lint, pruebas y build de la imagen production en cada PR hacia
-# main y en cada push a main. Sin secretos y con permisos de solo lectura.
+# CI (REQ-F-006 y REQ-F-014): tipos, lint, pruebas contra MySQL 8.4, divergencia entre esquema y
+# migraciones, y build de las imágenes production y migrate en cada PR hacia main y en cada push a
+# main. Sin secretos y con permisos de solo lectura. MySQL es el servicio mysql-dev de
+# restaurante/compose.yaml (solo en 127.0.0.1, credenciales de desarrollo): el mismo que en local,
+# porque un `services:` de GitHub no permite fijar la colación del servidor.
 # Las acciones están fijadas por SHA completo (la versión va en el comentario); para
 # actualizarlas, ver la sección "CI" de restaurante/README.md.
 name: CI
@@ -25,7 +28,7 @@ jobs:
   calidad:
     name: calidad
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: restaurante
@@ -57,13 +60,22 @@ jobs:
       # Las pruebas leen el CSS generado (public/css/<negocio>/main.css), que no se versiona.
       - name: build:css
         run: npm run build:css
+      # MySQL 8.4 local (utf8mb4 + utf8mb4_es_0900_as_cs) para la divergencia y las pruebas.
+      - name: db:up
+        run: npm run db:up
+      # El esquema y las migraciones no divergen (base sombra del MySQL local).
+      - name: migraciones sin divergencia
+        env:
+          SHADOW_DATABASE_URL: mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante_shadow
+        run: npx --no-install prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
+      # Usa las URL de prueba por defecto (TEST_DATABASE_URL/TEST_ADMIN_DATABASE_URL hacia 127.0.0.1:3307).
       - name: test
         run: npm test
 
   docker:
     name: docker
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,7 +83,7 @@ jobs:
           persist-credentials: false
       - name: setup-buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      # Solo construye (sin push ni load): la etapa build ejecuta npm run typecheck.
+      # Sin push (se carga en el runner para las comprobaciones): la etapa build ejecuta npm run typecheck.
       - name: build production
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -82,3 +94,32 @@ jobs:
           provenance: false
           cache-from: type=gha,scope=production
           cache-to: type=gha,scope=production,mode=max
+          load: true
+          tags: restaurante:production
+      # Imagen del proceso de migraciones (REQ-F-014, RF-15).
+      - name: build migrate
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: restaurante
+          target: migrate
+          platforms: linux/amd64
+          push: false
+          provenance: false
+          cache-from: type=gha,scope=migrate
+          cache-to: type=gha,scope=migrate,mode=max
+          load: true
+          tags: restaurante:migrate
+      # CA-13: production sin el CLI de Prisma ni SQLite; migrate sin SQLite.
+      - name: contenido de las imágenes
+        run: |
+          docker run --rm --entrypoint sh restaurante:production -c 'test ! -e node_modules/prisma && test ! -e node_modules/better-sqlite3 && test ! -e node_modules/@prisma/adapter-better-sqlite3 && test -e node_modules/@prisma/adapter-mariadb'
+          docker run --rm --entrypoint sh restaurante:migrate -c 'test -e node_modules/prisma && test ! -e node_modules/better-sqlite3'
+      # CA-13: la imagen migrate aplica el esquema sobre una base vacía con código 0.
+      - name: migrate sobre una base vacía
+        working-directory: restaurante
+        run: |
+          docker compose up -d --wait mysql-dev
+          docker compose exec -T mysql-dev sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE restaurante_test_ci CHARACTER SET utf8mb4 COLLATE utf8mb4_es_0900_as_cs"'
+          docker run --rm --network restaurante_db-test \
+            -e MIGRATION_DATABASE_URL=mysql://restaurante_test_admin:test-dev@mysql-dev:3306/restaurante_test_ci \
+            restaurante:migrate

@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { login, setupAdmin } from '../support/admin.ts';
+import { adminSql } from '../support/database.ts';
 import { IMAGE } from '../support/products.ts';
 
 /**
- * Atomicidad de las escrituras de productos por HTTP con SQLite real (REQ-F-008, RF-2.3, RF-7.5 y
+ * Atomicidad de las escrituras de productos por HTTP con MySQL real (REQ-F-008, RF-2.3, RF-7.5 y
  * DT-5). Ampliación de QA aprobada por el usuario (P-3).
  *
- * Los fallos a mitad de la transacción se provocan con triggers de SQLite que abortan la inserción
+ * Los fallos a mitad de la transacción se provocan con triggers de MySQL que abortan la inserción
  * de una variante o de la entrada del registro: el producto, sus variantes, sus chips y la entrada
  * de `product_change` se guardan juntos o no se guardan.
  */
@@ -39,7 +40,8 @@ async function setup() {
     chips: await context.prisma.productChip.findMany({ orderBy: { id: 'asc' } }),
     changes: await context.prisma.productChange.findMany({ orderBy: { id: 'asc' } }),
   });
-  const sql = (statement: string) => context.prisma.$executeRawUnsafe(statement);
+  // DDL de prueba (triggers) con el usuario admin: el de la app no tiene privilegios DDL (CA-6).
+  const sql = (statement: string) => adminSql(context.database.name, statement);
   return { ...context, browser, csrf, snapshot, sql };
 }
 
@@ -50,7 +52,7 @@ const variantsUpdate = (version: number, variants: unknown[]) => {
   return { ...editable, variants, available: true, version };
 };
 
-describe('atomicidad de las escrituras de productos con SQLite real (P-3)', () => {
+describe('atomicidad de las escrituras de productos con MySQL real (P-3)', () => {
   it('un PUT con 6 variantes donde la sexta no es válida responde 422 y no cambia nada', async () => {
     const { browser, csrf, snapshot, request } = await setup();
     const created = await browser.post(BIRRIA).set('X-CSRF-Token', csrf).send(VARIANTS_PRODUCT);
@@ -74,7 +76,7 @@ describe('atomicidad de las escrituras de productos con SQLite real (P-3)', () =
     const before = await snapshot();
     const landing = (await request().get('/birria')).text;
 
-    await sql(`CREATE TRIGGER qa_fail_change BEFORE INSERT ON product_change BEGIN SELECT RAISE(ABORT, 'qa-trigger-change'); END`);
+    await sql(`CREATE TRIGGER qa_fail_change BEFORE INSERT ON product_change FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'qa-trigger-change'`);
     const variants = [variant('V1'), variant('V2'), variant('V3')];
     const res = await browser.put(`${BIRRIA}/${id}`).set('X-CSRF-Token', csrf).send(variantsUpdate(1, variants));
     expect(res.status).toBe(503);
@@ -94,7 +96,7 @@ describe('atomicidad de las escrituras de productos con SQLite real (P-3)', () =
     const { browser, csrf, snapshot, sql } = await setup();
     const before = await snapshot();
 
-    await sql(`CREATE TRIGGER qa_fail_variant BEFORE INSERT ON product_variant WHEN NEW.label = 'Falla' BEGIN SELECT RAISE(ABORT, 'qa-trigger-variant'); END`);
+    await sql(`CREATE TRIGGER qa_fail_variant BEFORE INSERT ON product_variant FOR EACH ROW BEGIN IF NEW.label = 'Falla' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'qa-trigger-variant'; END IF; END`);
     const input = { ...VARIANTS_PRODUCT, variants: [variant('Bien'), variant('Falla'), variant('Otra')] };
     const res = await browser.post(BIRRIA).set('X-CSRF-Token', csrf).send(input);
     expect(res.status).toBe(503);
@@ -115,7 +117,7 @@ describe('atomicidad de las escrituras de productos con SQLite real (P-3)', () =
     const before = await snapshot();
     const landing = (await request().get('/molotes')).text;
 
-    await sql(`CREATE TRIGGER qa_fail_reorder BEFORE INSERT ON product_change WHEN NEW.action = 'reorder' BEGIN SELECT RAISE(ABORT, 'qa-trigger-reorder'); END`);
+    await sql(`CREATE TRIGGER qa_fail_reorder BEFORE INSERT ON product_change FOR EACH ROW BEGIN IF NEW.action = 'reorder' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'qa-trigger-reorder'; END IF; END`);
     const res = await browser.put(`${MOLOTES}/orden`).set('X-CSRF-Token', csrf).send({ category: 'platillo', items: [...items].reverse() });
     expect(res.status).toBe(503);
     expect(await snapshot()).toEqual(before);
@@ -127,7 +129,7 @@ describe('atomicidad de las escrituras de productos con SQLite real (P-3)', () =
     const [drink] = (await browser.get(`${MOLOTES}?categoria=bebida`)).body.products as { id: number; version: number }[];
     const before = await snapshot();
 
-    await sql(`CREATE TRIGGER qa_fail_delete BEFORE INSERT ON product_change WHEN NEW.action = 'delete' BEGIN SELECT RAISE(ABORT, 'qa-trigger-delete'); END`);
+    await sql(`CREATE TRIGGER qa_fail_delete BEFORE INSERT ON product_change FOR EACH ROW BEGIN IF NEW.action = 'delete' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'qa-trigger-delete'; END IF; END`);
     expect((await browser.delete(`${MOLOTES}/${drink!.id}?version=${drink!.version}`).set('X-CSRF-Token', csrf)).status).toBe(503);
     expect(await snapshot()).toEqual(before);
     await sql('DROP TRIGGER qa_fail_delete');
@@ -135,7 +137,7 @@ describe('atomicidad de las escrituras de productos con SQLite real (P-3)', () =
     const removed = await browser.delete(`${MOLOTES}/${drink!.id}?version=${drink!.version}`).set('X-CSRF-Token', csrf);
     expect(removed.status).toBe(200);
     const afterDelete = await snapshot();
-    await sql(`CREATE TRIGGER qa_fail_restore BEFORE INSERT ON product_change WHEN NEW.action = 'restore' BEGIN SELECT RAISE(ABORT, 'qa-trigger-restore'); END`);
+    await sql(`CREATE TRIGGER qa_fail_restore BEFORE INSERT ON product_change FOR EACH ROW BEGIN IF NEW.action = 'restore' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'qa-trigger-restore'; END IF; END`);
     expect((await browser.post(`${MOLOTES}/${drink!.id}/recuperar`).set('X-CSRF-Token', csrf).send({ version: removed.body.product.version })).status).toBe(503);
     expect(await snapshot()).toEqual(afterDelete);
   });

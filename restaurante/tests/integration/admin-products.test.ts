@@ -426,7 +426,7 @@ describe('permisos y sesión (CA-15, casos límite)', () => {
       listBusiness: async (business) => {
         if (failing) {
           const { DatabaseUnavailableError } = await import('../../src/db/errors.ts');
-          throw new DatabaseUnavailableError({ name: 'PrismaClientKnownRequestError', code: 'P2039', originalCode: 'SQLITE_IOERR' });
+          throw new DatabaseUnavailableError({ name: 'PrismaClientKnownRequestError', code: 'P2039', originalCode: '1205' });
         }
         return store.listBusiness(business);
       },
@@ -438,7 +438,7 @@ describe('permisos y sesión (CA-15, casos límite)', () => {
       expect(res.status, path).toBe(503);
       expect(textOf(res.text)).toContain('Administración no disponible');
     }
-    expect(logger.lines).toContainEqual(expect.objectContaining({ msg: 'database_unavailable', originalCode: 'SQLITE_IOERR' }));
+    expect(logger.lines).toContainEqual(expect.objectContaining({ msg: 'database_unavailable', originalCode: '1205' }));
     expect((await client().get('/molotes')).status).toBe(200);
   });
 });

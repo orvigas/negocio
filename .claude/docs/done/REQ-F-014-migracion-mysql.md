@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 ## Aprobación
 
@@ -1354,3 +1354,14 @@ Estado: `QA_APPROVED`.
 2026-10-09. Se corrigió DEF-001 (MINOR, solo documentación), sin cambios de comportamiento: el comentario de `src/db/client.ts`, la desviación y los pendientes del "Implementation Result" dicen ahora que las esperas de bloqueo las corta `innodb_lock_wait_timeout` del servidor (50 s por defecto), con 503 sin cambios, y que ese valor se bajará en REQ-F-016. Se volvieron a ejecutar typecheck, lint y `npm test` contra MySQL: todo en verde (76 archivos, 1456 pruebas pasan y 1 fallo esperado; 58,9 s).
 
 Pull Request: https://github.com/orvigas/negocio/pull/38 (commit ce4adc8). CI del PR en verde: `calidad` pass (7 min 44 s, con MySQL, divergencia y `npm test`) y `docker` pass (4 min 8 s: imágenes production y migrate, su contenido y `migrate` sobre una base vacía). Estado: `READY_FOR_MERGE`.
+
+### Cierre (T5)
+
+2026-10-10. El usuario confirmó el merge del PR #38 (https://github.com/orvigas/negocio/pull/38) con esta cita textual: "Ya hice el merge y quiero que actualices el .env por mi".
+
+- Commit de merge en `main`: 61088de (2026-10-10T03:25:41Z).
+- CI de `main` sobre el merge en verde: https://github.com/orvigas/negocio/actions/runs/38020516076.
+- La sesión principal añadió al `.env` local del usuario las tres URL de `.env.example` y dejó `mysql-dev` en marcha.
+- Se borró la rama `feature/REQ-F-014-migracion-mysql`.
+
+Estado: `DONE`.

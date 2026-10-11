@@ -123,3 +123,34 @@ jobs:
           docker run --rm --network restaurante_db-test \
             -e MIGRATION_DATABASE_URL=mysql://restaurante_test_admin:test-dev@mysql-dev:3306/restaurante_test_ci \
             restaurante:migrate
+      # CA-9 (REQ-F-015): la imagen production, sin HOST al ejecutar, escucha en 0.0.0.0 dentro del
+      # contenedor (HOST de la imagen), el HEALTHCHECK queda healthy y la landing responde por el
+      # puerto publicado. La red db-test es interna (no publica puertos): el contenedor se crea en la
+      # red por defecto y se conecta además a db-test antes de arrancar. Usa la base migrada del paso
+      # anterior con el usuario solo DML de pruebas; números de WhatsApp ficticios.
+      - name: imagen production escucha en 0.0.0.0 y queda healthy
+        working-directory: restaurante
+        run: |
+          docker create --name app-ca9 -p 127.0.0.1:3000:3000 \
+            -e DATABASE_URL=mysql://restaurante_test_app:test-dev@mysql-dev:3306/restaurante_test_ci \
+            -e DATA_DIR=/var/lib/restaurante \
+            -e WHATSAPP_MOLOTES=5210000000001 \
+            -e WHATSAPP_BIRRIA=5210000000002 \
+            restaurante:production
+          docker network connect restaurante_db-test app-ca9
+          docker start app-ca9
+          health=starting
+          for _ in $(seq 1 60); do
+            health=$(docker inspect -f '{{.State.Health.Status}}' app-ca9)
+            [ "$health" = healthy ] && break
+            [ "$(docker inspect -f '{{.State.Running}}' app-ca9)" = true ] || break
+            sleep 2
+          done
+          if [ "$health" != healthy ]; then
+            echo "El contenedor no quedó healthy (estado: $health)"
+            docker logs app-ca9
+            exit 1
+          fi
+          docker logs app-ca9 | grep '"msg":"server_started"' | grep -q '"host":"0.0.0.0"' || { docker logs app-ca9; exit 1; }
+          curl -fsS -o /dev/null http://127.0.0.1:3000/molotes
+          docker rm -f app-ca9

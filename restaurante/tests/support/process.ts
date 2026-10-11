@@ -53,18 +53,29 @@ export function freePort(): Promise<number> {
   });
 }
 
+/** Quita las variables con valor undefined (una prueba puede así eliminar una de VALID_ENV). */
+const definedOnly = (env: Record<string, string | undefined>): Record<string, string> =>
+  Object.fromEntries(Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined));
+
+export interface StartOptions {
+  /** Argumentos de `node` (por defecto `src/server.ts`; p. ej. los de un script de package.json). */
+  args?: string[];
+}
+
 /**
- * Arranca `node src/server.ts` y espera a `server_started` (o a que termine). Sin DATABASE_URL en
- * `env`, usa una base de pruebas migrada y vacía del trabajador (REQ-F-014), que se libera cuando
- * el proceso termina.
+ * Arranca `node src/server.ts` (u otros `args`) y espera a `server_started` (o a que termine). Sin
+ * DATABASE_URL en `env`, usa una base de pruebas migrada y vacía del trabajador (REQ-F-014), que se
+ * libera cuando el proceso termina. Un valor undefined en `env` quita esa variable (REQ-F-015).
+ * El proceso va en su propio grupo y `stop()` detiene el grupo entero (p. ej. `node --watch` y su hijo).
  */
-export async function startServer(env: Record<string, string>, timeoutMs = 30_000) {
+export async function startServer(env: Record<string, string | undefined>, timeoutMs = 30_000, { args = ['src/server.ts'] }: StartOptions = {}) {
   const port = await freePort();
-  const database = env.DATABASE_URL === undefined ? await makeDatabase() : null;
-  const child = spawn(process.execPath, ['src/server.ts'], {
+  const database = env.DATABASE_URL === undefined && !('DATABASE_URL' in env) ? await makeDatabase() : null;
+  const child = spawn(process.execPath, args, {
     cwd: PROJECT_DIR,
-    env: baseEnv({ ...VALID_ENV, PORT: String(port), ...(database ? { DATABASE_URL: appDatabaseUrl(database.name) } : {}), ...env }),
+    env: baseEnv(definedOnly({ ...VALID_ENV, PORT: String(port), ...(database ? { DATABASE_URL: appDatabaseUrl(database.name) } : {}), ...env })),
     stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true,
   });
   let stdout = '';
   let stderr = '';
@@ -88,11 +99,18 @@ export async function startServer(env: Record<string, string>, timeoutMs = 30_00
   });
   return {
     started,
+    port,
     url: `http://127.0.0.1:${port}`,
     output: () => ({ stdout, stderr }),
     exited,
     async stop() {
-      if (child.exitCode === null) child.kill('SIGTERM');
+      if (child.exitCode === null && child.pid !== undefined) {
+        try {
+          process.kill(-child.pid, 'SIGTERM');
+        } catch {
+          // El grupo ya terminó.
+        }
+      }
       return exited;
     },
   };

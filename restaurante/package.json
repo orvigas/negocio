@@ -10,7 +10,7 @@
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env src/server.ts",
-    "dev": "node --watch --env-file-if-exists=.env src/server.ts",
+    "dev": "node --watch --env-file-if-exists=.env scripts/dev-server.ts",
     "build:css": "npm run build:css:molotes && npm run build:css:birria && npm run build:css:admin",
     "build:css:molotes": "tailwindcss -i src/styles/molotes/main.css -o public/css/molotes/main.css --minify",
     "build:css:birria": "tailwindcss -i src/styles/birria/main.css -o public/css/birria/main.css --minify",

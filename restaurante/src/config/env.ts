@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -93,6 +94,8 @@ export interface DatabaseConfig {
 export interface Config {
   readonly nodeEnv: NodeEnv;
   readonly isProduction: boolean;
+  /** Dirección IP literal en la que escucha el servidor (REQ-F-015; 127.0.0.1 por defecto). */
+  readonly host: string;
   readonly port: number;
   readonly timezone: string;
   readonly siteUrl: string | undefined;
@@ -115,8 +118,9 @@ const isCompleteWhatsApp = (
 export const PROJECT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** Carpeta de datos por defecto fuera de producción (está en .gitignore). */
 export const DEFAULT_DATA_DIR = join(PROJECT_DIR, 'data');
+// NODE_ENV no tiene valor por defecto (REQ-F-015, RF-3): sin él la app no arranca.
 export const DEFAULTS = Object.freeze({
-  NODE_ENV: 'development',
+  HOST: '127.0.0.1',
   PORT: 3000,
   BUSINESS_TIMEZONE: 'America/Mexico_City',
 });
@@ -147,6 +151,19 @@ function readVar(env: Env, name: string): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed === '' ? undefined : trimmed;
+}
+
+/**
+ * Dirección de escucha (REQ-F-015, RF-6 y RF-7): solo una IP literal IPv4 o IPv6 (isIP; incluye
+ * IPv6 con zona). Escuchar en todas las interfaces exige pedirlo (0.0.0.0 o ::).
+ */
+function parseHost(raw: string | undefined, issues: string[]): string | undefined {
+  if (raw === undefined) return DEFAULTS.HOST;
+  if (isIP(raw) === 0) {
+    issues.push('HOST debe ser una IP literal IPv4 o IPv6 (p. ej. 127.0.0.1, 0.0.0.0, ::1 o ::), no un nombre de máquina');
+    return undefined;
+  }
+  return raw;
 }
 
 function parsePort(raw: string | undefined, issues: string[]): number | undefined {
@@ -195,7 +212,7 @@ const isInside = (child: string, parent: string): boolean => {
  * Carpeta de los datos editables (REQ-F-001, DT-4). Obligatoria y absoluta en producción;
  * nunca dentro de src/ ni de public/ (no debe servirse ni mezclarse con el código).
  */
-function parseDataDir(raw: string | undefined, nodeEnv: string, issues: string[]): string | undefined {
+function parseDataDir(raw: string | undefined, nodeEnv: string | undefined, issues: string[]): string | undefined {
   if (raw === undefined) {
     if (nodeEnv === 'production') {
       issues.push('DATA_DIR es obligatoria en producción (ruta absoluta de la carpeta de datos editables)');
@@ -313,7 +330,7 @@ function isValidWebhookUrl(raw: string): boolean {
  * Proveedor del bot (D-4, D-5, D-12): sin distinguir mayúsculas; si está definido se valida
  * siempre, y con NODE_ENV=production nunca puede ser twilio, esté o no habilitado el bot.
  */
-function parseBotProvider(env: Env, nodeEnv: string, issues: string[]): BotProvider | undefined {
+function parseBotProvider(env: Env, nodeEnv: string | undefined, issues: string[]): BotProvider | undefined {
   const raw = readVar(env, BOT_VARS.provider);
   if (raw === undefined) return undefined;
   const provider = raw.toLowerCase();
@@ -333,7 +350,7 @@ function parseBotProvider(env: Env, nodeEnv: string, issues: string[]): BotProvi
  * el proveedor y sus obligatorias deben estar y ser válidas. Las variables que solo usa el otro
  * proveedor se ignoran (D-15). Los mensajes nunca incluyen los valores.
  */
-function parseChatBot(env: Env, nodeEnv: string, sender: string | undefined, issues: string[]): ChatBotConfig | undefined {
+function parseChatBot(env: Env, nodeEnv: string | undefined, sender: string | undefined, issues: string[]): ChatBotConfig | undefined {
   const before = issues.length;
   if (readVar(env, LEGACY_PHONE_NUMBER_ID) !== undefined) {
     issues.push(`${LEGACY_PHONE_NUMBER_ID} ya no se usa: renómbrala a ${BOT_VARS.accountId}`);
@@ -493,11 +510,15 @@ export function loadDatabaseConfig(env: Env = process.env): DatabaseConfig {
 export function loadConfig(env: Env = process.env): Config {
   const issues: string[] = [];
 
-  const nodeEnv = readVar(env, 'NODE_ENV') ?? DEFAULTS.NODE_ENV;
-  if (!isNodeEnv(nodeEnv)) {
+  // Sin valor por defecto (REQ-F-015, RF-1): ausente, vacío o solo espacios impide arrancar.
+  const nodeEnv = readVar(env, 'NODE_ENV');
+  if (nodeEnv === undefined) {
+    issues.push(`NODE_ENV es obligatorio: debe ser uno de ${NODE_ENVS.join(', ')}`);
+  } else if (!isNodeEnv(nodeEnv)) {
     issues.push(`NODE_ENV debe ser uno de: ${NODE_ENVS.join(', ')}`);
   }
 
+  const host = parseHost(readVar(env, 'HOST'), issues);
   const port = parsePort(readVar(env, 'PORT'), issues);
 
   const timezone = readVar(env, 'BUSINESS_TIMEZONE') ?? DEFAULTS.BUSINESS_TIMEZONE;
@@ -528,7 +549,9 @@ export function loadConfig(env: Env = process.env): Config {
   // Cada valor undefined ya dejó su problema en `issues`; las comprobaciones extra solo estrechan tipos.
   if (
     issues.length > 0 ||
+    nodeEnv === undefined ||
     !isNodeEnv(nodeEnv) ||
+    host === undefined ||
     port === undefined ||
     dataDir === undefined ||
     database === undefined ||
@@ -543,6 +566,7 @@ export function loadConfig(env: Env = process.env): Config {
   return Object.freeze({
     nodeEnv,
     isProduction: nodeEnv === 'production',
+    host,
     port,
     timezone,
     siteUrl,

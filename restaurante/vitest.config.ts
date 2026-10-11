@@ -2,6 +2,8 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    // REQ-F-015 (RF-5): la suite corre siempre con NODE_ENV=test, aunque se haya exportado otro valor.
+    env: { NODE_ENV: 'test' },
     // Base de pruebas MySQL (REQ-F-014): salvaguarda, MySQL disponible e id de ejecución.
     globalSetup: ['tests/setup/database-global.ts'],
     // Ninguna prueba llama a Meta (REQ-F-009, RF-11.1); ninguna usa una base que no sea de pruebas.

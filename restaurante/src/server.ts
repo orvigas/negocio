@@ -1,3 +1,5 @@
+import { once } from 'node:events';
+
 import { DEFAULT_PUBLIC_DIR, createApp } from './app.ts';
 import { ConfigError, loadConfig } from './config/env.ts';
 import { createPrismaClient } from './db/client.ts';
@@ -83,15 +85,28 @@ try {
 }
 
 const app = createApp({ config, repository, products, users, logger });
-const server = app.listen(config.port, () => {
-  logger.info('server_started', {
-    port: config.port,
-    nodeEnv: config.nodeEnv,
-    timezone: config.timezone,
-    adminStatus,
-    whatsappBot: config.whatsappBot ? 'enabled' : 'disabled',
-    trustProxy: config.trustProxy,
-  });
+// Escucha solo en HOST (REQ-F-015; 127.0.0.1 por defecto). Si la dirección no existe en la máquina
+// o el puerto está ocupado, termina con 1 y un mensaje claro, sin repetir los valores.
+const server = app.listen(config.port, config.host);
+try {
+  await once(server, 'listening');
+} catch (err) {
+  const code = errorProp(err, 'code');
+  logger.error('server_listen_failed', { code });
+  process.stderr.write(
+    `No se pudo escuchar en la dirección y el puerto configurados (${String(code)}): revisa que HOST sea una IP de esta máquina y que PORT esté libre.\n`,
+  );
+  await prisma.$disconnect();
+  process.exit(1);
+}
+logger.info('server_started', {
+  host: config.host,
+  port: config.port,
+  nodeEnv: config.nodeEnv,
+  timezone: config.timezone,
+  adminStatus,
+  whatsappBot: config.whatsappBot ? 'enabled' : 'disabled',
+  trustProxy: config.trustProxy,
 });
 
 function shutdown(signal: NodeJS.Signals): void {

@@ -58,7 +58,11 @@ USER node
 ENTRYPOINT ["node_modules/.bin/prisma", "migrate", "deploy"]
 
 FROM base AS production
+# HOST=0.0.0.0 (REQ-F-015, RF-9): dentro del contenedor se escucha en todas sus interfaces para que
+# el puerto publicado y el HEALTHCHECK funcionen. Fuera de Docker, HOST vale 127.0.0.1 por defecto.
+# `docker run -e HOST=...` o el compose lo sobrescriben.
 ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
     PORT=3000
 COPY package.json package-lock.json ./
 # --omit=optional: @prisma/client declara el CLI de Prisma y TypeScript como peerDependencies

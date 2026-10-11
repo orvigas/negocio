@@ -53,7 +53,7 @@ npm run db:up          # MySQL 8.4 local (Docker), solo en 127.0.0.1:3307
 npm run db:migrate     # aplica las migraciones (MIGRATION_DATABASE_URL del .env)
 npm run admin:hash-password   # opcional: genera ADMIN_PASSWORD_HASH para crear el primer administrador
 npm run build:css
-npm run dev            # http://localhost:3000 (administración: http://localhost:3000/admin)
+npm run dev            # http://127.0.0.1:3000 (administración: http://127.0.0.1:3000/admin)
 ```
 
 En la primera ejecución se crea la carpeta de datos (`DATA_DIR`, por defecto `data/`) con
@@ -71,8 +71,8 @@ apruebe con `npm install-scripts approve <paquete>`.
 
 | Script               | Descripción                                                 |
 | -------------------- | ----------------------------------------------------------- |
-| `npm start`          | Inicia el servidor (carga `.env` si existe)                 |
-| `npm run dev`        | Servidor con recarga (`node --watch`; reinicia al editar cualquier `.ts` importado) |
+| `npm start`          | Inicia el servidor (carga `.env` si existe). No fija `NODE_ENV`: debe venir del `.env` o del entorno |
+| `npm run dev`        | Servidor con recarga (`node --watch`; reinicia al editar cualquier `.ts` importado). Siempre con `NODE_ENV=development` (`scripts/dev-server.ts`), diga lo que diga el `.env` |
 | `npm run build:css`  | Compila el CSS de ambas landings y de la administración (`build:css:molotes`, `build:css:birria`, `build:css:admin`) |
 | `npm run watch:css`  | Compilación de CSS en modo observación                      |
 | `npm run admin:hash-password` | Pide la contraseña de administración (sin mostrarla) e imprime el valor de `ADMIN_PASSWORD_HASH` |
@@ -113,8 +113,8 @@ const browser = server.browser();       // cliente con cookies (sesión y CSRF d
   intermitentes; REQ-F-011). `npm run lint` lo impide en `tests/`: solo `tests/support/http.ts`
   importa `supertest` (salvo `import type`), no se permite `.callback()` y todo `listen` lleva
   `'127.0.0.1'`.
-- Excepción: las pruebas de arranque (`tests/integration/server-startup.test.ts`) lanzan el
-  proceso de producción (`src/server.ts`), que escucha en todas las interfaces; se prueba tal cual.
+- Excepción: las pruebas de arranque (`tests/integration/server-startup*.test.ts`) lanzan el
+  proceso real (`src/server.ts`), que escucha en `HOST` (`127.0.0.1` por defecto; REQ-F-015).
 
 ### Pruebas con base de datos
 
@@ -206,7 +206,9 @@ REQ-F-016.
 - La configuración se inyecta **al ejecutar** (`-e` o `--env-file .env`), nunca en el build. Se
   valida igual que sin Docker: si falta una variable obligatoria (`WHATSAPP_*`, `DATABASE_URL`, `DATA_DIR`), el
   contenedor termina con código 1 y lista los problemas sin mostrar valores.
-- `NODE_ENV=production` y `PORT=3000` vienen definidos en la imagen; la app corre con el usuario
+- `NODE_ENV=production`, `HOST=0.0.0.0` (todas las interfaces del contenedor, para que funcionen
+  el puerto publicado y el `HEALTHCHECK`) y `PORT=3000` vienen definidos en la imagen; `-e HOST=…`
+  los sustituye. La app corre con el usuario
   `node` (UID 1000) y el código es de solo lectura para él.
 - `DATA_DIR` debe ser una ruta absoluta montada como volumen; `/var/lib/restaurante` ya existe
   en la imagen con dueño `node`, así que un volumen con nombre montado ahí funciona sin más. Con
@@ -253,7 +255,7 @@ ejecutan; un fallo en una no afecta a la otra.
 | Comprobación | Pasos, en orden |
 | ------------ | --------------- |
 | `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado), `npm run db:up` (MySQL 8.4 de `compose.yaml`), `prisma migrate diff` (el esquema y las migraciones no divergen) y `npm test` (contra MySQL) |
-| `docker`     | Build de los targets `production` y `migrate` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite y que `migrate` aplica el esquema sobre una base vacía con código 0 |
+| `docker`     | Build de los targets `production` y `migrate` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite y que `migrate` aplica el esquema sobre una base vacía con código 0; arranca `production` sin `HOST` y comprueba que escucha en `0.0.0.0`, queda `healthy` y responde por el puerto publicado (REQ-F-015) |
 
 La caché de npm se invalida al cambiar `package-lock.json`; la de Docker reutiliza las capas que
 no cambian. El runner usa UTC; la selección de landing depende de `BUSINESS_TIMEZONE`, no de la
@@ -307,7 +309,8 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 
 | Variable                   | Obligatoria             | Descripción                                                        |
 | -------------------------- | ----------------------- | ------------------------------------------------------------------ |
-| `NODE_ENV`                 | No (`development`)      | `development`, `production` o `test`                               |
+| `NODE_ENV`                 | Sí                      | `development`, `production` o `test` (exacto). Sin ella, vacía o con otro valor, la app no arranca. `npm run dev` fija `development` y la suite de pruebas `test`; `npm start` no la fija |
+| `HOST`                     | No (`127.0.0.1`)        | Dirección en la que escucha el servidor. Solo IP literal IPv4 o IPv6 (`127.0.0.1`, `::1`, `0.0.0.0`, `::`…); `localhost` u otro nombre no es válido. `0.0.0.0` o `::` escuchan en todas las interfaces (solo si se pide; la imagen Docker fija `0.0.0.0`) |
 | `PORT`                     | No (`3000`)             | Puerto HTTP (1-65535)                                              |
 | `BUSINESS_TIMEZONE`        | No (`America/Mexico_City`) | Zona horaria IANA del negocio, validada con `Intl`              |
 | `SITE_URL`                 | No                      | URL pública (http/https, sin query ni fragmento). Hace absolutas la canónica, `og:url` y `og:image`; sin ella la canónica es relativa y se omiten `og:url`/`og:image` |
@@ -609,7 +612,7 @@ Twilio**, sin la cuenta de Meta. Nunca se usa en producción.
    `join <palabra>`. Si el personal no está unido, el aviso falla, el cliente recibe el contacto
    directo y el log registra el error (`bot_staff_send_failed` o `bot_staff_delivery_failed`,
    con el código de Twilio).
-4. Un **túnel HTTPS** hacia la app local (p. ej. `cloudflared tunnel --url http://localhost:3000`
+4. Un **túnel HTTPS** hacia la app local (p. ej. `cloudflared tunnel --url http://127.0.0.1:3000`
    o `ngrok http 3000`).
 
 **Configuración:**

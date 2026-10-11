@@ -18,8 +18,9 @@ volver a una versión anterior y respaldar sus datos. Los detalles de cada tema 
 ### Qué se despliega
 
 - Un solo proceso Node (Koa) que sirve las dos landings, `/admin`, la API `/admin/api` y el
-  webhook del bot (`/webhooks/whatsapp`). Escucha en `PORT` (3000 por defecto) en todas las
-  interfaces.
+  webhook del bot (`/webhooks/whatsapp`). Escucha en `HOST`:`PORT`: por defecto `127.0.0.1:3000`
+  (solo la propia máquina, para que nadie llegue a la app saltándose el proxy). En la imagen
+  Docker, `HOST=0.0.0.0` dentro del contenedor.
 - Delante, un proxy inverso con TLS (nginx según el README): `/admin` y la API solo funcionan
   por HTTPS en producción, y Meta exige HTTPS para el webhook.
 - Los datos editables viven **fuera del código**: los JSON de página de cada negocio y
@@ -86,7 +87,8 @@ un lugar seguro fuera de la VM (**a definir** dónde). Explicación de cada vari
 
 ```sh
 # --- Servidor ---
-NODE_ENV=production
+NODE_ENV=production                           # obligatoria: npm start no la fija
+# HOST=127.0.0.1                              # por defecto; nginx en la misma VM llega por loopback
 PORT=3000
 BUSINESS_TIMEZONE=America/Mexico_City
 SITE_URL=https://<dominio>                    # dominio a definir
@@ -149,6 +151,11 @@ npm start                                       # carga .env de esta carpeta si 
 - Opcional, igual que el CI: `npm run typecheck` antes de arrancar.
 - `npm start` carga el `.env` de `restaurante/`. Si el gestor de procesos inyecta las variables
   de otra forma, `.env` puede no existir.
+- `npm start` **no fija `NODE_ENV`**: sin `NODE_ENV=production` en el `.env` o en el entorno, la
+  app no arranca (código 1 y la lista de valores admitidos). Así nunca se publica por descuido en
+  modo `development` (stack en los 5xx, cookie sin `Secure`).
+- Sin Docker, deja `HOST` sin definir (`127.0.0.1`): solo nginx, en la misma VM, llega a la app.
+  `HOST` solo admite IP literales; `0.0.0.0` o `::` exponen el puerto en todas las interfaces.
 - El gestor que mantiene el proceso en marcha, lo reinicia ante fallos y al encender la VM, y le
   envía `SIGTERM` para pararlo es **a definir**. Con `SIGTERM` (o `SIGINT`) la app cierra el
   servidor y la base de datos ordenadamente.

@@ -15,6 +15,76 @@ function issuesFor(env: Env): string[] {
   throw new Error('Se esperaba ConfigError');
 }
 
+const withoutNodeEnv = (): Record<string, string> => Object.fromEntries(Object.entries(VALID_ENV).filter(([name]) => name !== 'NODE_ENV'));
+
+describe('NODE_ENV obligatorio (REQ-F-015)', () => {
+  it.each([
+    ['ausente', undefined],
+    ['vacío', ''],
+    ['solo espacios', '   '],
+  ])('CA-3: %s -> ConfigError con el problema de obligatoriedad y la lista de valores', (_case, value) => {
+    const issues = issuesFor({ ...withoutNodeEnv(), NODE_ENV: value });
+    expect(issues).toEqual(['NODE_ENV es obligatorio: debe ser uno de development, production, test']);
+  });
+
+  it.each(['staging', 'Production', 'TEST'])('CA-3: %s no es válido, no se normaliza y no se repite el valor', (value) => {
+    const issues = issuesFor({ ...VALID_ENV, NODE_ENV: value });
+    expect(issues).toEqual(['NODE_ENV debe ser uno de: development, production, test']);
+    expect(issues.join('\n')).not.toContain(value);
+  });
+
+  it('CA-2: sin NODE_ENV se informan también los demás problemas', () => {
+    const issues = issuesFor({ ...withoutNodeEnv(), PORT: 'abc' });
+    expect(issues).toHaveLength(2);
+    expect(issues.join('\n')).toContain('NODE_ENV es obligatorio');
+    expect(issues.join('\n')).toContain('PORT debe ser');
+  });
+
+  it('sin NODE_ENV no se derivan problemas de producción (DATA_DIR, Twilio)', () => {
+    const issues = issuesFor({ ...withoutNodeEnv(), WHATSAPP_BOT_PROVIDER: 'twilio', DATA_DIR: 'data' });
+    expect(issues).toEqual([expect.stringContaining('NODE_ENV es obligatorio')]);
+  });
+
+  it('CA-5: la suite corre con NODE_ENV=test (vitest.config.ts), sin exportarlo', () => {
+    expect(process.env.NODE_ENV).toBe('test');
+  });
+});
+
+describe('HOST (REQ-F-015)', () => {
+  it.each(['development', 'production', 'test'])('CA-6: sin HOST vale 127.0.0.1 con NODE_ENV=%s y cualquier TRUST_PROXY', (nodeEnv) => {
+    for (const trustProxy of [undefined, 'true', 'false']) {
+      const config = loadConfig({ ...VALID_ENV, NODE_ENV: nodeEnv, DATA_DIR: '/var/lib/restaurante', TRUST_PROXY: trustProxy });
+      expect(config.host).toBe('127.0.0.1');
+    }
+  });
+
+  it.each(['', '   '])('HOST vacío o con solo espacios (%j) vale 127.0.0.1', (HOST) => {
+    expect(loadConfig({ ...VALID_ENV, HOST }).host).toBe('127.0.0.1');
+  });
+
+  it.each(['127.0.0.1', '0.0.0.0', '::1', '::', '::ffff:127.0.0.1', '192.168.1.20', 'fe80::1%lo0'])('CA-7/CA-12: acepta la IP literal %s', (HOST) => {
+    expect(loadConfig({ ...VALID_ENV, HOST }).host).toBe(HOST);
+  });
+
+  it('se recorta como el resto de variables', () => {
+    expect(loadConfig({ ...VALID_ENV, HOST: ' 0.0.0.0 ' }).host).toBe('0.0.0.0');
+  });
+
+  it.each(['localhost', '999.1.1.1', 'abc def', '127.0.0.1:3000', '[::1]', '127.000.0.1', 'mi-maquina.local'])(
+    'CA-8: rechaza %s con un mensaje que nombra HOST y no repite el valor',
+    (HOST) => {
+      const issues = issuesFor({ ...VALID_ENV, HOST });
+      expect(issues).toEqual([expect.stringMatching(/^HOST debe ser una IP literal IPv4 o IPv6/)]);
+      expect(issues.join('\n')).not.toContain(HOST);
+    },
+  );
+
+  it('CA-13: HOST=0.0.0.0 con TRUST_PROXY=true se acepta sin más problemas', () => {
+    const config = loadConfig({ ...VALID_ENV, HOST: '0.0.0.0', TRUST_PROXY: 'true' });
+    expect(config).toMatchObject({ host: '0.0.0.0', trustProxy: true });
+  });
+});
+
 describe('loadConfig', () => {
   it('carga una configuración válida y precalcula los enlaces de WhatsApp', () => {
     const config = loadConfig(VALID_ENV);
@@ -26,9 +96,9 @@ describe('loadConfig', () => {
     expect(Object.isFrozen(config)).toBe(true);
   });
 
-  it('aplica valores por defecto para NODE_ENV, PORT y BUSINESS_TIMEZONE', () => {
-    const config = loadConfig({ WHATSAPP_MOLOTES: '5210000000001', WHATSAPP_BIRRIA: '5210000000002', DATABASE_URL: VALID_ENV.DATABASE_URL });
-    expect(config).toMatchObject({ nodeEnv: 'development', port: 3000, timezone: 'America/Mexico_City' });
+  it('aplica valores por defecto para HOST, PORT y BUSINESS_TIMEZONE', () => {
+    const config = loadConfig({ NODE_ENV: 'development', WHATSAPP_MOLOTES: '5210000000001', WHATSAPP_BIRRIA: '5210000000002', DATABASE_URL: VALID_ENV.DATABASE_URL });
+    expect(config).toMatchObject({ nodeEnv: 'development', host: '127.0.0.1', port: 3000, timezone: 'America/Mexico_City' });
   });
 
   it('da prioridad a WHATSAPP_*_URL cuando está definida', () => {
@@ -68,7 +138,7 @@ describe('loadConfig', () => {
   });
 
   it('exige URL o número para cada negocio y reporta todos los problemas juntos', () => {
-    const issues = issuesFor({ PORT: 'x' });
+    const issues = issuesFor({ NODE_ENV: 'test', PORT: 'x' });
     expect(issues).toHaveLength(4);
     expect(issues.join('\n')).toMatch(/DATABASE_URL es obligatoria/);
     expect(issues.join('\n')).toMatch(/PORT/);

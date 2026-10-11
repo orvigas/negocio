@@ -111,17 +111,22 @@ de página de cada negocio y `changes.jsonl`. Estructura y reglas en
 
 ```sh
 npm run build:css   # genera public/css/{molotes,birria,admin}/main.css (no se versiona)
-npm run dev         # servidor con recarga en http://localhost:3000
+npm run dev         # servidor con recarga en http://127.0.0.1:3000
 ```
 
 | URL | Qué muestra |
 | --- | ----------- |
-| `http://localhost:3000/` | Landing del día según `BUSINESS_TIMEZONE` (L-V Molotes, S-D Birria) |
-| `http://localhost:3000/molotes` y `/birria` | Cada landing, siempre |
-| `http://localhost:3000/admin` | Administración (necesita el primer administrador del paso 3) |
+| `http://127.0.0.1:3000/` | Landing del día según `BUSINESS_TIMEZONE` (L-V Molotes, S-D Birria) |
+| `http://127.0.0.1:3000/molotes` y `/birria` | Cada landing, siempre |
+| `http://127.0.0.1:3000/admin` | Administración (necesita el primer administrador del paso 3) |
 
 - `npm run dev` reinicia al editar cualquier `.ts` importado. Un reinicio cierra las sesiones de
   `/admin` y borra las conversaciones del bot (están en memoria).
+- `npm run dev` arranca siempre con `NODE_ENV=development`, aunque el `.env` diga otra cosa.
+  `npm start` no lo fija: lo toma del `.env` o del entorno, y sin él la app no arranca.
+- La app solo escucha en `127.0.0.1` (esta máquina). Para probarla desde otro dispositivo de tu
+  red (p. ej. el móvil), define `HOST=0.0.0.0` en `.env` y abre `http://<IP de tu equipo>:3000`.
+  `HOST` solo admite IP literales: `localhost` no es válido.
 - Si editas estilos o clases en plantillas, vuelve a ejecutar `npm run build:css` o deja
   `npm run watch:css` corriendo en otra terminal.
 - Los logs son JSON por línea en la terminal. Al arrancar verás `server_started` (y
@@ -190,10 +195,10 @@ la app no arranca. Referencia completa en [Twilio (desarrollo)](../README.md#twi
 
 ### 8.2 Abrir el túnel HTTPS
 
-Twilio necesita una URL pública con HTTPS que llegue a tu `localhost:3000`. En otra terminal:
+Twilio necesita una URL pública con HTTPS que llegue a tu `127.0.0.1:3000`. En otra terminal:
 
 ```sh
-cloudflared tunnel --url http://localhost:3000
+cloudflared tunnel --url http://127.0.0.1:3000
 ```
 
 Copia la URL `https://<algo>.trycloudflare.com` que imprime. **Cambia en cada reinicio del
@@ -252,7 +257,9 @@ webhook responde 403.
 | La app no arranca: "Con twilio, WHATSAPP_MOLOTES es obligatoria como número" | Solo definiste `WHATSAPP_MOLOTES_URL` | Define `WHATSAPP_MOLOTES` con el número del sandbox |
 | La app no arranca: "`WHATSAPP_BOT_WEBHOOK_URL` no es válida" | Falta `https://`, la ruta no termina en `/webhooks/whatsapp` o lleva query | Copia la URL del túnel y agrega `/webhooks/whatsapp` |
 | La app no arranca: "`WHATSAPP_BOT_PHONE_NUMBER_ID` ya no se usa" | Variable antigua en `.env` | Renómbrala a `WHATSAPP_BOT_ACCOUNT_ID` |
-| La app no arranca: "twilio no se permite con NODE_ENV=production" | `NODE_ENV=production` en tu `.env` | Usa `NODE_ENV=development` |
+| La app no arranca: "twilio no se permite con NODE_ENV=production" | `npm start` con `NODE_ENV=production` en tu `.env` | Usa `npm run dev` (siempre `development`) o `NODE_ENV=development` |
+| La app no arranca: "NODE_ENV es obligatorio" | `npm start` sin `NODE_ENV` en el `.env` ni en el entorno | Usa `npm run dev` o define `NODE_ENV=development` en `.env` |
+| La app no arranca: "HOST debe ser una IP literal IPv4 o IPv6" | `HOST=localhost` u otro nombre en `.env`, o un `HOST` exportado por tu shell (p. ej. `tcsh` exporta el nombre de la máquina) | Usa `127.0.0.1` (o `0.0.0.0` para tu red), o `unset HOST` en la terminal |
 | El bot no contesta y en el log no aparece nada | El túnel se cerró, la app no corre o la URL de Twilio es otra | Revisa el túnel y la URL de "When a message comes in" |
 | `bot_webhook_signature_invalid` (403) | La URL del túnel cambió y una de las dos no se actualizó, o no coinciden letra por letra | Actualiza `.env` y Twilio con la misma URL y reinicia |
 | `GET /webhooks/whatsapp` responde 405 | Normal con Twilio: no verifica el webhook por `GET` | Nada |

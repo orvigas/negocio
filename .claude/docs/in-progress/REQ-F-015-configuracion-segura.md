@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
 ## Aprobación
 
@@ -637,3 +637,7 @@ senior-qa analiza la implementación aprobada ("Aprobar") y agrega el QA Action 
 ### QA (Q2, ronda 1, 2026-10-10)
 
 senior-qa ejecuta el QA Action Plan aprobado ("Aprobar"): CA-1 a CA-14 en PASS (CA-9 en local), sin defectos, suite, typecheck y lint en verde. Estado: `QA_APPROVED`.
+
+### Commit y Pull Request (T4, 2026-10-10)
+
+Commit `77b9201` (`feat: exige NODE_ENV al arrancar y escucha solo en 127.0.0.1 salvo HOST explícito`). Pull Request: https://github.com/orvigas/negocio/pull/40 hacia `main`. CI del PR (run 38110071102): `calidad` pass (7m55s), `docker` pass (3m48s), con el paso CA-9 "imagen production escucha en 0.0.0.0 y queda healthy" en verde. Estado: `READY_FOR_MERGE`.

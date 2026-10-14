@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 Pull Request: https://github.com/orvigas/negocio/pull/45 (commit 59a3620). CI del PR en verde: `calidad`, `docker` y `despliegue` pasan (`publish` y `deploy` se omiten en un PR; ejecución https://github.com/orvigas/negocio/actions/runs/38567391499).
 
@@ -474,6 +474,16 @@ Ninguno.
 ### Resultado final
 QA_APPROVED
 
+## Cierre
+
+- **Merge:** PR #45 (https://github.com/orvigas/negocio/pull/45), mergeado a `main` por el usuario ("Merge hecho") con el commit d1d2286, el 2026-10-14.
+- **Despliegue:** ejecución https://github.com/orvigas/negocio/actions/runs/38569723704, con todos los jobs en success. Desplegado el 2026-10-14T13:22:35Z; la app está healthy.
+- **Verificación en producción** (hecha por la sesión principal):
+  - `/` muestra Birria con `data-home-notice="molotes"` (miércoles).
+  - `/birria` y `/molotes` no muestran el modal.
+  - `?dia=lunes` se ignora en producción.
+  - `/js/modules/home-notice.js` y `/favicon.ico` responden 200.
+
 ## Trazabilidad
 
 | Objetivo | Requisitos | Historia | Criterios |
@@ -516,3 +526,7 @@ QA Action Plan aprobado por el usuario ("Aprobar"). Pruebas ejecutadas; CA-1 a C
 ### Pull Request (senior-fullstack, 2026-10-14)
 
 Commit 59a3620 y PR #45 (https://github.com/orvigas/negocio/pull/45) contra `main`. CI en verde: `calidad`, `docker` y `despliegue`. Estado: READY_FOR_MERGE.
+
+### Cierre (senior-fullstack, 2026-10-14)
+
+PR #45 mergeado (d1d2286) y desplegado (ejecución 38569723704). Verificado en producción. El ticket pasa a `done/`. Estado: DONE.

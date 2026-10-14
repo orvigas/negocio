@@ -1110,7 +1110,8 @@ DATA_DIR/
   7) y migra con la imagen `migrate`. Una base migrada no arranca con un código anterior
   (`DATABASE_NEWER_THAN_CODE`) salvo en la vuelta atrás automática, que usa
   `DATABASE_ALLOW_NEWER_SCHEMA=true`: por eso **cada migración debe ser compatible con el código
-  anterior** (añadir antes de quitar). Respaldos fuera del VPS: REQ-F-019.
+  anterior** (añadir antes de quitar). Respaldos cifrados fuera del VPS, restauración y prueba
+  mensual (REQ-F-019; scripts en `ops/backup/`): [docs/despliegue.md](docs/despliegue.md#11-respaldos-fuera-del-vps).
 
 ### Recuperación de datos dañados
 

@@ -43,3 +43,6 @@ Dockerfile
 compose.yaml
 .dockerignore
 docker
+
+# Scripts de respaldo del host (REQ-F-019): no forman parte de la imagen
+ops

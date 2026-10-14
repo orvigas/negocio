@@ -1,0 +1,12 @@
+# Respaldo diario a las 03:00 de America/Mexico_City (REQ-F-019, RF-5); el host está en UTC.
+[Unit]
+Description=Respaldo diario de restaurante a las 03:00 de México
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 America/Mexico_City
+# Si el VPS estaba apagado a esa hora, se ejecuta al arrancar.
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

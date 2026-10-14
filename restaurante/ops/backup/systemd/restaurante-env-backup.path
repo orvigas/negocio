@@ -1,0 +1,10 @@
+# Vigila /opt/restaurante/.env (REQ-F-019, RF-9). backup.sh repite la comprobación cada día.
+[Unit]
+Description=Vigila el .env de restaurante para copiarlo cifrado
+
+[Path]
+PathChanged=/opt/restaurante/.env
+Unit=restaurante-env-backup.service
+
+[Install]
+WantedBy=paths.target

@@ -19,8 +19,8 @@ versión anterior y restaurar la base de datos (REQ-F-016). Los detalles de la a
   - `migrate`: proceso puntual que aplica las migraciones con un usuario con DDL.
 - **Borde HTTPS:** Traefik.
   - `https://birriaelmuneco.com` sirve la app.
-  - `http://` responde 308 hacia `https://` del mismo host (redirección global del Traefik del
-    VPS; sin ella, el router del proyecto responde 301 a la raíz).
+  - `http://` responde 301 hacia `https://` del mismo host (redirección global del Traefik del
+    VPS; sin ella, el router del proyecto responde 301 directamente a la raíz).
   - `https://www.` responde 301 a `https://birriaelmuneco.com`.
   - En los dos casos se conservan la ruta y la query.
   - `/admin` tiene un límite de 10 peticiones por minuto por IP, con ráfaga de 20; después
@@ -261,7 +261,7 @@ rojo y la app se queda como esté ([Diagnóstico](#10-diagnóstico)).
 | Comprobación | Cómo |
 | ------------ | ---- |
 | CA-1: HTTPS y certificado | `curl -sI https://birriaelmuneco.com` → 200, certificado válido en el navegador, landing del día |
-| CA-2: redirecciones | `curl -sI 'http://birriaelmuneco.com/molotes?a=1'` y `http://www.` → `308` hacia `https://` del mismo host (redirección global del entrypoint `web` del Traefik del VPS). `curl -sI 'https://www.birriaelmuneco.com/molotes?a=1'` → `301` con `Location: https://birriaelmuneco.com/molotes?a=1`. Así, `http://www.` llega a la raíz en dos saltos |
+| CA-2: redirecciones | `curl -sI 'http://birriaelmuneco.com/molotes?a=1'` y `http://www.` → `301` hacia `https://` del mismo host (redirección global del entrypoint `web` del Traefik del VPS). `curl -sI 'https://www.birriaelmuneco.com/molotes?a=1'` → `301` con `Location: https://birriaelmuneco.com/molotes?a=1`. Así, `http://www.` llega a la raíz en dos saltos |
 | CA-3: puertos cerrados | Desde fuera: `nc -vz <vps> 3000` y `nc -vz <vps> 3306` fallan |
 | CA-4: límite de `/admin` | 30 peticiones seguidas a `https://birriaelmuneco.com/admin/login`: las últimas reciben 429; `/molotes` sigue en 200 |
 | CA-5: IP real | En `docker logs restaurante-app-1`, la línea `request` lleva `"protocol":"https"` y tu IP pública, no una `172.x` de Docker. Si sale una `172.x`, Traefik no ve la IP de origen (proxy de Docker en IPv6, CDN delante): revisa la publicación de puertos de Traefik |

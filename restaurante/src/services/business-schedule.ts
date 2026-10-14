@@ -41,3 +41,43 @@ export function getWeekday(date: Date, timeZone: string): Weekday {
 export function getActiveBusinessId({ now = new Date(), timeZone }: { now?: Date; timeZone: string }): BusinessId {
   return WEEKEND_DAYS.has(getWeekday(now, timeZone)) ? BUSINESS.BIRRIA : BUSINESS.MOLOTES;
 }
+
+/**
+ * Aviso de la página de inicio (REQ-F-028): `/` muestra siempre Birria y, según el día en la
+ * zona del negocio, abre un modal.
+ *   lunes            -> 'rest'    (descanso: ningún negocio abre)
+ *   martes a viernes -> 'molotes' (la birria es de fin de semana)
+ *   sábado y domingo -> null
+ */
+export type HomeNotice = 'molotes' | 'rest';
+
+const HOME_NOTICES: Readonly<Record<Weekday, HomeNotice | null>> = Object.freeze({
+  Mon: 'rest',
+  Tue: 'molotes',
+  Wed: 'molotes',
+  Thu: 'molotes',
+  Fri: 'molotes',
+  Sat: null,
+  Sun: null,
+});
+
+/** `forcedDay`: día forzado en desarrollo (`?dia=`); si llega, sustituye al calculado. */
+export function getHomeNotice({ now = new Date(), timeZone, forcedDay }: { now?: Date; timeZone: string; forcedDay?: Weekday | undefined }): HomeNotice | null {
+  return HOME_NOTICES[forcedDay ?? getWeekday(now, timeZone)];
+}
+
+/** Valores de `?dia=` (solo en desarrollo), sin acentos para escribirlos fácil en la URL. */
+const FORCED_DAYS: Readonly<Record<string, Weekday>> = Object.freeze({
+  lunes: 'Mon',
+  martes: 'Tue',
+  miercoles: 'Wed',
+  jueves: 'Thu',
+  viernes: 'Fri',
+  sabado: 'Sat',
+  domingo: 'Sun',
+});
+
+/** Traduce `?dia=` a un día; cualquier otro valor (o ninguno) se ignora. */
+export function parseForcedDay(value: unknown): Weekday | undefined {
+  return typeof value === 'string' && Object.hasOwn(FORCED_DAYS, value) ? FORCED_DAYS[value] : undefined;
+}

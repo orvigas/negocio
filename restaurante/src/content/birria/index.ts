@@ -166,6 +166,28 @@ export const birriaContent = Object.freeze({
       disclaimer: 'Sin spam. Solo antojo, consomé y promociones reales.',
     }),
   }),
+  /**
+   * Avisos de la página de inicio (REQ-F-028): `/` es siempre Birria y, según el día, abre uno
+   * de estos modales (src/views/partials/birria/home-notice.html).
+   */
+  homeNotices: Object.freeze({
+    molotes: Object.freeze({
+      title: '¡Ay, compa! La birria es de fin de semana',
+      body: 'Nuestra birria sale calientita nomás sábados y domingos. Pero no te quedes con antojo: de martes a viernes tenemos ricos y deliciosos molotes recién hechecitos, doraditos y con su salsita de la casa.',
+      linkLabel: '¡Ordenar ya!',
+      linkHref: '/molotes',
+      // El alt no repite "¡Ordenar ya!": el nombre del enlace queda "Molotes ¡Ordenar ya!".
+      logo: image('/img/molotes/logo-molotes.webp', 'Molotes', 461, 512),
+      closeLabel: 'Cerrar',
+    }),
+    rest: Object.freeze({
+      title: '¡Los lunes descansamos!',
+      body: 'Hoy el comal y las cazuelas agarran fuerzas, y nosotros también. Mañana martes volvemos con molotes recién hechecitos, y el fin de semana, con la birria de siempre.',
+      linkLabel: 'Mañana hay molotes',
+      linkHref: '/molotes',
+      closeLabel: 'Cerrar',
+    }),
+  }),
   footer: Object.freeze({
     about: Object.freeze({
       text: 'Sabor de tradición jalisciense cocinado a fuego lento con chiles secos, especias enteras y el inconfundible aroma de leña de encino.',

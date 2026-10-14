@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getActiveBusinessId, getWeekday } from '../../src/services/business-schedule.ts';
+import { getActiveBusinessId, getHomeNotice, getWeekday, parseForcedDay } from '../../src/services/business-schedule.ts';
 
 const MX = 'America/Mexico_City';
 
@@ -52,4 +52,60 @@ describe('getActiveBusinessId', () => {
     // @ts-expect-error: un string en lugar de Date, a propósito.
     expect(() => getActiveBusinessId({ now: '2026-10-10', timeZone: MX })).toThrow(TypeError);
   });
+});
+
+describe('getHomeNotice (REQ-F-028)', () => {
+  it.each([
+    ['2026-10-05T18:00:00Z', 'Mon', 'rest'],
+    ['2026-10-06T18:00:00Z', 'Tue', 'molotes'],
+    ['2026-10-07T18:00:00Z', 'Wed', 'molotes'],
+    ['2026-10-08T18:00:00Z', 'Thu', 'molotes'],
+    ['2026-10-09T18:00:00Z', 'Fri', 'molotes'],
+    ['2026-10-10T18:00:00Z', 'Sat', null],
+    ['2026-10-11T18:00:00Z', 'Sun', null],
+  ])('%s (%s) -> %s', (iso, _weekday, expected) => {
+    expect(getHomeNotice({ now: new Date(iso), timeZone: MX })).toBe(expected);
+  });
+
+  it('CA-11: usa el día de la zona del negocio, no el de UTC (lunes 23:30 CDMX = martes UTC)', () => {
+    const now = new Date('2026-10-13T05:30:00Z');
+    expect(getHomeNotice({ now, timeZone: MX })).toBe('rest');
+    expect(getHomeNotice({ now, timeZone: 'UTC' })).toBe('molotes');
+  });
+
+  it('los cambios de día a medianoche en CDMX', () => {
+    expect(getHomeNotice({ now: new Date('2026-10-12T05:59:59Z'), timeZone: MX })).toBeNull(); // domingo 23:59:59
+    expect(getHomeNotice({ now: new Date('2026-10-12T06:00:00Z'), timeZone: MX })).toBe('rest'); // lunes 00:00
+    expect(getHomeNotice({ now: new Date('2026-10-13T06:00:00Z'), timeZone: MX })).toBe('molotes'); // martes 00:00
+    expect(getHomeNotice({ now: new Date('2026-10-17T06:00:00Z'), timeZone: MX })).toBeNull(); // sábado 00:00
+  });
+
+  it('el día forzado sustituye al calculado', () => {
+    const saturday = new Date('2026-10-10T18:00:00Z');
+    expect(getHomeNotice({ now: saturday, timeZone: MX, forcedDay: 'Mon' })).toBe('rest');
+    expect(getHomeNotice({ now: saturday, timeZone: MX, forcedDay: 'Wed' })).toBe('molotes');
+    expect(getHomeNotice({ now: new Date('2026-10-06T18:00:00Z'), timeZone: MX, forcedDay: 'Sun' })).toBeNull();
+    expect(getHomeNotice({ now: saturday, timeZone: MX, forcedDay: undefined })).toBeNull();
+  });
+});
+
+describe('parseForcedDay (REQ-F-028, RF-11)', () => {
+  it.each([
+    ['lunes', 'Mon'],
+    ['martes', 'Tue'],
+    ['miercoles', 'Wed'],
+    ['jueves', 'Thu'],
+    ['viernes', 'Fri'],
+    ['sabado', 'Sat'],
+    ['domingo', 'Sun'],
+  ])('%s -> %s', (value, expected) => {
+    expect(parseForcedDay(value)).toBe(expected);
+  });
+
+  it.each([undefined, null, '', 'Lunes', 'miércoles', 'sábado', 'mon', ' lunes', 'toString', 'constructor', '__proto__', ['lunes'], 1])(
+    'ignora %j',
+    (value) => {
+      expect(parseForcedDay(value)).toBeUndefined();
+    },
+  );
 });

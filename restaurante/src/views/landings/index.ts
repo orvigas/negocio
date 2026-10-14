@@ -3,6 +3,7 @@ import type { Config } from '../../config/env.ts';
 import { getIconLinks } from '../../content/icons.ts';
 import type { ImageDescriptor } from '../../content/images.ts';
 import { commonContent, getBusinessContent, type BusinessContentById } from '../../content/index.ts';
+import type { HomeNotice } from '../../services/business-schedule.ts';
 import type { MenuDataByBusiness } from '../../services/menu-schema.ts';
 import { buildVisibleMenu, type VisibleMenuByBusiness } from '../../services/visible-menu.ts';
 import type { Renderer, SafeHtml } from '../render.ts';
@@ -28,6 +29,8 @@ export interface LandingView<Id extends BusinessId = BusinessId> {
   location: typeof commonContent.location;
   whatsappIcon: SafeHtml;
   menu: VisibleMenuByBusiness[Id];
+  /** Aviso de la página de inicio (REQ-F-028); solo lo pinta la landing de Birria en `/`. */
+  homeNotice: HomeNotice | null;
 }
 
 /** Vista sin el renderizador (los constructores de cada landing lo reciben aparte). */
@@ -49,11 +52,13 @@ export function renderLandingPage<Id extends BusinessId>({
   config,
   businessId,
   menu,
+  homeNotice = null,
 }: {
   renderer: Renderer;
   config: Pick<Config, 'whatsapp' | 'siteUrl'>;
   businessId: Id;
   menu: MenuDataByBusiness[Id];
+  homeNotice?: HomeNotice | null;
 }): SafeHtml {
   if (!menu) throw new TypeError('renderLandingPage requiere los datos editables del menú');
   const content = getBusinessContent(businessId);
@@ -72,6 +77,7 @@ export function renderLandingPage<Id extends BusinessId>({
     location: commonContent.location,
     whatsappIcon: renderer.render(`partials/icons/whatsapp-${businessId}`),
     menu: buildVisibleMenu(businessId, menu),
+    homeNotice,
   };
 
   const canonical = canonicalUrl(config.siteUrl, BUSINESS_PATHS[businessId]);

@@ -2,18 +2,22 @@
 
 > **Estado:** ambas landings implementan el diseño de `../_stich_source_/`
 > (`moloteando_aut_nticos_molotes_artesanales` y
-> `birrier_a_el_mu_eco_aut_ntica_birria_de_res_color_adobo`), con ruta automática por día
-> y rutas dedicadas por negocio.
+> `birrier_a_el_mu_eco_aut_ntica_birria_de_res_color_adobo`), con Birria como página de
+> inicio, un aviso según el día y rutas dedicadas por negocio.
 
 Aplicación Koa.js (Node.js 24 LTS) que sirve dos landing pages desde un mismo proyecto. El
 backend está escrito en TypeScript estricto y Node lo ejecuta directamente (type stripping,
 sin paso de compilación); el JavaScript del navegador (`public/js/`) es Vanilla JS.
 
-- **Moloteando (molotes)**: lunes a viernes.
-- **Birriería El Muñeco (birria)**: sábado y domingo.
+- **Moloteando (molotes)**: martes a viernes (`/molotes`).
+- **Birriería El Muñeco (birria)**: sábado y domingo (`/birria`). Es también la página de
+  inicio (`/`) todos los días.
+- **Lunes:** descanso, no abre ningún negocio.
 
-El día se calcula en la zona horaria del negocio (`BUSINESS_TIMEZONE`), no en la del
-servidor. Cada landing tiene un CTA de pedido por WhatsApp configurable. El contenido estático
+En `/`, según el día, se abre además un aviso (REQ-F-028): de martes a viernes, que la birria
+es de fin de semana y un enlace a `/molotes`; los lunes, que ese día se descansa. El fin de
+semana no hay aviso. El día se calcula en la zona horaria del negocio (`BUSINESS_TIMEZONE`),
+no en la del servidor ni en la del dispositivo. Cada landing tiene un CTA de pedido por WhatsApp configurable. El contenido estático
 vive en `src/content/`; los menús, precios, showcase del hero y promociones se editan desde
 `/admin/molotes` y `/admin/birria` y se guardan en archivos JSON (ver
 [Administración de menús](#administración-de-menús)).
@@ -354,10 +358,10 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 
 | Ruta             | Respuesta                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------------ |
-| `GET /`          | Landing activa según el día en `BUSINESS_TIMEZONE`: L-V Moloteando, S-D Birriería El Muñeco |
+| `GET /`          | Landing de Birriería El Muñeco, siempre, con el aviso del día en `BUSINESS_TIMEZONE` (lunes descanso, martes a viernes Molotes, fin de semana ninguno; REQ-F-028) |
 | `GET /molotes`   | Landing de Moloteando, siempre                                                             |
 | `GET /birria`    | Landing de Birriería El Muñeco, siempre                                                    |
-| `GET /favicon.ico`, `GET /apple-touch-icon.png`, `GET /apple-touch-icon-precomposed.png` | Icono del negocio activo del día (ver [Iconos](#iconos-favicons-y-pantalla-de-inicio)) |
+| `GET /favicon.ico`, `GET /apple-touch-icon.png`, `GET /apple-touch-icon-precomposed.png` | Icono de Birria, el de `/` (ver [Iconos](#iconos-favicons-y-pantalla-de-inicio)) |
 | `GET /molotes.webmanifest`, `GET /birria.webmanifest` | Web App Manifest de cada negocio                                  |
 | `GET /<archivo>` | Estáticos de `public/` (sin índices ni archivos ocultos)                                   |
 | `/admin/...`     | Administración de menús y productos (ver [Administración de menús](#administración-de-menús))  |
@@ -365,9 +369,17 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `GET`/`POST /webhooks/whatsapp` | Webhook del bot de WhatsApp: verificación de la suscripción y recepción de mensajes firmados (ver [Bot de WhatsApp](#bot-de-whatsapp)); 503 si el bot no está configurado |
 
 Las tres rutas HTML usan el mismo controlador (`src/controllers/landing.ts`): con un
-`businessId` fijo renderiza ese negocio y sin él lo resuelve por fecha. Responden con
-`Cache-Control: no-cache`. La `<link rel="canonical">` siempre apunta a la ruta dedicada
-(`/` muestra la canónica del negocio del día), así que no hay contenido duplicado para SEO.
+`businessId` fijo renderiza ese negocio y sin él (`/`) renderiza Birria con el aviso del día.
+Responden con `Cache-Control: no-cache`, así que cada carga de `/` trae el aviso del día. La
+`<link rel="canonical">` siempre apunta a la ruta dedicada (`/` apunta a `/birria`), así que no
+hay contenido duplicado para SEO.
+
+El aviso es un `<dialog>` que el servidor pinta cerrado y que abre
+`public/js/modules/home-notice.js` una sola vez por sesión del navegador (`sessionStorage`).
+Sin JavaScript no se ve ni tapa nada. Sus textos están en `homeNotices`, en
+`src/content/birria/index.ts`. En desarrollo (`NODE_ENV=development`), `/?dia=lunes`, `martes`,
+`miercoles`, `jueves`, `viernes`, `sabado` o `domingo` fuerza el día del aviso. En `test` y
+`production` el parámetro se ignora.
 Cualquier otra ruta responde 404 y los métodos distintos de GET/HEAD, 405 (salvo los POST de
 la administración y del webhook del bot).
 
@@ -1170,10 +1182,10 @@ los PNG de alta resolución de `../_stich_source_/logo_<negocio>.png/screen.png`
 - **Metadatos:** `icons` en `src/content/<negocio>/index.ts` (versión, `themeColor` y nombres
   del manifest). Las rutas de los archivos y el manifest se arman en `src/content/icons.ts`.
 - **`<head>`:** cada landing declara el .ico, los PNG de 16 y 32, el apple-touch-icon, su
-  manifest y su `theme-color`; `/` usa los del negocio del día. Las páginas de `/admin`
+  manifest y su `theme-color`; `/` usa los de Birria. Las páginas de `/admin`
   muestran el favicon del negocio del día, sin manifest ni `theme-color`.
 - **Raíz:** `/favicon.ico`, `/apple-touch-icon.png` y `/apple-touch-icon-precomposed.png`
-  sirven el icono del negocio del día con `Cache-Control: no-cache` y `ETag` (responden 304
+  sirven el icono de Birria, el mismo de `/` (REQ-F-028), con `Cache-Control: no-cache` y `ETag` (responden 304
   si no cambió). Los archivos se cargan en memoria al arrancar; si falta alguno, la app no arranca.
   No crees archivos con esos nombres en la raíz de `public/`: `koa-static` los serviría con
   caché larga.

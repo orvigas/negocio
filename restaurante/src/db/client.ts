@@ -16,10 +16,11 @@ import { PrismaClient } from '../generated/prisma/client.ts';
  *   promesa rechazada sin manejar, que tiraría el proceso con MySQL caído (RF-9). Por eso las fechas
  *   las pone siempre la app en UTC (RF-12). Una espera de bloqueo larga no la corta el `timeout` de
  *   la transacción de Prisma: la corta `innodb_lock_wait_timeout` del servidor (50 s por defecto en
- *   MySQL 8.4) y la respuesta es 503 sin cambios. Bajar ese valor en el servidor: REQ-F-016.
+ *   MySQL 8.4; 10 s en producción, deploy/compose.prod.yaml, REQ-F-016) y la respuesta es 503 sin
+ *   cambios.
  * - `allowPublicKeyRetrieval`: caching_sha2_password sin TLS dentro de la red interna de Docker
- *   (la contraseña viaja cifrada con la clave RSA del servidor). Con un MySQL remoto hará falta TLS
- *   (REQ-F-016).
+ *   (la contraseña viaja cifrada con la clave RSA del servidor). En producción MySQL está en una red
+ *   interna de Docker sin puertos publicados (REQ-F-016); con un MySQL remoto haría falta TLS.
  * - `errorFormat: 'minimal'` evita mensajes con rutas del código. Nunca se registra la configuración.
  */
 

@@ -174,6 +174,9 @@ describe('loadConfig: administración y datos (REQ-F-001)', () => {
     const config = loadConfig(VALID_ENV);
     expect(config.adminBootstrap).toBeNull();
     expect(config.trustProxy).toBe(false);
+    // REQ-F-016 (D-1): solo la vuelta atrás del despliegue la activa.
+    expect(config.allowNewerSchema).toBe(false);
+    expect(loadConfig({ ...VALID_ENV, DATABASE_ALLOW_NEWER_SCHEMA: 'true' }).allowNewerSchema).toBe(true);
     // Por defecto, la carpeta data/ del proyecto (sin depender del nombre de la carpeta clonada).
     expect(config.dataDir).toBe(join(PROJECT_DIR, 'data'));
   });
@@ -193,6 +196,7 @@ describe('loadConfig: administración y datos (REQ-F-001)', () => {
     [{ ADMIN_USER: 'x'.repeat(61), ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER no es un usuario válido/],
     [{ ADMIN_USER: 'due\u0007no', ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER no es un usuario válido/],
     [{ TRUST_PROXY: 'yes' }, /TRUST_PROXY debe ser true o false/],
+    [{ DATABASE_ALLOW_NEWER_SCHEMA: '1' }, /DATABASE_ALLOW_NEWER_SCHEMA debe ser true o false/],
     [{ NODE_ENV: 'production' }, /DATA_DIR es obligatoria en producción/],
     [{ NODE_ENV: 'production', DATA_DIR: 'data' }, /DATA_DIR debe ser una ruta absoluta/],
     [{ DATA_DIR: 'src/content' }, /DATA_DIR no puede estar dentro de src\/ ni de public\//],

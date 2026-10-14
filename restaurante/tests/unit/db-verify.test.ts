@@ -91,7 +91,7 @@ describe('verifyDatabase: conexión (RF-6)', () => {
           waits.push(ms);
           await time.sleep(ms);
         },
-        logger: { info: () => {} },
+        logger: { info: () => {}, warn: () => {} },
       }),
     );
     expect(code).toBe(DATABASE_INIT_CODES.UNREACHABLE);
@@ -109,7 +109,7 @@ describe('verifyDatabase: conexión (RF-6)', () => {
       query: await fakeQuery({}),
       now: time.now,
       sleep: time.sleep,
-      logger: { info: (msg, fields) => lines.push({ msg, ...(fields ? { fields } : {}) }) },
+      logger: { info: (msg, fields) => lines.push({ msg, ...(fields ? { fields } : {}) }), warn: () => {} },
     });
     expect(attempts).toBe(4);
     expect(lines.map((line) => line.msg)).toEqual(['database_waiting', 'database_waiting', 'database_waiting']);
@@ -199,5 +199,25 @@ describe('verifyDatabase: estado de la base (RF-6, CA-2 y CA-7)', () => {
   it('carpeta de migraciones ilegible -> MIGRATIONS_UNREADABLE', async () => {
     const code = await codeOf(verifyDatabase({ probe: () => Promise.resolve(), query: await fakeQuery({}), migrationsDir: '/no/existe' }));
     expect(code).toBe(DATABASE_INIT_CODES.MIGRATIONS_UNREADABLE);
+  });
+
+  it('migración aplicada desconocida -> DATABASE_NEWER_THAN_CODE salvo con allowNewerSchema (REQ-F-016, D-1)', async () => {
+    const applied = (await projectMigrationChecksums()).map(({ name, checksum }) => ({ name, checksum, finished: new Date(), rolledBack: null }));
+    const migrations = [...applied, { name: '29990101000000_futura', checksum: 'x', finished: new Date(), rolledBack: null }];
+    expect(await run({ migrations })).toBe(DATABASE_INIT_CODES.DATABASE_NEWER_THAN_CODE);
+    const warnings: string[] = [];
+    await verifyDatabase({
+      probe: () => Promise.resolve(),
+      query: await fakeQuery({ migrations }),
+      allowNewerSchema: true,
+      logger: { info: () => {}, warn: (msg) => warnings.push(msg) },
+    });
+    expect(warnings).toEqual(['database_newer_than_code_allowed']);
+  });
+
+  it('allowNewerSchema sin migraciones desconocidas no registra nada', async () => {
+    const warnings: string[] = [];
+    await verifyDatabase({ probe: () => Promise.resolve(), query: await fakeQuery({}), allowNewerSchema: true, logger: { info: () => {}, warn: (msg) => warnings.push(msg) } });
+    expect(warnings).toEqual([]);
   });
 });

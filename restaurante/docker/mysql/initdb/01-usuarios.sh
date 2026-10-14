@@ -1,6 +1,7 @@
 #!/bin/sh
 # Bases y usuarios del MySQL local (REQ-F-014). Lo ejecuta la imagen oficial solo al crear el
-# volumen (primer arranque). Solo desarrollo y pruebas: en producción los crea REQ-F-016.
+# volumen (primer arranque). Solo desarrollo y pruebas: en producción los crea
+# deploy/mysql/initdb/01-usuarios.sh (REQ-F-016).
 #
 # - restaurante           base de desarrollo (utf8mb4 + utf8mb4_es_0900_as_cs)
 # - restaurante_app       la app: solo DML sobre restaurante.*

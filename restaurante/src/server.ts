@@ -40,9 +40,10 @@ try {
 // Base de datos (REQ-F-014, RF-6): la app no migra; verifica conexión (reintentos hasta 60 s),
 // credenciales, modo estricto, utf8mb4 y colación, y que las migraciones estén al día. Si falla, el
 // servidor no arranca; el log solo lleva códigos (sin SQL, URL, credenciales ni stack).
+// DATABASE_ALLOW_NEWER_SCHEMA solo la pone el despliegue al volver a la versión anterior (REQ-F-016, D-1).
 const prisma = createPrismaClient(config.database);
 try {
-  await verifyDatabase({ probe: probeOf(config.database), query: queryOf(prisma), logger });
+  await verifyDatabase({ probe: probeOf(config.database), query: queryOf(prisma), logger, allowNewerSchema: config.allowNewerSchema });
 } catch (err) {
   logger.error('database_init_failed', { code: errorProp(err, 'code'), migration: errorProp(err, 'migration'), object: errorProp(err, 'object') });
   process.stderr.write(
@@ -107,6 +108,7 @@ logger.info('server_started', {
   adminStatus,
   whatsappBot: config.whatsappBot ? 'enabled' : 'disabled',
   trustProxy: config.trustProxy,
+  allowNewerSchema: config.allowNewerSchema,
 });
 
 function shutdown(signal: NodeJS.Signals): void {

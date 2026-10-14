@@ -19,7 +19,8 @@ async function scratch(migrated = true) {
   cleanups.push(database.cleanup);
   const prisma = createPrismaClient(database.config);
   cleanups.push(() => prisma.$disconnect());
-  const verify = () => verifyDatabase({ probe: probeOf(database.config), query: queryOf(prisma), windowMs: 5000 });
+  const verify = (options: { allowNewerSchema?: boolean; logger?: { info: () => void; warn: (msg: string, fields?: object) => void } } = {}) =>
+    verifyDatabase({ probe: probeOf(database.config), query: queryOf(prisma), windowMs: 5000, ...options });
   return { ...database, prisma, verify };
 }
 
@@ -81,5 +82,31 @@ describe('verifyDatabase sobre MySQL real', () => {
     const { verify, name } = await scratch(statement !== null);
     if (statement) await adminSql(name, statement);
     expect(await failure(verify())).toMatchObject({ code });
+  });
+
+  describe('DATABASE_ALLOW_NEWER_SCHEMA (REQ-F-016, D-1): vuelta atrás tras una migración', () => {
+    const FUTURE = "INSERT INTO _prisma_migrations (id, checksum, migration_name, finished_at, applied_steps_count) VALUES ('x', 'y', '29990101000000_futura', NOW(3), 1)";
+
+    it('tolera una migración aplicada desconocida y la registra con database_newer_than_code_allowed', async () => {
+      const { verify, name } = await scratch();
+      await adminSql(name, FUTURE);
+      const warnings: { msg: string; fields?: object }[] = [];
+      await expect(verify({ allowNewerSchema: true, logger: { info: () => {}, warn: (msg, fields) => warnings.push({ msg, ...(fields ? { fields } : {}) }) } })).resolves.toBeUndefined();
+      expect(warnings).toEqual([{ msg: 'database_newer_than_code_allowed', fields: { migrations: ['29990101000000_futura'] } }]);
+    });
+
+    it.each([
+      ['migración desconocida incompleta', "INSERT INTO _prisma_migrations (id, checksum, migration_name, finished_at, applied_steps_count) VALUES ('x', 'y', '29990101000000_futura', NULL, 0)", DATABASE_INIT_CODES.MIGRATION_INCOMPLETE],
+      ['migración conocida modificada', "UPDATE _prisma_migrations SET checksum = 'otro'", DATABASE_INIT_CODES.MIGRATION_MODIFIED],
+    ])('sigue fallando con %s', async (_case, statement, code) => {
+      const { verify, name } = await scratch();
+      await adminSql(name, statement);
+      expect(await failure(verify({ allowNewerSchema: true }))).toMatchObject({ code });
+    });
+
+    it('sigue exigiendo las migraciones conocidas (base sin migrar -> MIGRATIONS_PENDING)', async () => {
+      const { verify } = await scratch(false);
+      expect(await failure(verify({ allowNewerSchema: true }))).toMatchObject({ code: DATABASE_INIT_CODES.MIGRATIONS_PENDING });
+    });
   });
 });

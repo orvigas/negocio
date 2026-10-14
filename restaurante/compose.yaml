@@ -1,5 +1,5 @@
 # Servicios locales (REQ-F-003 y REQ-F-014). Solo para desarrollo, pruebas y CI; el compose de
-# producción es otro (REQ-F-016).
+# producción es deploy/compose.prod.yaml (REQ-F-016).
 #
 #   npm run db:up                 -> MySQL de desarrollo y pruebas (solo en 127.0.0.1:3307)
 #   docker compose run --rm test  -> suite completa en contenedor, contra mysql-dev

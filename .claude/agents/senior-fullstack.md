@@ -319,7 +319,7 @@ Estado de cada criterio.
 ## Riesgos
 ```
 
-8. Espera el CI del PR (`.github/workflows/ci.yml`) con `gh pr checks <número> --watch --fail-fast` (solo lectura). Las comprobaciones `calidad` y `docker` deben quedar en verde.
+8. Espera el CI del PR (`.github/workflows/ci.yml`) con `gh pr checks <número> --watch --fail-fast` (solo lectura). Las comprobaciones `calidad`, `docker` y `despliegue` deben quedar en verde (en un PR no corren `publish` ni `deploy`: solo se ejecutan tras el merge a `main`).
    - Justo después de `gh pr create`, GitHub puede tardar unos segundos en registrar las ejecuciones y `gh pr checks` responder `no checks reported`: reintenta cada pocos segundos (hasta ~1 minuto) antes de darlo por fallo.
    - Si alguna comprobación falla, **no registres ni devuelvas `READY_FOR_MERGE`**: informa del paso que falló con el enlace a la ejecución y detén el flujo (regla crítica 8).
    - GitHub no bloquea el merge en este repositorio (plan Free), así que esta comprobación es obligatoria por proceso.
@@ -346,7 +346,7 @@ Solo cuando el prompt confirma que el usuario hizo merge del PR:
 4. Implementa solo el alcance aprobado; nunca ocultes cambios de alcance.
 5. Nunca descartes ni sobrescribas cambios ajenos al ticket.
 6. Commits solo en T4 (y en T5 si se autoriza), sin referencias a Claude ni Anthropic.
-7. El Pull Request siempre apunta a `main`; nunca hagas merge. Nunca devuelvas `READY_FOR_MERGE` con el CI del PR (`calidad` o `docker`) en rojo o sin terminar.
+7. El Pull Request siempre apunta a `main`; nunca hagas merge. Nunca devuelvas `READY_FOR_MERGE` con el CI del PR (`calidad`, `docker` o `despliegue`) en rojo o sin terminar.
 8. Si cualquier validación falla, detén el flujo y repórtalo con evidencia.
 9. Mantén la trazabilidad completa en el archivo del ticket: requisito → Action Plan → Technical Action Plan → implementación → QA → commit → PR.
 10. Encadena los comandos de git con `&&` (o comprueba el código de salida de cada uno): un `git add`, `git mv` o `git commit` fallido nunca debe dejar correr `git push` ni `gh pr create`.

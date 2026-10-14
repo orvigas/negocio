@@ -183,9 +183,10 @@ docker compose run --rm test   # código de salida 0 si todo pasa; distinto de 0
 
 ### Producción
 
-La VM no usa esta imagen: se despliega con Node directo (ver
-[Despliegue a producción en la VM](docs/despliegue.md)). Esta sección describe la imagen
-`production`, que el [CI](#ci) construye en cada cambio.
+En el VPS la app corre con esta imagen, publicada en GHCR y desplegada en cada push a `main` por
+el CI con `deploy/compose.prod.yaml` y `deploy/deploy.sh` detrás de Traefik (REQ-F-016; guía
+completa en [Despliegue a producción](docs/despliegue.md)). Esta sección describe la imagen
+`production` por sí sola.
 
 ```sh
 docker build --target production -t restaurante:prod .
@@ -200,8 +201,8 @@ docker run -d --name restaurante -p 3000:3000 \
   restaurante:prod
 ```
 
-El compose de producción (red interna con MySQL, secretos y usuarios de la base) es
-REQ-F-016.
+El compose de producción (red interna con MySQL, Traefik, usuarios de la base, volcados y vuelta
+atrás) está en `deploy/` y se describe en [docs/despliegue.md](docs/despliegue.md).
 
 - La configuración se inyecta **al ejecutar** (`-e` o `--env-file .env`), nunca en el build. Se
   valida igual que sin Docker: si falta una variable obligatoria (`WHATSAPP_*`, `DATABASE_URL`, `DATA_DIR`), el
@@ -229,14 +230,15 @@ REQ-F-016.
   `MIGRATION_DATABASE_URL` (usuario con DDL) y termina: 0 si todo se aplicó, 1 si no.
 - Recuperar el acceso dentro del contenedor:
   `docker exec -it restaurante node scripts/admin-recover.ts --usuario <nombre>`.
-- `/admin` exige HTTPS en producción (ver [Seguridad](#seguridad-1)): un despliegue con Docker
-  necesita un proxy con TLS y `TRUST_PROXY=true`, fuera del alcance actual.
+- `/admin` exige HTTPS en producción (ver [Seguridad](#seguridad-1)): en el VPS lo da Traefik y
+  `deploy/compose.prod.yaml` fija `TRUST_PROXY=true`.
 
 ## CI
 
 El workflow `.github/workflows/ci.yml` (en la raíz del repositorio, GitHub Actions) comprueba
-cada cambio. No necesita secretos ni `.env`: las pruebas usan su propia configuración
-(`tests/helpers.ts`).
+cada cambio y, en `main`, publica y despliega (REQ-F-016). Las comprobaciones no necesitan
+secretos ni `.env`: las pruebas usan su propia configuración (`tests/helpers.ts`). Solo el job
+`deploy` usa secretos (los del environment `production`).
 
 ### Cuándo se ejecuta
 
@@ -244,18 +246,21 @@ cada cambio. No necesita secretos ni `.env`: las pruebas usan su propia configur
 - En cada push a `main` (por ejemplo, al hacer merge de un PR).
 - Un push nuevo al mismo PR cancela la ejecución anterior de ese PR; las de `main` nunca se
   cancelan.
-- Cada comprobación tiene un tiempo máximo de 20 minutos.
+- Cada comprobación tiene un tiempo máximo de 20 minutos (`despliegue`, 30).
+- `publish` y `deploy` solo corren en un push a `main`, después de que `calidad`, `docker` y
+  `despliegue` terminen en verde. Un PR nunca publica ni despliega.
 
 ### Qué comprueba
 
-Dos comprobaciones independientes, que aparecen por separado en el PR (`CI / calidad` y
-`CI / docker`). Si un paso falla, la comprobación queda en rojo y sus pasos siguientes no se
-ejecutan; un fallo en una no afecta a la otra.
+Tres comprobaciones independientes, que aparecen por separado en el PR (`CI / calidad`,
+`CI / docker` y `CI / despliegue`). Si un paso falla, la comprobación queda en rojo y sus pasos
+siguientes no se ejecutan; un fallo en una no afecta a las otras.
 
 | Comprobación | Pasos, en orden |
 | ------------ | --------------- |
 | `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado), `npm run db:up` (MySQL 8.4 de `compose.yaml`), `prisma migrate diff` (el esquema y las migraciones no divergen) y `npm test` (contra MySQL) |
 | `docker`     | Build de los targets `production` y `migrate` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite y que `migrate` aplica el esquema sobre una base vacía con código 0; arranca `production` sin `HOST` y comprueba que escucha en `0.0.0.0`, queda `healthy` y responde por el puerto publicado (REQ-F-015) |
+| `despliegue` | `shellcheck` de los scripts de `deploy/` y prueba de humo `deploy/ci/smoke.sh` (REQ-F-016): el compose de producción no publica puertos y MySQL solo está en la red interna; con un registro local y un Traefik v3 ejecuta `deploy.sh` como el comando forzado de SSH y comprueba los rechazos (argumentos, suma de `deploy/`, permisos del `.env`), el primer despliegue, las redirecciones 301, el 429 en `/admin`, la IP y el esquema en el log, la retención de 7 volcados, la migración fallida (la app no se toca), la vuelta atrás ante una imagen rota (también tras una migración nueva) y dos despliegues a la vez |
 
 La caché de npm se invalida al cambiar `package-lock.json`; la de Docker reutiliza las capas que
 no cambian. El runner usa UTC; la selección de landing depende de `BUSINESS_TIMEZONE`, no de la
@@ -272,12 +277,27 @@ docker buildx build --platform linux/amd64 --target production .              # 
 docker buildx build --platform linux/amd64 --target migrate .
 ```
 
+La prueba de humo necesita Linux (`flock`, GNU `find` y `stat`). Con Docker Desktop, ejecútala
+dentro de un contenedor con el socket de Docker y una carpeta de trabajo que el daemon vea con la
+misma ruta:
+
+```sh
+docker build -t restaurante:production --target production . && docker build -t restaurante:migrate --target migrate .
+docker network create traefik-public 2>/dev/null; w=/tmp/restaurante-smoke; mkdir -p "$w"
+docker run --rm --network traefik-public -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "$PWD/deploy:/src/deploy:ro" -v "$w:$w" -e SMOKE_WORKDIR="$w" docker:cli \
+  sh -c 'apk add -q bash curl jq coreutils findutils util-linux gzip && bash /src/deploy/ci/smoke.sh restaurante:production restaurante:migrate'
+```
+
 Si un paso falla en GitHub por un problema de red (npm o Docker Hub), vuelve a ejecutarlo desde
 la pestaña **Actions** del PR con **Re-run failed jobs**.
 
 ### Seguridad
 
-- Permisos de solo lectura del repositorio (`permissions: contents: read`) y ningún secreto.
+- Permisos de solo lectura del repositorio (`permissions: contents: read`); `publish` añade solo
+  `packages: write` (GHCR con el `GITHUB_TOKEN`). Los únicos secretos (`VPS_*`) están en el
+  environment `production` y solo los usa `deploy`, cuya llave SSH solo puede ejecutar
+  `deploy.sh` en el VPS (comando forzado).
 - Usa el evento `pull_request`: los PR desde forks se ejecutan sin secretos y con un token de
   solo lectura. En un repositorio privado, GitHub además no ejecuta workflows de forks salvo que
   se habilite en **Settings → Actions → General**.
@@ -290,17 +310,17 @@ la pestaña **Actions** del PR con **Re-run failed jobs**.
 
 Hoy GitHub **no puede bloquear** el merge con el CI en rojo: el repositorio es privado con el
 plan Free, que no ofrece protección de rama ni rulesets. La regla es de proceso: no se hace
-merge de un PR con `calidad` o `docker` en rojo (el agente `senior-fullstack` no lo entrega como
-listo para merge).
+merge de un PR con `calidad`, `docker` o `despliegue` en rojo (el agente `senior-fullstack` no lo
+entrega como listo para merge).
 
 Si el repositorio pasa a GitHub Pro (o se hace público), para hacerlas obligatorias:
 
 1. **Settings → Rules → Rulesets → New ruleset → New branch ruleset** (o **Settings → Branches
    → Add branch protection rule**).
 2. Destino: la rama `main`; estado **Active**.
-3. Activa **Require status checks to pass** y agrega `calidad` y `docker` (aparecen después de
-   que el CI se haya ejecutado al menos una vez).
-4. Guarda. Desde entonces, el botón de merge queda bloqueado hasta que ambas estén en verde.
+3. Activa **Require status checks to pass** y agrega `calidad`, `docker` y `despliegue`
+   (aparecen después de que el CI se haya ejecutado al menos una vez).
+4. Guarda. Desde entonces, el botón de merge queda bloqueado hasta que las tres estén en verde.
 
 ## Configuración
 
@@ -326,7 +346,8 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `DATA_DIR`                 | Solo en producción (ruta absoluta) | Carpeta de los datos editables: JSON de página y `changes.jsonl` (por defecto `data/` del proyecto fuera de producción). No puede estar dentro de `src/` ni de `public/` |
 | `ADMIN_USER`               | No                      | Usuario del **primer administrador** (1-60 caracteres). Solo se usa si la base de datos no tiene usuarios; después se ignora (aviso `admin_bootstrap_ignored` en el log, sin valores). Sin usuarios ni estas variables, `/admin` responde 503 "no disponible"; con solo una de las dos o un hash inválido, la app no arranca |
 | `ADMIN_PASSWORD_HASH`      | No                      | Hash scrypt de la contraseña del primer administrador (`npm run admin:hash-password`). Nunca la contraseña en claro |
-| `TRUST_PROXY`              | No (`false`)            | `true` detrás de nginx con TLS: Koa usa `X-Forwarded-Proto` (HTTPS) y la última IP de `X-Forwarded-For` (límite de intentos) |
+| `TRUST_PROXY`              | No (`false`)            | `true` detrás de un proxy con TLS (Traefik en producción): Koa usa `X-Forwarded-Proto` (HTTPS) y la última IP de `X-Forwarded-For` (límite de intentos y log) |
+| `DATABASE_ALLOW_NEWER_SCHEMA` | No (`false`)         | Solo la pone `deploy/deploy.sh` al volver a la versión anterior: la app arranca aunque la base tenga migraciones que no conoce (REQ-F-016). Nunca en `.env` |
 | `WHATSAPP_BOT_*`, `WHATSAPP_GRAPH_API_VERSION` | Todas o ninguna | Bot de WhatsApp; ver [Variables del bot](#variables-del-bot). Sin ninguna, el bot queda deshabilitado |
 
 ## HTTP
@@ -448,7 +469,7 @@ en producción y la prueba de punta a punta con Meta (CA-26 de REQ-F-009, pendie
 3. Número dedicado al bot, registrado en la Cloud API y que no esté en uso en la app de WhatsApp.
 4. Token de acceso permanente (de un usuario del sistema), el ID del número y el ID de la WABA.
 5. El secreto de la app (App Secret), para validar la firma.
-6. URL pública con HTTPS para el webhook (el dominio de la VM con nginx).
+6. URL pública con HTTPS para el webhook (el dominio del VPS, detrás de Traefik).
 7. Plantilla aprobada para el aviso al personal.
 8. Método de pago en Meta (ver [Costos de Meta y Twilio](#costos-de-meta-y-twilio)): sin él,
    Meta deja de entregar las respuestas del bot al agotar el cupo gratuito del mes.
@@ -541,7 +562,7 @@ tokens nunca se envían a otro host, ni van en una URL ni en un log.
 ### Registrar el webhook en Meta (producción)
 
 1. Define las variables del bot con `WHATSAPP_BOT_PROVIDER=meta` y despliega la app detrás de
-   nginx con HTTPS (`TRUST_PROXY=true`).
+   Traefik con HTTPS (`TRUST_PROXY=true`; ver [docs/despliegue.md](docs/despliegue.md)).
 2. En la app de Meta: WhatsApp → Configuración → Webhook. URL de devolución de llamada:
    `https://<tu-dominio>/webhooks/whatsapp`; token de verificación: el valor de
    `WHATSAPP_BOT_VERIFY_TOKEN`. Meta hace `GET` con `hub.mode=subscribe`, `hub.verify_token` y
@@ -667,6 +688,9 @@ Eventos: `bot_provider_selected` (al arrancar, solo con el proveedor), `bot_conv
 los 4 últimos dígitos). Nunca se registran el texto de los mensajes, el nombre, la dirección,
 las notas, el código de referencia, los tokens, el Account SID ni el mensaje de error del
 proveedor (solo su código).
+La línea `request` de cada petición HTTP lleva la IP del cliente y el esquema (REQ-F-016, para
+diagnosticar abusos y el límite de `/admin`); nunca la query. En el VPS los logs de Docker rotan a
+10 MB x 5 archivos por contenedor, lo que limita cuánto tiempo se conserva la IP.
 El nombre y la dirección se piden con un aviso de privacidad y se borran de memoria al cerrar la
 conversación. Se recomienda publicar el Aviso de Privacidad del negocio (LFPDPPP).
 
@@ -871,18 +895,10 @@ habilita sin reiniciar.
   `no-referrer`) para que el navegador mande el `Origin` real en sus formularios.
 - Las respuestas de `/admin` llevan `Cache-Control: no-store` y `X-Robots-Tag: noindex, nofollow`;
   las landings no enlazan a `/admin`.
-- En producción solo funciona por HTTPS. Con nginx y TLS delante, define `TRUST_PROXY=true` y
-  reenvía las cabeceras:
-
-  ```nginx
-  location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $remote_addr;
-  }
-  ```
-
+- En producción solo funciona por HTTPS. En el VPS lo da Traefik (REQ-F-016), que añade
+  `X-Forwarded-Proto` y `X-Forwarded-For`, y `deploy/compose.prod.yaml` fija `TRUST_PROXY=true`.
+  Con otro proxy, define `TRUST_PROXY=true` y reenvía esas cabeceras. Traefik además limita
+  `/admin` a 10 peticiones por minuto por IP (ráfaga de 20; luego 429).
   Sin HTTPS (o sin `TRUST_PROXY` detrás del proxy), `/admin` responde 503 y el log registra
   `admin_requires_https`.
 - Las credenciales, el hash, los tokens y el contenido de los menús no se escriben en los logs.
@@ -976,9 +992,11 @@ DATA_DIR/
   `update`, `delete`, `restore`, `reorder`, `overwrite_after_conflict`, `import`— y campos con su
   valor anterior y el nuevo). No tiene pantalla: se consulta en la base de datos. Si se edita la
   base a mano con el servidor en marcha, reinícialo para que las landings lo vean.
-- **Respaldos y despliegue en el VPS:** fuera de este ticket (REQ-F-016, REQ-F-019 y REQ-F-021).
-  Una base migrada no arranca con un código anterior (`DATABASE_NEWER_THAN_CODE`): respalda la
-  base antes de cada actualización.
+- **Despliegue en el VPS (REQ-F-016):** cada despliegue hace antes un volcado local (se conservan
+  7) y migra con la imagen `migrate`. Una base migrada no arranca con un código anterior
+  (`DATABASE_NEWER_THAN_CODE`) salvo en la vuelta atrás automática, que usa
+  `DATABASE_ALLOW_NEWER_SCHEMA=true`: por eso **cada migración debe ser compatible con el código
+  anterior** (añadir antes de quitar). Respaldos fuera del VPS: REQ-F-019.
 
 ### Recuperación de datos dañados
 

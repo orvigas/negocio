@@ -24,7 +24,10 @@ import { databaseErrorDetails } from './errors.ts';
  *    textos en silencio (RN-3).
  * 3. Base en utf8mb4 con utf8mb4_es_0900_as_cs (D-4, D-5).
  * 4. Migraciones: las de prisma/migrations frente a `_prisma_migrations` (checksum = SHA-256 del
- *    migration.sql, el mismo que calcula Prisma).
+ *    migration.sql, el mismo que calcula Prisma). Con `allowNewerSchema` (DATABASE_ALLOW_NEWER_SCHEMA,
+ *    solo en la vuelta atrás de un despliegue; REQ-F-016, D-1) se toleran migraciones aplicadas que
+ *    este código no conoce: se registran con `database_newer_than_code_allowed`. Las conocidas
+ *    siguen siendo obligatorias, terminadas y con su checksum.
  * 5. Tablas y columnas de texto en utf8mb4 con utf8mb4_es_0900_as_cs. `_prisma_migrations`, interna
  *    de Prisma (la crea con utf8mb4_unicode_ci), solo tiene que ser utf8mb4 (CA-2, P-1).
  *
@@ -111,8 +114,10 @@ export const probeOf =
 export interface VerifyOptions {
   probe: ConnectionProbe;
   query: RawQuery;
-  logger?: Pick<Logger, 'info'>;
+  logger?: Pick<Logger, 'info' | 'warn'>;
   migrationsDir?: string;
+  /** Tolera migraciones aplicadas que este código no conoce (REQ-F-016, D-1). */
+  allowNewerSchema?: boolean;
   windowMs?: number;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
@@ -151,7 +156,7 @@ const rowsOf = (result: unknown): Row[] =>
 
 const text = (value: unknown): string | null => (typeof value === 'string' ? value : null);
 
-async function connect({ probe, logger, windowMs, now, sleep }: Required<Omit<VerifyOptions, 'migrationsDir' | 'query'>>): Promise<void> {
+async function connect({ probe, logger, windowMs, now, sleep }: Required<Omit<VerifyOptions, 'migrationsDir' | 'query' | 'allowNewerSchema'>>): Promise<void> {
   const deadline = now() + windowMs;
   for (let attempt = 1; ; attempt += 1) {
     try {
@@ -188,7 +193,8 @@ async function checkDatabaseCharset(query: RawQuery): Promise<void> {
   }
 }
 
-async function checkMigrations(query: RawQuery, migrationsDir: string): Promise<void> {
+/** Devuelve las migraciones aplicadas que este código no conoce (solo con `allowNewerSchema`). */
+async function checkMigrations(query: RawQuery, migrationsDir: string, allowNewerSchema: boolean): Promise<string[]> {
   const local = await readMigrations(migrationsDir);
   let result: unknown;
   try {
@@ -208,15 +214,19 @@ async function checkMigrations(query: RawQuery, migrationsDir: string): Promise<
     applied.set(name, { checksum: text(row.checksum), finished: row.finished });
   }
   const localNames = new Set(local.map((migration) => migration.name));
+  const unknown: string[] = [];
   for (const [name, row] of applied) {
     if (row.finished == null) throw new DatabaseInitError(DATABASE_INIT_CODES.MIGRATION_INCOMPLETE, { migration: name });
-    if (!localNames.has(name)) throw new DatabaseInitError(DATABASE_INIT_CODES.DATABASE_NEWER_THAN_CODE, { migration: name });
+    if (localNames.has(name)) continue;
+    if (!allowNewerSchema) throw new DatabaseInitError(DATABASE_INIT_CODES.DATABASE_NEWER_THAN_CODE, { migration: name });
+    unknown.push(name);
   }
   for (const migration of local) {
     const row = applied.get(migration.name);
     if (!row) throw new DatabaseInitError(DATABASE_INIT_CODES.MIGRATIONS_PENDING, { migration: migration.name });
     if (row.checksum !== migration.checksum) throw new DatabaseInitError(DATABASE_INIT_CODES.MIGRATION_MODIFIED, { migration: migration.name });
   }
+  return unknown.sort();
 }
 
 const isUtf8mb4Collation = (collation: string | null): boolean => collation !== null && collation.startsWith(`${EXPECTED_CHARSET}_`);
@@ -253,8 +263,9 @@ async function checkTablesAndColumns(query: RawQuery): Promise<void> {
 export async function verifyDatabase({
   probe,
   query,
-  logger = { info: () => {} },
+  logger = { info: () => {}, warn: () => {} },
   migrationsDir = DEFAULT_MIGRATIONS_DIR,
+  allowNewerSchema = false,
   windowMs = STARTUP_WINDOW_MS,
   now = Date.now,
   sleep = (ms) => delay(ms),
@@ -263,8 +274,10 @@ export async function verifyDatabase({
   try {
     await checkStrictMode(query);
     await checkDatabaseCharset(query);
-    await checkMigrations(query, migrationsDir);
+    const unknown = await checkMigrations(query, migrationsDir, allowNewerSchema);
     await checkTablesAndColumns(query);
+    // Solo nombres de migración (NNNNNNNNNNNNNN_nombre): sin SQL ni datos.
+    if (unknown.length > 0) logger.warn('database_newer_than_code_allowed', { migrations: unknown });
   } catch (err) {
     if (err instanceof DatabaseInitError) throw err;
     const code = mysqlCode(err);

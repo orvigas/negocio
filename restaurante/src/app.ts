@@ -74,9 +74,10 @@ export function createApp({
 
   const app = new Koa();
   app.env = config.nodeEnv;
-  // Detrás de nginx con TLS: respeta X-Forwarded-Proto/For (HTTPS e IP real del visitante).
+  // Detrás del proxy con TLS (Traefik en producción, REQ-F-016): respeta X-Forwarded-Proto/For
+  // (HTTPS e IP real del visitante).
   app.proxy = config.trustProxy;
-  // Solo se confía en la última IP de X-Forwarded-For (la que añade nginx): el cliente no
+  // Solo se confía en la última IP de X-Forwarded-For (la que añade el proxy): el cliente no
   // puede falsearla para esquivar el límite de intentos de acceso.
   app.maxIpsCount = 1;
   // Los errores se registran en el middleware centralizado; evita el log duplicado de Koa.

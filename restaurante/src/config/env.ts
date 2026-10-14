@@ -102,6 +102,11 @@ export interface Config {
   readonly whatsapp: Readonly<Record<BusinessId, WhatsAppConfig>>;
   readonly dataDir: string;
   readonly database: DatabaseConfig;
+  /**
+   * DATABASE_ALLOW_NEWER_SCHEMA (REQ-F-016, D-1): tolera migraciones aplicadas que este código no
+   * conoce. Solo la pone el script de despliegue al volver a la versión anterior; nunca va en `.env`.
+   */
+  readonly allowNewerSchema: boolean;
   readonly trustProxy: boolean;
   readonly adminBootstrap: AdminBootstrapConfig;
   readonly whatsappBot: ChatBotConfig;
@@ -537,6 +542,7 @@ export function loadConfig(env: Env = process.env): Config {
   const dataDir = parseDataDir(readVar(env, 'DATA_DIR'), nodeEnv, issues);
   const database = parseDatabaseUrl(readVar(env, 'DATABASE_URL'), 'DATABASE_URL', issues);
   const adminBootstrap = parseAdminBootstrap(env, issues);
+  const allowNewerSchema = parseBoolean(readVar(env, 'DATABASE_ALLOW_NEWER_SCHEMA'), 'DATABASE_ALLOW_NEWER_SCHEMA', false, issues);
   const trustProxy = parseBoolean(readVar(env, 'TRUST_PROXY'), 'TRUST_PROXY', false, issues);
   const whatsappBot = parseChatBot(env, nodeEnv, whatsapp.molotes?.phone, issues);
   // D-6 (REQ-F-009): con el bot, los CTA de las dos landings abren el chat del mismo número (el del bot).
@@ -555,6 +561,7 @@ export function loadConfig(env: Env = process.env): Config {
     port === undefined ||
     dataDir === undefined ||
     database === undefined ||
+    allowNewerSchema === undefined ||
     adminBootstrap === undefined ||
     trustProxy === undefined ||
     whatsappBot === undefined ||
@@ -573,6 +580,7 @@ export function loadConfig(env: Env = process.env): Config {
     whatsapp: Object.freeze(whatsapp),
     dataDir,
     database,
+    allowNewerSchema,
     trustProxy,
     adminBootstrap,
     whatsappBot,

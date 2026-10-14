@@ -76,7 +76,7 @@ export function createAdminGate({
     ctx.set('Referrer-Policy', 'same-origin');
 
     if (config.isProduction && !ctx.secure) {
-      // Con nginx + TLS delante, TRUST_PROXY=true hace que Koa lea X-Forwarded-Proto.
+      // Con el proxy con TLS delante (Traefik), TRUST_PROXY=true hace que Koa lea X-Forwarded-Proto.
       logger.warn('admin_requires_https', { path: ctx.path });
       return respondUnavailable(ctx);
     }

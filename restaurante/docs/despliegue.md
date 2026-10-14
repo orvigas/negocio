@@ -1,8 +1,8 @@
 # Despliegue a producción en el VPS
 
 Guía para preparar el VPS, desplegar automáticamente con cada merge a `main`, volver a una
-versión anterior y restaurar la base de datos (REQ-F-016). Los detalles de la app están en el
-[README](../README.md).
+versión anterior y restaurar la base de datos (REQ-F-016), y para los respaldos cifrados fuera del
+VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
 
 ## Antes de empezar
 
@@ -359,8 +359,8 @@ gzip -dc backups/<archivo>.sql.gz | $C exec -T mysql sh -c 'exec mysql -uroot -p
 4. Si el siguiente despliegue desde `main` vuelve a fallar en la migración, corrige la migración
    antes de volver a desplegar.
 
-Los volcados solo existen en el VPS. Copias cifradas fuera del servidor y pruebas periódicas de
-restauración: REQ-F-019.
+Estos volcados solo existen en el VPS. Las copias cifradas diarias fuera del servidor, la
+restauración desde ellas y la prueba mensual están en el [paso 11](#11-respaldos-fuera-del-vps).
 
 ## 10. Diagnóstico
 
@@ -381,3 +381,297 @@ restauración: REQ-F-019.
 | `/admin` responde 503 y `admin_requires_https` | La petición no llegó por HTTPS a través de Traefik | Revisa el entrypoint HTTPS y el certresolver |
 | `/admin` responde 429 | Límite de Traefik (10 por minuto por IP, ráfaga de 20) | Espera un minuto. Cada guardado son 2 peticiones (POST y redirección) |
 | `database_init_failed` | Base inalcanzable, credenciales, migraciones pendientes o base más nueva que el código | Según el código del log ([Base de datos](../README.md#base-de-datos)) |
+
+## 11. Respaldos fuera del VPS
+
+REQ-F-019. Objetivo: perder como mucho 24 h de datos (RPO) y recuperar el servicio en 2 h o menos
+(RTO).
+
+### 11.1 Qué hace
+
+- **Cuándo:** cada día a las 03:00 de `America/Mexico_City` (`restaurante-backup.timer`; el host
+  está en UTC). Si el VPS estaba apagado a esa hora, se ejecuta al arrancar.
+- **Qué guarda:**
+  - un `mysqldump` de `restaurante` hecho con el usuario de solo lectura `restaurante_backup`;
+  - el volumen `restaurante_app-data` completo, sin los temporales;
+  - un manifiesto con los conteos de `user` y `product`, la última migración, las imágenes y el
+    commit de `state/release.env`, y las sumas sha256.
+- **Integridad:** un volcado incompleto o dañado (o un `app-data` sin `molotes/` y `birria/`) no se
+  cifra ni se sube.
+- **Cifrado:** con `age`, usando solo las claves públicas de `/etc/restaurante-backup/recipients.txt`.
+  La clave privada nunca está en el VPS.
+- **Destino:** Cloudflare R2.
+  - `daily/` recibe el respaldo todos los días; `weekly/`, también los domingos; y `monthly/`,
+    también el día 1 (fecha de México).
+  - Nunca sobrescribe: sube con `If-None-Match: *` y los bucket locks lo impiden.
+- **Copia local:** en `/opt/restaurante/offsite/` (`deploy`, `700`; archivos `600`) quedan los 7
+  últimos respaldos cifrados. Si la subida falla, la copia se marca como pendiente y se reintenta en
+  la siguiente ejecución.
+- **Aviso:** Healthchecks.io recibe un ping al empezar, al terminar bien y al fallar (con el
+  código). Si no llega ningún ping a tiempo, avisa por correo.
+- **`.env`:** `restaurante-env-backup.path` vigila `/opt/restaurante/.env`. Al cambiar, sube una
+  copia cifrada a `env/`. El respaldo diario repite la comprobación.
+- **Convivencia con `deploy.sh`:** comparten el candado `state/deploy.lock`. El respaldo lo
+  mantiene solo durante el volcado (segundos) y espera hasta 30 min si hay un despliegue en curso.
+- **Huella SHA-256:** los scripts viven en `restaurante/ops/backup/` y se instalan en
+  `/opt/restaurante/ops/backup/`, fuera de `deploy/`. Instalarlos no cambia su suma SHA-256.
+
+| Ruta en el VPS | Dueño | Contenido |
+| -------------- | ----- | --------- |
+| `/opt/restaurante/ops/backup/` | root, `755` | `lib.sh`, `backup.sh`, `env-backup.sh`, `restore.sh` |
+| `/etc/systemd/system/restaurante-*` | root, `644` | Las cuatro unidades de systemd |
+| `/etc/restaurante-backup/backup.env` | root:deploy, `640` | Credencial de R2 del VPS y URL de ping (plantilla: `ops/backup/backup.env.example`) |
+| `/etc/restaurante-backup/recipients.txt` | root, `644` | Claves públicas de `age` (`age1...`), una por línea |
+| `/opt/restaurante/offsite/` | deploy, `700` | Los 7 últimos respaldos cifrados, `env.sha256` y las marcas `.pending` |
+
+Códigos de salida de `backup.sh`:
+
+| Código | Significado |
+| ------ | ----------- |
+| 2 | Configuración inválida |
+| 3 | Precondición: disco lleno, sin `release.env`, MySQL parado |
+| 4 | Un despliegue siguió en curso 30 min |
+| 5 | Falló el volcado o la lectura de `app-data` |
+| 6 | Integridad |
+| 7 | Cifrado |
+| 8 | Subida; la copia local queda pendiente |
+| 9 | Copia del `.env` |
+
+### 11.2 Preparar Cloudflare R2 (una vez)
+
+Fuentes: [bucket locks](https://developers.cloudflare.com/r2/buckets/bucket-locks/),
+[ciclo de vida](https://developers.cloudflare.com/r2/buckets/object-lifecycles/) y
+[tokens](https://developers.cloudflare.com/r2/api/tokens/).
+
+R2 no tiene versionado S3. Además, un token `Object Read & Write` puede borrar y sobrescribir.
+Por eso la protección la dan los **bucket locks**, que el token del VPS no puede quitar:
+
+- impiden borrar y sobrescribir los objetos de cada prefijo durante el plazo;
+- prevalecen sobre el ciclo de vida.
+
+1. Activa R2 en el panel de Cloudflare y anota el **Account ID**.
+2. Crea el bucket `restaurante-respaldos`: ubicación automática, sin jurisdicción y sin acceso
+   público ni dominio.
+3. En **Settings → Bucket lock rules**, añade estas reglas. Ninguna regla puede ir sin prefijo ni
+   durar más que su expiración, porque impediría la retención.
+4. En **Settings → Object Lifecycle Rules**, añade las expiraciones de la misma tabla. El bloqueo dura
+   un día menos que la expiración: así el ciclo de vida puede borrar en cuanto vence el bloqueo.
+
+   | Prefijo | Bucket lock (edad) | Expiración | Quedan |
+   | ------- | ------------------ | ---------- | ------ |
+   | `daily/` | 7 días | 8 días | 7 u 8 diarios |
+   | `weekly/` | 28 días | 29 días | 4 o 5 semanales |
+   | `monthly/` | 180 días | 186 días | 6 o 7 mensuales |
+   | `env/` | 180 días | 365 días | Copias del `.env` de un año |
+
+   Si el VPS queda comprometido, solo puede borrar objetos con el bloqueo ya vencido: los mínimos
+   7, 4 y 6 sobreviven.
+5. En **Manage API Tokens**, crea dos **Account API tokens** limitados a ese bucket y guarda en el
+   gestor de contraseñas el Access Key ID y el Secret Access Key de cada uno:
+   - **VPS:** `Object Read & Write`.
+   - **Mac:** `Object Read only`. Nunca va al VPS.
+
+### 11.3 Claves de `age` (una vez, en tu Mac)
+
+```sh
+brew install age
+age-keygen -o restaurante-backup.key     # imprime "Public key: age1..."
+```
+
+1. Guarda el contenido **completo** de `restaurante-backup.key` en el gestor de contraseñas.
+   Contiene la línea `AGE-SECRET-KEY-1...`, que es lo que te piden la restauración y la prueba
+   mensual.
+2. Copia solo la clave pública (`age1...`) para el VPS.
+3. Borra el archivo con `rm -P restaurante-backup.key`.
+
+Si se pierde la clave privada, **todos los respaldos quedan inútiles**. Para que una segunda persona
+también pueda descifrar, añade su clave pública como otra línea de `recipients.txt`. Los respaldos
+siguientes se cifran para las dos; los anteriores no.
+
+### 11.4 Healthchecks.io (una vez)
+
+1. Crea un check **"respaldo diario"**:
+   - Schedule: Cron `0 3 * * *`;
+   - zona horaria: `America/Mexico_City`;
+   - gracia: 2 h;
+   - integración de correo activa.
+
+   Su URL de ping (`https://hc-ping.com/...`) va en `HC_PING_URL` del VPS. Es un secreto: con ella
+   se pueden enviar pings falsos.
+2. Crea un check **"prueba mensual"**:
+   - Schedule: Cron `0 12 1 * *`;
+   - gracia: 7 días.
+
+   Su URL va en `HC_PING_URL` de la configuración del Mac. Si un mes no haces la prueba, avisa.
+
+### 11.5 Instalar en el VPS
+
+Desde tu máquina, en la raíz del repositorio, con el commit de `main` deseado:
+
+```sh
+scp -r restaurante/ops/backup <admin>@<vps>:/tmp/restaurante-backup
+```
+
+En el VPS, con tu usuario de administración:
+
+```sh
+sudo apt-get install -y age
+sudo install -d -o root -g root -m 755 /opt/restaurante/ops /opt/restaurante/ops/backup
+sudo install -d -o deploy -g deploy -m 700 /opt/restaurante/offsite
+sudo install -d -o root -g deploy -m 750 /etc/restaurante-backup
+cd /tmp/restaurante-backup
+sudo install -o root -g root -m 755 lib.sh backup.sh env-backup.sh restore.sh /opt/restaurante/ops/backup/
+sudo install -o root -g root -m 644 systemd/restaurante-backup.service systemd/restaurante-backup.timer \
+  systemd/restaurante-env-backup.service systemd/restaurante-env-backup.path /etc/systemd/system/
+sudo install -o root -g deploy -m 640 backup.env.example /etc/restaurante-backup/backup.env
+sudo nano /etc/restaurante-backup/backup.env      # R2_ACCOUNT_ID, R2_*_KEY del token del VPS, HC_PING_URL
+echo 'age1...' | sudo tee /etc/restaurante-backup/recipients.txt >/dev/null
+sudo chmod 644 /etc/restaurante-backup/recipients.txt
+sudo systemctl daemon-reload
+sudo systemctl start restaurante-backup.service    # primer respaldo, a mano
+sudo journalctl -u restaurante-backup.service -n 40 --no-pager
+sudo systemctl enable --now restaurante-backup.timer restaurante-env-backup.path
+systemctl list-timers restaurante-backup.timer     # próxima ejecución: 09:00 UTC
+rm -rf /tmp/restaurante-backup
+```
+
+Para actualizar los scripts, repite `scp` y los `install`, y después `daemon-reload`. Nada de esto
+toca `deploy/`: la suma de `cd /opt/restaurante/deploy && sha256sum compose.prod.yaml deploy.sh
+mysql/initdb/01-usuarios.sh | sha256sum` no cambia.
+
+### 11.6 Verificar la instalación
+
+Haz estas comprobaciones una vez y anota el resultado en el ticket.
+
+1. **Respaldo en R2 y ping de éxito.** Tras el primer respaldo, el panel de R2 muestra
+   `daily/restaurante-<fecha>.tar.age` y Healthchecks muestra el ping. Al día siguiente, lo mismo
+   a las 03:00 de México.
+2. **Aviso si falta un respaldo.** `sudo systemctl stop restaurante-backup.timer` y espera a que
+   venza la gracia: Healthchecks envía el correo. Después, `sudo systemctl start
+   restaurante-backup.timer`.
+3. **La credencial del VPS no puede borrar ni sobrescribir.** Las dos peticiones deben responder
+   un código 4xx, y el respaldo debe seguir intacto en el panel:
+
+   ```sh
+   sudo -u deploy bash -c '
+     . /opt/restaurante/ops/backup/lib.sh
+     load_config /etc/restaurante-backup/backup.env required
+     k=$(s3_list daily/ | head -n 1)
+     echo "objeto: $k"
+     curl -sS -o /dev/null -w "DELETE %{http_code}\n" -X DELETE -K <(s3_config) "$(s3_url "$k")"
+     f=$(mktemp); echo prueba >"$f"
+     curl -sS -o /dev/null -w "PUT %{http_code}\n" -K <(s3_config) \
+       -H "x-amz-content-sha256: $(sha256_of "$f")" -T "$f" "$(s3_url "$k")"
+     rm -f "$f"'
+   ```
+
+4. **Sin clave privada en el VPS.** `sudo grep -rl AGE-SECRET-KEY- /etc/restaurante-backup
+   /opt/restaurante/offsite /opt/restaurante/.env` no imprime nada. `ls -l
+   /opt/restaurante/offsite` muestra como mucho 7 respaldos, todos `-rw-------`.
+5. **`.env`.** Añade una línea de comentario a `/opt/restaurante/.env` (como `deploy`): en
+   `env/` aparece una copia nueva (`journalctl -u restaurante-env-backup.service`).
+6. **Retención.** Las reglas de 11.2 están en el panel del bucket.
+7. **`deploy/` intacto.** El siguiente despliegue desde `main` pasa sin reinstalar `deploy/`.
+
+### 11.7 Restaurar (runbook)
+
+Hazlo cuando se pierdan datos, cuando una migración quede a medias o cuando haya que levantar un VPS
+nuevo. **Se pierde todo lo escrito después del respaldo.**
+
+`restore.sh` hace lo siguiente:
+
+1. Toma el candado de `deploy.sh`.
+2. Descarga el respaldo y pide la clave privada sin eco; la clave no se guarda en ningún sitio.
+3. Comprueba las sumas.
+4. Pide que escribas `restaurante` para confirmar.
+5. Para la app y recarga la base como root (`DROP DATABASE` y el volcado).
+6. Vacía y restaura `app-data`.
+7. Arranca **la imagen de la app del respaldo** y espera a que esté `healthy`.
+8. Actualiza `state/release.env` y anota la restauración en `state/releases.log`.
+
+Al terminar imprime la duración de cada fase y el tiempo sin servicio.
+
+```sh
+sudo -u deploy /opt/restaurante/ops/backup/restore.sh latest                 # último de daily/
+sudo -u deploy /opt/restaurante/ops/backup/restore.sh monthly/restaurante-20261101T090000Z.tar.age
+sudo -u deploy /opt/restaurante/ops/backup/restore.sh /opt/restaurante/offsite/restaurante-<fecha>.tar.age
+```
+
+Después, haz las comprobaciones del [paso 8](#8-comprobaciones-después-de-cada-despliegue).
+
+**Casos:**
+
+- **Migración a medias (`MIGRATION_INCOMPLETE`) justo tras un despliegue:** usa primero el volcado
+  previo de `deploy.sh` ([paso 9](#9-restaurar-la-base-desde-un-volcado)), que es más reciente. Solo
+  si no sirve, usa el último respaldo de R2.
+- **El respaldo es más viejo que el código (`MIGRATIONS_PENDING`):** no pasa con `restore.sh`,
+  porque arranca la imagen del respaldo. El siguiente despliegue desde `main` aplica las
+  migraciones pendientes con su volcado previo.
+- **`DATABASE_NEWER_THAN_CODE`:** la base tiene migraciones que la imagen arrancada no conoce, por
+  ejemplo si se arrancó a mano una imagen anterior. Arranca la imagen del respaldo (la que imprime
+  `restore.sh`, también en `state/release.env`). `DATABASE_ALLOW_NEWER_SCHEMA=true` solo se usa
+  como en la vuelta atrás de `deploy.sh`, nunca en el `.env`.
+- **VPS nuevo:**
+  1. Prepara el VPS con los pasos 1.1 a 1.6, instala `deploy/` y la sección 11.5 sin activar el
+     timer.
+  2. Recupera el `.env` desde tu Mac. Con la credencial de solo lectura, descarga el último objeto
+     de `env/` y descífralo con `age -d -i <archivo con la clave> -o .env <copia>.env.age`.
+  3. Copia el `.env` a `/opt/restaurante/.env` (`deploy`, `600`).
+  4. Haz `docker login ghcr.io` como `deploy` (paso 1.4) y ejecuta `restore.sh latest`. Crea
+     MySQL, la base y los usuarios, y después restaura.
+  5. Activa el timer.
+
+### 11.8 Prueba mensual y simulacro (en tu Mac)
+
+Una vez al mes, desde la raíz del repositorio, en tu Mac. Necesitas Docker Desktop, `age` y
+`docker login ghcr.io` con un token de lectura (`read:packages`).
+
+Configuración, una vez:
+
+```sh
+mkdir -p ~/.config/restaurante-backup && chmod 700 ~/.config/restaurante-backup
+cp restaurante/ops/backup/backup.env.example ~/.config/restaurante-backup/r2-readonly.conf
+chmod 600 ~/.config/restaurante-backup/r2-readonly.conf
+# Edita: R2_ACCOUNT_ID, R2_BUCKET, las claves del token "Object Read only" y HC_PING_URL del check
+# "prueba mensual". Borra BACKUP_MIN_FREE_MB (no se usa aquí).
+```
+
+Prueba:
+
+```sh
+restaurante/ops/backup/verify-backup.sh --drill
+```
+
+1. Descarga el último respaldo de `daily/`, pide la clave privada y lo descifra.
+2. Comprueba las sumas.
+3. Carga el volcado en un MySQL 8.4 efímero (el mismo digest de producción, sin puertos
+   publicados).
+4. Compara los conteos de `user` y `product` y la última migración con el manifiesto, es decir,
+   con producción en el momento del respaldo. Si `counts_stable=false`, hubo escrituras durante el
+   volcado y una diferencia en los conteos solo es un aviso.
+5. Comprueba los JSON de `molotes/` y `birria/`.
+6. Con `--drill`, arranca además la imagen de la app del respaldo con esa base y ese `app-data`, y
+   espera a que responda.
+
+Al terminar:
+
+- borra todo lo efímero;
+- añade una línea a `~/.config/restaurante-backup/pruebas.log` (fecha, respaldo, conteos, migración,
+  duración y resultado);
+- envía el ping al check mensual (éxito o fallo).
+
+La duración del simulacro (`duracion=`) es el tiempo de una restauración completa sin la parada de
+producción. Debe quedar dentro del RTO de 2 h. La imagen de la app es `linux/amd64`, así que en un
+Mac con Apple Silicon corre emulada y tarda más.
+
+### 11.9 Operación
+
+| Tarea | Comando |
+| ----- | ------- |
+| Estado y próxima ejecución | `systemctl list-timers restaurante-backup.timer` |
+| Log del último respaldo | `sudo journalctl -u restaurante-backup.service -n 60 --no-pager` |
+| Respaldo a mano | `sudo systemctl start restaurante-backup.service` |
+| Copias locales | `sudo ls -l /opt/restaurante/offsite` |
+| Suspender los respaldos | `sudo systemctl disable --now restaurante-backup.timer restaurante-env-backup.path` |
+
+Los logs nunca muestran credenciales, la URL de ping, contraseñas ni el contenido del `.env`.

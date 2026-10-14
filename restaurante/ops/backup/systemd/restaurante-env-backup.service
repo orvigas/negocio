@@ -1,0 +1,21 @@
+# Copia cifrada del .env cuando cambia (REQ-F-019, RF-9). La lanza restaurante-env-backup.path.
+[Unit]
+Description=Copia cifrada del .env de restaurante a Cloudflare R2
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+ExecStart=/opt/restaurante/ops/backup/env-backup.sh
+TimeoutStartSec=10min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/opt/restaurante/offsite

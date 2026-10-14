@@ -175,6 +175,15 @@ jobs:
       - name: shellcheck
         working-directory: restaurante/deploy
         run: shellcheck deploy.sh mysql/initdb/01-usuarios.sh ci/smoke.sh
+      # Respaldos (REQ-F-019): scripts y unidades de systemd de restaurante/ops/backup.
+      - name: shellcheck respaldos
+        working-directory: restaurante/ops/backup
+        run: shellcheck -x lib.sh backup.sh env-backup.sh restore.sh verify-backup.sh ci/smoke.sh
+      - name: systemd respaldos
+        run: |
+          sudo install -d /opt/restaurante/ops/backup
+          sudo install -m 755 restaurante/ops/backup/*.sh /opt/restaurante/ops/backup/
+          systemd-analyze verify restaurante/ops/backup/systemd/*.service restaurante/ops/backup/systemd/*.timer restaurante/ops/backup/systemd/*.path
       - name: setup-buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       # Solo lee la caché del job docker (no la escribe: evita pisar sus entradas).
@@ -202,6 +211,10 @@ jobs:
           tags: restaurante:migrate
       - name: prueba de humo
         run: bash restaurante/deploy/ci/smoke.sh restaurante:production restaurante:migrate
+      - name: age
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends age
+      - name: prueba de humo de respaldos
+        run: bash restaurante/ops/backup/ci/smoke.sh restaurante:production restaurante:migrate
 
   # Publicación en GHCR (REQ-F-016, RF-3): solo en un push a main con todo el CI en verde. Las
   # imágenes se identifican por digest (salidas del job) y se etiquetan con el SHA del commit.

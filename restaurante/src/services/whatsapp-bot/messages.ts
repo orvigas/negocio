@@ -192,16 +192,23 @@ const staffLine = (line: CartLine): string => `${line.quantity} × ${lineLabel(l
 
 /**
  * Cuerpo de la plantilla del aviso al personal tal como se crea en el Administrador de WhatsApp
- * (README, "Plantilla del aviso al personal"; una prueba comprueba que coinciden).
+ * (README, "Plantilla del aviso al personal"; una prueba comprueba que coinciden). Meta exige
+ * suficiente texto fijo en proporción a las variables (error 2388293).
  */
 export const STAFF_TEMPLATE_BODY = [
-  'Nuevo pedido {{codigo}} de {{negocio}}',
-  '{{horario}}',
-  'Cliente: {{cliente}} ({{whatsapp}})',
-  'Entrega: {{entrega}}',
-  'Pedido: {{lineas}}',
-  'Total: {{total}}',
-  'Notas: {{notas}}',
+  'Hola, acaba de llegar un nuevo pedido por WhatsApp.',
+  '',
+  'Código del pedido: {{codigo}}',
+  'Negocio: {{negocio}}',
+  'Horario: {{horario}}',
+  'Nombre del cliente: {{cliente}}',
+  'WhatsApp del cliente: {{whatsapp}}',
+  'Forma de entrega: {{entrega}}',
+  'Productos: {{lineas}}',
+  'Total a cobrar: {{total}}',
+  'Notas del cliente: {{notas}}',
+  '',
+  'Por favor confirma el pedido respondiendo directamente al cliente por WhatsApp.',
 ].join('\n');
 
 /** Longitud máxima del cuerpo de una plantilla de WhatsApp (documentada para el cuerpo; DT-1 la aplica al cuerpo ya rellenado). */
@@ -247,6 +254,9 @@ function compactLines(lines: readonly CartLine[], budget: number): { text: strin
   return { text, level: STAFF_LINE_LEVELS.length };
 }
 
+/** Textos libres del cliente que se recortan si el cuerpo aún no cabe (DT-1), en este orden. */
+const FREE_TEXT_PARAMS = ['notas', 'entrega', 'cliente'] as const;
+
 /** Parámetros de la plantilla y nivel de compactación de `lineas` (0 = completo; DT-1). */
 export function buildStaffTemplate(order: OrderDetails, customerWaId: string): { params: Record<string, string>; level: number } {
   const others = {
@@ -265,7 +275,16 @@ export function buildStaffTemplate(order: OrderDetails, customerWaId: string): {
   const { text, level } = compactLines(order.lines, budget);
   // El mismo orden de siempre (README): codigo, negocio, horario, cliente, whatsapp, entrega, lineas, total, notas.
   const { total, notas, ...first } = clean;
-  return { params: { ...first, lineas: templateParam(text), total: total ?? '', notas: notas ?? '' }, level };
+  const params: Record<string, string> = { ...first, lineas: templateParam(text), total: total ?? '', notas: notas ?? '' };
+  // Último recurso: si ni las líneas abreviadas caben (nombre, dirección y notas al máximo, p. ej. con emojis),
+  // se recortan los textos libres del cliente en este orden. Nunca las líneas, las cantidades ni el total.
+  for (const key of FREE_TEXT_PARAMS) {
+    const overflow = hydrateStaffTemplate(params).length - MAX_TEMPLATE_BODY_CHARS;
+    if (overflow <= 0) break;
+    const value = params[key] ?? '';
+    params[key] = clip(value, Math.max(1, value.length - overflow));
+  }
+  return { params, level };
 }
 
 /** Parámetros con nombre de la plantilla del aviso al personal (DT-6; README). */
@@ -281,5 +300,9 @@ export const hydrateStaffTemplate = (params: Readonly<Record<string, string>>): 
  */
 export function staffNoticeText(order: OrderDetails, customerWaId: string): string {
   const params = staffTemplateParams(order, customerWaId);
-  return fill(botText.staffNotice, { ...params, lineas: order.lines.map((line) => templateParam(staffLine(line))).join('\n') });
+  return fill(botText.staffNotice, {
+    ...params,
+    lineas: order.lines.map((line) => templateParam(staffLine(line))).join('\n'),
+    notas: templateParam(order.notes === '' ? botText.noNotes : order.notes),
+  });
 }

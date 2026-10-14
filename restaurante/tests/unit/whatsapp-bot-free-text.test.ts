@@ -489,9 +489,46 @@ describe('presupuesto de la plantilla del aviso (DT-1)', () => {
   });
 
   it('un pedido normal no se compacta', () => {
-    const { level, params } = buildStaffTemplate(order([line(1), line(2)]), '5215500001234');
+    const normal = { ...order([line(1), line(2)]), name: 'Ana Pérez', address: 'Calle Hidalgo 123, Centro', notes: 'Sin cebolla, por favor' };
+    const { level, params } = buildStaffTemplate(normal, '5215500001234');
     expect(level).toBe(0);
     expect(params.lineas).toContain(' a $123.45 = $2,469');
+    expect(params.notas).toBe('Sin cebolla, por favor');
+  });
+
+  it('con todos los campos al máximo y emojis cabe recortando los textos libres, nunca las líneas ni el total', () => {
+    const extreme: OrderDetails = {
+      ...order(Array.from({ length: 15 }, (_, index) => ({ ...line(index + 1), optionLabel: 'O'.repeat(40), unitPriceCents: 9_999_999 }))),
+      business: 'birria',
+      name: '🌮'.repeat(60),
+      address: '🌮'.repeat(200),
+      notes: '🌮'.repeat(200),
+      offHoursOpening: 'mañana miércoles a las 08:30',
+    };
+    const { level, params } = buildStaffTemplate(extreme, '5215500001234');
+    expect(level).toBe(3);
+    expect(hydrateStaffTemplate(params).length).toBeLessThanOrEqual(MAX_TEMPLATE_BODY_CHARS);
+    expect(params.lineas?.split('; ')).toHaveLength(15);
+    expect(params.total).toBe('$29,999,997');
+    expect(params.notas?.endsWith('…')).toBe(true);
+    expect(params.whatsapp).toBe('+5215500001234');
+    expect(staffNoticeText(extreme, '5215500001234')).toContain('🌮'.repeat(200));
+  });
+
+  it('sin notas y con nombre y dirección al máximo en emojis, recorta las notas y la entrega y conserva el nombre y el total', () => {
+    const extreme: OrderDetails = {
+      ...order(Array.from({ length: 15 }, (_, index) => line(index + 1))),
+      name: '🌮'.repeat(60),
+      address: '🌮'.repeat(200),
+      notes: '',
+    };
+    const { params } = buildStaffTemplate(extreme, '5215500001234');
+    expect(hydrateStaffTemplate(params).length).toBeLessThanOrEqual(MAX_TEMPLATE_BODY_CHARS);
+    expect(params.notas).toBe('…');
+    expect(params.entrega).toMatch(/^A domicilio: (🌮)+…$/u);
+    expect(params.cliente).toBe('🌮'.repeat(60));
+    expect(params.lineas?.split('; ')).toHaveLength(15);
+    expect(params.total).toBe('$37,035');
   });
 
   it('el peor caso cabe en 1024 caracteres sin perder líneas, cantidades ni el total; el texto libre no se compacta', () => {

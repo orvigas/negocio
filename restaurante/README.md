@@ -597,19 +597,30 @@ se envía **siempre** con una plantilla utility, que se cobra (ver
 [Costos de Meta y Twilio](#costos-de-meta-y-twilio)). Créala en el Administrador de WhatsApp con:
 
 - **Categoría:** Utility. **Idioma:** Español (México), `es_MX` (o el de
-  `WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE`). **Nombre:** el de `WHATSAPP_BOT_STAFF_TEMPLATE` (p. ej.
-  `nuevo_pedido`).
+  `WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE`). **Nombre:** `nuevo_pedido` (el valor de
+  `WHATSAPP_BOT_STAFF_TEMPLATE`).
 - **Tipo de parámetros:** con nombre. **Solo cuerpo** (sin encabezado, pie ni botones):
 
 ```text
-Nuevo pedido {{codigo}} de {{negocio}}
-{{horario}}
-Cliente: {{cliente}} ({{whatsapp}})
-Entrega: {{entrega}}
-Pedido: {{lineas}}
-Total: {{total}}
-Notas: {{notas}}
+Hola, acaba de llegar un nuevo pedido por WhatsApp.
+
+Código del pedido: {{codigo}}
+Negocio: {{negocio}}
+Horario: {{horario}}
+Nombre del cliente: {{cliente}}
+WhatsApp del cliente: {{whatsapp}}
+Forma de entrega: {{entrega}}
+Productos: {{lineas}}
+Total a cobrar: {{total}}
+Notas del cliente: {{notas}}
+
+Por favor confirma el pedido respondiendo directamente al cliente por WhatsApp.
 ```
+
+Meta exige suficiente texto fijo en proporción a las variables: un cuerpo con poco texto fijo se
+rechaza con el error 2388293 ("demasiadas variables en relación con su longitud"). Por eso cada
+variable va con su etiqueta y el cuerpo abre y cierra con una frase fija. La plantilla vigente se
+llama `nuevo_pedido` (Utility, `es_MX`, parámetros con nombre).
 
 Ejemplos para la revisión de Meta: `codigo` M-4F7K, `negocio` Moloteando, `horario` En horario,
 `cliente` Ana Pérez, `whatsapp` +5215512345678, `entrega` Recoger en sucursal, `lineas`
@@ -620,7 +631,8 @@ Los valores nunca llevan saltos de línea ni tabuladores (la API los rechaza): l
 pedido van separadas por `; ` y llevan su detalle (`2 × Taco de Birria con Tortilla de Mano ·
 sin cebolla a $40 = $80`). El cuerpo de la plantilla admite como máximo 1024 caracteres: si un
 pedido muy grande no cabe, `lineas` se abrevia por niveles (sin precio unitario, detalles más
-cortos y, al final, cada línea recortada con el prefijo "(abreviado)"). Nunca se omite una línea,
+cortos y, al final, cada línea recortada con el prefijo "(abreviado)"); si aun así no cabe (nombre,
+dirección y notas al máximo), se recortan con "…" las notas, después la entrega y, por último, el nombre del cliente. Nunca se omite una línea,
 una cantidad ni el total, y queda `bot_staff_notice_compacted` en el log. Este texto de la
 plantilla debe coincidir con `STAFF_TEMPLATE_BODY` (`src/services/whatsapp-bot/messages.ts`);
 una prueba lo comprueba. Si Meta acepta el aviso pero avisa después de que no se entregó

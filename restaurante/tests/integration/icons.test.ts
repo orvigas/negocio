@@ -79,19 +79,20 @@ describe('<head> de cada landing (CA-1, CA-2)', () => {
   });
 });
 
-describe('<head> de / según el día (CA-3)', () => {
+// REQ-F-028: `/` es siempre Birria, así que su <head> declara los iconos de Birria cualquier día.
+describe('<head> de / (CA-3; REQ-F-028)', () => {
   it.each([
-    ['viernes a mediodía', FRIDAY_NOON_MX, 'molotes'],
-    ['viernes 20:00 CDMX (ya es sábado en UTC)', FRIDAY_LATE_MX_SATURDAY_UTC, 'molotes'],
-    ['viernes 23:59:59', FRIDAY_LAST_SECOND_MX, 'molotes'],
-    ['sábado 00:00:00', SATURDAY_FIRST_SECOND_MX, 'birria'],
-    ['domingo 23:59:59', SUNDAY_LAST_SECOND_MX, 'birria'],
-    ['lunes 00:00:00', MONDAY_FIRST_SECOND_MX, 'molotes'],
-  ] as const)('%s -> iconos de %s, idénticos a su ruta fija', async (_label, now, businessId) => {
+    ['viernes a mediodía', FRIDAY_NOON_MX],
+    ['viernes 20:00 CDMX (ya es sábado en UTC)', FRIDAY_LATE_MX_SATURDAY_UTC],
+    ['viernes 23:59:59', FRIDAY_LAST_SECOND_MX],
+    ['sábado 00:00:00', SATURDAY_FIRST_SECOND_MX],
+    ['domingo 23:59:59', SUNDAY_LAST_SECOND_MX],
+    ['lunes 00:00:00', MONDAY_FIRST_SECOND_MX],
+  ] as const)('%s -> iconos de Birria, idénticos a /birria', async (_label, now) => {
     const client = await agent({ now });
-    const [root, fixed] = await Promise.all([client.get('/'), client.get(`/${businessId}`)]);
+    const [root, fixed] = await Promise.all([client.get('/'), client.get('/birria')]);
     expect(headIcons(root.text)).toEqual(headIcons(fixed.text));
-    expect(headIcons(root.text)).toEqual(expectedHead(businessId));
+    expect(headIcons(root.text)).toEqual(expectedHead('birria'));
   });
 });
 
@@ -126,31 +127,27 @@ describe('recursos referenciados (CA-4, CA-6)', () => {
   });
 });
 
-describe('iconos de la raíz según el día (CA-7, CA-8)', () => {
+// REQ-F-028 (D-T1): los iconos de la raíz son siempre los de Birria, como `/`.
+describe('iconos de la raíz (CA-7, CA-8; REQ-F-028)', () => {
   const ROOT_ICONS: [string, IconKey, RegExp][] = [
     ['/favicon.ico', 'ico', /^image\/x-icon/],
     ['/apple-touch-icon.png', 'appleTouch', /^image\/png/],
     ['/apple-touch-icon-precomposed.png', 'appleTouch', /^image\/png/],
   ];
 
-  it.each(ROOT_ICONS)('%s sirve el icono del negocio activo y obliga a revalidar', async (path, key, type) => {
-    for (const [now, businessId] of [
-      [FRIDAY_LAST_SECOND_MX, 'molotes'],
-      [SATURDAY_FIRST_SECOND_MX, 'birria'],
-      [SUNDAY_LAST_SECOND_MX, 'birria'],
-      [MONDAY_FIRST_SECOND_MX, 'molotes'],
-    ] as const) {
+  it.each(ROOT_ICONS)('%s sirve siempre el icono de Birria y obliga a revalidar', async (path, key, type) => {
+    for (const now of [FRIDAY_LAST_SECOND_MX, SATURDAY_FIRST_SECOND_MX, SUNDAY_LAST_SECOND_MX, MONDAY_FIRST_SECOND_MX]) {
       const res = await (await agent({ now })).get(path).buffer(true);
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toMatch(type);
-      expect(Buffer.compare(res.body, iconFile(businessId, key)), `${path} ${businessId}`).toBe(0);
+      expect(Buffer.compare(res.body, iconFile('birria', key)), `${path} ${now.toISOString()}`).toBe(0);
       expect(res.headers['cache-control']).toBe('no-cache');
       expect(res.headers['cache-control']).not.toMatch(/max-age/);
       expect(res.headers.etag).toMatch(/^"[\w-]+"$/);
     }
   });
 
-  it('responde 304 si el navegador ya tiene el icono del día, y el nuevo icono tras la medianoche', async () => {
+  it('responde 304 si el navegador ya tiene el icono, también tras la medianoche (ya no cambia con el día)', async () => {
     let now = FRIDAY_LAST_SECOND_MX;
     const client = await agent({ now: () => now });
 
@@ -160,11 +157,11 @@ describe('iconos de la raíz según el día (CA-7, CA-8)', () => {
     expect(again.status).toBe(304);
     expect(again.headers['cache-control']).toBe('no-cache');
 
+    expect(Buffer.compare(first.body as Buffer, iconFile('birria', 'ico'))).toBe(0);
+
     now = SATURDAY_FIRST_SECOND_MX;
-    const next = await client.get('/favicon.ico').set('If-None-Match', etag!).buffer(true);
-    expect(next.status).toBe(200);
-    expect(next.headers.etag).not.toBe(etag);
-    expect(Buffer.compare(next.body, iconFile('birria', 'ico'))).toBe(0);
+    const next = await client.get('/favicon.ico').set('If-None-Match', etag!);
+    expect(next.status).toBe(304);
   });
 
   it('HEAD /favicon.ico responde 200 sin cuerpo', async () => {
@@ -231,16 +228,17 @@ describe('QA: zona horaria configurable (A-1, CA-3, CA-7, CA-9, CLAUDE.md §11)'
   it.each([
     ['America/Mexico_City', 'molotes'],
     ['Asia/Tokyo', 'birria'],
-  ] as const)('con BUSINESS_TIMEZONE=%s, /, los iconos de la raíz y /admin/login siguen el día de esa zona (%s)', async (timeZone, businessId) => {
+  ] as const)('con BUSINESS_TIMEZONE=%s, /admin/login sigue el día de esa zona (%s); / y los iconos de la raíz son de Birria', async (timeZone, businessId) => {
     const config = makeConfig({ BUSINESS_TIMEZONE: timeZone });
     const client = await agent({ now: FRIDAY_MX_SATURDAY_TOKYO, config });
 
-    expect(headIcons((await client.get('/').expect(200)).text)).toEqual(expectedHead(businessId));
+    // REQ-F-028: `/` y los iconos de la raíz ya no dependen del día.
+    expect(headIcons((await client.get('/').expect(200)).text)).toEqual(expectedHead('birria'));
 
     const ico = await client.get('/favicon.ico').buffer(true);
-    expect(Buffer.compare(ico.body, iconFile(businessId, 'ico'))).toBe(0);
+    expect(Buffer.compare(ico.body, iconFile('birria', 'ico'))).toBe(0);
     const precomposed = await client.get('/apple-touch-icon-precomposed.png').buffer(true);
-    expect(Buffer.compare(precomposed.body, iconFile(businessId, 'appleTouch'))).toBe(0);
+    expect(Buffer.compare(precomposed.body, iconFile('birria', 'appleTouch'))).toBe(0);
 
     const { request: adminClient } = await setupAdmin({
       env: { BUSINESS_TIMEZONE: timeZone },
@@ -262,14 +260,15 @@ describe('QA: HEAD y validadores de las rutas de la raíz (A-2, CA-7, CA-8)', ()
   });
 
   it.each(['/favicon.ico', '/apple-touch-icon.png', '/apple-touch-icon-precomposed.png'])(
-    '%s con el ETag del otro negocio responde 200 con el icono del día',
+    '%s con un ETag que no es el actual responde 200 con el icono de Birria',
     async (path) => {
       const birriaEtag = (await (await agent({ now: SATURDAY_NOON_MX })).get(path)).headers.etag;
-      const res = await (await agent({ now: FRIDAY_NOON_MX })).get(path).set('If-None-Match', birriaEtag!).buffer(true);
+      expect((await (await agent({ now: FRIDAY_NOON_MX })).get(path).set('If-None-Match', birriaEtag!)).status).toBe(304);
+      const res = await (await agent({ now: FRIDAY_NOON_MX })).get(path).set('If-None-Match', '"otro"').buffer(true);
       expect(res.status).toBe(200);
-      expect(res.headers.etag).not.toBe(birriaEtag);
+      expect(res.headers.etag).toBe(birriaEtag);
       const key = path === '/favicon.ico' ? 'ico' : 'appleTouch';
-      expect(Buffer.compare(res.body, iconFile('molotes', key))).toBe(0);
+      expect(Buffer.compare(res.body, iconFile('birria', key))).toBe(0);
     },
   );
 });

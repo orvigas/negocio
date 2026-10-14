@@ -60,38 +60,109 @@ function whatsappHrefs(html: string) {
   return [...html.matchAll(/<a\b[^>]*data-action="whatsapp-order"[^>]*>/g)].map((m) => m[0].match(/href="([^"]+)"/)![1]);
 }
 
-describe('GET / (selección automática por día)', () => {
-  it('entre semana renderiza Molotes y la canónica apunta a /molotes', async () => {
-    const res = await (await agent({ now: FRIDAY_NOON_MX })).get('/');
+/** Variante del aviso de inicio en el HTML (`data-home-notice`), o null si no hay. */
+function homeNoticeOf(html: string): string | null {
+  return /<dialog\b[^>]*data-home-notice="([^"]+)"/.exec(html)?.[1] ?? null;
+}
+
+const MONDAY_LATE_MX_TUESDAY_UTC = new Date('2026-10-13T05:30:00Z'); // lunes 23:30 CDMX = martes UTC
+const TUESDAY_NOON_MX = new Date('2026-10-13T18:00:00Z');
+
+describe('GET / (siempre Birria, con el aviso del día; REQ-F-028)', () => {
+  it.each([
+    ['lunes', MONDAY_EARLY_MX],
+    ['martes', TUESDAY_NOON_MX],
+    ['viernes', FRIDAY_NOON_MX],
+    ['sábado', SATURDAY_NOON_MX],
+    ['domingo', SUNDAY_LATE_MX],
+  ])('CA-10: el %s renderiza Birria con su SEO y la canónica a /birria', async (_label, now) => {
+    const res = await (await agent({ now })).get('/');
 
     expect(res.status).toBe(200);
     expect(res.type).toBe('text/html');
     expect(res.headers['cache-control']).toBe('no-cache');
-    expect(res.text).toContain('data-business="molotes"');
-    expect(res.text).toContain(`<title>${PAGES.molotes.title}</title>`);
-    expect(res.text).toContain('<link rel="canonical" href="/molotes" />');
-  });
-
-  it('en fin de semana renderiza Birria y la canónica apunta a /birria', async () => {
-    const res = await (await agent({ now: SATURDAY_NOON_MX })).get('/');
     expect(res.text).toContain('data-business="birria"');
+    expect(res.text).not.toContain('data-business="molotes"');
+    expect(res.text).toContain(`<title>${PAGES.birria.title}</title>`);
+    expect(res.text).toContain(`<meta property="og:title" content="${PAGES.birria.title}" />`);
     expect(res.text).toContain('<link rel="canonical" href="/birria" />');
+    expect(res.text).toContain('<script type="module" src="/js/birria/main.js"></script>');
   });
 
   it.each([
-    ['domingo 23:30', SUNDAY_LATE_MX, 'birria'],
-    ['lunes 00:30', MONDAY_EARLY_MX, 'molotes'],
-  ])('respeta el cambio de día en la zona del negocio (%s)', async (_label, now, businessId) => {
+    ['lunes 00:30', MONDAY_EARLY_MX, 'rest'],
+    ['martes', TUESDAY_NOON_MX, 'molotes'],
+    ['viernes', FRIDAY_NOON_MX, 'molotes'],
+    ['sábado', SATURDAY_NOON_MX, null],
+    ['domingo 23:30', SUNDAY_LATE_MX, null],
+  ])('CA-1 a CA-3: el %s el aviso es %s', async (_label, now, notice) => {
     const res = await (await agent({ now })).get('/');
-    expect(res.text).toContain(`data-business="${businessId}"`);
+    expect(homeNoticeOf(res.text)).toBe(notice);
   });
 
-  it('decide con la zona horaria del negocio (viernes 23:30 CDMX = sábado UTC)', async () => {
-    const now = new Date('2026-10-10T05:30:00Z');
-    const mx = await (await agent({ now })).get('/');
-    const utc = await (await agent({ now, config: makeConfig({ BUSINESS_TIMEZONE: 'UTC' }) })).get('/');
-    expect(mx.text).toContain('data-business="molotes"');
-    expect(utc.text).toContain('data-business="birria"');
+  it('CA-2, CA-3: el aviso llega cerrado (sin el atributo open) y con un título asociado', async () => {
+    for (const now of [MONDAY_EARLY_MX, FRIDAY_NOON_MX]) {
+      const { text } = await (await agent({ now })).get('/');
+      const dialog = /<dialog\b[^>]*>/.exec(text)![0];
+      expect(dialog).not.toMatch(/\bopen\b/);
+      expect(dialog).toContain('aria-labelledby="home-notice-title"');
+      expect(text).toContain('id="home-notice-title"');
+      expect(text.match(/<dialog\b/g)).toHaveLength(1);
+    }
+  });
+
+  it('CA-11: decide con la zona horaria del negocio (lunes 23:30 CDMX = martes UTC)', async () => {
+    const mx = await (await agent({ now: MONDAY_LATE_MX_TUESDAY_UTC })).get('/');
+    const utc = await (await agent({ now: MONDAY_LATE_MX_TUESDAY_UTC, config: makeConfig({ BUSINESS_TIMEZONE: 'UTC' }) })).get('/');
+    expect(homeNoticeOf(mx.text)).toBe('rest');
+    expect(homeNoticeOf(utc.text)).toBe('molotes');
+  });
+
+  it.each(['/birria', '/molotes'])('CA-4: %s nunca lleva aviso, ningún día', async (path) => {
+    for (const now of [MONDAY_EARLY_MX, TUESDAY_NOON_MX, FRIDAY_NOON_MX, SATURDAY_NOON_MX]) {
+      const { text } = await (await agent({ now })).get(path);
+      expect(text).not.toContain('data-home-notice');
+      expect(text).not.toContain('<dialog');
+    }
+  });
+
+  it.each([
+    ['lunes', 'rest'],
+    ['martes', 'molotes'],
+    ['miercoles', 'molotes'],
+    ['jueves', 'molotes'],
+    ['viernes', 'molotes'],
+    ['sabado', null],
+    ['domingo', null],
+  ])('CA-13: en desarrollo ?dia=%s fuerza el aviso (%s)', async (dia, notice) => {
+    const client = await agent({ now: SATURDAY_NOON_MX, config: makeConfig({ NODE_ENV: 'development' }) });
+    const { text } = await client.get(`/?dia=${dia}`);
+    expect(homeNoticeOf(text)).toBe(notice);
+    expect(text).toContain('data-business="birria"');
+  });
+
+  it('CA-13: en desarrollo, un ?dia no válido se ignora y decide el día real', async () => {
+    const client = await agent({ now: FRIDAY_NOON_MX, config: makeConfig({ NODE_ENV: 'development' }) });
+    for (const dia of ['Lunes', 'miércoles', 'mon', '', 'constructor', '__proto__']) {
+      const res = await client.get(`/?dia=${encodeURIComponent(dia)}`);
+      expect(res.status).toBe(200);
+      expect(homeNoticeOf(res.text), dia).toBe('molotes');
+    }
+    expect(homeNoticeOf((await client.get('/?dia=lunes&dia=sabado')).text)).toBe('molotes');
+  });
+
+  it.each(['production', 'test'] as const)('CA-13: con NODE_ENV=%s, ?dia no tiene efecto', async (nodeEnv) => {
+    const config = makeConfig(nodeEnv === 'production' ? { NODE_ENV: 'production', DATA_DIR: '/var/lib/restaurante' } : { NODE_ENV: 'test' });
+    const client = await agent({ now: SATURDAY_NOON_MX, config });
+    expect(homeNoticeOf((await client.get('/?dia=lunes')).text)).toBeNull();
+    const weekday = await agent({ now: TUESDAY_NOON_MX, config });
+    expect(homeNoticeOf((await weekday.get('/?dia=sabado')).text)).toBe('molotes');
+  });
+
+  it('CA-13: ?dia en desarrollo no afecta a /birria ni a /molotes', async () => {
+    const client = await agent({ now: TUESDAY_NOON_MX, config: makeConfig({ NODE_ENV: 'development' }) });
+    expect((await client.get('/birria?dia=lunes')).text).not.toContain('data-home-notice');
+    expect((await client.get('/molotes?dia=lunes')).text).not.toContain('data-home-notice');
   });
 
   it('envía cabeceras de seguridad', async () => {
@@ -335,10 +406,14 @@ describe('horarios reales (REQ-F-010)', () => {
     }
   });
 
-  it('CA-5: un lunes a las 10:00 (zona del negocio) / muestra Molotes con "Lunes: Cerrado por nixtamal"', async () => {
-    const { text } = await (await agent({ now: MONDAY_10_MX })).get('/');
-    expect(text).toContain('data-business="molotes"');
-    expect(footerHourRows(text)).toContainEqual(['Lunes', 'Cerrado por nixtamal']);
+  // REQ-F-028 sustituye REQ-F-010 D-2: el lunes `/` es Birria con el aviso de descanso; el
+  // horario "Lunes: Cerrado por nixtamal" sigue en la landing de Molotes.
+  it('CA-5: un lunes a las 10:00 (zona del negocio) / muestra Birria con el aviso de descanso, y /molotes "Lunes: Cerrado por nixtamal"', async () => {
+    const client = await agent({ now: MONDAY_10_MX });
+    const { text } = await client.get('/');
+    expect(text).toContain('data-business="birria"');
+    expect(homeNoticeOf(text)).toBe('rest');
+    expect(footerHourRows((await client.get('/molotes')).text)).toContainEqual(['Lunes', 'Cerrado por nixtamal']);
   });
 
   it('CA-5: un sábado / muestra Birria con su horario', async () => {

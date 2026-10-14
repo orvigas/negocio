@@ -17,11 +17,12 @@ import { createAdminRouter } from './admin.ts';
 export type AdminRouteDeps = Omit<AdminDeps, 'config' | 'renderer' | 'now' | 'repository' | 'products'>;
 
 /**
- * GET /           -> landing activa según el día (L-V Molotes, S-D Birria).
+ * GET /           -> landing de Birriería El Muñeco, siempre, con el aviso del día (REQ-F-028):
+ *                    lunes descanso, de martes a viernes Molotes, fin de semana ninguno.
  * GET /molotes    -> landing de Moloteando, siempre.
  * GET /birria     -> landing de Birriería El Muñeco, siempre.
  * GET /favicon.ico, /apple-touch-icon.png, /apple-touch-icon-precomposed.png
- *                 -> iconos del negocio activo del día, con revalidación (REQ-F-002).
+ *                 -> iconos de Birria (los de `/`; REQ-F-028), con revalidación (REQ-F-002).
  * GET /molotes.webmanifest, /birria.webmanifest -> manifest de cada negocio.
  * /admin/...      -> administración de menús (src/routes/admin.ts), solo si `admin` existe.
  * GET/POST /webhooks/whatsapp -> webhook del bot de WhatsApp (REQ-F-009); 503 sin `bot`.
@@ -47,7 +48,7 @@ export function createRouter({
   logger: Logger;
 }): Router {
   const router = new Router();
-  const icons = createIconsController({ config: deps.config, now: deps.now, publicDir });
+  const icons = createIconsController({ publicDir });
   router.get('/', createLandingController(deps));
   for (const businessId of BUSINESS_IDS) {
     router.get(BUSINESS_PATHS[businessId], createLandingController({ ...deps, businessId }));

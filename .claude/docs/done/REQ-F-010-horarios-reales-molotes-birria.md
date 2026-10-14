@@ -28,6 +28,7 @@ Además, cada negocio debe tener su horario definido en una sola fuente estructu
 
 - **D-1 (1A).** Molotes abre de martes a viernes, de 08:30 a 15:00. Cierra lunes, sábado y domingo.
 - **D-2 (2A).** La regla de qué landing se muestra no cambia (CLAUDE.md §5 y §11): el lunes se muestra Molotes.
+  - **Sustituida por REQ-F-028** (2026-10-14): `/` muestra siempre Birria y el lunes abre el aviso de descanso.
   - Ese día la landing enseña el horario correcto, con "Lunes: cerrado".
   - No hay ningún aviso que cambie según el día.
   - El bot atiende como Molotes fuera de horario (REQ-F-009).

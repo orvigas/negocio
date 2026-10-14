@@ -4,10 +4,11 @@
 
 Desarrollar una aplicación web tipo Landing Page para dos negocios dentro de la misma aplicación:
 
-- **Molotes** — activa de lunes a viernes.
-- **Birria El Muñeco** — activa sábados y domingos.
+- **Molotes** — abre de martes a viernes. Su landing está en `/molotes`.
+- **Birria El Muñeco** — abre sábados y domingos. Su landing está en `/birria` y es también la página de inicio (`/`) todos los días.
+- **Lunes** — descanso: no abre ningún negocio.
 
-La aplicación debe determinar automáticamente qué landing page renderizar según el día de la semana, sin intervención manual.
+La página de inicio muestra siempre Birria y, según el día de la semana, abre automáticamente un aviso (modal), sin intervención manual (REQ-F-028).
 
 Ambas landing pages deben incluir un botón visible para realizar pedidos mediante un bot de WhatsApp.
 
@@ -103,32 +104,30 @@ Los cambios pequeños que no provienen de un ticket (correcciones puntuales, aju
 
 ## 5. Comportamiento de las landing pages
 
-La aplicación tendrá dos experiencias dentro del mismo proyecto.
+La aplicación tendrá dos experiencias dentro del mismo proyecto: `/molotes` (Molotes) y `/birria` (Birria El Muñeco), cada una siempre disponible en su ruta.
 
-### Lunes a viernes
+### Página de inicio (`/`)
 
-Renderizar:
-
-```text
-Molotes
-```
-
-### Sábado y domingo
-
-Renderizar:
+Renderiza siempre:
 
 ```text
 Birria El Muñeco
 ```
 
-La selección debe realizarse automáticamente utilizando la fecha/hora correspondiente al negocio.
+Según el día, abre además un aviso (modal) solo en `/`:
+
+- **Lunes:** aviso "Descanso" (ese día no abre ningún negocio), con un enlace a `/molotes`.
+- **Martes a viernes:** aviso "Molotes" (la birria es de fin de semana), con un enlace a `/molotes`.
+- **Sábado y domingo:** ningún aviso.
+
+El aviso se decide en el servidor con la fecha del negocio, se muestra una vez por sesión del navegador, sus textos son editables en el contenido de Birria y, sin JavaScript, no tapa nada. `/molotes` y `/birria` nunca muestran el aviso.
 
 ### Reglas
 
 - No duplicar innecesariamente la aplicación.
 - Compartir componentes, layouts y lógica común cuando sea apropiado.
 - Mantener separados los contenidos específicos de cada negocio.
-- El cambio de landing no debe requerir modificar código manualmente.
+- El cambio del aviso según el día no debe requerir modificar código manualmente.
 - Evitar lógica duplicada entre ambas experiencias.
 
 ## 6. WhatsApp / pedidos
@@ -196,7 +195,7 @@ El contenido SEO debe corresponder al negocio que se está mostrando.
 
 ## 11. Fecha y zona horaria
 
-La selección entre Molotes y Birria debe considerar explícitamente la zona horaria del negocio.
+La elección del aviso de la página de inicio debe considerar explícitamente la zona horaria del negocio.
 
 No depender exclusivamente de la zona horaria accidental del servidor.
 
@@ -211,11 +210,13 @@ America/Mexico_City
 La lógica debe considerar:
 
 ```text
-Lunes  → Molotes
-Martes → Molotes
-Miércoles → Molotes
-Jueves → Molotes
-Viernes → Molotes
-Sábado → Birria El Muñeco
-Domingo → Birria El Muñeco
+Lunes     → Birria El Muñeco + aviso "Descanso"
+Martes    → Birria El Muñeco + aviso "Molotes"
+Miércoles → Birria El Muñeco + aviso "Molotes"
+Jueves    → Birria El Muñeco + aviso "Molotes"
+Viernes   → Birria El Muñeco + aviso "Molotes"
+Sábado    → Birria El Muñeco (sin aviso)
+Domingo   → Birria El Muñeco (sin aviso)
 ```
+
+No depender tampoco del reloj del dispositivo del cliente: el servidor decide el aviso.

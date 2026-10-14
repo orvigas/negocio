@@ -91,6 +91,21 @@ function renderBranches(renderer: Renderer, view: LandingViewData<'birria'>): Sa
   );
 }
 
+/**
+ * Aviso de la página de inicio (REQ-F-028): un `<dialog>` cerrado que abre public/js/modules/home-notice.js.
+ * Sin aviso (fin de semana, /birria) no se pinta nada.
+ */
+function renderHomeNotice(renderer: Renderer, view: LandingViewData<'birria'>): SafeHtml {
+  const { homeNotice } = view;
+  if (homeNotice === null) return renderer.join([]);
+  const notice = view.c.homeNotices[homeNotice];
+  return renderer.render('partials/birria/home-notice', {
+    variant: homeNotice,
+    notice,
+    action: renderer.render(`partials/birria/home-notice-${homeNotice}-action`, { notice }),
+  });
+}
+
 /** Combina el contenido estático con los datos editables (showcase del hero y club). */
 function withEditableContent(view: LandingViewData<'birria'>) {
   const { hero, promo } = view.menu;
@@ -107,5 +122,6 @@ export function buildBirriaBody({ renderer, ...view }: LandingView<'birria'>): S
     c: withEditableContent(view),
     menuCards: renderMenuCards(renderer, view),
     branches: renderBranches(renderer, view),
+    homeNotice: renderHomeNotice(renderer, view),
   });
 }

@@ -1,17 +1,19 @@
 import type { Middleware } from 'koa';
 
-import { isBusinessId, type BusinessId } from '../config/businesses.ts';
+import { BUSINESS, isBusinessId, type BusinessId } from '../config/businesses.ts';
 import type { Config } from '../config/env.ts';
 import type { MenuRepository } from '../repositories/menu-repository.ts';
 import { withProducts, type ProductRepository } from '../repositories/product-repository.ts';
-import { getActiveBusinessId } from '../services/business-schedule.ts';
+import { getHomeNotice, parseForcedDay } from '../services/business-schedule.ts';
 import { renderLandingPage } from '../views/landings/index.ts';
 import type { Renderer } from '../views/render.ts';
 
 /**
  * Controlador único de landing.
  * - Con `businessId` fijo (rutas /molotes y /birria) siempre renderiza ese negocio.
- * - Sin él (ruta /) elige el negocio por día de la semana en la zona horaria configurada.
+ * - Sin él (ruta /) muestra siempre Birria y, según el día en la zona horaria del negocio, el
+ *   aviso de inicio (REQ-F-028): lunes descanso, de martes a viernes Molotes. En desarrollo,
+ *   `?dia=lunes|...|domingo` fuerza el día (RF-11); en test y producción se ignora.
  *
  * `repository`: hero, texto destacado y promociones (JSON; REQ-F-001).
  * `products`: productos de la base de datos (REQ-F-008), leídos de su caché en memoria.
@@ -24,7 +26,7 @@ export function createLandingController({
   products,
   businessId: fixedBusinessId,
 }: {
-  config: Pick<Config, 'timezone' | 'whatsapp' | 'siteUrl'>;
+  config: Pick<Config, 'timezone' | 'whatsapp' | 'siteUrl' | 'nodeEnv'>;
   renderer: Renderer;
   now: () => Date;
   repository: Pick<MenuRepository, 'getPublished'>;
@@ -39,15 +41,17 @@ export function createLandingController({
   if (typeof products?.getPublished !== 'function') throw new TypeError('createLandingController requiere el repositorio de productos');
 
   return async function renderLanding(ctx) {
-    const businessId = fixedBusinessId ?? getActiveBusinessId({ now: now(), timeZone: config.timezone });
+    const businessId = fixedBusinessId ?? BUSINESS.BIRRIA;
+    const forcedDay = config.nodeEnv === 'development' ? parseForcedDay(ctx.query.dia) : undefined;
+    const homeNotice = fixedBusinessId === undefined ? getHomeNotice({ now: now(), timeZone: config.timezone, forcedDay }) : null;
     // La landing usa siempre la última versión válida en memoria (RN-7): sin E/S por petición,
     // tampoco a la base de datos (REQ-F-008, D-15).
     const { data } = await repository.getPublished(businessId);
     const menu = withProducts(businessId, data, products.getPublished(businessId));
-    const html = renderLandingPage({ renderer, config, businessId, menu });
+    const html = renderLandingPage({ renderer, config, businessId, menu, homeNotice });
 
     ctx.type = 'html';
-    // `/` cambia según el día y el contenido depende de la configuración: revalidar siempre.
+    // El aviso de `/` cambia según el día y el contenido depende de la configuración: revalidar siempre.
     ctx.set('Cache-Control', 'no-cache');
     ctx.body = html.toString();
   };

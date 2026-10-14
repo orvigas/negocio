@@ -4,10 +4,8 @@ import { join } from 'node:path';
 
 import type { Context, Middleware } from 'koa';
 
-import { BUSINESS_IDS, isBusinessId, type BusinessId } from '../config/businesses.ts';
-import type { Config } from '../config/env.ts';
+import { BUSINESS, BUSINESS_IDS, isBusinessId, type BusinessId } from '../config/businesses.ts';
 import { ICON_FILES, buildManifest, iconFilePath, type IconKey } from '../content/icons.ts';
-import { getActiveBusinessId } from '../services/business-schedule.ts';
 
 interface CachedAsset {
   readonly body: Buffer;
@@ -51,19 +49,12 @@ function sendRevalidated(ctx: Context, asset: CachedAsset): void {
 }
 
 /**
- * Iconos de la raíz que siguen al negocio activo del día (RF-5) y manifests por negocio (RF-3).
+ * Iconos de la raíz y manifests por negocio (RF-3). Los de la raíz son siempre los de Birria,
+ * igual que la página de inicio `/` (REQ-F-028, D-T1; antes seguían al negocio del día).
  * Los archivos se leen una sola vez al construir la app: falla rápido si falta alguno y no
  * hay E/S por petición.
  */
-export function createIconsController({
-  config,
-  now,
-  publicDir,
-}: {
-  config: Pick<Config, 'timezone'>;
-  now: () => Date;
-  publicDir: string;
-}): IconsController {
+export function createIconsController({ publicDir }: { publicDir: string }): IconsController {
   if (typeof publicDir !== 'string') throw new TypeError('createIconsController requiere publicDir');
 
   const read = (businessId: BusinessId, key: IconKey): Buffer => {
@@ -87,16 +78,16 @@ export function createIconsController({
     ]),
   ) as Record<BusinessId, BusinessIconAssets>;
 
-  const activeAssets = () => assets[getActiveBusinessId({ now: now(), timeZone: config.timezone })];
+  const rootAssets = assets[BUSINESS.BIRRIA];
 
   return Object.freeze<IconsController>({
     /** GET /favicon.ico */
     favicon(ctx) {
-      sendRevalidated(ctx, activeAssets().ico);
+      sendRevalidated(ctx, rootAssets.ico);
     },
     /** GET /apple-touch-icon.png y /apple-touch-icon-precomposed.png */
     appleTouchIcon(ctx) {
-      sendRevalidated(ctx, activeAssets().appleTouch);
+      sendRevalidated(ctx, rootAssets.appleTouch);
     },
     /** Manejador de GET /<negocio>.webmanifest */
     manifest(businessId) {

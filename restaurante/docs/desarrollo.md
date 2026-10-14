@@ -116,7 +116,8 @@ npm run dev         # servidor con recarga en http://127.0.0.1:3000
 
 | URL | Qué muestra |
 | --- | ----------- |
-| `http://127.0.0.1:3000/` | Landing del día según `BUSINESS_TIMEZONE` (L-V Molotes, S-D Birria) |
+| `http://127.0.0.1:3000/` | Birria, con el aviso del día según `BUSINESS_TIMEZONE` (lunes descanso, martes a viernes Molotes) |
+| `http://127.0.0.1:3000/?dia=lunes` | Fuerza el día del aviso (`lunes` … `domingo`, sin acentos); solo con `NODE_ENV=development`. El aviso sale una vez por sesión: ábrelo en una ventana privada nueva o borra `sessionStorage` para volver a verlo |
 | `http://127.0.0.1:3000/molotes` y `/birria` | Cada landing, siempre |
 | `http://127.0.0.1:3000/admin` | Administración (necesita el primer administrador del paso 3) |
 

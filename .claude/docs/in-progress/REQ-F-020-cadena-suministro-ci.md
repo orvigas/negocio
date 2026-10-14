@@ -2,7 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
+
+Pull Request: https://github.com/orvigas/negocio/pull/50 (commit a6b1dae, rebasado sobre `main` ea716f9). CI del PR en verde: `calidad`, `docker`, `despliegue` y `auditoria` pasan (`publish` y `deploy` se omiten en un PR; ejecución https://github.com/orvigas/negocio/actions/runs/38612343485). El log del job `auditoria` muestra "Auditoría de dependencias: sin bloqueos".
 
 ## Aprobación
 
@@ -635,3 +637,7 @@ QA Action Plan (2026-10-14, senior-qa): el usuario aprobó la implementación co
 ### Versión 5
 
 QA ronda 1 (2026-10-14, senior-qa): el usuario aprobó el QA Action Plan con "Aprobar". Todos los criterios PASS en local; una observación TRIVIAL; G-1 a G-4 pendientes en GitHub. Estado: QA_APPROVED.
+
+### Versión 4
+
+Commit a6b1dae y PR #50 (https://github.com/orvigas/negocio/pull/50) contra `main`, tras QA_APPROVED (ronda 1). CI en verde: `calidad`, `docker`, `despliegue` y `auditoria`. La observación TRIVIAL del QA (mensaje cuando falta el archivo de excepciones) queda como mejora pendiente. Estado: READY_FOR_MERGE.

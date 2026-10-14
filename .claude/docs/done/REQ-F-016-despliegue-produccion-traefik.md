@@ -2,9 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
-
-Pull Request: https://github.com/orvigas/negocio/pull/43. **No hacer merge hasta preparar el VPS** (`docs/despliegue.md`, secciones 1 a 3): el merge dispara el despliegue real.
+DONE
 
 ## Aprobación
 
@@ -110,9 +108,9 @@ Consolida los tickets del roadmap REQ-F-016 (imagen y compose de producción end
 
 - **CA-1:** `https://birriaelmuneco.com` responde 200 con un certificado válido y muestra la landing del día según `America/Mexico_City`.
 - **CA-2:** conservando ruta y query en todos los casos:
-  - `http://birriaelmuneco.com` y `http://www.birriaelmuneco.com` responden 308 hacia `https://` del mismo host (redirección global del entrypoint `web` del Traefik del VPS);
+  - `http://birriaelmuneco.com` y `http://www.birriaelmuneco.com` responden 301 hacia `https://` del mismo host (redirección global del entrypoint `web` del Traefik del VPS; verificado en el primer despliegue);
   - `https://www.birriaelmuneco.com` responde 301 hacia `https://birriaelmuneco.com`;
-  - ajustado el 2026-10-14 con la decisión del usuario "Aceptar 308 + 301 (Recomendado)".
+  - ajustado el 2026-10-14 con la decisión del usuario "Aceptar 308 + 301 (Recomendado)" y corregido a 301 tras el primer despliegue, porque el Traefik del VPS redirige con 301.
 
   La prueba de humo, sin redirección global, sigue comprobando el 301 del router del proyecto en las tres variantes.
 - **CA-3:** desde fuera del VPS no responden ni el puerto 3000 ni el 3306. El compose no publica puertos.
@@ -948,6 +946,45 @@ No aplican: no hay cambios de frontend (el diff de `src/views`, `src/content` y 
 
 QA_APPROVED
 
+## Cierre
+
+PR #43 mergeado en `main` (commit de merge `05bd9e7`, 2026-10-14T07:14:54Z). El merge disparó el primer despliegue real: run 38527090517 de Actions, todos los jobs en `success`, y el job `deploy` de 07:24:12Z a 07:25:08Z.
+
+### Verificación del primer despliegue (2026-10-14)
+
+| CA | Resultado |
+| -- | --------- |
+| CA-1 | 200 con certificado de Let's Encrypt (YR2), válido hasta el 2027-01-12; landing de Molotes un miércoles |
+| CA-2 | Las 3 variantes responden 301. `http://` y `http://www` van a `https://` del mismo host (redirección global de Traefik) y `https://www` va a la raíz, con ruta y query |
+| CA-3 | Puertos 3000 y 3306 cerrados desde fuera |
+| CA-4 | De 30 peticiones a `/admin`: 21 con 200 y 9 con 429; `/molotes` sigue en 200 |
+| CA-5 | El log registra la IP pública real y `protocol: https` |
+| CA-6 | El merge desplegó sin pasos manuales, con volcado previo en `/opt/restaurante/backups` |
+| CA-7 y CA-8 | Cubiertos por la prueba de humo del CI (no se provocan en producción) |
+| CA-9 | **Pendiente:** se verificará en el próximo par de merges seguidos |
+| CA-10 | `.env` con permisos 600 y dueño `deploy`; `deploy` sin sudo |
+| CA-11 y CA-12 | Cumplidos (configuración en `.env` y secrets; `docs/despliegue.md`) |
+
+Al arrancar, la app y MySQL quedaron healthy y el log registró `admin_bootstrap_created`. El bot está deshabilitado: el usuario aún no tiene cuenta de Meta y Twilio no se permite en producción (anotado en `pendientes.md`).
+
+### Infraestructura del VPS
+
+Preparada el 2026-10-14 desde la sesión principal, con aprobación del usuario:
+
+- SSH solo con llave;
+- ufw con 22, 80 y 443;
+- red `traefik-public` creada;
+- usuario `deploy` creado;
+- `deploy/` instalado (suma `82c3e5ae4b8f99ea424f55291032ab81c550632240d4bffedd0168579ee21596`).
+
+Traefik del VPS:
+
+- 3.7.14 con `network_mode: host`;
+- certresolver `letsencrypt` y entrypoints `web` y `websecure`;
+- redirección global de HTTP a HTTPS (301).
+
+Docker Engine 29.8.1.
+
 ## Historial de cambios
 
 ### Versión 1
@@ -1002,3 +1039,12 @@ PR https://github.com/orvigas/negocio/pull/43 (commit `5fafb82`). CI en verde:
 - `publish` y `deploy`: omitidos en el PR.
 
 SHA-256 de `deploy/`: `82c3e5ae4b8f99ea424f55291032ab81c550632240d4bffedd0168579ee21596`. Estado `READY_FOR_MERGE`.
+
+### Cierre (T5)
+
+2026-10-14, senior-fullstack:
+
+- PR #43 mergeado (`05bd9e7`) y primer despliegue verificado (run 38527090517).
+- CA-2 corregido a 301 en las tres variantes.
+- CA-9 queda pendiente para el próximo par de merges seguidos.
+- Ticket movido a `done/`. Estado `DONE`.

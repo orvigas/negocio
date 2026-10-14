@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 Pull Request: https://github.com/orvigas/negocio/pull/50 (commit a6b1dae, rebasado sobre `main` ea716f9). CI del PR en verde: `calidad`, `docker`, `despliegue` y `auditoria` pasan (`publish` y `deploy` se omiten en un PR; ejecución https://github.com/orvigas/negocio/actions/runs/38612343485). El log del job `auditoria` muestra "Auditoría de dependencias: sin bloqueos".
 
@@ -605,6 +605,22 @@ El job `auditoria` no instala dependencias. Las tres auditorías corren en paral
 
 QA_APPROVED
 
+## Cierre
+
+PR #50 (https://github.com/orvigas/negocio/pull/50) mergeado en `main` el 2026-10-14 (commit de merge `fad5c4d`). Después se mergeó el #51 (`9f62592`, REQ-F-019).
+
+### Verificación tras el merge
+
+- **G-1:** el CI del PR estaba en verde (`calidad`, `docker`, `despliegue` y `auditoria`).
+- **G-2:** en `main`, `auditoria` terminó antes de `publish` en las dos ejecuciones (run de `fad5c4d`: `auditoria` a las 18:24:26Z, `publish` a las 18:33:10Z).
+- **Producción:** corre `9f62592`, con `mariadb` 3.4.7 y la app healthy.
+
+### Pendientes posteriores (no bloquean el cierre)
+
+- **G-3:** que GitHub acepte `.github/dependabot.yml`. El usuario lo revisa en Insights → Dependency graph → Dependabot.
+- **G-4:** los primeros PR de Dependabot llegarán el lunes.
+- **Mejora TRIVIAL del QA:** el mensaje de `scripts/support/audit-policy.ts:149` es engañoso cuando falta el archivo de excepciones.
+
 ## Trazabilidad
 
 | Origen | Requisitos | Criterios de aceptación |
@@ -641,3 +657,7 @@ QA ronda 1 (2026-10-14, senior-qa): el usuario aprobó el QA Action Plan con "Ap
 ### Versión 4
 
 Commit a6b1dae y PR #50 (https://github.com/orvigas/negocio/pull/50) contra `main`, tras QA_APPROVED (ronda 1). CI en verde: `calidad`, `docker`, `despliegue` y `auditoria`. La observación TRIVIAL del QA (mensaje cuando falta el archivo de excepciones) queda como mejora pendiente. Estado: READY_FOR_MERGE.
+
+### Versión 5
+
+Cierre (2026-10-14): PR #50 mergeado (`fad5c4d`). El usuario confirmó con "Listo fusionado". Ticket movido a `done/`. Estado: DONE.

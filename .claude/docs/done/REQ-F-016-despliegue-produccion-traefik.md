@@ -961,7 +961,7 @@ PR #43 mergeado en `main` (commit de merge `05bd9e7`, 2026-10-14T07:14:54Z). El 
 | CA-5 | El log registra la IP pública real y `protocol: https` |
 | CA-6 | El merge desplegó sin pasos manuales, con volcado previo en `/opt/restaurante/backups` |
 | CA-7 y CA-8 | Cubiertos por la prueba de humo del CI (no se provocan en producción) |
-| CA-9 | **Pendiente:** se verificará en el próximo par de merges seguidos |
+| CA-9 | Verificado el 2026-10-14 con los merges seguidos de #50 y #51 (ver "Verificación de CA-9" en el historial) |
 | CA-10 | `.env` con permisos 600 y dueño `deploy`; `deploy` sin sudo |
 | CA-11 y CA-12 | Cumplidos (configuración en `.env` y secrets; `docs/despliegue.md`) |
 
@@ -1048,3 +1048,11 @@ SHA-256 de `deploy/`: `82c3e5ae4b8f99ea424f55291032ab81c550632240d4bffedd0168579
 - CA-2 corregido a 301 en las tres variantes.
 - CA-9 queda pendiente para el próximo par de merges seguidos.
 - Ticket movido a `done/`. Estado `DONE`.
+
+### Verificación de CA-9 (2026-10-14)
+
+CA-9 verificado con dos merges seguidos: PR #50 (`fad5c4d`, REQ-F-020) y PR #51 (`9f62592`, REQ-F-019).
+
+- El job `deploy` de `fad5c4d` (18:34:17Z → 18:34:27Z) no desplegó porque ya no era la cabeza de `main` y no aparece en `releases.log`.
+- El de `9f62592` desplegó de 18:37:06Z a 18:37:33Z, sin solaparse con el anterior.
+- Producción corre `9f62592` con la app healthy.

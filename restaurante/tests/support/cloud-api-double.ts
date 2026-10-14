@@ -7,12 +7,18 @@ import type { FetchLike } from '../../src/services/whatsapp-bot/providers/http-s
  * - `requests`: todos los intentos (también los fallidos y los reintentos).
  * - `sent`: solo los mensajes que el doble "entregó" (respuesta 200 con un `wamid`).
  * - `failNext(...)`: los próximos intentos responden con lo indicado, en orden.
+ * - Celulares de México como en Meta: el `wa_id` es `521` + 10 dígitos, pero el número permitido
+ *   es `52` + 10. Enviar a `521` + 10 responde 400 con el código 131030; `52` + 10 llega a la
+ *   cuenta `521` + 10. `to` es siempre la cuenta (`wa_id`) y `recipient`, el destino enviado.
  */
 
 export interface DoubleRequest {
   readonly url: string;
   readonly authorization: string | null;
+  /** Cuenta de WhatsApp (`wa_id`) que recibe el mensaje. */
   readonly to: string;
+  /** Destino tal como lo envió el cliente (`to` del cuerpo). */
+  readonly recipient: string;
   readonly type: string;
   readonly text?: string;
   readonly template?: { name: string; language: string; params: Record<string, string> };
@@ -34,11 +40,17 @@ interface RawPayload {
   template?: { name: string; language: { code: string }; components: { parameters: { parameter_name: string; text: string }[] }[] };
 }
 
+/** `wa_id` de la cuenta a la que llega un destino: `52` + 10 dígitos es el celular `521` + 10. */
+const waIdOf = (recipient: string): string => recipient.replace(/^52(\d{10})$/, '521$1');
+
+/** Meta rechaza `521` + 10 dígitos como destino (no está en la lista de números permitidos). */
+const NOT_ALLOWED_RECIPIENT = /^521\d{10}$/;
+
 function toRequest(url: string, init: RequestInit): DoubleRequest {
   // El cliente siempre envía el cuerpo como texto JSON.
   const payload = JSON.parse(typeof init.body === 'string' ? init.body : '{}') as RawPayload;
   const headers = new Headers(init.headers);
-  const request: DoubleRequest = { url, authorization: headers.get('Authorization'), to: payload.to, type: payload.type };
+  const request: DoubleRequest = { url, authorization: headers.get('Authorization'), to: waIdOf(payload.to), recipient: payload.to, type: payload.type };
   if (payload.text) return { ...request, text: payload.text.body };
   if (payload.template) {
     const params = Object.fromEntries((payload.template.components[0]?.parameters ?? []).map((p) => [p.parameter_name, p.text]));
@@ -59,13 +71,14 @@ export function createCloudApiDouble() {
     const next = script.shift();
     if (next?.kind === 'timeout') throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
     if (next?.kind === 'network-error') throw new TypeError('fetch failed', { cause: Object.assign(new Error(next.code), { code: next.code }) });
-    if (next?.kind === 'graph-error') {
-      return Response.json({ error: { message: `(#${next.code}) error simulado con datos sensibles`, code: next.code, fbtrace_id: 'x' } }, { status: next.status });
+    if (next?.kind === 'graph-error' || NOT_ALLOWED_RECIPIENT.test(request.recipient)) {
+      const { status, code } = next?.kind === 'graph-error' ? next : { status: 400, code: 131030 };
+      return Response.json({ error: { message: `(#${code}) error simulado con datos sensibles`, code, fbtrace_id: 'x' } }, { status });
     }
     counter += 1;
     const messageId = `wamid.DOBLE${counter}`;
     sent.push({ ...request, messageId });
-    return Response.json({ messaging_product: 'whatsapp', contacts: [{ input: request.to, wa_id: request.to }], messages: [{ id: messageId }] });
+    return Response.json({ messaging_product: 'whatsapp', contacts: [{ input: request.recipient, wa_id: request.to }], messages: [{ id: messageId }] });
   };
 
   return {

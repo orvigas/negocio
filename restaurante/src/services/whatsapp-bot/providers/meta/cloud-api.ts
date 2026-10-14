@@ -14,6 +14,9 @@ import { postWithRetry, type FetchLike } from '../http-send.ts';
  * - **Un solo reintento**, y solo si es seguro que Meta no aceptó el mensaje: HTTP 429 o 5xx,
  *   códigos de Graph de servicio temporal o límite de envío, o un error de conexión antes de
  *   enviar (providers/http-send.ts).
+ * - Destinatario mexicano: Meta entrega el `wa_id` de un celular de México como `521` + 10
+ *   dígitos, pero solo acepta enviarle como `52` + 10 (si no, error 131030). Solo se normaliza
+ *   el destino del envío; el identificador del cliente en la conversación no cambia.
  */
 
 export const GRAPH_API_BASE_URL = 'https://graph.facebook.com';
@@ -57,6 +60,11 @@ const messageIdOf = (body: unknown): string | undefined => {
   return typeof id === 'string' ? id : undefined;
 };
 
+const MX_MOBILE_WA_ID = /^521(\d{10})$/;
+
+/** Destino aceptado por la Cloud API: `521` + 10 dígitos -> `52` + 10; cualquier otro, sin cambios. */
+export const toCloudApiRecipient = (to: string): string => to.replace(MX_MOBILE_WA_ID, '52$1');
+
 export function createCloudApiClient({ config, fetch, logger, timeoutMs, retryDelayMs, sleep }: CloudApiOptions): CloudApiClient {
   const url = `${GRAPH_API_BASE_URL}/${config.graphApiVersion}/${config.accountId}/messages`;
 
@@ -80,11 +88,11 @@ export function createCloudApiClient({ config, fetch, logger, timeoutMs, retryDe
 
   return Object.freeze({
     sendText(to: string, body: string) {
-      return send('text', { to, type: 'text', text: { preview_url: false, body } });
+      return send('text', { to: toCloudApiRecipient(to), type: 'text', text: { preview_url: false, body } });
     },
     sendTemplate(to: string, { name, language, params }: TemplateMessage) {
       const parameters = Object.entries(params).map(([parameterName, text]) => ({ type: 'text', parameter_name: parameterName, text }));
-      return send('template', { to, type: 'template', template: { name, language: { code: language }, components: [{ type: 'body', parameters }] } });
+      return send('template', { to: toCloudApiRecipient(to), type: 'template', template: { name, language: { code: language }, components: [{ type: 'body', parameters }] } });
     },
   });
 }

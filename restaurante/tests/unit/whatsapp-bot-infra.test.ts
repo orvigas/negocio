@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
 import { BUSINESS_HOURS } from '../../src/content/hours.ts';
-import { createCloudApiClient } from '../../src/services/whatsapp-bot/providers/meta/cloud-api.ts';
+import { createCloudApiClient, toCloudApiRecipient } from '../../src/services/whatsapp-bot/providers/meta/cloud-api.ts';
 import { staffTemplateParams, type OrderDetails } from '../../src/services/whatsapp-bot/messages.ts';
 import { maskPhone } from '../../src/services/whatsapp-bot/phone.ts';
 import { acceptsOrders, describeHours, describeOpening, isOpen, nextOpening } from '../../src/services/whatsapp-bot/schedule.ts';
 import { createConversationStore, createExpiringMap, createRateLimiter } from '../../src/services/whatsapp-bot/store.ts';
 import { chunkText, codePointLength, normalizeInput, parseNumber } from '../../src/services/whatsapp-bot/text.ts';
 import { checkSignature, parseDelivery } from '../../src/services/whatsapp-bot/providers/meta/webhook.ts';
+import { WhatsAppBot } from '../../src/services/whatsapp-bot/providers/meta/whatsapp-bot.ts';
 import { getLocalMinutes } from '../../src/utils/datetime.ts';
 import { BOT_ENV, makeRecordingLogger } from '../helpers.ts';
 import { createCloudApiDouble, graphError, networkError, timeout } from '../support/cloud-api-double.ts';
-import { PHONE_NUMBER_ID, WEEK, loadFixture, mx, sign } from '../support/whatsapp.ts';
+import { PHONE_NUMBER_ID, WEEK, botConfig, loadFixture, mx, sign } from '../support/whatsapp.ts';
 
 const TZ = 'America/Mexico_City';
 
@@ -98,8 +99,29 @@ describe('cliente de la Cloud API (RF-7.3, RF-8)', () => {
     const { double, client } = setup();
     expect(await client.sendText('5215500001234', 'Hola')).toEqual({ ok: true, messageId: 'wamid.DOBLE1' });
     expect(double.requests).toEqual([
-      { url: 'https://graph.facebook.com/v26.0/106540352242922/messages', authorization: `Bearer ${config.accessToken}`, to: '5215500001234', type: 'text', text: 'Hola' },
+      { url: 'https://graph.facebook.com/v26.0/106540352242922/messages', authorization: `Bearer ${config.accessToken}`, to: '5215500001234', recipient: '525500001234', type: 'text', text: 'Hola' },
     ]);
+  });
+
+  it.each([
+    ['celular de México (521 + 10 dígitos) sin el 1', '5215500001234', '525500001234'],
+    ['México ya con 52 + 10 dígitos, sin cambios', '525500001234', '525500001234'],
+    ['otro país, sin cambios', '14155550123', '14155550123'],
+    ['otro país que empieza con 521, sin cambios', '5211234567', '5211234567'],
+  ])('envía al destino que acepta Meta: %s', async (_name, to, recipient) => {
+    expect(toCloudApiRecipient(to)).toBe(recipient);
+    const { double, client } = setup();
+    expect(await client.sendText(to, 'Hola')).toMatchObject({ ok: true });
+    await client.sendTemplate(to, { name: 'nuevo_pedido', language: 'es_MX', params: { codigo: 'M-AB12' } });
+    expect(double.requests.map((request) => request.recipient)).toEqual([recipient, recipient]);
+  });
+
+  it('el aviso al personal de WhatsAppBot también se envía sin el 1 tras el 52', async () => {
+    const double = createCloudApiDouble();
+    const bot = new WhatsAppBot({ config: botConfig(), fetch: double.fetch, logger: makeRecordingLogger(), retryDelayMs: 0 });
+    expect(await bot.sendStaffNotice('5215511110001', { params: { codigo: 'M-AB12' }, text: 'Nuevo pedido' })).toMatchObject({ ok: true });
+    expect(await bot.sendText('5215500001234', 'Hola')).toMatchObject({ ok: true });
+    expect(double.requests.map((request) => request.recipient)).toEqual(['525511110001', '525500001234']);
   });
 
   it('envía la plantilla con parámetros con nombre', async () => {

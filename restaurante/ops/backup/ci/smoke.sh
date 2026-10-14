@@ -307,6 +307,8 @@ check 'releases.log registra la restauración' grep -q 'result=restored' "$BASE/
 
 # --- Prueba mensual y simulacro (RF-11, CA-7, CA-8) ----------------------------------------------
 say 'prueba mensual con --drill (RF-11)'
+# Esta prueba corre con GNU coreutils; verify-backup.sh corre en macOS, cuyo chmod/chown no acepta --.
+check 'verify-backup.sh y lib.sh no usan chmod/chown con --' sh -c "! grep -nE '\\b(chmod|chown)\\b[^#]*[[:space:]]--([[:space:]]|\$)' '$OPS_SRC/verify-backup.sh' '$OPS_SRC/lib.sh'"
 install -m 600 "$ETC/backup.env" "$WORK/r2-readonly.conf"
 check 'verify-backup.sh --drill termina con 0' run verify RESTAURANTE_BACKUP_CONFIG="$WORK/r2-readonly.conf" RESTAURANTE_BACKUP_LOG="$WORK/pruebas.log" sh -c "printf '%s\n' '$IDENTITY' | '$OPS_SRC/verify-backup.sh' --drill"
 check 'el resultado queda registrado' grep -q 'resultado=ok' "$WORK/pruebas.log"

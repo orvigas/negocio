@@ -2,7 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
+
+Pull Request: https://github.com/orvigas/negocio/pull/45 (commit 59a3620). CI del PR en verde: `calidad`, `docker` y `despliegue` pasan (`publish` y `deploy` se omiten en un PR; ejecución https://github.com/orvigas/negocio/actions/runs/38567391499).
 
 ## Aprobación
 
@@ -510,3 +512,7 @@ Implementación aprobada por el usuario ("Aprobar"). Se agrega el QA Action Plan
 ### QA ronda 1 (senior-qa, 2026-10-14)
 
 QA Action Plan aprobado por el usuario ("Aprobar"). Pruebas ejecutadas; CA-1 a CA-14 en PASS y sin defectos. Estado: QA_APPROVED.
+
+### Pull Request (senior-fullstack, 2026-10-14)
+
+Commit 59a3620 y PR #45 (https://github.com/orvigas/negocio/pull/45) contra `main`. CI en verde: `calidad`, `docker` y `despliegue`. Estado: READY_FOR_MERGE.

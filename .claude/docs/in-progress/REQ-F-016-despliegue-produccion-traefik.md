@@ -2,7 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
+
+Pull Request: https://github.com/orvigas/negocio/pull/43. **No hacer merge hasta preparar el VPS** (`docs/despliegue.md`, secciones 1 a 3): el merge dispara el despliegue real.
 
 ## Aprobación
 
@@ -991,3 +993,12 @@ Decisiones del usuario:
 - CA-2 ajustado a 308 (redirección global de Traefik) más 301 (`https://www`), por decisión del usuario.
 - `docs/despliegue.md` §1.6: creación de `traefik-public` y ufw con Traefik en modo host.
 - Commit y PR.
+
+PR https://github.com/orvigas/negocio/pull/43 (commit `5fafb82`). CI en verde:
+
+- `calidad`: 8 min 30 s.
+- `docker`: 2 min 13 s.
+- `despliegue`: 3 min 29 s. La prueba de humo pasó todas sus comprobaciones en amd64.
+- `publish` y `deploy`: omitidos en el PR.
+
+SHA-256 de `deploy/`: `82c3e5ae4b8f99ea424f55291032ab81c550632240d4bffedd0168579ee21596`. Estado `READY_FOR_MERGE`.

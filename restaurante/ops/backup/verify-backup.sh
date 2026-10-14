@@ -77,7 +77,7 @@ record() { # record <ok|fallo> [motivo]
   line="fecha=$(date -u +%Y-%m-%dT%H:%M:%SZ) respaldo=$LABEL usuarios=$USERS productos=$PRODUCTS migracion=$MIGRATION simulacro=$DRILL duracion=$((SECONDS - START))s resultado=$1${2:+ motivo=\"$2\"}"
   mkdir -p -- "$(dirname -- "$RESULT_LOG")"
   printf '%s\n' "$line" >>"$RESULT_LOG"
-  chmod 600 -- "$RESULT_LOG"
+  chmod 600 "$RESULT_LOG" # Sin --: el chmod de macOS lo toma como archivo y sale con 1.
   printf '%s\n' "$line"
 }
 

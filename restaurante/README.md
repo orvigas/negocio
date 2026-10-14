@@ -91,6 +91,7 @@ apruebe con `npm install-scripts approve <paquete>`.
 | `npm run test:watch` | Vitest en modo observación                                  |
 | `npm run lint`       | ESLint (`eslint.config.ts`): backend en TypeScript con información de tipos (typescript-eslint) y `public/js` con las reglas de JavaScript para navegador. No modifica archivos; termina con código distinto de 0 si hay errores o avisos. No forma parte de `npm test` ni del Dockerfile, pero sí del [CI](#ci) |
 | `npm run lint:fix`   | Igual que `lint`, pero aplica las correcciones automáticas |
+| `npm run audit:deps` | Auditoría de dependencias por imagen (production, migrate y desarrollo) con la política del CI y las excepciones de `security/audit-exceptions.json` (ver [Auditoría de dependencias](#auditoría-de-dependencias)). Necesita red |
 
 Excepciones al lint: una regla solo se desactiva en una línea concreta y con la justificación
 después de `--` (`// eslint-disable-next-line <regla> -- <motivo>`); sin justificación, el lint
@@ -250,14 +251,14 @@ secretos ni `.env`: las pruebas usan su propia configuración (`tests/helpers.ts
 - En cada push a `main` (por ejemplo, al hacer merge de un PR).
 - Un push nuevo al mismo PR cancela la ejecución anterior de ese PR; las de `main` nunca se
   cancelan.
-- Cada comprobación tiene un tiempo máximo de 20 minutos (`despliegue`, 30).
-- `publish` y `deploy` solo corren en un push a `main`, después de que `calidad`, `docker` y
-  `despliegue` terminen en verde. Un PR nunca publica ni despliega.
+- Cada comprobación tiene un tiempo máximo de 20 minutos (`despliegue`, 30; `auditoria`, 10).
+- `publish` y `deploy` solo corren en un push a `main`, después de que `calidad`, `docker`,
+  `despliegue` y `auditoria` terminen en verde. Un PR nunca publica ni despliega.
 
 ### Qué comprueba
 
-Tres comprobaciones independientes, que aparecen por separado en el PR (`CI / calidad`,
-`CI / docker` y `CI / despliegue`). Si un paso falla, la comprobación queda en rojo y sus pasos
+Cuatro comprobaciones independientes, que aparecen por separado en el PR (`CI / calidad`,
+`CI / docker`, `CI / despliegue` y `CI / auditoria`). Si un paso falla, la comprobación queda en rojo y sus pasos
 siguientes no se ejecutan; un fallo en una no afecta a las otras.
 
 | Comprobación | Pasos, en orden |
@@ -265,6 +266,7 @@ siguientes no se ejecutan; un fallo en una no afecta a las otras.
 | `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado), `npm run db:up` (MySQL 8.4 de `compose.yaml`), `prisma migrate diff` (el esquema y las migraciones no divergen) y `npm test` (contra MySQL) |
 | `docker`     | Build de los targets `production` y `migrate` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite y que `migrate` aplica el esquema sobre una base vacía con código 0; arranca `production` sin `HOST` y comprueba que escucha en `0.0.0.0`, queda `healthy` y responde por el puerto publicado (REQ-F-015) |
 | `despliegue` | `shellcheck` de los scripts de `deploy/` y prueba de humo `deploy/ci/smoke.sh` (REQ-F-016): el compose de producción no publica puertos y MySQL solo está en la red interna; con un registro local y un Traefik v3 ejecuta `deploy.sh` como el comando forzado de SSH y comprueba los rechazos (argumentos, suma de `deploy/`, permisos del `.env`), el primer despliegue, las redirecciones 301, el 429 en `/admin`, la IP y el esquema en el log, la retención de 7 volcados, la migración fallida (la app no se toca), la vuelta atrás ante una imagen rota (también tras una migración nueva) y dos despliegues a la vez |
+| `auditoria`  | Node 24 y `node scripts/audit-deps.ts` (REQ-F-020), sin `npm ci`: `npm audit` sobre `package-lock.json` por imagen, con la política de [Auditoría de dependencias](#auditoría-de-dependencias) |
 
 La caché de npm se invalida al cambiar `package-lock.json`; la de Docker reutiliza las capas que
 no cambian. El runner usa UTC; la selección de landing depende de `BUSINESS_TIMEZONE`, no de la
@@ -279,6 +281,7 @@ npm ci --strict-allow-scripts && npm run db:generate && npm run typecheck && npm
 SHADOW_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante_shadow npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code   # divergencia
 docker buildx build --platform linux/amd64 --target production .              # docker
 docker buildx build --platform linux/amd64 --target migrate .
+npm run audit:deps                                                            # auditoria
 ```
 
 La prueba de humo necesita Linux (`flock`, GNU `find` y `stat`). Con Docker Desktop, ejecútala
@@ -310,21 +313,104 @@ la pestaña **Actions** del PR con **Re-run failed jobs**.
   (`gh api repos/<dueño>/<acción>/commits/<etiqueta> --jq .sha`) y cambia SHA y comentario
   juntos.
 
+### Auditoría de dependencias
+
+`npm run audit:deps` (job `auditoria`, REQ-F-020) ejecuta `npm audit --json` sobre
+`package-lock.json` en tres cortes, con los mismos `--omit` que el `Dockerfile`, y aplica la
+política de `scripts/support/audit-policy.ts`:
+
+| Corte | Árbol | Qué rompe el CI |
+| --- | --- | --- |
+| `production` | `--omit=dev --omit=optional` (imagen production) | Un aviso `high` o `critical` sin excepción vigente |
+| `migrate` | `--omit=dev` (imagen migrate: añade el CLI de Prisma) | Un aviso `high` o `critical` sin excepción vigente |
+| `desarrollo` | Todo el árbol | Nada: solo informa |
+
+- Los avisos `moderate`, `low` e `info` de cualquier corte solo informan. Todo aparece en el
+  resumen del job (pestaña **Summary** de la ejecución) y en la consola.
+- **Fail closed:** si el registro de npm no responde o la salida no es un informe válido, el job
+  falla. Se reintenta con **Re-run failed jobs**.
+- Un aviso nuevo publicado sin cambios en el código deja en rojo el siguiente PR o push a `main`
+  hasta corregirlo o aceptarlo con una excepción.
+- Prohibido: `npm audit fix --force` y bajar cualquier dependencia de versión mayor. Las
+  correcciones se hacen subiendo la dependencia o con `overrides` que pasen todo el CI
+  (typecheck, lint, pruebas contra MySQL 8.4, `docker` y `despliegue`).
+
+#### Excepciones
+
+Viven en `security/audit-exceptions.json`. Cada una acepta un aviso concreto en un paquete
+concreto durante 30 días como máximo:
+
+```json
+{
+  "exceptions": [
+    {
+      "ghsa": "GHSA-xxxx-xxxx-xxxx",
+      "package": "nombre-del-paquete",
+      "justification": "Por qué no se explota en esta app y qué lo corregirá",
+      "approvedBy": "Nombre de quien la aprueba",
+      "approvedOn": "2026-10-14",
+      "reviewBy": "2026-11-13"
+    }
+  ]
+}
+```
+
+- Todos los campos son obligatorios y no se admiten otros. `ghsa` tiene el formato
+  `GHSA-xxxx-xxxx-xxxx` y las fechas, `AAAA-MM-DD` (UTC).
+- `reviewBy` está como mucho 30 días después de `approvedOn`; el día `reviewBy` todavía vale.
+- Una excepción vencida, con más de 30 días de plazo, con `approvedOn` en el futuro, con un campo
+  vacío o repetida rompe el CI, y el mensaje nombra el GHSA. Rompe aunque su aviso ya no exista.
+- Una excepción que ya no excusa ningún aviso aparece como **sin uso**: retírala.
+- **Añadir:** analiza si el aviso se explota en esta app, agrega la entrada con la aprobación del
+  responsable y `reviewBy` a 30 días como máximo, y súbela en un PR.
+- **Renovar:** vuelve a analizar el aviso. Si sigue sin corrección, actualiza `approvedOn` (la
+  fecha de la nueva aprobación), `reviewBy` y, si cambió, la justificación, en un PR.
+
+#### Overrides vigentes
+
+`package.json` no admite comentarios; el motivo de cada override está aquí:
+
+| Override | Motivo |
+| --- | --- |
+| `mariadb` → `$mariadb` (3.4.7) | `@prisma/adapter-mariadb` 7.10.0 fija `mariadb` 3.4.5 exacto, afectado por GHSA-cqhc-2h57-wpxf, GHSA-r3rv-jm3r-62q2, GHSA-v6pj-gxxw-phfw y GHSA-48qf-xh34-q73r (high). 3.4.7 es un parche con las mismas dependencias. Queda GHSA-cx2f-j9fh-8g68 (moderate, solo con autenticación ed25519 de MariaDB, que MySQL 8.4 no usa; se corrige en 3.5.4). Retirarlo cuando el adaptador fije una versión corregida |
+| `prisma` → `mysql2` 3.24.6 | El CLI de Prisma 7.10.0 fija `mysql2` 3.15.3 (GHSA-3f6p-5ww8-9rcr, high; GHSA-rgwj-5xj2-c3m3, moderate). Solo lo usa Prisma Studio; `migrate deploy` no lo carga. Misma versión mayor |
+| `@prisma/config` → `deepmerge-ts` 8.0.2 | `@prisma/config` 7.10.0 fija `deepmerge-ts` 7.1.5 (GHSA-ggr8-5vv4-36mx, high; la rama 7 no se corrige). Solo fusiona `prisma.config.ts`; la API `deepmerge` no cambia en la 8 y `migrate deploy` lo valida en `calidad`, `docker` y `despliegue` |
+
+Al subir Prisma, revisa si cada override sigue haciendo falta.
+
+### Dependabot
+
+`.github/dependabot.yml` (REQ-F-020) revisa cada lunes las dependencias npm de `restaurante/` y
+las acciones de GitHub. Las alertas y las actualizaciones de seguridad de Dependabot están
+activadas en el repositorio (**Settings → Code security**).
+
+- **Actualización rutinaria:** un PR semanal agrupado con las versiones menores y de parche. Las
+  versiones mayores no se proponen y se revisan a mano.
+- **Seguridad:** los PR de seguridad se abren siempre, también si exigen una versión mayor.
+- **Prisma:** `prisma`, `@prisma/*` y `mariadb` llegan juntos en un PR propio. Ese PR queda en
+  rojo en `npm ci --strict-allow-scripts` hasta que actualices en el mismo PR las entradas
+  `prisma@x.y.z` y `@prisma/engines@x.y.z` de `allowScripts` en `package.json`, después de revisar
+  sus scripts de instalación.
+- **Acciones:** siguen fijadas por SHA completo; Dependabot actualiza el SHA y el comentario de
+  versión.
+- **Sin merge automático:** cada merge a `main` despliega en producción. Los PR de Dependabot
+  pasan por el mismo CI y se revisan a mano.
+
 ### Comprobaciones obligatorias para el merge
 
 Hoy GitHub **no puede bloquear** el merge con el CI en rojo: el repositorio es privado con el
 plan Free, que no ofrece protección de rama ni rulesets. La regla es de proceso: no se hace
-merge de un PR con `calidad`, `docker` o `despliegue` en rojo (el agente `senior-fullstack` no lo
-entrega como listo para merge).
+merge de un PR con `calidad`, `docker`, `despliegue` o `auditoria` en rojo (el agente
+`senior-fullstack` no lo entrega como listo para merge).
 
 Si el repositorio pasa a GitHub Pro (o se hace público), para hacerlas obligatorias:
 
 1. **Settings → Rules → Rulesets → New ruleset → New branch ruleset** (o **Settings → Branches
    → Add branch protection rule**).
 2. Destino: la rama `main`; estado **Active**.
-3. Activa **Require status checks to pass** y agrega `calidad`, `docker` y `despliegue`
-   (aparecen después de que el CI se haya ejecutado al menos una vez).
-4. Guarda. Desde entonces, el botón de merge queda bloqueado hasta que las tres estén en verde.
+3. Activa **Require status checks to pass** y agrega `calidad`, `docker`, `despliegue` y
+   `auditoria` (aparecen después de que el CI se haya ejecutado al menos una vez).
+4. Guarda. Desde entonces, el botón de merge queda bloqueado hasta que las cuatro estén en verde.
 
 ## Configuración
 
@@ -1092,8 +1178,11 @@ restaurante/
 │   ├── hash-password.ts      # `npm run admin:hash-password`
 │   ├── admin-recover.ts      # `npm run admin:recover`
 │   ├── bot-chat.ts           # `npm run bot:chat`: el bot en la terminal contra el simulador (solo desarrollo)
+│   ├── audit-deps.ts         # `npm run audit:deps`: auditoría de dependencias por imagen (CI, job auditoria)
 │   ├── support/read-hidden.ts # Lectura de contraseñas sin eco (compartida)
+│   ├── support/audit-policy.ts # Política de la auditoría (umbral, excepciones, fail closed)
 │   └── generate-icons.py     # Genera public/img/<negocio>/icons/ (Python 3 + Pillow; solo desarrollo)
+├── security/audit-exceptions.json # Excepciones de la auditoría de dependencias (30 días como máximo)
 ├── data/                     # DATA_DIR por defecto fuera de producción (ignorado por git)
 ├── tests/
 │   ├── helpers.ts            # Config válida, semillas y repositorio en memoria para pruebas

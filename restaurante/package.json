@@ -31,7 +31,8 @@
     "admin:recover": "node --env-file-if-exists=.env scripts/admin-recover.ts",
     "bot:chat": "node scripts/bot-chat.ts",
     "lint": "eslint . --max-warnings 0",
-    "lint:fix": "eslint . --fix --max-warnings 0"
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "audit:deps": "node scripts/audit-deps.ts"
   },
   "dependencies": {
     "@koa/router": "^15.7.0",
@@ -41,7 +42,7 @@
     "koa": "^3.2.1",
     "koa-helmet": "^9.0.0",
     "koa-static": "^5.0.0",
-    "mariadb": "3.4.5"
+    "mariadb": "3.4.7"
   },
   "devDependencies": {
     "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
@@ -62,6 +63,15 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.0",
     "vitest": "^5.0.3"
+  },
+  "overrides": {
+    "mariadb": "$mariadb",
+    "prisma": {
+      "mysql2": "3.24.6"
+    },
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.2"
+    }
   },
   "allowScripts": {
     "prisma@7.10.0": true,

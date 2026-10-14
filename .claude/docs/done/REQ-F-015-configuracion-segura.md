@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 ## Aprobación
 
@@ -641,3 +641,13 @@ senior-qa ejecuta el QA Action Plan aprobado ("Aprobar"): CA-1 a CA-14 en PASS (
 ### Commit y Pull Request (T4, 2026-10-10)
 
 Commit `77b9201` (`feat: exige NODE_ENV al arrancar y escucha solo en 127.0.0.1 salvo HOST explícito`). Pull Request: https://github.com/orvigas/negocio/pull/40 hacia `main`. CI del PR (run 38110071102): `calidad` pass (7m55s), `docker` pass (3m48s), con el paso CA-9 "imagen production escucha en 0.0.0.0 y queda healthy" en verde. Estado: `READY_FOR_MERGE`.
+
+### Cierre (T5)
+
+2026-10-14. El usuario confirmó el merge del PR #40 (https://github.com/orvigas/negocio/pull/40) con esta cita textual: "mientras tanto cierra el ticket REQ-F-015, ya está mergeado".
+
+- Commit de merge en `main`: 78186a6 (2026-10-11T04:15:01Z).
+- CI de `main` sobre el merge en verde: https://github.com/orvigas/negocio/actions/runs/38110977985.
+- Se borró la rama `feature/REQ-F-015-configuracion-segura` (local y remota).
+
+Estado: `DONE`.

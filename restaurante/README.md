@@ -470,6 +470,10 @@ arrancar queda `bot_provider_selected` con el proveedor en el log.
   `rejected`, `unavailable`, `otherBusiness`), nunca el texto del cliente ni los detalles.
 - **Estado en memoria** (una sola instancia, como las sesiones de `/admin`): si la app se
   reinicia, la conversación en curso se pierde y el bot empieza de nuevo.
+- **Celulares de México con Meta:** la Cloud API entrega el `wa_id` como `521` + 10 dígitos,
+  pero solo acepta enviar a `52` + 10 (si no, error 131030). Al enviar (respuestas y aviso al
+  personal), `providers/meta/cloud-api.ts` quita ese `1`; el identificador del cliente en la
+  conversación, la deduplicación, el límite y los logs no cambian. Twilio no lo necesita.
 
 ### Prerrequisitos de Meta (los provee el dueño)
 

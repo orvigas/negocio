@@ -324,6 +324,17 @@ Detalles y prerrequisitos de Meta en
 [Registrar el webhook en Meta](../README.md#registrar-el-webhook-en-meta-producción). Sin el bot,
 las landings funcionan igual: deja vacías las `WHATSAPP_BOT_*`.
 
+Con el bot habilitado, `.env` también necesita `WHATSAPP_BOT_BLOCKLIST_KEY` (REQ-F-025): genérala
+con `openssl rand -base64 32` y guárdala en el gestor de contraseñas. Sin ella la app no arranca.
+Si el bot ya estaba activo cuando llega la versión que la exige, el orden es:
+
+1. Añade la clave al `.env` del VPS.
+2. Haz el merge; si el job `deploy` falla con el código 4 (`deploy/` cambió), reinstala `deploy/`
+   (paso 1.3) y vuelve a ejecutar el job.
+
+Los umbrales de los topes (`BOT_LIMIT_*`, `BOT_BUDGET_MONTH_USD`...) son opcionales: vacíos usan los
+valores por defecto (ver `README.md`, "Topes de gasto, lista negra e interruptor").
+
 ## 8. Comprobaciones después de cada despliegue
 
 1. Actions → `deploy` en verde, con el commit y los digests en el resumen.

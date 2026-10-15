@@ -5,6 +5,7 @@ import { createBotOrchestrator } from '../../src/services/whatsapp-bot/orchestra
 import { createChatBot } from '../../src/services/whatsapp-bot/providers/select.ts';
 import { makeConfig, makeRecordingLogger, makeRepository } from '../helpers.ts';
 import { PROVIDER_DRIVERS, type ProviderDriver, type SignedDelivery } from '../support/chat-bot-drivers.ts';
+import { makeBotControl } from '../support/bot-control.ts';
 import { listenLocal } from '../support/http.ts';
 import { makeProductRepository } from '../support/products.ts';
 import { CUSTOMER, STAFF, WEEK, mx } from '../support/whatsapp.ts';
@@ -99,7 +100,9 @@ describe.each(PROVIDER_DRIVERS)('selección por configuración con $provider (CA
     const logger = makeRecordingLogger();
     const clock = { now: mx(`${WEEK.tue}T10:00`) };
     const products = (await makeProductRepository()).repository;
-    const app = createApp({ config: makeConfig(driver.env), repository: await makeRepository(), products, logger, now: () => clock.now, providerFetch: double.fetch });
+    const config = makeConfig(driver.env);
+    const botControl = await makeBotControl(config, { now: () => clock.now });
+    const app = createApp({ config, repository: await makeRepository(), products, logger, now: () => clock.now, providerFetch: double.fetch, botControl });
     expect(logger.lines).toContainEqual({ level: 'info', msg: 'bot_provider_selected', provider: driver.provider });
 
     const server = await listenLocal(app);

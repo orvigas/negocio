@@ -35,26 +35,30 @@ enum Business {
 
 /// Cuenta personal de la administración (D-10). No se elimina: se desactiva (D-6).
 model User {
-  id             Int            @id @default(autoincrement())
+  id               Int             @id @default(autoincrement())
   /// Usuario de acceso tal como se escribió.
-  username       String         @db.VarChar(60)
+  username         String          @db.VarChar(60)
   /// Usuario normalizado (NFC y minúsculas): único sin distinguir mayúsculas.
   /// Hasta 120 puntos de código: toLowerCase() convierte «İ» en dos.
-  usernameKey    String         @unique @map("username_key") @db.VarChar(128)
-  displayName    String         @map("display_name") @db.VarChar(60)
-  role           Role
-  active         Boolean        @default(true)
+  usernameKey      String          @unique @map("username_key") @db.VarChar(128)
+  displayName      String          @map("display_name") @db.VarChar(60)
+  role             Role
+  active           Boolean         @default(true)
   /// scrypt$N$r$p$sal$hash (sal ≤ 64 bytes; ver services/admin-auth.ts).
-  passwordHash   String         @map("password_hash") @db.VarChar(255)
+  passwordHash     String          @map("password_hash") @db.VarChar(255)
   /// Cambia al desactivar, cambiar rol/negocios o contraseña: invalida las sesiones abiertas (D-8).
-  sessionVersion Int            @default(0) @map("session_version")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
-  lastLoginAt    DateTime?      @map("last_login_at")
-  businesses     UserBusiness[]
-  auditActions   UserAudit[]    @relation("actor")
-  auditEvents    UserAudit[]    @relation("target")
-  productChanges ProductChange[]
+  sessionVersion   Int             @default(0) @map("session_version")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+  lastLoginAt      DateTime?       @map("last_login_at")
+  businesses       UserBusiness[]
+  auditActions     UserAudit[]     @relation("actor")
+  auditEvents      UserAudit[]     @relation("target")
+  productChanges   ProductChange[]
+  botBlocksAdded   BotBlock[]      @relation("blockCreator")
+  botBlocksRemoved BotBlock[]      @relation("blockRemover")
+  botAudits        BotAudit[]
+  botControls      BotControl[]
 
   @@map("user")
 }
@@ -205,4 +209,98 @@ model ProductImport {
   count      Int
 
   @@map("product_import")
+}
+
+/// Origen de un bloqueo del bot (REQ-F-025, RF-3.2).
+enum BotBlockOrigin {
+  manual
+  tope
+  repeticion
+}
+
+/// Lista negra del bot (REQ-F-025, RF-3; D-1): una fila por bloqueo, con historial para el escalón
+/// (RF-7.2). Nunca guarda el número completo: un HMAC-SHA256 con una clave que no está en la base
+/// (D-T1) y los 4 últimos dígitos.
+model BotBlock {
+  id              Int            @id @default(autoincrement())
+  /// HMAC-SHA256 (hex) del número canónico (52 + 10 en México; CA-9).
+  phoneHash       String         @map("phone_hash") @db.Char(64)
+  /// Identificador de la clave con la que se calculó (rotación, D-T1).
+  keyId           String         @map("key_id") @db.Char(8)
+  last4           String         @db.Char(4)
+  origin          BotBlockOrigin
+  reason          String?        @db.VarChar(200)
+  createdAt       DateTime       @map("created_at")
+  /// null: permanente.
+  expiresAt       DateTime?      @map("expires_at")
+  /// null: el sistema (bloqueo automático).
+  createdById     Int?           @map("created_by_id")
+  createdByName   String?        @map("created_by_name") @db.VarChar(60)
+  removedAt       DateTime?      @map("removed_at")
+  removedById     Int?           @map("removed_by_id")
+  removedByName   String?        @map("removed_by_name") @db.VarChar(60)
+  /// Caducidad ya registrada en la auditoría (RF-3.7).
+  expiryAuditedAt DateTime?      @map("expiry_audited_at")
+  createdBy       User?          @relation("blockCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  removedBy       User?          @relation("blockRemover", fields: [removedById], references: [id], onDelete: Restrict)
+
+  @@index([phoneHash])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("bot_block")
+}
+
+/// Auditoría del bot (REQ-F-025, RF-3.7 y RF-9.1): solo números enmascarados; se conserva 12 meses.
+model BotAudit {
+  id        Int      @id @default(autoincrement())
+  at        DateTime
+  /// block_added | block_removed | block_expired | bot_paused | bot_resumed
+  action    String   @db.VarChar(32)
+  /// null: el sistema.
+  actorId   Int?     @map("actor_id")
+  /// user | system
+  actorKind String   @map("actor_kind") @db.VarChar(16)
+  actorName String?  @map("actor_name") @db.VarChar(60)
+  /// Número enmascarado (maskPhone), nunca el completo.
+  masked    String?  @db.VarChar(20)
+  origin    String?  @db.VarChar(16)
+  reason    String?  @db.VarChar(200)
+  /// Duración o caducidad del bloqueo.
+  details   String?  @db.VarChar(200)
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([at])
+  @@map("bot_audit")
+}
+
+/// Contadores globales del bot por día y por mes en la zona del negocio (REQ-F-025, RF-2). Sin
+/// datos personales.
+model BotUsage {
+  /// day | month
+  periodType        String    @map("period_type") @db.VarChar(8)
+  /// AAAA-MM-DD o AAAA-MM.
+  period            String    @db.VarChar(10)
+  templates         Int       @default(0)
+  outbound          Int       @default(0)
+  templatesCappedAt DateTime? @map("templates_capped_at")
+  outboundCappedAt  DateTime? @map("outbound_capped_at")
+  budgetCappedAt    DateTime? @map("budget_capped_at")
+  updatedAt         DateTime  @map("updated_at")
+
+  @@id([periodType, period])
+  @@map("bot_usage")
+}
+
+/// Interruptor de emergencia del bot (REQ-F-025, RF-9): una sola fila (id = 1). Sin fila, el bot no
+/// está pausado.
+model BotControl {
+  id            Int      @id
+  paused        Boolean
+  changedAt     DateTime @map("changed_at")
+  changedById   Int?     @map("changed_by_id")
+  changedByName String?  @map("changed_by_name") @db.VarChar(60)
+  reason        String?  @db.VarChar(200)
+  changedBy     User?    @relation(fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@map("bot_control")
 }

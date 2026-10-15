@@ -130,6 +130,14 @@ describe('REQ-F-015: NODE_ENV obligatorio al arrancar', () => {
     await expectConfigFailure({ NODE_ENV: value }, ['NODE_ENV', NODE_ENV_VALUES]);
   });
 
+  it('REQ-F-025 (CA-14): un umbral del bot inválido impide arrancar con un mensaje claro, sin el valor', async () => {
+    const output = await expectConfigFailure({ BOT_LIMIT_MESSAGES_PER_NUMBER_DAY: 'sesenta', BOT_BUDGET_MONTH_USD: '-20' }, [
+      'BOT_LIMIT_MESSAGES_PER_NUMBER_DAY no es válida: entero de 5 a 10000',
+      'BOT_BUDGET_MONTH_USD no es válida',
+    ]);
+    expect(output).not.toContain('sesenta');
+  });
+
   it('CA-2: sin NODE_ENV y con PORT=abc el mensaje lista los dos problemas', async () => {
     const database = await sentinel();
     const server = await boot({ NODE_ENV: undefined, PORT: 'abc', DATABASE_URL: database.url });

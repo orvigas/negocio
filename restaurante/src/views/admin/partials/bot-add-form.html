@@ -1,0 +1,6 @@
+<form class="bot-panel__add space-y-4 rounded-lg border border-slate-300 bg-white p-4 shadow-xs sm:p-6" method="post" action="{{ action }}" novalidate>
+          <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+          <div class="grid gap-4 sm:grid-cols-3">{{{ fields }}}
+          </div>
+          <button class="admin-button admin-button--primary {{ buttonClass }}" type="submit">Bloquear número</button>
+        </form>

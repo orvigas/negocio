@@ -94,6 +94,18 @@ export const botText = Object.freeze({
   confirmed: '¡Listo! 🙌 Tu pedido *{codigo}* fue enviado a {negocio}. El personal te escribirá para confirmarlo. 😋',
   staffFailed:
     'No pude enviar tu pedido *{codigo}* al personal de {negocio}. Por favor escríbeles directamente: {contacto}',
+  /** REQ-F-025, RF-1.1: el número ya hizo el máximo de pedidos de hoy (al empezar). */
+  orderLimitReached:
+    'Por hoy ya recibimos el máximo de pedidos desde este número. Si quieres pedir algo más, escribe directamente al personal de *{negocio}*: {contacto}',
+  /** REQ-F-025, RF-1.1 y RF-2.1: al confirmar, el aviso al personal no se envía por un tope. */
+  orderCapContact:
+    'Tu pedido *{codigo}* no se pudo enviar automáticamente al personal de {negocio}. Por favor escríbeles directamente con tu pedido: {contacto}',
+  /** REQ-F-025, RF-1.2: tope diario de mensajes del número (se envía una sola vez). */
+  dailyLimitReached:
+    'Llegaste al límite de mensajes de hoy con el asistente. Para continuar, escribe directamente al personal de *{negocio}*: {contacto}',
+  /** REQ-F-025, RF-2.1: modo contacto directo (tope global de avisos al personal). */
+  directContactMode:
+    'Por ahora no puedo tomar pedidos por este medio. Escribe directamente al personal de *{negocio}*: {contacto}',
   cancelled: 'Pedido cancelado. Cuando quieras, escríbenos de nuevo. 👋',
   person: '🙋 Para hablar con una persona de *{negocio}*, escribe a: {contacto}',
   staffHours: 'En horario',

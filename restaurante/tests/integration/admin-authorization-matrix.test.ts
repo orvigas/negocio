@@ -58,6 +58,8 @@ async function setupMatrix() {
     changes: context.repository.storage.changes.length,
     users: await context.prisma.user.findMany({ include: { businesses: true }, orderBy: { id: 'asc' } }),
     audit: await context.prisma.userAudit.count(),
+    // REQ-F-025: lista negra, auditoría del bot e interruptor.
+    bot: [await context.prisma.botBlock.count(), await context.prisma.botAudit.count(), await context.prisma.botControl.count()],
   });
 
   return { ...context, browsers, csrf, target, snapshot };
@@ -71,7 +73,8 @@ function expectLoginRedirect(res: { status: number; headers: Record<string, stri
 describe('matriz de autorización: páginas (GET)', () => {
   it('cada actor recibe exactamente lo que su rol y sus negocios permiten', async () => {
     const { browsers, target } = await setupMatrix();
-    const userPaths = ['/admin/usuarios', '/admin/usuarios/nuevo', `/admin/usuarios/${target.id}`, `/admin/usuarios/${target.id}/contrasena`];
+    // REQ-F-025: la página "Bot" es solo para administradores, como la gestión de usuarios.
+    const userPaths = ['/admin/usuarios', '/admin/usuarios/nuevo', `/admin/usuarios/${target.id}`, `/admin/usuarios/${target.id}/contrasena`, '/admin/bot'];
 
     for (const actor of ACTORS) {
       const browser = browsers[actor];
@@ -120,6 +123,7 @@ describe('matriz de autorización: páginas (GET)', () => {
         expect(html.includes(`href="/admin/${businessId}"`), `${actor} -> ${businessId}`).toBe(allowed.includes(businessId));
       }
       expect(html.includes('href="/admin/usuarios"'), `${actor} -> usuarios`).toBe(actor === 'admin');
+      expect(html.includes('href="/admin/bot"'), `${actor} -> bot`).toBe(actor === 'admin');
       expect(html, actor).toContain('href="/admin/cuenta"');
     }
   });
@@ -139,6 +143,11 @@ describe('matriz de autorización: formularios (POST) sin permiso', () => {
       [`/admin/usuarios/${target.id}/contrasena`, { password, passwordConfirmation: password }],
       ['/admin/usuarios/999999', { username: 'x', displayName: 'x', role: 'admin' }],
       ['/admin/usuarios/999999/desactivar', {}],
+      // REQ-F-025 (CA-7): la página "Bot".
+      ['/admin/bot/interruptor', { accion: 'pausar', motivo: '' }],
+      ['/admin/bot/bloqueos', { telefono: '5215500001234', duracion: '7d', motivo: '' }],
+      ['/admin/bot/bloqueos/1/quitar', {}],
+      [`/admin/bot/topes/${'a'.repeat(32)}/bloquear`, { duracion: '7d', motivo: '' }],
     ];
     const businessPosts = (businessId: BusinessId): [string, FormFields][] => [
       [`/admin/${businessId}`, { action: 'save', 'promo.title': 'Intruso' }],

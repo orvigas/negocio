@@ -1,5 +1,6 @@
 import type { SendFailure } from '../../chat-bot.ts';
 import type { Logger } from '../../../../utils/logger.ts';
+import { withoutMxMobilePrefix } from '../../phone.ts';
 import { postWithRetry, type FetchLike } from '../http-send.ts';
 
 /**
@@ -60,10 +61,8 @@ const messageIdOf = (body: unknown): string | undefined => {
   return typeof id === 'string' ? id : undefined;
 };
 
-const MX_MOBILE_WA_ID = /^521(\d{10})$/;
-
-/** Destino aceptado por la Cloud API: `521` + 10 dígitos -> `52` + 10; cualquier otro, sin cambios. */
-export const toCloudApiRecipient = (to: string): string => to.replace(MX_MOBILE_WA_ID, '52$1');
+/** Destino aceptado por la Cloud API: `521` + 10 dígitos -> `52` + 10; cualquier otro, sin cambios (REQ-F-025, D-T6). */
+export const toCloudApiRecipient = (to: string): string => withoutMxMobilePrefix(to);
 
 export function createCloudApiClient({ config, fetch, logger, timeoutMs, retryDelayMs, sleep }: CloudApiOptions): CloudApiClient {
   const url = `${GRAPH_API_BASE_URL}/${config.graphApiVersion}/${config.accountId}/messages`;

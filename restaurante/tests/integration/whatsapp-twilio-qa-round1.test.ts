@@ -8,6 +8,7 @@ import { createBotOrchestrator } from '../../src/services/whatsapp-bot/orchestra
 import { createChatBot } from '../../src/services/whatsapp-bot/providers/select.ts';
 import { twilioSignature } from '../../src/services/whatsapp-bot/providers/twilio/webhook.ts';
 import { BOT_ENV, TWILIO_BOT_ENV, VALID_ENV, makeConfig, makeRecordingLogger, makeRepository } from '../helpers.ts';
+import { makeBotControl } from '../support/bot-control.ts';
 import { listenLocal } from '../support/http.ts';
 import { makeProductRepository } from '../support/products.ts';
 import { newMessageSid, twilioConfig, twilioInbound, twilioStatus } from '../support/twilio.ts';
@@ -330,7 +331,9 @@ describe('QA intercambiabilidad sin bot inyectado (I-5, CA-20) y 503 con Meta (N
       };
       const logger = makeRecordingLogger();
       const products = (await makeProductRepository()).repository;
-      const server = await listenLocal(createApp({ config: makeConfig({ ...env }), repository: await makeRepository(), products, logger, now: () => at, providerFetch }));
+      const config = makeConfig({ ...env });
+      const botControl = await makeBotControl(config, { now: () => at });
+      const server = await listenLocal(createApp({ config, repository: await makeRepository(), products, logger, now: () => at, providerFetch, botControl }));
       expect(logger.lines.filter((l) => l.msg === 'bot_provider_selected')).toEqual([{ level: 'info', msg: 'bot_provider_selected', provider }]);
       if (provider === 'meta') {
         const body = JSON.stringify(inboundPayload('text', { text: 'Hola', at }));

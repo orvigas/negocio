@@ -1,0 +1,4 @@
+<form class="bot-panel__unblock" method="post" action="{{ action }}">
+                    <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+                    <button class="admin-button admin-button--secondary {{ buttonClass }}" type="submit">Quitar<span class="sr-only"> el bloqueo de {{ masked }}</span></button>
+                  </form>

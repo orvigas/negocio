@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
 ## Aprobación
 
@@ -867,6 +867,22 @@ Aceptados por el usuario al aprobar el plan:
 
 QA_APPROVED
 
+## Pull Request
+
+- PR: https://github.com/orvigas/negocio/pull/64 (`feature/REQ-F-030-identificar-despliegue-en-actions` → `main`).
+- Commit: `ffa8f7e3ed96dfb719ea402e7e80e8063db68683` (`ci: identifica en GitHub Actions el commit y el resultado de cada despliegue`), con la rama al día con `origin/main` (`7da4c4a`).
+- CI del PR (ejecución 38778621127, https://github.com/orvigas/negocio/actions/runs/38778621127), en `success`:
+  - en verde: `cambios`, `calidad` (8m46s), `docker` (2m28s), `despliegue` (4m27s) y `auditoria` (9s);
+  - en el job `despliegue`, los pasos `shellcheck` y `prueba del resumen` en verde;
+  - omitidos, como corresponde a un PR: `publish`, `vigente`, `deploy` y `validado`;
+  - GitGuardian en verde.
+- **G-1 (CA-6) superado.** `gh run list --branch feature/REQ-F-030-identificar-despliegue-en-actions --json displayTitle,headSha` devuelve:
+  - `displayTitle`: `ci: identifica en GitHub Actions el commit y el resultado de cada despliegue · ffa8f7e3ed96dfb719ea402e7e80e8063db68683`;
+  - `headSha`: `ffa8f7e3ed96dfb719ea402e7e80e8063db68683`.
+
+  Coincide con `<título del PR> · <SHA de la punta>`. El SHA aparece completo, como estaba previsto en la alternativa A, porque las expresiones de `run-name` no pueden recortar texto.
+- Pendientes tras el merge: G-2 a G-5 (ver `## QA Report`).
+
 ## Historial de cambios
 
 ### Versión 1
@@ -919,3 +935,11 @@ Estado `QA_APPROVED`.
   - G-1 a G-5 como revisión manual en GitHub;
   - autorización para descargar `bash:5.2`.
 - Ejecutado el plan completo, sin defectos. Ver `## QA Report`.
+
+### T4 (senior-fullstack, 2026-10-15)
+
+Estado `READY_FOR_MERGE`.
+
+- Commit `ffa8f7e`.
+- PR #64 hacia `main`, con el CI en verde.
+- G-1 superado. Ver `## Pull Request`.

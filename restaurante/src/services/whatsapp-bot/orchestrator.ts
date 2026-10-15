@@ -35,7 +35,7 @@ import {
   createExpiringMap,
   createRateLimiter,
 } from './store.ts';
-import { chunkText } from './text.ts';
+import { splitMessage } from './text.ts';
 
 /**
  * Orquestador del bot de WhatsApp (REQ-F-009): la conversación compartida, independiente del
@@ -129,9 +129,9 @@ export function createBotOrchestrator({
 
   async function reply(to: string, messages: readonly string[]): Promise<void> {
     // En orden: el cliente debe leerlos en la secuencia en que se escribieron. Cada texto se
-    // parte por líneas según el límite del proveedor (nunca corta un producto; DT-7).
+    // parte según el límite del proveedor sin separar un bloque (DT-7; REQ-F-029, RF-12).
     for (const body of messages) {
-      for (const part of chunkText(body, chatBot.maxTextLength)) {
+      for (const part of splitMessage(body, chatBot.maxTextLength)) {
         // REQ-F-025 (paso 8): cada parte es un saliente; con la pausa o un tope global, silencio.
         const ticket = protection ? protection.reserve('outbound', now()) : undefined;
         if (ticket === null) return;

@@ -104,9 +104,9 @@ describe('emojis de los productos en el menú', () => {
 
   it('el emoji acompaña al nombre del producto', () => {
     const menu = menuText(BUSINESS.MOLOTES, SCOPES[BUSINESS.MOLOTES].catalog);
-    expect(menu).toContain('1. 🧀 Molotes de Queso Oaxaca — pieza $45 · orden de 3 $130');
-    expect(menu).toContain('10. 🥤 Refrescos Familia Coca-Cola — $35');
-    expect(menuText(BUSINESS.BIRRIA, SCOPES[BUSINESS.BIRRIA].catalog)).toContain('5. 🍜 Birriamen Artesanal — Grande $155 · Chica $110');
+    expect(menu).toContain('*1.* 🧀 *Molotes de Queso Oaxaca*\n    pieza $45 · orden de 3 $130');
+    expect(menu).toContain('*10.* 🥤 *Refrescos Familia Coca-Cola*\n    $35');
+    expect(menuText(BUSINESS.BIRRIA, SCOPES[BUSINESS.BIRRIA].catalog)).toContain('*5.* 🍜 *Birriamen Artesanal*\n    Grande $155 · Chica $110');
   });
 
   it('un producto sin emoji asignado se muestra sin emoji y sin error', async () => {
@@ -121,7 +121,7 @@ describe('emojis de los productos en el menú', () => {
     const line = menuText(BUSINESS.MOLOTES, scope.catalog)
       .split('\n')
       .find((text) => text.includes('Molote de Frijol con Queso'));
-    expect(line).toMatch(/^\d+\. Molote de Frijol con Queso — /);
+    expect(line).toMatch(/^\*\d+\.\* \*Molote de Frijol con Queso\*$/);
   });
 });
 
@@ -152,8 +152,8 @@ describe('uso moderado y accesible de los emojis', () => {
   });
 
   it('el resumen acompaña la forma de entrega con su ícono', () => {
-    expect(summary(order)).toContain('🛵 Entrega: A domicilio: Calle 5 #10');
-    expect(summary({ ...order, delivery: 'pickup', address: undefined })).toContain('🏪 Entrega: Recoger en sucursal');
+    expect(summary(order)).toContain('🛵 *Entrega:* A domicilio\nCalle 5 #10');
+    expect(summary({ ...order, delivery: 'pickup', address: undefined })).toContain('🏪 *Entrega:* Recoger en sucursal');
   });
 
   it('los parámetros de la plantilla de Meta no llevan emojis (su texto lo fija la plantilla aprobada)', () => {

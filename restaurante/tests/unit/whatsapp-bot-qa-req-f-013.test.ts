@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { BusinessId } from '../../src/config/businesses.ts';
+import { botText } from '../../src/content/bot.ts';
 import { toInput } from '../../src/services/product-schema.ts';
 import { createDeterministicInterpreter } from '../../src/services/whatsapp-bot/interpreter/deterministic.ts';
 import type { OrderInterpreter } from '../../src/services/whatsapp-bot/interpreter/types.ts';
@@ -33,12 +34,15 @@ async function started(business: BusinessId): Promise<BotHarness> {
 }
 
 /** Bloque "Agregado:" de la respuesta (las líneas "- ..."). */
+/** Líneas de "Agregado:" como "2 × Nombre (opción) · detalle" (REQ-F-029: el detalle va en su renglón, en cursiva). */
 const added = (reply: string): string[] => {
-  const block = /Agregado:\n((?:- .*\n?)+)/.exec(reply)?.[1] ?? '';
-  return block
-    .split('\n')
-    .filter((line) => line.startsWith('- '))
-    .map((line) => line.slice(2));
+  const block = /Agregado:\n((?:(?:- | {4}_).*\n?)+)/.exec(reply)?.[1] ?? '';
+  const lines: string[] = [];
+  for (const line of block.split('\n')) {
+    if (line.startsWith('- ')) lines.push(line.slice(2));
+    else if (line.startsWith('    _') && lines.length > 0) lines[lines.length - 1] += ` · ${line.slice(5, -1)}`;
+  }
+  return lines;
 };
 const totalOf = (reply: string): string | undefined => /\*Total: (\$[\d,.]+)\*/.exec(reply)?.[1];
 
@@ -86,7 +90,7 @@ describe('QA REQ-F-013: batería exploratoria con resultado correcto (regresión
   it('"2 de chicharrón y 2 de chicharron prensado" se suman en una línea (RF-1.6)', async () => {
     const h = await started('molotes');
     const reply = await h.ask('2 de chicharrón y 2 de chicharron prensado');
-    expect(reply).toContain('1. 4 × Molotes de Chicharrón Prensado en Adobo (pieza) — $48 c/u = $192');
+    expect(reply).toContain('*1.* Molotes de Chicharrón Prensado en Adobo (pieza)\n    4 × $48 c/u = $192');
     expect(totalOf(reply)).toBe('$192');
   });
 
@@ -330,14 +334,14 @@ describe('QA REQ-F-013: RF-6.3 con la precisión aprobada ("sí por favor")', ()
     const h = await toSummary('molotes', '2 de queso');
     const reply = await h.ask(text);
     expect(reply).not.toContain('fue enviado');
-    expect(reply).toContain(`Notas: ${text}`);
+    expect(reply).toContain(`*Notas:* ${text}`);
     expect(h.double.templatesTo(STAFF.molotes)).toHaveLength(0);
   });
 
   it.each(['no gracias', 'no quiero', 'No, gracias'])('"%s" se trata como "no": repite la indicación sin cancelar ni guardar nota', async (text) => {
     const h = await toSummary('molotes', '2 de queso');
     const reply = await h.ask(text);
-    expect(reply).toBe('✅ Escribe *sí* para confirmar, o escribe una nota para agregarla. *cancelar* para cancelar.');
+    expect(reply).toBe(botText.confirmPrompt);
     expect(await h.ask('sí')).toContain('fue enviado');
   });
 });
@@ -353,8 +357,8 @@ describe('QA REQ-F-013: resumen, edición y notas', () => {
   it('una nota de 200 caracteres se acepta, una de 201 no, y "0" borra la nota', async () => {
     const h = await toSummary('molotes', '2 de queso');
     expect(await h.ask('n'.repeat(201))).toContain('200');
-    expect(await h.ask('n'.repeat(200))).toContain(`Notas: ${'n'.repeat(200)}`);
-    expect(await h.ask('0')).toContain('Notas: Sin notas');
+    expect(await h.ask('n'.repeat(200))).toContain(`*Notas:* ${'n'.repeat(200)}`);
+    expect(await h.ask('0')).toContain('*Notas:* Sin notas');
   });
 
   it('"también 2 de tinga" edita desde el resumen y "quita la tinga" la quita', async () => {
@@ -379,7 +383,7 @@ describe('QA REQ-F-013: resumen, edición y notas', () => {
     const h = await makeBotHarness({ at: SATURDAY, products: repository });
     await h.ask(LANDING.birria);
     await h.ask('2 tacos sin cebolla');
-    expect(await h.ask('Ana, recoger')).toContain('2 × Taco de Birria con Tortilla de Mano · sin cebolla — $40 c/u = $80');
+    expect(await h.ask('Ana, recoger')).toContain('- Taco de Birria con Tortilla de Mano\n    _sin cebolla_\n    2 × $40 c/u = $80');
     const products = repository;
     const taco = (await products.list('birria')).find((product) => product.name === 'Taco de Birria con Tortilla de Mano');
     if (!taco) throw new Error('Falta el taco de la semilla');
@@ -405,7 +409,7 @@ describe('QA REQ-F-013: números por paso (RF-4.4, X-4) y palabras clave', () =>
 
   it('saludo sin intención: "1" muestra el menú; "2" empieza el pedido', async () => {
     const h = await makeBotHarness({ at: TUESDAY });
-    expect(await h.ask('Hola')).toContain('1. 📋 Ver el menú');
+    expect(await h.ask('Hola')).toContain('*1.* 📋 Ver el menú');
     expect(await h.ask('1')).toContain('*Menú de Moloteando*');
   });
 
@@ -434,7 +438,7 @@ describe('QA REQ-F-013: números por paso (RF-4.4, X-4) y palabras clave', () =>
     const h = await started('molotes');
     await h.ask('2 de queso');
     expect(await h.ask('cancelar por favor')).not.toContain('cancelado');
-    expect(await h.ask('carrito')).toContain('2 × Molotes de Queso Oaxaca (pieza)');
+    expect(await h.ask('carrito')).toContain('Molotes de Queso Oaxaca (pieza)\n    2 × ');
     const h2 = await started('molotes');
     await h2.ask('2 de queso');
     expect(await h2.ask('CANCELAR')).toContain('Pedido cancelado.');
@@ -446,17 +450,17 @@ describe('QA REQ-F-013: datos del cliente', () => {
     const h = await started('birria');
     await h.ask('2 tacos');
     const summary = await h.ask('Tina, recoger');
-    expect(summary).toContain('Nombre: Tina');
+    expect(summary).toContain('*Nombre:* Tina');
     expect(summary).toContain('*Total: $80*');
   });
 
   it('una dirección con palabras de producto: una pregunta y, con "2", la dirección completa', async () => {
     const h = await started('molotes');
     await h.ask('2 de queso');
-    expect(await h.ask('Luis, domicilio, Calle de la Papa 10, Col. Centro')).toContain('2. Son mis datos');
+    expect(await h.ask('Luis, domicilio, Calle de la Papa 10, Col. Centro')).toContain('*2.* Son mis datos de entrega');
     const summary = await h.ask('2');
-    expect(summary).toContain('Entrega: A domicilio: Calle de la Papa 10, Col. Centro');
-    expect(summary).toContain('Nombre: Luis');
+    expect(summary).toContain('*Entrega:* A domicilio\nCalle de la Papa 10, Col. Centro');
+    expect(summary).toContain('*Nombre:* Luis');
     expect(summary).toContain('*Total: $90*');
   });
 
@@ -464,11 +468,11 @@ describe('QA REQ-F-013: datos del cliente', () => {
     const h = await started('molotes');
     await h.ask('2 de queso');
     const summary = await h.ask('Paco domicilio Reforma 123');
-    expect(summary).toContain('Entrega: A domicilio: Reforma 123');
-    expect(summary).toContain('Nombre: Paco');
+    expect(summary).toContain('*Entrega:* A domicilio\nReforma 123');
+    expect(summary).toContain('*Nombre:* Paco');
     const h2 = await started('molotes');
     await h2.ask('2 de queso');
-    expect(await h2.ask('Juan, recoger, paso a las 3')).toContain('Notas: a las 3');
+    expect(await h2.ask('Juan, recoger, paso a las 3')).toContain('*Notas:* a las 3');
   });
 
   it('límites: nombre de 61 caracteres y direcciones de 4 y 201 se rechazan', async () => {
@@ -480,7 +484,7 @@ describe('QA REQ-F-013: datos del cliente', () => {
     await h2.ask('Ana, domicilio');
     expect(await h2.ask('Av 1')).toContain('entre 5 y 200');
     expect(await h2.ask('C'.repeat(201))).toContain('entre 5 y 200');
-    expect(await h2.ask('Calle 5 #10')).toContain('Entrega: A domicilio: Calle 5 #10');
+    expect(await h2.ask('Calle 5 #10')).toContain('*Entrega:* A domicilio\nCalle 5 #10');
   });
 
   it('X-5: un nombre y una dirección del primer mensaje no se capturan', async () => {

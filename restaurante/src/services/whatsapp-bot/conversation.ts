@@ -5,6 +5,7 @@ import { findOption, type BotCatalog, type CatalogProduct } from './catalog.ts';
 import type { ClarifyBlock, CustomerDataInterpretation, InterpretScope, InterpretedLine, OrderInterpretation, OrderInterpreter } from './interpreter/types.ts';
 import { formatPesos } from '../price.ts';
 import {
+  addedLineBlock,
   cartView,
   cartWithOptions,
   clarifyQuestion,
@@ -16,6 +17,7 @@ import {
   helpText,
   hoursAndLocation,
   lineLabel,
+  listItem,
   menuEmpty,
   menuPrompt,
   menuText,
@@ -443,7 +445,7 @@ class Turn {
       }
       c.cart = [...c.cart, line];
     }
-    outcome.added.push(`- ${line.quantity} × ${lineLabel(line)}`);
+    outcome.added.push(addedLineBlock(line));
     return true;
   }
 
@@ -504,7 +506,9 @@ class Turn {
         fragment: block.fragment,
         options: block.candidates.map((candidate) => {
           const found = findOption(catalog, candidate.slug, candidate.optionKey);
-          return found ? `${productLabel(found.product.name, found.option.label)} — ${formatOption({ ...found.option, label: '' })}` : candidate.slug;
+          return found
+            ? { label: productLabel(found.product.name, found.option.label), price: formatOption({ ...found.option, label: '' }) }
+            : { label: candidate.slug, price: null };
         }),
       })),
     );
@@ -513,7 +517,7 @@ class Turn {
   removeWhich(indexes: readonly number[]): string {
     const lines = indexes.flatMap((index, at) => {
       const line = this.conversation.cart[index];
-      return line ? [`${at + 1}. ${lineLabel(line)}`] : [];
+      return line ? [listItem(at + 1, lineLabel(line))] : [];
     });
     return fill(botText.removeWhich, { lineas: lines.join('\n') });
   }

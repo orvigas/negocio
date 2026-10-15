@@ -172,7 +172,7 @@ describe('pedido completo (CA-14, CA-15, CA-21, CA-22)', () => {
   it('CA-14: el personal recibe exactamente un aviso con todos los datos y el cliente su confirmación', async () => {
     const { h, write } = await start();
     await order(write);
-    expect(await write('1')).toContain('¡Listo! 🙌 Tu pedido *M-T001* fue enviado a Moloteando');
+    expect(await write('1')).toContain('¡Listo! 🙌\nTu pedido *M-T001* fue enviado a Moloteando');
     const [staff, ...others] = h.double.sent.filter((message) => message.to !== CUSTOMER);
     expect(others).toEqual([]);
     expect(staff?.to).toBe(STAFF.molotes);

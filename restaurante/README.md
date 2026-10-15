@@ -539,8 +539,20 @@ arrancar queda `bot_provider_selected` con el proveedor en el log.
   Content Template o como texto libre (ver [Twilio](#twilio-desarrollo)). Si falla, el cliente
   recibe el contacto directo del personal (`https://wa.me/<número>`). "persona" da ese mismo
   contacto.
-- **Mensajes largos:** se parten por líneas según el límite del proveedor (4096 caracteres con
-  Meta, 1600 con Twilio), sin cortar nunca un producto del menú.
+- **Mensajes largos:** se parten según el límite del proveedor (4096 caracteres con Meta, 1600
+  con Twilio) sin separar nunca un bloque: un producto del menú con sus precios ni una línea del
+  pedido con su detalle y su cantidad (`splitMessage` en `src/services/whatsapp-bot/text.ts`;
+  REQ-F-029). El aviso al personal en texto libre de Twilio se sigue partiendo por líneas.
+- **Formato de los textos (REQ-F-029):** pensado para la burbuja del celular. Los renglones
+  estructurados (listas, precios, cantidades, totales, palabras clave) miden como máximo
+  `MAX_LINE_WIDTH` de ancho visible (`visibleWidth`: sin la sangría ni los marcadores `*`, `_` y
+  `~`; un emoji cuenta 2). En el menú, cada producto va en un bloque: `*N.* emoji *Nombre*` y, con
+  sangría (`INDENT`, 4 espacios), sus precios unidos con " · " si caben o uno por renglón; un
+  renglón en blanco entre productos. Todas las listas numeradas usan el número en negrita
+  (`*1.*`): el cliente sigue respondiendo "1". El carrito y el resumen usan el mismo bloque por
+  línea (detalle en cursiva y `2 × $130 c/u = $260` con sangría). El formato es el mismo para los
+  dos negocios y no depende del catálogo. Un nombre de producto con `*`, `_` o `~` puede alterar
+  la negrita del menú (WhatsApp no permite escaparlos).
 - **Textos:** `src/content/common/bot.ts` (flujo y vocabulario común) y
   `src/content/<negocio>/bot.ts` (lema, palabras del negocio, secciones del menú, emojis de los
   productos y vocabulario del negocio).

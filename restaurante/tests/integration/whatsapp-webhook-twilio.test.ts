@@ -138,7 +138,7 @@ describe('pedido completo con Twilio (CA-5, CA-7b, CA-13)', () => {
   it('CA-5: sin STAFF_TEMPLATE, exactamente un texto libre al personal con los datos del pedido', async () => {
     const { double, write, order } = await start();
     await order();
-    expect(await write('1')).toContain('¡Listo! 🙌 Tu pedido *M-T001* fue enviado a Moloteando');
+    expect(await write('1')).toContain('¡Listo! 🙌\nTu pedido *M-T001* fue enviado a Moloteando');
     const staff = double.sent.filter((message) => message.to !== CUSTOMER);
     expect(staff).toHaveLength(1);
     expect(staff[0]).toMatchObject({ to: STAFF.molotes, rawFrom: `whatsapp:+${TWILIO_SENDER}` });

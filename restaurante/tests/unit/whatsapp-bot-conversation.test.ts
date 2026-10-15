@@ -53,7 +53,7 @@ describe('selección del negocio (RF-3)', () => {
     const tuesday = await makeBotHarness({ at: mx(`${WEEK.tue}T10:00`) });
     const greetingTue = await tuesday.ask('Hola');
     expect(greetingTue).toContain('Moloteando');
-    expect(greetingTue).toContain('1. 📋 Ver el menú');
+    expect(greetingTue).toContain('*1.* 📋 Ver el menú');
     expect(greetingTue).toContain('Estamos abiertos hasta las 15:00');
 
     const saturday = await makeBotHarness({ at: mx(`${WEEK.sat}T10:00`) });
@@ -126,13 +126,13 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     const h = await makeBotHarness();
     await h.ask('Hola');
     const menu = await h.ask('1');
-    expect(menu).toContain('*Molotes*\n1. 🧀 Molotes de Queso Oaxaca — pieza $45 · orden de 3 $130');
-    expect(menu).toContain('*Bebidas*\n9. 🍹 Aguas Frescas Naturales del Día — $35');
+    expect(menu).toContain('*MOLOTES*\n\n*1.* 🧀 *Molotes de Queso Oaxaca*\n    pieza $45 · orden de 3 $130');
+    expect(menu).toContain('*BEBIDAS*\n\n*9.* 🍹 *Aguas Frescas Naturales del Día*\n    $35');
 
     const birria = await makeBotHarness({ at: mx(`${WEEK.sat}T10:00`) });
     await birria.ask('Hola');
     const birriaMenu = await birria.ask('1');
-    expect(birriaMenu).toContain('4. 🍲 Tazón de Consomé Chico — Con Carne $80 · Sin Carne $45');
+    expect(birriaMenu).toContain('*4.* 🍲 *Tazón de Consomé Chico*\n    Con Carne $80\n    Sin Carne $45');
   });
 
   it('CA-9: no muestra productos no disponibles ni eliminados, ni variantes no disponibles', async () => {
@@ -149,7 +149,7 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     const menu = await h.ask('1');
     expect(menu).not.toContain('Taco de Birria');
     expect(menu).not.toContain('Quesabirria con Tortilla');
-    expect(menu).toContain('Tazón de Consomé Chico — Sin Carne $45');
+    expect(menu).toContain('*Tazón de Consomé Chico*\n    Sin Carne $45');
     expect(menu).not.toContain('Con Carne $80');
   });
 
@@ -160,13 +160,13 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     expect(await add(h, 1, 2, 2)).toContain('Agregado:\n- 2 × Molotes de Queso Oaxaca (orden de 3)');
     await h.ask('1');
     const cart = await add(h, 9, 1);
-    expect(cart).toContain('1. 2 × Molotes de Queso Oaxaca (orden de 3) — $130 c/u = $260');
-    expect(cart).toContain('2. 1 × Aguas Frescas Naturales del Día — $35 c/u = $35');
+    expect(cart).toContain('*1.* Molotes de Queso Oaxaca (orden de 3)\n    2 × $130 c/u = $260');
+    expect(cart).toContain('*2.* Aguas Frescas Naturales del Día\n    1 × $35 c/u = $35');
     expect(cart).toContain('*Total: $295*');
     const summary = await checkout(h);
-    expect(summary).toContain('*Resumen de tu pedido M-T001*');
+    expect(summary).toContain('*Resumen de tu pedido*\n*M-T001* · Moloteando');
     expect(summary).toContain('*Total: $295*');
-    expect(summary).toContain('Entrega: Recoger en sucursal');
+    expect(summary).toContain('*Entrega:* Recoger en sucursal');
     expect(summary).not.toContain('FUERA DE HORARIO');
   });
 
@@ -177,13 +177,13 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     await add(h, 1, 2, 1);
     await h.ask('1');
     const merged = await add(h, 1, 3, 1);
-    expect(merged).toContain('1. 5 × Molotes de Queso Oaxaca (pieza) — $45 c/u = $225');
+    expect(merged).toContain('*1.* Molotes de Queso Oaxaca (pieza)\n    5 × $45 c/u = $225');
     await h.ask('1');
     await add(h, 10, 1);
     await h.ask('2');
     const removed = await h.ask('1');
     expect(removed).toContain('Quitado: Molotes de Queso Oaxaca (pieza).');
-    expect(removed).toContain('1. 1 × Refrescos Familia Coca-Cola');
+    expect(removed).toContain('*1.* Refrescos Familia Coca-Cola');
     expect(await h.ask('3')).toContain('Listo, vacié tu carrito.');
     expect(await h.ask('carrito')).toContain('Tu carrito está vacío.');
   });
@@ -201,7 +201,7 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     const reply = await h.ask('1');
     expect(reply).toContain('Algunos productos cambiaron');
     expect(reply).toContain('Aguas Frescas Naturales del Día cambió de precio: ahora $40');
-    expect(reply).toContain('2 × Aguas Frescas Naturales del Día — $40 c/u = $80');
+    expect(reply).toContain('- Aguas Frescas Naturales del Día\n    2 × $40 c/u = $80');
     expect(h.double.templatesTo(STAFF.molotes)).toHaveLength(0);
     await h.ask('1');
     expect(h.double.templatesTo(STAFF.molotes)[0]?.template?.params.total).toBe('$80');
@@ -247,8 +247,8 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     }
     await h.ask('carrito');
     const cart = await h.ask('carrito');
-    expect(cart).toContain('15. ');
-    expect(cart).not.toContain('16. ');
+    expect(cart).toContain('*15.* ');
+    expect(cart).not.toContain('*16.* ');
 
     const other = await makeBotHarness();
     await other.ask('Hola');
@@ -256,7 +256,7 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     await add(other, 9, 15);
     await other.ask('1');
     expect(await add(other, 9, 6)).toContain('tendrías más de 20');
-    expect(await other.ask('carrito')).toContain('15 × Aguas Frescas');
+    expect(await other.ask('carrito')).toContain('Aguas Frescas Naturales del Día\n    15 × ');
   });
 
   it('CA-13: a domicilio pide la dirección y la valida (5 a 200 caracteres); la nota se escribe en el resumen (REQ-F-013, RF-5.4, RF-6.2)', async () => {
@@ -268,10 +268,10 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     expect(await h.ask('Ana, domicilio')).toContain('¿Cuál es la dirección de entrega?');
     expect(await h.ask('Av')).toContain('La dirección debe tener entre 5 y 200 caracteres.');
     expect(await h.ask('x'.repeat(201))).toContain('La dirección debe tener entre 5 y 200 caracteres.');
-    expect(await h.ask('Calle Falsa 123')).toContain('Escribe *sí* para confirmar, o escribe una nota');
+    expect(await h.ask('Calle Falsa 123')).toContain('Escribe *sí* para confirmar.\nO escribe una nota');
     const summary = await h.ask('Sin cebolla 🌶️');
-    expect(summary).toContain('Entrega: A domicilio: Calle Falsa 123');
-    expect(summary).toContain('Notas: Sin cebolla 🌶️');
+    expect(summary).toContain('*Entrega:* A domicilio\nCalle Falsa 123');
+    expect(summary).toContain('*Notas:* Sin cebolla 🌶️');
     expect(summary).toContain('El personal te confirmará el costo del envío.');
   });
 
@@ -283,7 +283,7 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     const privacy = await h.ask('4');
     expect(privacy).toContain('Solo se usan para este pedido y no se guardan.');
     expect(await h.ask(`${'A'.repeat(61)}, recoger`)).toContain('El nombre debe tener entre 1 y 60 caracteres.');
-    expect(await h.ask(`${'😀'.repeat(60)}`)).toContain(`Nombre: ${'😀'.repeat(60)}`);
+    expect(await h.ask(`${'😀'.repeat(60)}`)).toContain(`*Nombre:* ${'😀'.repeat(60)}`);
   });
 
   it('CA-20: sin productos disponibles lo dice y ofrece hablar con una persona', async () => {
@@ -293,7 +293,7 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     };
     const h = await makeBotHarness({ products: empty });
     await h.ask('Hola');
-    expect(await h.ask('1')).toContain('Por ahora no tenemos productos disponibles. Escribe *persona*');
+    expect(await h.ask('1')).toContain('Por ahora no tenemos productos disponibles.\n\nEscribe *persona*');
   });
 });
 
@@ -349,9 +349,9 @@ describe('opciones del cliente (D-10, D-15, RF-4.7 a RF-4.9)', () => {
     await h.ask('Hola');
     const reply = await h.ask('qué tal 🤔');
     expect(reply).toContain('No entendí tu mensaje.');
-    expect(reply).toContain('2. 🛒 Hacer un pedido');
+    expect(reply).toContain('*2.* 🛒 Hacer un pedido');
     // REQ-F-013, RF-4.9: la ayuda invita a escribir el pedido con un ejemplo.
-    expect(await h.ask('Ayuda')).toContain('Puedes escribir tu pedido con tus palabras, por ejemplo: *2 molotes de queso 🧀 y una coca 🥤*');
+    expect(await h.ask('Ayuda')).toContain('Puedes escribir tu pedido con tus palabras, por ejemplo:\n*2 molotes de queso 🧀 y una coca 🥤*');
   });
 
   it('palabras clave sin distinguir acentos ni mayúsculas: "MENÚ" y "Menu"', async () => {
@@ -367,7 +367,7 @@ describe('opciones del cliente (D-10, D-15, RF-4.7 a RF-4.9)', () => {
     await h.ask('2');
     await add(h, 9, 1);
     await h.ask('4');
-    expect(await h.ask('Persona Cancelar López, recoger')).toContain('Nombre: Persona Cancelar López');
+    expect(await h.ask('Persona Cancelar López, recoger')).toContain('*Nombre:* Persona Cancelar López');
   });
 
   it('opción 3: horario y ubicación del contenido del negocio', async () => {
@@ -388,11 +388,11 @@ describe('horario (RF-6, D-16)', () => {
     const h = await makeBotHarness({ at: mx(local) });
     const greeting = await h.ask('Hola');
     expect(greeting).toContain(name);
-    expect(greeting).toContain(`En este momento estamos cerrados. Abrimos ${opening}.`);
+    expect(greeting).toContain(`En este momento estamos cerrados.\nAbrimos ${opening}.`);
     await h.ask('2');
     await add(h, 1, 1, ...(name === 'Moloteando' ? [1] : []));
     const summary = await checkout(h);
-    expect(summary).toContain(`FUERA DE HORARIO: tu pedido se atenderá cuando abramos, ${opening}.`);
+    expect(summary).toContain(`*FUERA DE HORARIO*\nTu pedido se atenderá cuando abramos, ${opening}.`);
     await h.ask('1');
     const staff = name === 'Moloteando' ? STAFF.molotes : STAFF.birria;
     expect(h.double.templatesTo(staff)[0]?.template?.params.horario).toBe(`FUERA DE HORARIO, abre ${opening}`);
@@ -416,12 +416,12 @@ describe('horario (RF-6, D-16)', () => {
   ])('CA-28: %s no toma el pedido, informa las aperturas y ofrece una persona', async (local, name, opening, other, otherOpening) => {
     const h = await makeBotHarness({ at: mx(local) });
     const greeting = await h.ask('Hola');
-    expect(greeting).toContain(`En este momento estamos cerrados. Abrimos ${opening}. Puedes ver el menú; los pedidos se reciben`);
+    expect(greeting).toContain(`En este momento estamos cerrados.\nAbrimos ${opening}.\n\nPuedes ver el menú; los pedidos se reciben`);
     expect(greeting).not.toContain('dejar tu pedido');
     for (const attempt of ['2', '1']) {
       if (attempt === '1') await h.ask('menú');
       const reply = await h.ask(attempt === '2' ? '2' : '1');
-      expect(reply).toContain(`*${name}* no está tomando pedidos: abre ${opening}. *${other}* abre ${otherOpening}.`);
+      expect(reply).toContain(`*${name}* no está tomando pedidos: abre ${opening}.\n\n*${other}* abre ${otherOpening}.`);
       expect(reply).toContain('hablar con una persona (escribe *persona*)');
     }
     expect(await h.ask('carrito')).toContain('Tu carrito está vacío.');
@@ -434,7 +434,7 @@ describe('horario (RF-6, D-16)', () => {
     await add(h, 9, 1);
     h.clock.now = mx(`${WEEK.fri}T15:05`);
     const summary = await checkout(h);
-    expect(summary).toContain('FUERA DE HORARIO: tu pedido se atenderá cuando abramos, el martes a las 08:30.');
+    expect(summary).toContain('🌙 *FUERA DE HORARIO*\nTu pedido se atenderá cuando abramos, el martes a las 08:30.');
     expect(await h.ask('1')).toContain('fue enviado');
   });
 });
@@ -464,6 +464,6 @@ describe('estado en memoria (RF-9.3, CA-22)', () => {
     await add(h, 9, 1);
     await h.ask('Hola', { from: '5215599990000' });
     expect(await h.ask('carrito', { from: '5215599990000' })).toContain('Tu carrito está vacío.');
-    expect(await h.ask('carrito')).toContain('1 × Aguas Frescas');
+    expect(await h.ask('carrito')).toContain('*1.* Aguas Frescas Naturales del Día\n    1 × $35');
   });
 });

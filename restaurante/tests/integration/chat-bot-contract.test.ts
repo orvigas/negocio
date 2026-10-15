@@ -59,7 +59,7 @@ describe.each(PROVIDER_DRIVERS)('contrato de ChatBot con $provider (CA-19)', (dr
     const { bot, double, write } = await start(driver);
     // REQ-F-013 (RF-5, RF-6): los datos en un solo mensaje y la nota, si la hay, en el resumen.
     for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez, recoger']) await write(text);
-    expect(await write('1')).toContain('¡Listo! 🙌 Tu pedido *M-T001* fue enviado a Moloteando');
+    expect(await write('1')).toContain('¡Listo! 🙌\nTu pedido *M-T001* fue enviado a Moloteando');
     expect(double.staffNoticesTo(STAFF.molotes)).toEqual([{ codigo: 'M-T001' }]);
     expect(double.staffNoticesTo(STAFF.birria)).toEqual([]);
     expect(bot.hasConversation(CUSTOMER)).toBe(false);

@@ -19,7 +19,7 @@ describe('bot:chat (CA-15b)', () => {
     expect(stdout).toContain('Simulador del bot con meta');
     expect(stdout).toContain('[aviso al personal +5215511110001, plantilla nuevo_pedido]');
     expect(stdout).toContain('1 × Refrescos Familia Coca-Cola · Coca-Cola a $35 = $35');
-    expect(stdout).toMatch(/¡Listo! 🙌 Tu pedido \*M-[A-Z0-9]{4}\* fue enviado a Moloteando/);
+    expect(stdout).toMatch(/¡Listo! 🙌\n\s*Tu pedido \*M-[A-Z0-9]{4}\* fue enviado a Moloteando/);
   }, 30_000);
 
   it('con --proveedor twilio completa un pedido contra el doble de Twilio (aviso en texto libre)', async () => {
@@ -29,7 +29,7 @@ describe('bot:chat (CA-15b)', () => {
     expect(stdout).toContain('[aviso al personal +5215511110001, texto libre]');
     expect(stdout).toMatch(/🔔 \*Nuevo pedido M-[A-Z0-9]{4}\* - Moloteando/);
     expect(stdout).toContain('2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260');
-    expect(stdout).toMatch(/¡Listo! 🙌 Tu pedido \*M-[A-Z0-9]{4}\* fue enviado a Moloteando/);
+    expect(stdout).toMatch(/¡Listo! 🙌\n\s*Tu pedido \*M-[A-Z0-9]{4}\* fue enviado a Moloteando/);
     expect(stdout).not.toContain('el webhook respondió');
   }, 30_000);
 

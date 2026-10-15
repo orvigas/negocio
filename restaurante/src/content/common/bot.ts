@@ -9,29 +9,35 @@
  * ignora (separan palabras), así que un cliente que copie un texto del bot se entiende igual. No van
  * en los textos que llegan a los parámetros de la plantilla de Meta (`pickup`, `delivery`,
  * `staffHours`, `staffOffHours`, `noNotes`): su texto lo fija la plantilla aprobada.
+ *
+ * Formato (REQ-F-029): renglones estructurados de hasta 28 de ancho visible, un renglón en blanco
+ * entre párrafos y el contacto o la URL solos en su renglón. Las claves de la plantilla y
+ * `staffNotice` no se reacomodan: lo que recibe el personal no cambia.
  */
 export const botText = Object.freeze({
-  greeting: '¡Hola! 👋 Te atiende el asistente de *{negocio}*. {lema}',
+  greeting: '¡Hola! 👋 Te atiende el asistente de *{negocio}*.\n\n{lema}',
   openNow: '🕒 Estamos abiertos hasta las {cierre}.',
-  closedNow: '🌙 En este momento estamos cerrados. Abrimos {apertura}. Puedes ver el menú y dejar tu pedido: lo atenderemos cuando abramos.',
+  closedNow: '🌙 En este momento estamos cerrados.\nAbrimos {apertura}.\n\nPuedes ver el menú y dejar tu pedido: lo atenderemos cuando abramos.',
   /** Fuera de horario y sin pedidos (D-16): el negocio no abre hoy ni mañana. */
-  closedNoOrders: '🌙 En este momento estamos cerrados. Abrimos {apertura}. Puedes ver el menú; los pedidos se reciben desde el día anterior a la apertura.',
-  rootOptions: '¿Qué deseas hacer?\n1. 📋 Ver el menú\n2. 🛒 Hacer un pedido\n3. 🕒 Horario y ubicación\n4. 🙋 Hablar con una persona',
-  keywordsHint: '💬 En cualquier momento puedes escribir: *menú*, *carrito*, *cancelar*, *persona* o *ayuda*.',
-  help: 'Puedes escribir tu pedido con tus palabras, por ejemplo: *{ejemplo}*. También respondo a números de opción y a palabras clave.',
+  closedNoOrders: '🌙 En este momento estamos cerrados.\nAbrimos {apertura}.\n\nPuedes ver el menú; los pedidos se reciben desde el día anterior a la apertura.',
+  rootOptions: '*¿Qué deseas hacer?*\n*1.* 📋 Ver el menú\n*2.* 🛒 Hacer un pedido\n*3.* 🕒 Horario y ubicación\n*4.* 🙋 Hablar con una persona',
+  /** W-1 (REQ-F-029). */
+  keywordsHint: '💬 En cualquier momento,\nescribe:\n*menú* · *carrito* · *cancelar*\n*persona* · *ayuda*',
+  /** W-2 (REQ-F-029): el ejemplo va en su propio renglón. */
+  help: 'Puedes escribir tu pedido con tus palabras, por ejemplo:\n*{ejemplo}*\n\nTambién respondo a números de opción y a palabras clave.',
   notUnderstood: 'No entendí tu mensaje. 🤔',
   textOnly: 'Por ahora solo entiendo mensajes de texto.',
-  hoursAndLocation: '🕒 *{negocio}* atiende {horario}.\n📍 Ubicación: {mapa}',
-  otherBusiness: '*{otro}* atiende {horarioOtro}. Hoy te atiende *{negocio}*.',
+  hoursAndLocation: '🕒 *{negocio}* atiende {horario}.\n\n📍 *Ubicación:*\n{mapa}',
+  otherBusiness: '*{otro}* atiende {horarioOtro}.\n\nHoy te atiende *{negocio}*.',
   menuTitle: '📋 *Menú de {negocio}*',
-  menuPrompt: 'Escríbeme tu pedido, por ejemplo: *{ejemplo}*. También puedes escribir el número de un producto.',
+  menuPrompt: 'Escríbeme tu pedido, por ejemplo:\n*{ejemplo}*\n\nTambién puedes escribir el número de un producto.',
   /** Invitación del saludo (REQ-F-013, RF-4.1). */
-  orderInvite: 'O escríbeme tu pedido, por ejemplo: *{ejemplo}*.',
-  menuEmpty: 'Por ahora no tenemos productos disponibles. Escribe *persona* para hablar con alguien de {negocio}.',
+  orderInvite: 'O escríbeme tu pedido, por ejemplo:\n*{ejemplo}*',
+  menuEmpty: 'Por ahora no tenemos productos disponibles.\n\nEscribe *persona* para hablar con alguien de {negocio}.',
   ordersClosed:
-    '🌙 Por ahora *{negocio}* no está tomando pedidos: abre {apertura}. *{otro}* abre {aperturaOtro}.\nPuedes ver el menú (escribe *menú*) o hablar con una persona (escribe *persona*).',
+    '🌙 Por ahora *{negocio}* no está tomando pedidos: abre {apertura}.\n\n*{otro}* abre {aperturaOtro}.\n\nPuedes ver el menú (escribe *menú*) o hablar con una persona (escribe *persona*).',
   chooseOption: '¿Cuál opción de *{producto}*?\n{opciones}',
-  askQuantity: '¿Cuántas de *{producto}*? Escribe un número del 1 al {max}.',
+  askQuantity: '¿Cuántas de *{producto}*?\nEscribe un número del 1 al {max}.',
   invalidNumber: 'Escribe solo el número de una de las opciones.',
   invalidQuantity: 'La cantidad debe ser un número entero del 1 al {max}.',
   lineTooLarge: 'Con esa cantidad tendrías más de {max} de *{producto}*. Elige una cantidad menor.',
@@ -55,59 +61,67 @@ export const botText = Object.freeze({
   dataHint: 'Si es tu nombre, escribe también si es para *recoger* o *a domicilio* (con tu dirección), por ejemplo: *Ana, recoger*.',
   /** Petición de los datos con el aviso de privacidad (REQ-F-013, RF-5.1; D-17 de REQ-F-009). */
   askData:
-    'Si es todo, envíame tu nombre y si es para 🏪 *recoger* o 🛵 *a domicilio* (con tu dirección). Por ejemplo: *Ana, recoger* o *Ana, domicilio, Calle 5 #10, Centro*.',
+    'Si es todo, envíame:\n- tu nombre\n- 🏪 *recoger* o\n  🛵 *a domicilio*\n  (con tu dirección)\n\nPor ejemplo:\n*Ana, recoger*\n*Ana, domicilio, Calle 5 #10, Centro*',
   /** Una sola pregunta para todas las líneas ambiguas (REQ-F-013, RF-3.2). */
   clarifyTitle: 'Necesito que me aclares:',
   clarifyBlock: '*{numero}) {fragmento}*\n{opciones}',
   clarifyHint: 'Responde con los números en orden (por ejemplo: *{ejemplo}*) o con los nombres.',
   clarifyDiscarded: 'Dejé sin agregar lo que te había preguntado y tomé tu nuevo mensaje.',
-  dataOrProducts: 'Tu mensaje trae productos y datos de entrega. ¿Qué hago?\n1. Agregar los productos\n2. Son mis datos (nombre y entrega)',
+  /** W-4 (REQ-F-029). */
+  dataOrProducts: 'Tu mensaje trae productos y datos de entrega.\n¿Qué hago?\n*1.* Agregar los productos\n*2.* Son mis datos de entrega',
   removeNotFound: 'No encontré "{texto}" en tu carrito.',
   cartTitle: '🛒 *Tu pedido*',
   cartEmpty: '🛒 Tu carrito está vacío.',
-  cartOptions: '1. Agregar otro producto\n2. Quitar un producto\n3. Vaciar el carrito\n4. Terminar mi pedido',
-  removePrompt: '¿Qué producto quitas? Escribe su número.\n{lineas}',
-  removeWhich: '¿Cuál quitas? Escribe su número.\n{lineas}',
+  cartOptions: '*1.* Agregar otro producto\n*2.* Quitar un producto\n*3.* Vaciar el carrito\n*4.* Terminar mi pedido',
+  removePrompt: '¿Qué producto quitas?\nEscribe su número.\n\n{lineas}',
+  removeWhich: '¿Cuál quitas?\nEscribe su número.\n\n{lineas}',
   removed: 'Quitado: {producto}.',
   emptied: '🧹 Listo, vacié tu carrito.',
   privacy: '🔒 Para preparar y entregar tu pedido necesito tu nombre y, si es a domicilio, tu dirección. Solo se usan para este pedido y no se guardan.',
   askName: '¿A nombre de quién es el pedido?',
   invalidName: 'El nombre debe tener entre 1 y {max} caracteres.',
-  askDelivery: '¿Cómo lo quieres?\n1. 🏪 Recoger en sucursal\n2. 🛵 A domicilio',
-  askAddress: '¿Cuál es la dirección de entrega? (calle, número, colonia y referencias)',
+  askDelivery: '¿Cómo lo quieres?\n*1.* 🏪 Recoger en sucursal\n*2.* 🛵 A domicilio',
+  askAddress: '¿Cuál es la dirección de entrega?\n(calle, número, colonia y referencias)',
   invalidAddress: 'La dirección debe tener entre {min} y {max} caracteres.',
   invalidNotes: 'Las notas pueden tener hasta {max} caracteres.',
   /** Íconos de la forma de entrega en el resumen del cliente (no van al aviso al personal). */
   deliveryIcons: Object.freeze({ pickup: '🏪', delivery: '🛵' }),
   pickup: 'Recoger en sucursal',
   delivery: 'A domicilio: {direccion}',
+  /** Forma de entrega a domicilio en el resumen del cliente; la dirección va en el renglón siguiente (REQ-F-029). */
+  deliveryHome: 'A domicilio',
+  /** Etiquetas de los datos del resumen del cliente (en negrita; REQ-F-029, RF-5). */
+  summaryFields: Object.freeze({ delivery: 'Entrega:', name: 'Nombre:', notes: 'Notas:' }),
+  /** Total del carrito y del resumen (en negrita). */
+  total: 'Total: {total}',
   deliveryCost: 'El personal te confirmará el costo del envío.',
   noNotes: 'Sin notas',
-  summaryTitle: '📝 *Resumen de tu pedido {codigo}*\n{negocio}',
-  offHours: '🌙 FUERA DE HORARIO: tu pedido se atenderá cuando abramos, {apertura}.',
-  /** Indicación del resumen (REQ-F-013, RF-6.1): confirmar, nota o cancelar. */
-  confirmPrompt: '✅ Escribe *sí* para confirmar, o escribe una nota para agregarla. *cancelar* para cancelar.',
+  summaryTitle: '📝 *Resumen de tu pedido*\n*{codigo}* · {negocio}',
+  /** W-5 (REQ-F-029). */
+  offHours: '🌙 *FUERA DE HORARIO*\nTu pedido se atenderá cuando abramos, {apertura}.',
+  /** Indicación del resumen (REQ-F-013, RF-6.1): confirmar, nota o cancelar. W-6 (REQ-F-029). */
+  confirmPrompt: '✅ Escribe *sí* para confirmar.\nO escribe una nota para agregarla.\nEscribe *cancelar* para cancelar.',
   catalogChanged: 'Algunos productos cambiaron desde que los agregaste:',
   lineRemoved: '- {producto} ya no está disponible y lo quité.',
   linePriceChanged: '- {producto} cambió de precio: ahora {precio}.',
   cartNowEmpty: 'Tu carrito quedó vacío.',
-  confirmed: '¡Listo! 🙌 Tu pedido *{codigo}* fue enviado a {negocio}. El personal te escribirá para confirmarlo. 😋',
+  confirmed: '¡Listo! 🙌\nTu pedido *{codigo}* fue enviado a {negocio}.\n\nEl personal te escribirá para confirmarlo. 😋',
   staffFailed:
-    'No pude enviar tu pedido *{codigo}* al personal de {negocio}. Por favor escríbeles directamente: {contacto}',
+    'No pude enviar tu pedido *{codigo}* al personal de {negocio}.\n\nPor favor escríbeles directamente:\n{contacto}',
   /** REQ-F-025, RF-1.1: el número ya hizo el máximo de pedidos de hoy (al empezar). */
   orderLimitReached:
-    'Por hoy ya recibimos el máximo de pedidos desde este número. Si quieres pedir algo más, escribe directamente al personal de *{negocio}*: {contacto}',
+    'Por hoy ya recibimos el máximo de pedidos desde este número.\n\nSi quieres pedir algo más, escribe directamente al personal de *{negocio}*:\n{contacto}',
   /** REQ-F-025, RF-1.1 y RF-2.1: al confirmar, el aviso al personal no se envía por un tope. */
   orderCapContact:
-    'Tu pedido *{codigo}* no se pudo enviar automáticamente al personal de {negocio}. Por favor escríbeles directamente con tu pedido: {contacto}',
+    'Tu pedido *{codigo}* no se pudo enviar automáticamente al personal de {negocio}.\n\nPor favor escríbeles directamente con tu pedido:\n{contacto}',
   /** REQ-F-025, RF-1.2: tope diario de mensajes del número (se envía una sola vez). */
   dailyLimitReached:
-    'Llegaste al límite de mensajes de hoy con el asistente. Para continuar, escribe directamente al personal de *{negocio}*: {contacto}',
+    'Llegaste al límite de mensajes de hoy con el asistente.\n\nPara continuar, escribe directamente al personal de *{negocio}*:\n{contacto}',
   /** REQ-F-025, RF-2.1: modo contacto directo (tope global de avisos al personal). */
   directContactMode:
-    'Por ahora no puedo tomar pedidos por este medio. Escribe directamente al personal de *{negocio}*: {contacto}',
-  cancelled: 'Pedido cancelado. Cuando quieras, escríbenos de nuevo. 👋',
-  person: '🙋 Para hablar con una persona de *{negocio}*, escribe a: {contacto}',
+    'Por ahora no puedo tomar pedidos por este medio.\n\nEscribe directamente al personal de *{negocio}*:\n{contacto}',
+  cancelled: 'Pedido cancelado.\n\nCuando quieras, escríbenos de nuevo. 👋',
+  person: '🙋 Para hablar con una persona de *{negocio}*, escribe a:\n{contacto}',
   staffHours: 'En horario',
   staffOffHours: 'FUERA DE HORARIO, abre {apertura}',
   /**

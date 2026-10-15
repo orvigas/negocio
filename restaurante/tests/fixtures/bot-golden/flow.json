@@ -1,0 +1,2010 @@
+{
+  "molotes-numeros": [
+    {
+      "input": "Hola, quiero hacer un pedido de molotes",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "browse",
+        "pending": null,
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "1",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "option",
+        "pending": {
+          "slug": "queso-oaxaca"
+        },
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "2",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "quantity",
+        "pending": {
+          "slug": "queso-oaxaca",
+          "optionKey": "orden"
+        },
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "2",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "cart",
+        "pending": null,
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "1",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "browse",
+        "pending": null,
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "10",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "quantity",
+        "pending": {
+          "slug": "refrescos",
+          "optionKey": "unico"
+        },
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "1",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "cart",
+        "pending": null,
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "4",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "cart",
+        "pending": null,
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "Juan, recoger",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "confirm",
+        "pending": null,
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {
+          "delivery": "pickup",
+          "name": "Juan"
+        },
+        "code": "M-T001",
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "1",
+      "replies": 0,
+      "cancelled": false,
+      "order": {
+        "code": "M-T001",
+        "business": "molotes",
+        "lines": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "name": "Juan",
+        "delivery": "pickup",
+        "notes": "",
+        "offHoursOpening": null
+      },
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "sending",
+        "pending": null,
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {
+          "delivery": "pickup",
+          "name": "Juan"
+        },
+        "code": "M-T001",
+        "clarify": null,
+        "removeChoices": null
+      }
+    }
+  ],
+  "molotes-texto-libre-domicilio": [
+    {
+      "input": "Hola, quiero 2 órdenes de queso y una coca",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [
+        {
+          "source": "order",
+          "recognized": 2,
+          "rejected": 0,
+          "ambiguous": 0,
+          "unrecognized": 0,
+          "unavailable": 0,
+          "otherBusiness": 0
+        }
+      ],
+      "state": {
+        "business": "molotes",
+        "step": "cart",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": "Coca-Cola"
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "quita la coca",
+      "replies": 2,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "cart",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "1 coca sin azucar",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [
+        {
+          "source": "order",
+          "recognized": 1,
+          "rejected": 0,
+          "ambiguous": 0,
+          "unrecognized": 0,
+          "unavailable": 0,
+          "otherBusiness": 0
+        }
+      ],
+      "state": {
+        "business": "molotes",
+        "step": "cart",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": "Coca-Cola Sin Azúcar"
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "Ana, domicilio, Calle 5 #10, Centro",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "confirm",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": "Coca-Cola Sin Azúcar"
+          }
+        ],
+        "customer": {
+          "delivery": "delivery",
+          "name": "Ana",
+          "address": "Calle 5 #10, Centro"
+        },
+        "code": "M-T001",
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "sin cebolla",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "confirm",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": "Coca-Cola Sin Azúcar"
+          }
+        ],
+        "customer": {
+          "delivery": "delivery",
+          "name": "Ana",
+          "address": "Calle 5 #10, Centro",
+          "notes": "sin cebolla"
+        },
+        "code": "M-T001",
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "sí",
+      "replies": 0,
+      "cancelled": false,
+      "order": {
+        "code": "M-T001",
+        "business": "molotes",
+        "lines": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": "Coca-Cola Sin Azúcar"
+          }
+        ],
+        "name": "Ana",
+        "delivery": "delivery",
+        "address": "Calle 5 #10, Centro",
+        "notes": "sin cebolla",
+        "offHoursOpening": null
+      },
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "sending",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": "Coca-Cola Sin Azúcar"
+          }
+        ],
+        "customer": {
+          "delivery": "delivery",
+          "name": "Ana",
+          "address": "Calle 5 #10, Centro",
+          "notes": "sin cebolla"
+        },
+        "code": "M-T001",
+        "clarify": null,
+        "removeChoices": null
+      }
+    }
+  ],
+  "molotes-palabras-clave": [
+    {
+      "input": "Hola",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "root",
+        "pending": null,
+        "menu": [],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "ayuda",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "root",
+        "pending": null,
+        "menu": [],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "menú",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "browse",
+        "pending": null,
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "3",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "option",
+        "pending": {
+          "slug": "papas-con-chorizo"
+        },
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "1",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "quantity",
+        "pending": {
+          "slug": "papas-con-chorizo",
+          "optionKey": "pieza"
+        },
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "2",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "cart",
+        "pending": null,
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [
+          {
+            "slug": "papas-con-chorizo",
+            "optionKey": "pieza",
+            "productName": "Molotes de Papas con Chorizo",
+            "optionLabel": "pieza",
+            "unitPriceCents": 4500,
+            "quantity": 2,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "carrito",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "cart",
+        "pending": null,
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [
+          {
+            "slug": "papas-con-chorizo",
+            "optionKey": "pieza",
+            "productName": "Molotes de Papas con Chorizo",
+            "optionLabel": "pieza",
+            "unitPriceCents": 4500,
+            "quantity": 2,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "3",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "root",
+        "pending": null,
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "persona",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "root",
+        "pending": null,
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "cancelar",
+      "replies": 1,
+      "cancelled": true,
+      "order": null,
+      "interpretations": [],
+      "state": null
+    }
+  ],
+  "molotes-fuera-de-horario": [
+    {
+      "input": "Hola",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "root",
+        "pending": null,
+        "menu": [],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "2 de queso",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [
+        {
+          "source": "order",
+          "recognized": 1,
+          "rejected": 0,
+          "ambiguous": 0,
+          "unrecognized": 0,
+          "unavailable": 0,
+          "otherBusiness": 0
+        }
+      ],
+      "state": {
+        "business": "molotes",
+        "step": "cart",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "pieza",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "pieza",
+            "unitPriceCents": 4500,
+            "quantity": 2,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "Luis, recoger",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "confirm",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "pieza",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "pieza",
+            "unitPriceCents": 4500,
+            "quantity": 2,
+            "detail": ""
+          }
+        ],
+        "customer": {
+          "delivery": "pickup",
+          "name": "Luis"
+        },
+        "code": "M-T001",
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "agrega una coca",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [
+        {
+          "source": "edit",
+          "recognized": 1,
+          "rejected": 0,
+          "ambiguous": 0,
+          "unrecognized": 0,
+          "unavailable": 0,
+          "otherBusiness": 0
+        }
+      ],
+      "state": {
+        "business": "molotes",
+        "step": "confirm",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "pieza",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "pieza",
+            "unitPriceCents": 4500,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": "Coca-Cola"
+          }
+        ],
+        "customer": {
+          "delivery": "pickup",
+          "name": "Luis"
+        },
+        "code": "M-T001",
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "sí",
+      "replies": 0,
+      "cancelled": false,
+      "order": {
+        "code": "M-T001",
+        "business": "molotes",
+        "lines": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "pieza",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "pieza",
+            "unitPriceCents": 4500,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": "Coca-Cola"
+          }
+        ],
+        "name": "Luis",
+        "delivery": "pickup",
+        "notes": "",
+        "offHoursOpening": "hoy a las 08:30"
+      },
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "sending",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "pieza",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "pieza",
+            "unitPriceCents": 4500,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": "Coca-Cola"
+          }
+        ],
+        "customer": {
+          "delivery": "pickup",
+          "name": "Luis"
+        },
+        "code": "M-T001",
+        "clarify": null,
+        "removeChoices": null
+      }
+    }
+  ],
+  "birria-aclaracion": [
+    {
+      "input": "Hola, quiero hacer un pedido de birria",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "browse",
+        "pending": null,
+        "menu": [
+          "quesabirria",
+          "taco-de-birria",
+          "consome-grande",
+          "consome-chico",
+          "birriamen",
+          "bebidas"
+        ],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "consomé, una bebida y 2 tacos",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [
+        {
+          "source": "order",
+          "recognized": 1,
+          "rejected": 0,
+          "ambiguous": 2,
+          "unrecognized": 0,
+          "unavailable": 0,
+          "otherBusiness": 0
+        }
+      ],
+      "state": {
+        "business": "birria",
+        "step": "clarify",
+        "pending": null,
+        "menu": [
+          "quesabirria",
+          "taco-de-birria",
+          "consome-grande",
+          "consome-chico",
+          "birriamen",
+          "bebidas"
+        ],
+        "cart": [
+          {
+            "slug": "taco-de-birria",
+            "optionKey": "unico",
+            "productName": "Taco de Birria con Tortilla de Mano",
+            "optionLabel": "",
+            "unitPriceCents": 4000,
+            "quantity": 2,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": {
+          "blocks": [
+            {
+              "fragment": "consomé",
+              "quantity": 1,
+              "detail": "",
+              "candidates": [
+                {
+                  "slug": "consome-grande",
+                  "optionKey": "unico"
+                },
+                {
+                  "slug": "consome-chico",
+                  "optionKey": "v:Con Carne"
+                },
+                {
+                  "slug": "consome-chico",
+                  "optionKey": "v:Sin Carne"
+                }
+              ]
+            },
+            {
+              "fragment": "una bebida",
+              "quantity": 1,
+              "detail": "",
+              "candidates": [
+                {
+                  "slug": "bebidas",
+                  "optionKey": "v:Aguas Frescas"
+                },
+                {
+                  "slug": "bebidas",
+                  "optionKey": "v:Coca-Cola Vidrio"
+                }
+              ]
+            }
+          ],
+          "returnTo": "cart"
+        },
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "2, 1",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [
+        {
+          "source": "answer",
+          "recognized": 2,
+          "ambiguous": 0,
+          "unrecognized": 0,
+          "rejected": 0,
+          "unavailable": 0,
+          "otherBusiness": 0
+        }
+      ],
+      "state": {
+        "business": "birria",
+        "step": "cart",
+        "pending": null,
+        "menu": [
+          "quesabirria",
+          "taco-de-birria",
+          "consome-grande",
+          "consome-chico",
+          "birriamen",
+          "bebidas"
+        ],
+        "cart": [
+          {
+            "slug": "taco-de-birria",
+            "optionKey": "unico",
+            "productName": "Taco de Birria con Tortilla de Mano",
+            "optionLabel": "",
+            "unitPriceCents": 4000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          },
+          {
+            "slug": "bebidas",
+            "optionKey": "v:Aguas Frescas",
+            "productName": "Bebidas Frías del Comal",
+            "optionLabel": "Aguas Frescas",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "Ana, recoger",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "confirm",
+        "pending": null,
+        "menu": [
+          "quesabirria",
+          "taco-de-birria",
+          "consome-grande",
+          "consome-chico",
+          "birriamen",
+          "bebidas"
+        ],
+        "cart": [
+          {
+            "slug": "taco-de-birria",
+            "optionKey": "unico",
+            "productName": "Taco de Birria con Tortilla de Mano",
+            "optionLabel": "",
+            "unitPriceCents": 4000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          },
+          {
+            "slug": "bebidas",
+            "optionKey": "v:Aguas Frescas",
+            "productName": "Bebidas Frías del Comal",
+            "optionLabel": "Aguas Frescas",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {
+          "delivery": "pickup",
+          "name": "Ana"
+        },
+        "code": "B-T001",
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "sí",
+      "replies": 0,
+      "cancelled": false,
+      "order": {
+        "code": "B-T001",
+        "business": "birria",
+        "lines": [
+          {
+            "slug": "taco-de-birria",
+            "optionKey": "unico",
+            "productName": "Taco de Birria con Tortilla de Mano",
+            "optionLabel": "",
+            "unitPriceCents": 4000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          },
+          {
+            "slug": "bebidas",
+            "optionKey": "v:Aguas Frescas",
+            "productName": "Bebidas Frías del Comal",
+            "optionLabel": "Aguas Frescas",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "name": "Ana",
+        "delivery": "pickup",
+        "notes": "",
+        "offHoursOpening": null
+      },
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "sending",
+        "pending": null,
+        "menu": [
+          "quesabirria",
+          "taco-de-birria",
+          "consome-grande",
+          "consome-chico",
+          "birriamen",
+          "bebidas"
+        ],
+        "cart": [
+          {
+            "slug": "taco-de-birria",
+            "optionKey": "unico",
+            "productName": "Taco de Birria con Tortilla de Mano",
+            "optionLabel": "",
+            "unitPriceCents": 4000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          },
+          {
+            "slug": "bebidas",
+            "optionKey": "v:Aguas Frescas",
+            "productName": "Bebidas Frías del Comal",
+            "optionLabel": "Aguas Frescas",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {
+          "delivery": "pickup",
+          "name": "Ana"
+        },
+        "code": "B-T001",
+        "clarify": null,
+        "removeChoices": null
+      }
+    }
+  ],
+  "birria-quitar-y-datos-por-pasos": [
+    {
+      "input": "Hola",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "root",
+        "pending": null,
+        "menu": [],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "3 quesabirrias y un consome chico con carne",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [
+        {
+          "source": "order",
+          "recognized": 2,
+          "rejected": 0,
+          "ambiguous": 0,
+          "unrecognized": 0,
+          "unavailable": 0,
+          "otherBusiness": 0
+        }
+      ],
+      "state": {
+        "business": "birria",
+        "step": "cart",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "quesabirria",
+            "optionKey": "unico",
+            "productName": "Quesabirria con Tortilla de Mano",
+            "optionLabel": "",
+            "unitPriceCents": 6500,
+            "quantity": 3,
+            "detail": ""
+          },
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "2",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "remove",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "quesabirria",
+            "optionKey": "unico",
+            "productName": "Quesabirria con Tortilla de Mano",
+            "optionLabel": "",
+            "unitPriceCents": 6500,
+            "quantity": 3,
+            "detail": ""
+          },
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "1",
+      "replies": 2,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "cart",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "4",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "cart",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "Ana, domicilio",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "address",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {
+          "delivery": "delivery",
+          "name": "Ana"
+        },
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "Calle 5 #10, Centro",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "confirm",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {
+          "delivery": "delivery",
+          "name": "Ana",
+          "address": "Calle 5 #10, Centro"
+        },
+        "code": "B-T001",
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "quita las quesabirrias",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "confirm",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {
+          "delivery": "delivery",
+          "name": "Ana",
+          "address": "Calle 5 #10, Centro"
+        },
+        "code": "B-T001",
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "confirmo",
+      "replies": 0,
+      "cancelled": false,
+      "order": {
+        "code": "B-T001",
+        "business": "birria",
+        "lines": [
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "name": "Ana",
+        "delivery": "delivery",
+        "address": "Calle 5 #10, Centro",
+        "notes": "",
+        "offHoursOpening": null
+      },
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "sending",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {
+          "delivery": "delivery",
+          "name": "Ana",
+          "address": "Calle 5 #10, Centro"
+        },
+        "code": "B-T001",
+        "clarify": null,
+        "removeChoices": null
+      }
+    }
+  ],
+  "birria-otro-negocio": [
+    {
+      "input": "Hola, quiero molotes",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [
+        {
+          "source": "order",
+          "recognized": 0,
+          "rejected": 0,
+          "ambiguous": 0,
+          "unrecognized": 0,
+          "unavailable": 0,
+          "otherBusiness": 1
+        }
+      ],
+      "state": {
+        "business": "birria",
+        "step": "root",
+        "pending": null,
+        "menu": [],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "menú",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "browse",
+        "pending": null,
+        "menu": [
+          "quesabirria",
+          "taco-de-birria",
+          "consome-grande",
+          "consome-chico",
+          "birriamen",
+          "bebidas"
+        ],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "quiero hacer un pedido",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "browse",
+        "pending": null,
+        "menu": [
+          "quesabirria",
+          "taco-de-birria",
+          "consome-grande",
+          "consome-chico",
+          "birriamen",
+          "bebidas"
+        ],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "1",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "quantity",
+        "pending": {
+          "slug": "quesabirria",
+          "optionKey": "unico"
+        },
+        "menu": [
+          "quesabirria",
+          "taco-de-birria",
+          "consome-grande",
+          "consome-chico",
+          "birriamen",
+          "bebidas"
+        ],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    }
+  ],
+  "molotes-sin-pedidos": [
+    {
+      "input": "Hola",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "root",
+        "pending": null,
+        "menu": [],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "2 de queso",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [
+        {
+          "source": "order",
+          "recognized": 0,
+          "ambiguous": 0,
+          "unrecognized": 0,
+          "rejected": 0,
+          "unavailable": 0,
+          "otherBusiness": 0
+        }
+      ],
+      "state": {
+        "business": "molotes",
+        "step": "root",
+        "pending": null,
+        "menu": [],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "menú",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "browse",
+        "pending": null,
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [],
+        "customer": {},
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    }
+  ]
+}

@@ -2,14 +2,17 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../../src/app.ts';
-import type { BusinessId } from '../../src/config/businesses.ts';
+import { BUSINESS, BUSINESS_IDS, type BusinessId } from '../../src/config/businesses.ts';
 import type { Config } from '../../src/config/env.ts';
+import { commonContent, getBusinessContent } from '../../src/content/index.ts';
 import { loadSeedDocument } from '../../src/content/seeds.ts';
 import { createFileMenuRepository } from '../../src/repositories/file-menu-repository.ts';
 import type { MenuDocument } from '../../src/services/menu-schema.ts';
+import { hoursAndLocation } from '../../src/services/whatsapp-bot/messages.ts';
 import type { Logger } from '../../src/utils/logger.ts';
 import { makeConfig, makeRepository, type CorruptibleData } from '../helpers.ts';
 import { listenLocal } from '../support/http.ts';
@@ -330,6 +333,176 @@ describe('GET /molotes: contenido del diseño', () => {
   });
 });
 
+describe('GET /molotes: textos y datos comerciales reales (REQ-F-031)', () => {
+  const molotes = getBusinessContent('molotes');
+  const MAPS_URL = 'https://www.google.com/maps/search/?api=1&query=18.81823603166285,-98.96914471124853';
+  const EMBED_SRC =
+    'https://www.google.com/maps/embed?pb=!4v1792064722212!6m8!1m7!1sCliD7xRS-mkCpf6MwseHcQ!2m2!1d18.81823603166285!2d-98.96914471124853!3f189.613958693852!4f-9.01272483181998!5f0.7820865974627469';
+  const COMMON_MAPS_URL = 'https://maps.app.goo.gl/sAFDEeLdKzs7GGPz9';
+
+  const molotesPage = async () => {
+    const { text } = await (await agent()).get('/molotes');
+    return { html: text, document: new JSDOM(text).window.document };
+  };
+  const normalized = (text: string | null | undefined) => (text ?? '').replace(/\s+/g, ' ').trim();
+
+  it('CA-1: el HTML publicado no contiene ninguna afirmación retirada (atributos incluidos) y conserva "Queso Oaxaca"', async () => {
+    const { html, document } = await molotesPage();
+    // OT-1: los <path> de los iconos SVG contienen secuencias como "4.945"; no son texto publicado.
+    const markup = html.replace(/<svg\b[\s\S]*?<\/svg>/g, '');
+    const text = normalized(document.body.textContent);
+    const RETIRED = [
+      'oaxaqueños', '15 Años', 'generaciones', '1,500', 'Sucursales Activas', 'Sucursales', 'térmic', 'Uber', 'Rappi',
+      'moloteando.mx', '2x1', '2×1', 'Jueves', 'Club del Comal', 'ofertas secretas', 'plátano macho', 'Callejon del Sabor',
+      'San Jerónimo', '5548920184', '4.9', 'S.A. de C.V.', '2024', 'Facturación', 'curación de cazuelas', 'Cerrado por nixtamal',
+      'Solo promociones crujientes y reales',
+    ];
+    for (const term of RETIRED) {
+      expect(markup, `HTML: ${term}`).not.toContain(term);
+      expect(text, `texto: ${term}`).not.toContain(term);
+    }
+    // La métrica antigua iba en dos elementos ("+15" y "Años de Tradición").
+    expect(text).not.toContain('Años de Tradición');
+    expect(text).toContain('Queso Oaxaca');
+  });
+
+  it('CA-2: el formulario dice "Activar promoción" y su mensaje de éxito (oculto) es el aprobado', async () => {
+    const { document } = await molotesPage();
+    const form = document.querySelector('#promo-form')!;
+    expect(normalized(form.querySelector('button[type="submit"] span:not([aria-hidden])')?.textContent)).toBe('Activar promoción');
+    expect(form.hasAttribute('action')).toBe(false);
+    const success = document.querySelector('#promo-success')!;
+    expect(success.hasAttribute('hidden')).toBe(true);
+    expect(normalized(success.textContent)).toBe('¡Gracias por tu interés! Pregunta por la promoción vigente al pedir por WhatsApp.');
+    expect(molotes.promo.success).toBe(normalized(success.textContent));
+  });
+
+  it('CA-3 y CA-4: el pie lleva el teléfono oficial y ninguna línea de correo', async () => {
+    const { html, document } = await molotesPage();
+    const footer = document.querySelector('footer')!;
+    const phone = footer.querySelector('a[href^="tel:"]')!;
+    expect(phone.getAttribute('href')).toBe('tel:+527352782306');
+    expect(normalized(phone.textContent)).toBe('+52 735 278 2306');
+    expect(html).not.toContain('mailto:');
+    expect(normalized(footer.textContent)).not.toContain('@');
+    expect(normalized(footer.textContent)).toContain('Contacto y ubicación');
+  });
+
+  it('CA-5 y CA-6: un solo mapa embebido con el src oficial y dos enlaces a la ubicación de Molotes', async () => {
+    const { html, document } = await molotesPage();
+    const iframes = document.querySelectorAll('iframe');
+    expect(iframes).toHaveLength(1);
+    const iframe = iframes[0]!;
+    expect(iframe.closest('#pedidos-seccion')).not.toBeNull();
+    expect(iframe.getAttribute('src')).toBe(EMBED_SRC);
+    expect(iframe.getAttribute('title')).toBe('Ubicación de Moloteando en Google Maps');
+    expect(iframe.getAttribute('loading')).toBe('lazy');
+    expect(iframe.getAttribute('referrerpolicy')).toBe('strict-origin-when-cross-origin');
+    expect(iframe.hasAttribute('allowfullscreen')).toBe(true);
+    expect(iframe.hasAttribute('width')).toBe(false);
+
+    const links = [...document.querySelectorAll('a')].filter((a) => a.getAttribute('href') === MAPS_URL);
+    expect(links).toHaveLength(2);
+    const [directions, footerLink] = links;
+    expect(directions!.closest('#pedidos-seccion')).not.toBeNull();
+    expect(normalized(directions!.textContent)).toBe(`directions${commonContent.location.label} ${commonContent.location.assistiveText}`);
+    expect(footerLink!.closest('footer')).not.toBeNull();
+    expect(normalized(footerLink!.textContent)).toBe('Ver ubicación en Google Maps (se abre en una pestaña nueva)');
+    for (const link of links) {
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    }
+    expect(html).not.toContain('maps.app.goo.gl');
+  });
+
+  it('CA-7: / y /birria conservan la ubicación común, sin mapa embebido, y el bot sigue enviándola', async () => {
+    const client = await agent();
+    for (const path of ['/', '/birria']) {
+      const { text } = await client.get(path);
+      expect(text, path).toContain(`href="${COMMON_MAPS_URL}"`);
+      expect(text, path).not.toContain('<iframe');
+      expect(text, path).not.toContain('18.81823603166285');
+    }
+    for (const businessId of BUSINESS_IDS) expect(hoursAndLocation(businessId)).toContain(COMMON_MAPS_URL);
+    expect(hoursAndLocation(BUSINESS.MOLOTES)).not.toContain(MAPS_URL);
+  });
+
+  it('CA-8: dos casillas de plataformas: WhatsApp (enlace al bot) y Motomandados (informativa)', async () => {
+    const { document } = await molotesPage();
+    const list = document.querySelector('#pedidos-seccion ul')!;
+    expect(list.className).toBe('grid grid-cols-2 gap-space-sm');
+    const items = [...list.children];
+    expect(items).toHaveLength(2);
+    const whatsapp = items[0]!.querySelector('a.platform')!;
+    expect(whatsapp.getAttribute('data-action')).toBe('whatsapp-order');
+    expect(whatsapp.getAttribute('href')).toBe(WA_MOLOTES);
+    expect(normalized(whatsapp.textContent)).toContain('WhatsApp Sin comisiones');
+    expect(items[1]!.classList.contains('platform')).toBe(true);
+    expect(items[1]!.querySelector('a')).toBeNull();
+    expect(normalized(items[1]!.textContent)).toBe('moped Motomandados Costo según distancia');
+  });
+
+  it('CA-9: los textos corregidos coinciden con sus requisitos', async () => {
+    const { document } = await molotesPage();
+    const text = normalized(document.body.textContent);
+    const metrics = [...document.querySelectorAll('.ritual__metrics > div')].map((metric) => ({
+      value: normalized(metric.querySelector('dd.order-1')?.textContent),
+      title: normalized(metric.querySelector('dt')?.textContent),
+      note: normalized(metric.querySelector('dd.order-3')?.textContent),
+    }));
+    expect(metrics).toEqual([
+      { value: '2026', title: 'Desde', note: 'Comal recién encendido' },
+      { value: '1', title: 'Sucursal', note: 'Te esperamos de martes a viernes' },
+      { value: 'A mano', title: 'Hecho pieza por pieza', note: 'Masa recién amasada' },
+    ]);
+    for (const expected of [
+      'Disfruta tus molotes crujientes hasta tu puerta. Contamos con servicio de entrega mediante motomandados; el costo se calcula según la distancia de entrega. Consulta el costo al realizar tu pedido por WhatsApp.',
+      'Estilo Poblano',
+      '© 2026 Moloteando. Todos los derechos reservados.',
+      'Pedidos y Domicilio',
+      '* Lunes descansamos. Sábados y domingos te esperamos en Birria El Muñeco.',
+      'Molotes estilo poblano, crujientes y hechos a mano, con crema de rancho, queso fresco y salsas de molcajete.',
+      'Logramos esta textura templando la masa con un toque sutil de puré de papa criolla y cuidando cada fritura en el comal.',
+    ]) {
+      expect(text, expected).toContain(expected);
+    }
+    expect(normalized(document.querySelector('.hero__pills li:last-child')?.textContent)).toBe('star Estilo Poblano');
+    const disclaimer = [...document.querySelectorAll('#pedidos-seccion span')].find((span) => span.textContent?.startsWith('Sin spam'));
+    expect(disclaimer?.textContent).toBe('Sin spam molesto.');
+    expect([...document.querySelectorAll('nav a')].map((a) => normalized(a.textContent))).toContain('Ubicación');
+    expect(molotes.nav.at(-1)).toEqual({ label: 'Ubicación', href: '#pedidos-seccion' });
+  });
+
+  it('CA-11: la CSP solo añade www.google.com en frame-src a la política por defecto', async () => {
+    const EXPECTED = {
+      'default-src': ["'self'"],
+      'base-uri': ["'self'"],
+      'font-src': ["'self'", 'https:', 'data:'],
+      'form-action': ["'self'"],
+      'frame-ancestors': ["'self'"],
+      'img-src': ["'self'", 'data:'],
+      'object-src': ["'none'"],
+      'script-src': ["'self'"],
+      'script-src-attr': ["'none'"],
+      'style-src': ["'self'", 'https:', "'unsafe-inline'"],
+      'upgrade-insecure-requests': [],
+      'frame-src': ['https://www.google.com'],
+    };
+    const client = await agent();
+    for (const path of ['/molotes', '/', '/admin/login']) {
+      const header = (await client.get(path)).headers['content-security-policy'] as string;
+      const directives = Object.fromEntries(
+        header
+          .split(';')
+          .map((directive) => directive.trim().split(/\s+/))
+          .filter(([name]) => name)
+          .map(([name, ...values]) => [name, values]),
+      );
+      expect(directives, path).toEqual(EXPECTED);
+    }
+  });
+});
+
 describe('horarios reales (REQ-F-010)', () => {
   const MONDAY_10_MX = new Date('2026-10-12T16:00:00Z'); // lunes 10:00 CDMX
 
@@ -352,12 +525,12 @@ describe('horarios reales (REQ-F-010)', () => {
     expect(text).toContain('>Horario de Comal: Mar - Vie 08:30 a 15:00 hrs • Salsas Caseras y Masa Recién Frita<');
     expect(text).toContain('>Martes a Viernes de 8:30 AM a 3:00 PM<');
     expect(text).toContain(
-      '>* Lunes cerramos comales por molienda de nixtamal artesanal y curación de cazuelas. Sábados y domingos te esperamos en Birria El Muñeco.<',
+      '>* Lunes descansamos. Sábados y domingos te esperamos en Birria El Muñeco.<',
     );
     expect(footerHourRows(text)).toEqual([
       ['Martes a Viernes', '08:30 - 15:00'],
       ['Sábado y Domingo', 'Cerrado'],
-      ['Lunes', 'Cerrado por nixtamal'],
+      ['Lunes', 'Cerrado'],
     ]);
   });
 
@@ -407,13 +580,13 @@ describe('horarios reales (REQ-F-010)', () => {
   });
 
   // REQ-F-028 sustituye REQ-F-010 D-2: el lunes `/` es Birria con el aviso de descanso; el
-  // horario "Lunes: Cerrado por nixtamal" sigue en la landing de Molotes.
-  it('CA-5: un lunes a las 10:00 (zona del negocio) / muestra Birria con el aviso de descanso, y /molotes "Lunes: Cerrado por nixtamal"', async () => {
+  // horario "Lunes: Cerrado" sigue en la landing de Molotes (texto de REQ-F-031, R-22).
+  it('CA-5: un lunes a las 10:00 (zona del negocio) / muestra Birria con el aviso de descanso, y /molotes "Lunes: Cerrado"', async () => {
     const client = await agent({ now: MONDAY_10_MX });
     const { text } = await client.get('/');
     expect(text).toContain('data-business="birria"');
     expect(homeNoticeOf(text)).toBe('rest');
-    expect(footerHourRows((await client.get('/molotes')).text)).toContainEqual(['Lunes', 'Cerrado por nixtamal']);
+    expect(footerHourRows((await client.get('/molotes')).text)).toContainEqual(['Lunes', 'Cerrado']);
   });
 
   it('CA-5: un sábado / muestra Birria con su horario', async () => {

@@ -124,7 +124,7 @@ describe('guardar (RF-6, CA-27)', () => {
         action: 'save',
         changes: [
           { field: 'hero.showcase.priceCents', before: 14500, after: 15000 },
-          { field: 'promo.title', before: 'Jueves de Molotes 2x1', after: 'Martes 2x1' },
+          { field: 'promo.title', before: seedData('molotes').promo.title, after: 'Martes 2x1' },
         ],
       },
     ]);
@@ -267,7 +267,7 @@ describe('guardar (RF-6, CA-27)', () => {
     const { repository } = await makeRepo();
     const { version } = await repository.getForEdit('molotes');
     await writeDocument('molotes', 'current.json', (d: CorruptibleData) => (d.promo.title = 'Editado a mano'));
-    expect((await repository.getPublished('molotes')).data.promo.title).toBe('Jueves de Molotes 2x1');
+    expect((await repository.getPublished('molotes')).data.promo.title).toBe(seedData('molotes').promo.title);
 
     await repository.save('molotes', { data: seedPage('molotes'), expectedVersion: version, author: { id: 1, name: 'Ana' } });
     expect((await readJson('molotes', 'previous.json')).data.promo.title).toBe('Editado a mano');

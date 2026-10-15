@@ -82,6 +82,23 @@ describe('contenido por negocio', () => {
     expect(new URL(commonContent.location.mapsUrl).hostname).toBe('maps.app.goo.gl');
   });
 
+  it('REQ-F-031 (R-15): Molotes tiene ubicación propia en www.google.com con sus coordenadas oficiales', () => {
+    const { location } = getBusinessContent('molotes');
+    const maps = new URL(location.mapsUrl);
+    const embed = new URL(location.embedSrc);
+    for (const url of [maps, embed]) {
+      expect(url.protocol).toBe('https:');
+      expect(url.hostname).toBe('www.google.com');
+    }
+    expect(maps.pathname).toBe('/maps/search/');
+    expect(maps.searchParams.get('api')).toBe('1');
+    expect(maps.searchParams.get('query')).toBe('18.81823603166285,-98.96914471124853');
+    expect(embed.pathname).toBe('/maps/embed');
+    expect(embed.searchParams.get('pb')).toContain('!1d18.81823603166285!2d-98.96914471124853');
+    expect(location.embedTitle).toBe('Ubicación de Moloteando en Google Maps');
+    expect(location.mapsUrl).not.toBe(commonContent.location.mapsUrl);
+  });
+
   it.each(BUSINESS_IDS)('%s: la semilla cumple el esquema editable', (businessId) => {
     const seed = seedOf(businessId);
     expect(validateMenuDocument(businessId, seed, seed.data)).toEqual([]);
@@ -98,14 +115,20 @@ describe('contenido por negocio', () => {
   });
 
   // CA-39: la prueba de contenido contra el diseño fuente se aplica a la semilla, no a los datos vivos.
-  it('molotes: la semilla (platillos, bebidas, hero, texto destacado y promoción) coincide con el diseño fuente', () => {
+  // REQ-F-031 (R-23): los textos comerciales de la promoción prevalecen sobre el diseño (el diseño
+  // anunciaba un 2x1 que no existe); el resto de la semilla sigue comparándose con él.
+  it('molotes: la semilla (platillos, bebidas, hero y texto destacado) coincide con el diseño fuente; la promoción lleva los textos de REQ-F-031', () => {
     const design = designText('molotes');
     const { menu, drinks, hero, promo } = seedOf('molotes').data;
     for (const text of [menu.highlight, hero.showcase.tag, hero.showcase.title, hero.showcase.description, hero.showcase.unit]) {
       expect(design, text).toContain(text);
     }
     expect(design).toContain(`${pesosText(hero.showcase.priceCents)} MXN`);
-    for (const text of Object.values(promo)) expect(design, text).toContain(text);
+    expect(promo).toEqual({
+      badge: 'Promociones',
+      title: 'Promociones de Molotes',
+      description: 'Pregunta por la promoción vigente al hacer tu pedido por WhatsApp. Déjanos tus datos y no te pierdas nuestras novedades.',
+    });
     expect(menu.items).toHaveLength(8);
     for (const item of menu.items) {
       for (const text of [item.name, item.badge, item.description]) expect(design, text).toContain(text);

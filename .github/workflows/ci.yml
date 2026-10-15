@@ -1,14 +1,23 @@
 # CI (REQ-F-006 y REQ-F-014): tipos, lint, pruebas contra MySQL 8.4, divergencia entre esquema y
-# migraciones, y build de las imágenes production y migrate en cada PR hacia main y en cada push a
-# main. MySQL es el servicio mysql-dev de restaurante/compose.yaml (solo en 127.0.0.1, credenciales
-# de desarrollo): el mismo que en local, porque un `services:` de GitHub no permite fijar la
-# colación del servidor.
+# migraciones, y build de las imágenes production y migrate en cada PR hacia main. MySQL es el
+# servicio mysql-dev de restaurante/compose.yaml (solo en 127.0.0.1, credenciales de desarrollo):
+# el mismo que en local, porque un `services:` de GitHub no permite fijar la colación del servidor.
 #
-# Despliegue (REQ-F-016): el job `despliegue` (prueba de humo del compose de producción con Traefik)
-# corre también en los PR. Solo en un push a main, y con calidad, docker, despliegue y auditoria
-# (REQ-F-020) en verde, `publish` publica las imágenes en GHCR (privado) y `deploy` las despliega en
-# el VPS por SSH, en el environment `production`. Permisos por defecto de solo lectura; `publish`
-# añade packages: write.
+# Solo documentación: el job `cambios` compara los archivos del PR (o del push a main) y, si todos
+# son documentación (ver su comentario), calidad, docker, despliegue y auditoria quedan omitidas
+# (skipped) en el PR, y en main no se publica ni se despliega nada.
+#
+# Despliegue (REQ-F-016): las validaciones (calidad, docker, despliegue y auditoria, REQ-F-020)
+# corren en los PR. En un push a main con cambios de código, el job `validado` comprueba si el
+# árbol (tree) del commit de main es exactamente el que validó una ejecución en verde del PR
+# mergeado (ver su comentario): si lo es, `publish` publica las imágenes en GHCR (privado) sin
+# repetir las validaciones; si no lo es o no se puede decidir (main avanzó después del CI del PR,
+# push directo, error de la API), las cuatro validaciones corren en el push y `publish` solo
+# corre si todas quedan en verde. `deploy` despliega lo publicado en el VPS por SSH, en el
+# environment `production`. Redespliegue manual: `workflow_dispatch` sobre main (cualquier otra
+# rama se rechaza) corre las cuatro validaciones, publica y despliega la punta de main.
+# Permisos por defecto de solo lectura; `validado` añade lectura de actions, checks y
+# pull-requests, y `publish`, packages: write.
 # Los únicos secretos son los del environment production (VPS_*), y solo los ve `deploy`.
 # Las acciones están fijadas por SHA completo (la versión va en el comentario); para
 # actualizarlas, ver la sección "CI" de restaurante/README.md.
@@ -20,20 +29,158 @@ on:
     types: [opened, synchronize, reopened]
   push:
     branches: [main]
+  # Redespliegue manual (Actions > CI > Run workflow). Solo sobre main: `cambios` rechaza otra rama.
+  workflow_dispatch:
 
 # Solo lectura del repositorio; ningún otro permiso.
 permissions:
   contents: read
 
 # En un PR, un push nuevo cancela la ejecución anterior. Cada push a main tiene su propio
-# grupo (el SHA): ninguna ejecución de main se cancela ni se reemplaza.
+# grupo (el SHA) y cada ejecución manual el suyo (su id): ninguna ejecución de main se cancela ni
+# se reemplaza.
 concurrency:
-  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Detección de cambios con git, sin acciones de terceros. Es documentación: todo lo de .claude/,
+  # restaurante/docs/**.md y cualquier *.md fuera de restaurante/. Cualquier otro archivo (también
+  # un borrado o el origen de un renombrado) cuenta como código. Los *.md de restaurante/ fuera de
+  # docs/ cuentan como código: tests/unit/whatsapp-bot-free-text.test.ts lee el README.md y
+  # tests/fixtures/ forma parte de las pruebas. En un PR compara el commit de merge que prueba
+  # GitHub (refs/pull/N/merge) con su primer padre, la punta de main: lo que el PR agrega a main, y
+  # deja el tree de ese commit de merge en una anotación `arbol-validado` (la lee `validado` en el
+  # push a main). En un push a main, el rango before..sha; si `before` no existe en el historial
+  # (force push), corre todo. En una ejecución manual todo es código; fuera de main, falla y no
+  # corre nada más.
+  cambios:
+    name: cambios
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      codigo: ${{ steps.diff.outputs.codigo }}
+    steps:
+      - name: rama de la ejecución manual
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::La ejecución manual solo se permite sobre main (se pidió $REF)."
+          exit 1
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || github.event_name == 'workflow_dispatch' && 1 || 0 }}
+      - name: clasificar archivos
+        id: diff
+        env:
+          EVENTO: ${{ github.event_name }}
+          ANTES: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENTO" = workflow_dispatch ]; then
+            echo "Ejecución manual: se valida, se publica y se despliega la punta de main." >> "$GITHUB_STEP_SUMMARY"
+            echo "codigo=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          elif [ "$EVENTO" = pull_request ]; then
+            echo "::notice title=arbol-validado::$(git rev-parse 'HEAD^{tree}')"
+            desde=HEAD^1
+          elif git cat-file -e "${ANTES}^{commit}" 2>/dev/null; then
+            desde=$ANTES
+          else
+            echo "Sin commit anterior ($ANTES) en el historial: se considera código." >> "$GITHUB_STEP_SUMMARY"
+            echo "codigo=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          codigo=false
+          while IFS= read -r archivo; do
+            case "$archivo" in
+              .claude/*) ;;
+              restaurante/docs/*.md) ;;
+              restaurante/*) codigo=true ;;
+              *.md) ;;
+              *) codigo=true ;;
+            esac
+            if [ "$codigo" = true ]; then
+              echo "Cambio de código: \`$archivo\`" >> "$GITHUB_STEP_SUMMARY"
+              break
+            fi
+          done < <(git diff --name-only --no-renames "$desde" HEAD)
+          [ "$codigo" = true ] || echo "Solo documentación: se omiten las validaciones, la publicación y el despliegue." >> "$GITHUB_STEP_SUMMARY"
+          echo "codigo=$codigo" >> "$GITHUB_OUTPUT"
+
+  # Árbol ya validado (solo en un push a main con código). La API de ejecuciones solo da el
+  # head_sha de una ejecución de PR (la punta de la rama), no el commit de merge de prueba
+  # (refs/pull/N/merge) que validó; por eso `cambios` deja su tree en la anotación
+  # `arbol-validado`. Aquí: PR mergeado de este commit (uno solo, base main, merge_commit_sha =
+  # este SHA) → ejecuciones del CI con evento pull_request y conclusión success para la punta de
+  # ese PR → en alguna, calidad, auditoria, docker y despliegue en success y la anotación de
+  # `cambios` igual al tree de este commit. Si coincide, validado=true. Cualquier otra cosa (sin
+  # PR, varios PR, error de la API, sin ejecución válida, tree distinto) da validado=false y las
+  # validaciones corren en el push. Ante la duda, siempre se valida.
+  validado:
+    name: validado
+    needs: cambios
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.cambios.outputs.codigo == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: read
+    outputs:
+      validado: ${{ steps.arbol.outputs.validado }}
+    steps:
+      - name: comparar árbol con el validado en el PR
+        id: arbol
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          repo=$GITHUB_REPOSITORY
+          validar() {
+            echo "Se valida en este push: $1" >> "$GITHUB_STEP_SUMMARY"
+            echo "validado=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          arbol=$(gh api "repos/$repo/git/commits/$GITHUB_SHA" --jq .tree.sha) || validar "no se pudo leer el tree de $GITHUB_SHA."
+          # Nunca comparar vacíos: una anotación ausente ("") no debe coincidir con un tree ilegible.
+          [[ "$arbol" =~ ^[0-9a-f]{40}$ ]] || validar "tree de $GITHUB_SHA no válido."
+          cabeza=$(gh api "repos/$repo/commits/$GITHUB_SHA/pulls" --jq "[.[] | select(.merged_at != null and .base.ref == \"main\" and .merge_commit_sha == \"$GITHUB_SHA\")] | if length == 1 then .[0].head.sha else \"\" end") \
+            || validar "no se pudo consultar el PR de $GITHUB_SHA."
+          [ -n "$cabeza" ] || validar "$GITHUB_SHA no es el merge de un único PR hacia main."
+          ejecuciones=$(gh api "repos/$repo/actions/workflows/ci.yml/runs?event=pull_request&status=success&head_sha=$cabeza&per_page=100" --jq '.workflow_runs[].id') \
+            || validar "no se pudieron consultar las ejecuciones del PR."
+          for ejecucion in $ejecuciones; do
+            trabajos=$(gh api "repos/$repo/actions/runs/$ejecucion/jobs?filter=latest&per_page=100" --jq '.jobs[] | "\(.name) \(.conclusion) \(.id)"') || continue
+            verdes=0
+            for nombre in calidad auditoria docker despliegue; do
+              grep -Eq "^$nombre success [0-9]+$" <<< "$trabajos" && verdes=$((verdes + 1))
+            done
+            [ "$verdes" -eq 4 ] || continue
+            cambios=$(awk '$1 == "cambios" && $2 == "success" { print $3 }' <<< "$trabajos")
+            [ -n "$cambios" ] || continue
+            probado=$(gh api "repos/$repo/check-runs/$cambios/annotations" --jq '[.[] | select(.title == "arbol-validado") | .message] | if length == 1 then .[0] else "" end') || continue
+            if [ "$probado" = "$arbol" ]; then
+              echo "Árbol \`$arbol\` ya validado en la ejecución $ejecucion del PR: se publica sin repetir las validaciones." >> "$GITHUB_STEP_SUMMARY"
+              echo "validado=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          validar "ninguna ejecución en verde del PR validó el árbol \`$arbol\` (main avanzó o el PR no pasó el CI)."
+
+  # Las validaciones corren en los PR y en las ejecuciones manuales con cambios de código, y en un
+  # push a main solo si `validado` no confirmó el árbol (validado != 'true', también si falló).
+  # `!cancelled()` porque `validado` queda omitido (skipped) fuera del push.
   calidad:
     name: calidad
+    needs: [cambios, validado]
+    if: >-
+      !cancelled() && needs.cambios.result == 'success' && needs.cambios.outputs.codigo == 'true'
+      && (github.event_name != 'push' || needs.validado.outputs.validado != 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
@@ -86,6 +233,10 @@ jobs:
   # el job). Sin npm ci: no ejecuta código de dependencias. El resumen va al resumen del job.
   auditoria:
     name: auditoria
+    needs: [cambios, validado]
+    if: >-
+      !cancelled() && needs.cambios.result == 'success' && needs.cambios.outputs.codigo == 'true'
+      && (github.event_name != 'push' || needs.validado.outputs.validado != 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     defaults:
@@ -105,6 +256,10 @@ jobs:
 
   docker:
     name: docker
+    needs: [cambios, validado]
+    if: >-
+      !cancelled() && needs.cambios.result == 'success' && needs.cambios.outputs.codigo == 'true'
+      && (github.event_name != 'push' || needs.validado.outputs.validado != 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -190,6 +345,10 @@ jobs:
   # Traefik v3 y un registro local (CA-2, CA-3, CA-4, CA-5, CA-7, CA-8, CA-9 y D-1). Sin secretos.
   despliegue:
     name: despliegue
+    needs: [cambios, validado]
+    if: >-
+      !cancelled() && needs.cambios.result == 'success' && needs.cambios.outputs.codigo == 'true'
+      && (github.event_name != 'push' || needs.validado.outputs.validado != 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -241,12 +400,21 @@ jobs:
       - name: prueba de humo de respaldos
         run: bash restaurante/ops/backup/ci/smoke.sh restaurante:production restaurante:migrate
 
-  # Publicación en GHCR (REQ-F-016, RF-3): solo en un push a main con todo el CI en verde. Las
-  # imágenes se identifican por digest (salidas del job) y se etiquetan con el SHA del commit.
+  # Publicación en GHCR (REQ-F-016, RF-3): en main (push o ejecución manual) con cambios de código,
+  # y solo si el árbol ya estaba validado (`validado`, solo en push) o las cuatro validaciones de
+  # esta ejecución quedaron en success. Una validación fallida, cancelada u omitida sin árbol
+  # validado impide publicar. Las imágenes se identifican por digest (salidas del job) y se
+  # etiquetan con el SHA del commit.
   publish:
     name: publish
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [calidad, docker, despliegue, auditoria]
+    needs: [cambios, validado, calidad, auditoria, docker, despliegue]
+    if: >-
+      !cancelled() && github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && needs.cambios.result == 'success' && needs.cambios.outputs.codigo == 'true'
+      && ((github.event_name == 'push' && needs.validado.outputs.validado == 'true')
+        || (needs.calidad.result == 'success' && needs.auditoria.result == 'success'
+          && needs.docker.result == 'success' && needs.despliegue.result == 'success'))
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -303,6 +471,9 @@ jobs:
   deploy:
     name: deploy
     needs: publish
+    # Explícito: con la condición implícita (success()) se omitiría cuando `publish` corre con
+    # validaciones omitidas (árbol ya validado), porque cuenta toda la cadena de dependencias.
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment:
@@ -316,6 +487,7 @@ jobs:
       contents: read
     steps:
       # Si mientras tanto llegó otro commit a main, este no se despliega (el siguiente lo hará).
+      # También en una ejecución manual: solo se despliega si sigue siendo la punta de main.
       - name: commit vigente de main
         id: head
         env:

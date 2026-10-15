@@ -241,19 +241,75 @@ atrás) está en `deploy/` y se describe en [docs/despliegue.md](docs/despliegue
 ## CI
 
 El workflow `.github/workflows/ci.yml` (en la raíz del repositorio, GitHub Actions) comprueba
-cada cambio y, en `main`, publica y despliega (REQ-F-016). Las comprobaciones no necesitan
-secretos ni `.env`: las pruebas usan su propia configuración (`tests/helpers.ts`). Solo el job
-`deploy` usa secretos (los del environment `production`).
+cada PR hacia `main` y, en `main`, publica y despliega (REQ-F-016). Las comprobaciones no
+necesitan secretos ni `.env`: las pruebas usan su propia configuración (`tests/helpers.ts`). Solo
+el job `deploy` usa secretos (los del environment `production`).
 
 ### Cuándo se ejecuta
 
 - En cada PR hacia `main`, al abrirlo, al actualizarlo (push nuevo) o al reabrirlo.
 - En cada push a `main` (por ejemplo, al hacer merge de un PR).
-- Un push nuevo al mismo PR cancela la ejecución anterior de ese PR; las de `main` nunca se
-  cancelan.
-- Cada comprobación tiene un tiempo máximo de 20 minutos (`despliegue`, 30; `auditoria`, 10).
-- `publish` y `deploy` solo corren en un push a `main`, después de que `calidad`, `docker`,
-  `despliegue` y `auditoria` terminen en verde. Un PR nunca publica ni despliega.
+- A mano, sobre `main` ([Redespliegue manual](#redespliegue-manual)).
+- Un push nuevo al mismo PR cancela la ejecución anterior de ese PR; las de `main` (push o
+  manuales) nunca se cancelan.
+- Primero corre el job `cambios`, que clasifica con `git diff` los archivos que el PR agrega a
+  `main` (o los del push a `main`). Son **solo documentación** si todos están en `.claude/`, son
+  `*.md` fuera de `restaurante/` o están en `restaurante/docs/` con extensión `.md`. Los demás
+  `*.md` de `restaurante/` cuentan como código (`tests/unit/whatsapp-bot-free-text.test.ts` lee
+  este README y `tests/fixtures/` forma parte de las pruebas), igual que cualquier otro archivo
+  (código, Docker, CI, configuración), sin importar el nombre de la rama.
+- En un PR, `calidad`, `docker`, `despliegue` y `auditoria` solo corren si hay cambios de código;
+  en un PR de solo documentación quedan omitidas (*skipped*) y el PR no queda con comprobaciones
+  pendientes.
+- En un push a `main` de solo documentación no se publica ni se despliega nada. Con cambios de
+  código, el job `validado` decide si hace falta validar otra vez ([Árbol ya
+  validado](#árbol-ya-validado)): si el contenido exacto de `main` ya pasó el CI del PR, `publish`
+  y `deploy` corren directamente; si no, `calidad`, `docker`, `despliegue` y `auditoria` corren en
+  el push y solo con las cuatro en verde se publica y se despliega. Un PR nunca publica ni
+  despliega.
+- Cada comprobación tiene un tiempo máximo de 20 minutos (`despliegue`, 30; `auditoria`, 10;
+  `cambios` y `validado`, 5).
+
+### Árbol ya validado
+
+El CI de un PR prueba el commit de merge que prepara GitHub (`refs/pull/N/merge`: el PR combinado
+con la punta de `main` de ese momento). Si `main` avanza después (otro merge) y el PR se integra
+sin actualizarlo, el contenido que llega a `main` no es el que se validó. Sin protección de rama
+(plan Free), GitHub no puede exigir que el PR esté al día, así que lo comprueba el CI del push:
+
+1. En el PR, `cambios` deja el *tree* (el contenido completo) de ese commit de merge en una
+   anotación `arbol-validado` (visible en el resumen de la ejecución). La API de GitHub solo da,
+   de una ejecución de PR, la punta de la rama (`head_sha`), no el commit de merge que probó; por
+   eso se publica aparte.
+2. En el push a `main`, `validado` busca el PR mergeado de ese commit (uno solo, hacia `main`) y
+   sus ejecuciones del CI en verde para la punta del PR. Si en alguna `calidad`, `docker`,
+   `despliegue` y `auditoria` quedaron en verde y su anotación coincide con el *tree* del commit
+   de `main`, no se repiten las validaciones.
+3. En cualquier otro caso (`main` avanzó, push directo sin PR, varios PR, PR de solo
+   documentación, error de la API, ejecución anterior a este mecanismo) se valida en el push. Ante
+   la duda, siempre se valida.
+
+Dos commits con el mismo *tree* tienen exactamente los mismos archivos: da igual que el merge sea
+un merge commit, *squash* o *rebase*. Comprobado con el PR #60: su ejecución de PR probó
+`c817331` (merge de `9c1e508` sobre `20cf1eb`) y el merge real `cf68922` tiene el mismo tree
+(`4d22b60`); en cambio, los PR #54 y #55 de Dependabot se validaron sobre `e2d4ab2` y se
+integraron sobre una `main` posterior, con otro tree: en ese caso ahora se valida en el push.
+Actualizar el PR (**Update branch**) antes del merge sigue siendo lo recomendable: evita repetir
+las validaciones en `main` y detecta antes el problema.
+
+### Redespliegue manual
+
+Para volver a publicar y desplegar la punta de `main` (por ejemplo, tras restaurar el VPS o si un
+despliegue falló por un problema externo): **Actions → CI → Run workflow**, rama `main`. O desde
+la terminal:
+
+```sh
+gh workflow run ci.yml --ref main
+```
+
+Corre `calidad`, `docker`, `despliegue` y `auditoria`, y con las cuatro en verde, `publish` y
+`deploy`. Sobre otra rama, `cambios` falla y no corre nada más. Como en un push, `deploy` no
+despliega si mientras tanto `main` avanzó.
 
 ### Qué comprueba
 
@@ -301,8 +357,9 @@ la pestaña **Actions** del PR con **Re-run failed jobs**.
 
 ### Seguridad
 
-- Permisos de solo lectura del repositorio (`permissions: contents: read`); `publish` añade solo
-  `packages: write` (GHCR con el `GITHUB_TOKEN`). Los únicos secretos (`VPS_*`) están en el
+- Permisos de solo lectura del repositorio (`permissions: contents: read`); `validado` añade solo
+  lectura de `actions`, `checks` y `pull-requests` (para consultar el PR, sus ejecuciones y la
+  anotación), y `publish`, solo `packages: write` (GHCR con el `GITHUB_TOKEN`). Los únicos secretos (`VPS_*`) están en el
   environment `production` y solo los usa `deploy`, cuya llave SSH solo puede ejecutar
   `deploy.sh` en el VPS (comando forzado).
 - Usa el evento `pull_request`: los PR desde forks se ejecutan sin secretos y con un token de
@@ -411,6 +468,11 @@ Si el repositorio pasa a GitHub Pro (o se hace público), para hacerlas obligato
 3. Activa **Require status checks to pass** y agrega `calidad`, `docker`, `despliegue` y
    `auditoria` (aparecen después de que el CI se haya ejecutado al menos una vez).
 4. Guarda. Desde entonces, el botón de merge queda bloqueado hasta que las cuatro estén en verde.
+   En un PR de solo documentación quedan omitidas (*skipped*), y GitHub cuenta una comprobación
+   omitida como superada.
+5. Activa también **Require branches to be up to date before merging**: así el CI del PR valida
+   siempre la combinación exacta que se despliega y el push a `main` nunca repite las
+   validaciones ([Árbol ya validado](#árbol-ya-validado)).
 
 ## Configuración
 

@@ -42,6 +42,15 @@ export const molotesContent = Object.freeze({
     motivos: image('/img/molotes/motivos-molotes.webp', '', 476, 512),
     hero: image('/img/molotes/molotes-artesanales.jpg', 'Molotes artesanales recién dorados con crema, aguacate y salsa', 512, 382),
   }),
+  // Ubicación propia de Molotes (REQ-F-031, R-15): enlace "Cómo llegar" y mapa embebido (Street View).
+  // `common.location` sigue siendo la de Birria y del bot. El origen del iframe (www.google.com)
+  // es el único permitido en `frame-src` de la CSP (src/app.ts).
+  location: Object.freeze({
+    mapsUrl: 'https://www.google.com/maps/search/?api=1&query=18.81823603166285,-98.96914471124853',
+    embedSrc:
+      'https://www.google.com/maps/embed?pb=!4v1792064722212!6m8!1m7!1sCliD7xRS-mkCpf6MwseHcQ!2m2!1d18.81823603166285!2d-98.96914471124853!3f189.613958693852!4f-9.01272483181998!5f0.7820865974627469',
+    embedTitle: 'Ubicación de Moloteando en Google Maps',
+  }),
   announcement: 'Horario de Comal: Mar - Vie 08:30 a 15:00 hrs • Salsas Caseras y Masa Recién Frita',
   cta: Object.freeze({ label: 'Ordenar ya!' }),
   nav: Object.freeze([
@@ -49,13 +58,13 @@ export const molotesContent = Object.freeze({
     Object.freeze({ label: 'Menú de Molotes', href: '#menu-seccion' }),
     Object.freeze({ label: 'Especialidades', href: '#bebidas-seccion' }),
     Object.freeze({ label: 'Nosotros', href: '#ritual-seccion' }),
-    Object.freeze({ label: 'Sucursales', href: '#pedidos-seccion' }),
+    Object.freeze({ label: 'Ubicación', href: '#pedidos-seccion' }),
   ]),
   hero: Object.freeze({
     pills: Object.freeze([
       Object.freeze({ icon: 'agriculture', text: '100% Maíz Nixtamalizado' }),
       Object.freeze({ icon: 'storefront', text: 'Sabor de Barrio Callejero' }),
-      Object.freeze({ icon: 'star', text: '4.9 ★ en Calificaciones' }),
+      Object.freeze({ icon: 'star', text: 'Estilo Poblano' }),
     ]),
     titleLead: 'Auténticos Molotes Artesanales al',
     titleHighlight: 'Punto de Oro',
@@ -94,33 +103,31 @@ export const molotesContent = Object.freeze({
     eyebrow: 'El Ritual del Maíz',
     title: 'La Magia de la Masa y el Aceite Candente',
     paragraphs: Object.freeze([
-      'El secreto de un verdadero molote radica en su cáscara: debe sonar crujiente al primer mordisco sin absorber un gramo de grasa de más. Logramos esta textura inigualable templando la masa con un toque sutil de puré de papa criolla y friéndolo con tiempos de comal celosamente cronometrados por tres generaciones de maestras cocineras.',
+      'El secreto de un verdadero molote radica en su cáscara: debe sonar crujiente al primer mordisco sin absorber un gramo de grasa de más. Logramos esta textura templando la masa con un toque sutil de puré de papa criolla y cuidando cada fritura en el comal.',
       'No usamos harinas industriales ni polvos leudantes. Es puro maíz seleccionado de parcelas campesinas poblanas, reposado en cal viva durante la madrugada y molido en piedra volcánica cada mañana.',
     ]),
     metrics: Object.freeze([
-      Object.freeze({ value: '+15', title: 'Años de Tradición', note: 'Guardando recetas de barrio' }),
-      Object.freeze({ value: '3', title: 'Sucursales Activas', note: 'Comales siempre encendidos' }),
-      Object.freeze({ value: '1,500+', title: 'Molotes Diarios', note: 'Servidos bien calientitos' }),
+      Object.freeze({ value: '2026', title: 'Desde', note: 'Comal recién encendido' }),
+      Object.freeze({ value: '1', title: 'Sucursal', note: 'Te esperamos de martes a viernes' }),
+      Object.freeze({ value: 'A mano', title: 'Hecho pieza por pieza', note: 'Masa recién amasada' }),
     ]),
   }),
   service: Object.freeze({
     eyebrow: 'Servicio y Domicilio',
     title: 'Pídelos Calientes a Tu Puerta',
     description:
-      'Enviamos en empaques térmicos transpirables para que la costra de maíz mantenga su firmeza y crunch hasta el último bocado.',
+      'Disfruta tus molotes crujientes hasta tu puerta. Contamos con servicio de entrega mediante motomandados; el costo se calcula según la distancia de entrega. Consulta el costo al realizar tu pedido por WhatsApp.',
     schedule: Object.freeze({
       title: 'Horarios de Comal',
       hours: 'Martes a Viernes de 8:30 AM a 3:00 PM',
-      note: '* Lunes cerramos comales por molienda de nixtamal artesanal y curación de cazuelas. Sábados y domingos te esperamos en Birria El Muñeco.',
+      note: '* Lunes descansamos. Sábados y domingos te esperamos en Birria El Muñeco.',
     }),
     platformsLabel: 'Plataformas y Pedido Directo:',
-    // WhatsApp enlaza al bot configurado y "En Sucursal" a la ubicación común; el resto
-    // no tiene enlace configurado todavía y se muestra como información.
+    // WhatsApp enlaza al bot configurado; "Motomandados" es informativa (el costo del envío
+    // se consulta por WhatsApp; REQ-F-031, R-7). El orden coincide con las casillas de la plantilla.
     platforms: Object.freeze([
-      Object.freeze({ name: 'WhatsApp', note: 'Sin Comisiones' }),
-      Object.freeze({ name: 'Uber Eats', note: 'Disponible' }),
-      Object.freeze({ name: 'Rappi', note: 'Envío Turbo' }),
-      Object.freeze({ name: 'En Sucursal', note: 'Pick & Go' }),
+      Object.freeze({ name: 'WhatsApp', note: 'Sin comisiones' }),
+      Object.freeze({ name: 'Motomandados', note: 'Costo según distancia' }),
     ]),
   }),
   promo: Object.freeze({
@@ -128,13 +135,13 @@ export const molotesContent = Object.freeze({
     namePlaceholder: 'Tu nombre o apodo garnachero',
     emailLabel: 'Correo electrónico',
     emailPlaceholder: 'correo@ejemplo.com',
-    submit: 'Activar Mi Descuento 2x1',
-    success: '¡Listo! Revisa tu bandeja para activar tu 2x1 este próximo jueves.',
-    disclaimer: 'Sin spam molesto. Solo promociones crujientes y reales.',
+    submit: 'Activar promoción',
+    success: '¡Gracias por tu interés! Pregunta por la promoción vigente al pedir por WhatsApp.',
+    disclaimer: 'Sin spam molesto.',
   }),
   footer: Object.freeze({
     about:
-      'Tradición crujiente de maíz rellena de sazón mestizo. Molotes poblanos y oaxaqueños con crema de rancho, queso fresco y salsas de molcajete.',
+      'Molotes estilo poblano, crujientes y hechos a mano, con crema de rancho, queso fresco y salsas de molcajete.',
     nav: Object.freeze({
       title: 'Navegación Fonda',
       links: Object.freeze([
@@ -142,7 +149,7 @@ export const molotesContent = Object.freeze({
         Object.freeze({ label: 'Especialidades del Comal', href: '#menu-seccion' }),
         Object.freeze({ label: 'Nuestras Salsas y Guarniciones', href: '#menu-seccion' }),
         Object.freeze({ label: 'Historia & Masa Nixtamalizada', href: '#ritual-seccion' }),
-        Object.freeze({ label: 'Facturación y Pedidos Express', href: '#pedidos-seccion' }),
+        Object.freeze({ label: 'Pedidos y Domicilio', href: '#pedidos-seccion' }),
       ]),
     }),
     hours: Object.freeze({
@@ -150,16 +157,20 @@ export const molotesContent = Object.freeze({
       rows: Object.freeze([
         Object.freeze({ days: 'Martes a Viernes', hours: '08:30 - 15:00' }),
         Object.freeze({ days: 'Sábado y Domingo', hours: 'Cerrado' }),
-        Object.freeze({ days: 'Lunes', hours: 'Cerrado por nixtamal' }),
+        Object.freeze({ days: 'Lunes', hours: 'Cerrado' }),
       ]),
     }),
     contact: Object.freeze({
-      title: 'Contacto & Sucursales',
-      address: 'Callejon del Sabor #42, Col. San Jerónimo, Ciudad de México',
-      phone: Object.freeze({ label: '+52 55 4892 0184', href: 'tel:+525548920184' }),
-      email: Object.freeze({ label: 'antojos@moloteando.mx', href: 'mailto:antojos@moloteando.mx' }),
+      title: 'Contacto y ubicación',
+      // Texto del enlace a la ubicación de Molotes (`location.mapsUrl`). No hay dirección postal
+      // ni correo confirmados (REQ-F-031, RN-1): cuando exista el correo, se añade aquí y su <li>.
+      address: 'Ver ubicación en Google Maps',
+      // Texto de apoyo propio: el visible ya dice "en Google Maps" (el común lo repetiría).
+      addressAssistiveText: '(se abre en una pestaña nueva)',
+      // Teléfono de llamadas; distinto del WhatsApp del bot (WHATSAPP_MOLOTES; RN-3).
+      phone: Object.freeze({ label: '+52 735 278 2306', href: 'tel:+527352782306' }),
     }),
-    copyright: '© 2024 Moloteando S.A. de C.V. Todos los derechos reservados. Antojería de Barrio.',
+    copyright: '© 2026 Moloteando. Todos los derechos reservados.',
     legal: Object.freeze(['Aviso de Privacidad', 'Términos de Servicio']),
   }),
 });

@@ -1420,15 +1420,21 @@ Extraídos de `../_stich_source_/moloteando_aut_nticos_molotes_artesanales/code.
 - **Fuentes:** Google Fonts (familias del diseño y Material Symbols), una hoja por landing
   declarada en `content.assets.fontsHref`.
 
-La ubicación (Google Maps) es común a ambas landings: `src/content/common/index.ts` → `location.mapsUrl`.
+La ubicación común (Google Maps) está en `src/content/common/index.ts` → `location.mapsUrl`: la
+usan la landing de Birria (y `/`) y el bot de WhatsApp. Molotes tiene su ubicación propia
+(REQ-F-031) en `src/content/molotes/index.ts` → `location` (`mapsUrl` para los enlaces y
+`embedSrc`/`embedTitle` para el mapa embebido de la sección "Servicio y Domicilio"). El iframe
+solo funciona porque la CSP de `src/app.ts` añade `frame-src https://www.google.com` a la
+política por defecto de Helmet; es el único origen de iframes permitido.
 
 El layout carga `/css/<negocio>/main.css` y `/js/<negocio>/main.js` según el negocio activo.
 Cada hoja de Tailwind solo escanea las vistas de su negocio (`@source`), así una landing no
 incluye las clases de la otra.
 
 Todos los CTA de pedido (header, hero, banner, plataformas y botón flotante) usan el enlace
-calculado desde `WHATSAPP_MOLOTES*` / `WHATSAPP_BIRRIA*`. Los enlaces "Cómo llegar", la
-dirección del footer, el mapa y "Pick Up / En Sucursal" usan `location.mapsUrl`.
+calculado desde `WHATSAPP_MOLOTES*` / `WHATSAPP_BIRRIA*`. En Birria, los enlaces "Cómo llegar",
+la dirección del footer y las sucursales usan `location.mapsUrl` (común); en Molotes, "Cómo
+llegar" y el enlace del footer usan `c.location.mapsUrl` (propia).
 
 ### Iconos (favicons y pantalla de inicio)
 
@@ -1471,9 +1477,13 @@ los PNG de alta resolución de `../_stich_source_/logo_<negocio>.png/screen.png`
 
 ### Diferencias deliberadas con el diseño fuente
 
-- Enlaces `href="#"` del diseño: Uber Eats y Rappi no tienen URL configurada y se muestran
-  como información (no como enlaces); "Aviso de Privacidad" y "Términos" son texto hasta que
-  existan esas páginas. El menú de navegación apunta a las secciones de la página.
+- Enlaces `href="#"` del diseño: "Aviso de Privacidad" y "Términos" son texto hasta que
+  existan esas páginas.
+- Molotes (REQ-F-031): las plataformas son solo WhatsApp (enlace al bot) y "Motomandados"
+  (informativa) en lugar de las cuatro del diseño (Uber Eats, Rappi y "En Sucursal" no existen);
+  la sección "Servicio y Domicilio" añade el mapa embebido, que el diseño no tiene, y el pie no
+  muestra correo hasta que exista uno confirmado. Los textos comerciales (promoción, métricas,
+  contacto) prevalecen sobre los del diseño. El menú de navegación apunta a las secciones de la página.
 - Navegación por anclas: desplazamiento suave nativo (`scroll-behavior: smooth`, solo con
   `prefers-reduced-motion: no-preference`) y `scroll-padding-top` con el alto del header fijo
   de cada landing (`--landing-header-height` en `src/styles/<negocio>/main.css`). Los

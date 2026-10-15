@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 Pull Request: https://github.com/orvigas/negocio/pull/60 (contra `main`). CI del PR en verde: `calidad`, `docker`, `despliegue` y `auditoria` pasan; `publish` y `deploy` se omiten en un PR.
 
@@ -1199,3 +1199,11 @@ Descripción inicial (2026-10-15), a partir de la solicitud del usuario.
 - T3 (2026-10-15): se corrigieron DEF-001 (aclaración en bloques, como el menú) y DEF-002 (partición con encabezado). typecheck y lint en 0, y 1778 pruebas en verde. Sin commit. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
 - Correcciones aprobadas por el usuario (2026-10-15): "Si". QA ronda 2 (senior-qa): DEF-001 y DEF-002 corregidos y verificados (QA reforzó la prueba de DEF-001); `whatsapp-bot-format.test.ts` sin duplicados (50 pruebas: las 49 de la ronda 1 más 1). typecheck y lint en 0; `npm test` con 1778 pruebas en verde (1 fallo esperado de `local-server`). Dorada en `main` con los mismos sha256, y plantilla, flujo y conteos iguales a `main` (`cmp`) con Meta y Twilio. CA-1 a CA-10 en PASS; CA-11 diferido por decisión del usuario (Android tras el despliegue; iPhone pendiente). Estado: `QA_APPROVED`.
 - T4 (2026-10-15): commit `14e2f5e` en `feature/REQ-F-029-formato-textos-bot-whatsapp`, ya al día con `origin/main`, y PR #60 (https://github.com/orvigas/negocio/pull/60). CI en verde: `calidad`, `docker`, `despliegue` y `auditoria` pasan; `publish` y `deploy` se omiten. Estado: `READY_FOR_MERGE`.
+
+### Cierre (T5)
+
+- **2026-10-15: merge.** El usuario confirmó el merge del PR #60 con "Confirmo que fue mergeado, cierralo". GitHub registra el merge a las 12:50:07 UTC. Commit de merge en `main`: `cf68922`.
+- **Pipeline del merge (run 38737693670).** Terminaron en success `calidad`, `docker`, `despliegue`, `auditoria`, `publish` y `deploy`.
+- **Producción: verificación pendiente.** Solo consta que el job `deploy` terminó en success. Falta comprobar en el VPS el registro de `state/releases.log`, el estado `healthy` de la app y las respuestas de las landings. No se registra como hecho.
+- **CA-11: verificación posterior al despliegue.** Se acordó así con el usuario ("Acepto las recomendaciones"). Falta Android, con el bot de producción y la lista de 8 puntos del QA Action Plan. iPhone queda pendiente hasta que el usuario tenga uno. Si algún punto falla, se abre un ticket de corrección. Según el cierre de REQ-F-025, el bot de producción seguía sin activar, a la espera de que Meta apruebe la plantilla `nuevo_pedido`. Por eso la verificación en Android depende de esa activación.
+- Estado: DONE.

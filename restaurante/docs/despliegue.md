@@ -36,10 +36,17 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
 
 ### Cómo llega una versión a producción
 
-1. Merge de un PR a `main`.
-2. El CI (`.github/workflows/ci.yml`) ejecuta `calidad`, `docker` y `despliegue`.
-3. Con las tres en verde, `publish` publica en GHCR (privado) dos imágenes, con la etiqueta
-   `sha-<commit>`:
+1. El CI (`.github/workflows/ci.yml`) del PR ejecuta `calidad`, `docker`, `despliegue` y
+   `auditoria`, y se hace merge a `main` con las cuatro en verde. En un PR de solo documentación
+   (ver "Cuándo se ejecuta" en la sección CI del `README.md`) quedan omitidas.
+2. En el push a `main`, si solo trae documentación, no se publica ni se despliega nada. Con
+   cambios de código, el job `validado` comprueba si el contenido exacto del commit de `main` (su
+   *tree*) es el que validó el CI del PR. Si lo es, no se repiten las validaciones. Si no lo es
+   (`main` avanzó después del CI del PR, push directo) o no se puede decidir, las cuatro
+   validaciones corren en el push y, si alguna falla, no se publica ni se despliega. Así, un PR
+   desactualizado respecto a `main` ya no llega a producción sin validar ([Árbol ya
+   validado](../README.md#árbol-ya-validado)).
+3. `publish` publica en GHCR (privado) dos imágenes, con la etiqueta `sha-<commit>`:
    - `ghcr.io/orvigas/restaurante`;
    - `ghcr.io/orvigas/restaurante-migrate`.
 4. `deploy` se ejecuta en el environment `production`.
@@ -243,8 +250,9 @@ sudo -u deploy -H nano /opt/restaurante/.env
 
 ## 4. Primer despliegue
 
-Con los pasos 1 a 3 hechos, haz merge a `main` (o vuelve a ejecutar el workflow del último push
-a `main` desde **Actions**).
+Con los pasos 1 a 3 hechos, haz merge a `main` de un PR con cambios de código o lanza un
+[redespliegue manual](#redesplegar-la-punta-de-main) (un push de solo documentación no publica
+ni despliega).
 
 En el primer arranque:
 
@@ -293,6 +301,21 @@ ls -lt backups/                                    # volcados
   atrás con la base más nueva, la app recreada sin `DATABASE_ALLOW_NEWER_SCHEMA=true` no
   arranca (`DATABASE_NEWER_THAN_CODE`). Antepón `DATABASE_ALLOW_NEWER_SCHEMA=true` al comando o,
   mejor, despliega una versión corregida.
+
+### Redesplegar la punta de `main`
+
+Para volver a publicar y desplegar lo que hay en `main` sin un commit nuevo (VPS restaurado,
+despliegue fallido por un problema externo, primer despliegue): **Actions → CI → Run workflow**
+con la rama `main`, o
+
+```sh
+gh workflow run ci.yml --ref main
+```
+
+Corre `calidad`, `docker`, `despliegue` y `auditoria`, y con las cuatro en verde, `publish` y
+`deploy` del commit de la punta de `main` (con volcado y migración, como cualquier despliegue).
+Sobre otra rama se rechaza (`cambios` falla y no corre nada más). Si mientras tanto llega otro
+commit a `main`, no se despliega: lo hará el del commit nuevo.
 
 ## 6. Volver a una versión anterior a mano
 

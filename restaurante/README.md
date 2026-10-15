@@ -268,7 +268,7 @@ el job `deploy` usa secretos (los del environment `production`).
   el push y solo con las cuatro en verde se publica y se despliega. Un PR nunca publica ni
   despliega.
 - Cada comprobación tiene un tiempo máximo de 20 minutos (`despliegue`, 30; `auditoria`, 10;
-  `cambios` y `validado`, 5).
+  `cambios`, `validado` y `vigente`, 5).
 
 ### Árbol ya validado
 
@@ -308,8 +308,37 @@ gh workflow run ci.yml --ref main
 ```
 
 Corre `calidad`, `docker`, `despliegue` y `auditoria`, y con las cuatro en verde, `publish` y
-`deploy`. Sobre otra rama, `cambios` falla y no corre nada más. Como en un push, `deploy` no
-despliega si mientras tanto `main` avanzó.
+`deploy`. Sobre otra rama, `cambios` falla y no corre nada más. Como en un push, no se despliega
+si mientras tanto `main` avanzó (resumen **Omitido**). La ejecución se titula `Ejecución manual ·
+<SHA de main>`: un redespliegue del mismo commit se distingue por su propia ejecución y fecha.
+
+### Qué se desplegó
+
+Sin entrar al VPS (REQ-F-030), en **Actions → CI**:
+
+- **Título de la ejecución.** En un push a `main`, el mensaje del commit, y debajo GitHub escribe
+  `Commit abc1234 pushed by …` con el SHA corto enlazado. En un PR, `<título del PR> · <SHA>` con
+  la punta de la rama del PR. En una ejecución manual, `Ejecución manual · <SHA>`. GitHub no
+  permite recortar el SHA en el título: va completo, y sus 7 primeros caracteres son el SHA corto
+  de los resúmenes.
+- **Resumen de la ejecución.** Tras `publish`, el job `vigente` comprueba que el commit siga
+  siendo la punta de `main`; después, `deploy` escribe siempre un resumen con el estado, el SHA
+  corto enlazado a la página del commit y el SHA completo. Lo genera `deploy/ci/resumen.sh` (fuera
+  de la suma de `deploy/`: cambiarlo no exige reinstalar nada en el VPS).
+
+| Estado | Dónde | Qué significa | Job `deploy` |
+| ------ | ----- | ------------- | ------------ |
+| **Desplegado** | `deploy` | El commit quedó sirviendo en producción. Incluye los digests de app y migrate | Éxito |
+| **Omitido** | `vigente` | `main` ya está en otro commit (enlazado); lo desplegará su propia ejecución. Producción no se tocó | Omitido (*skipped*) |
+| **Omitido** | `deploy` | Igual, pero `main` avanzó mientras `deploy` esperaba al despliegue en curso, o se volvió a ejecutar solo `deploy` de un commit antiguo | Fallo, sin tocar el VPS |
+| **Revertido** | `deploy` | La versión nueva no quedó sana (código 21) y producción sigue con la anterior. El commit anterior no está disponible en el resumen: la imagen anterior figura en el log del paso `desplegar` y en `state/release.env` | Fallo |
+| **Fallido** | `deploy` | Cualquier otro error, con el código de `deploy.sh` y si producción pudo quedar afectada, con enlace a [docs/despliegue.md](docs/despliegue.md#10-diagnóstico) (diagnóstico o restauración de la base) | Fallo |
+| **Cancelado o interrumpido** | `deploy` | El job se canceló o el paso `desplegar` agotó su tiempo: resultado no confirmado, revisa `state/releases.log` | Cancelado o fallo |
+
+Solo **Desplegado** deja `deploy` en verde. El environment `production` (pestaña **Deployments**
+del repositorio) registra solo los despliegues intentados: un commit omitido en `vigente` no
+aparece y los demás estados distintos de Desplegado quedan como fallidos, nunca como activos. Si
+`vigente` no puede consultar `main` (error de la API), falla y `deploy` no corre.
 
 ### Qué comprueba
 
@@ -321,7 +350,7 @@ siguientes no se ejecutan; un fallo en una no afecta a las otras.
 | ------------ | --------------- |
 | `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado), `npm run db:up` (MySQL 8.4 de `compose.yaml`), `prisma migrate diff` (el esquema y las migraciones no divergen) y `npm test` (contra MySQL) |
 | `docker`     | Build de los targets `production` y `migrate` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite y que `migrate` aplica el esquema sobre una base vacía con código 0; arranca `production` sin `HOST` y comprueba que escucha en `0.0.0.0`, queda `healthy` y responde por el puerto publicado (REQ-F-015) |
-| `despliegue` | `shellcheck` de los scripts de `deploy/` y prueba de humo `deploy/ci/smoke.sh` (REQ-F-016): el compose de producción no publica puertos y MySQL solo está en la red interna; con un registro local y un Traefik v3 ejecuta `deploy.sh` como el comando forzado de SSH y comprueba los rechazos (argumentos, suma de `deploy/`, permisos del `.env`), el primer despliegue, las redirecciones 301, el 429 en `/admin`, la IP y el esquema en el log, la retención de 7 volcados, la migración fallida (la app no se toca), la vuelta atrás ante una imagen rota (también tras una migración nueva) y dos despliegues a la vez |
+| `despliegue` | `shellcheck` de los scripts de `deploy/`, `deploy/ci/resumen-test.sh` (cada estado del resumen de `deploy`, con entradas simuladas; REQ-F-030) y prueba de humo `deploy/ci/smoke.sh` (REQ-F-016): el compose de producción no publica puertos y MySQL solo está en la red interna; con un registro local y un Traefik v3 ejecuta `deploy.sh` como el comando forzado de SSH y comprueba los rechazos (argumentos, suma de `deploy/`, permisos del `.env`), el primer despliegue, las redirecciones 301, el 429 en `/admin`, la IP y el esquema en el log, la retención de 7 volcados, la migración fallida (la app no se toca), la vuelta atrás ante una imagen rota (también tras una migración nueva) y dos despliegues a la vez |
 | `auditoria`  | Node 24 y `node scripts/audit-deps.ts` (REQ-F-020), sin `npm ci`: `npm audit` sobre `package-lock.json` por imagen, con la política de [Auditoría de dependencias](#auditoría-de-dependencias) |
 
 La caché de npm se invalida al cambiar `package-lock.json`; la de Docker reutiliza las capas que

@@ -49,13 +49,16 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
 3. `publish` publica en GHCR (privado) dos imágenes, con la etiqueta `sha-<commit>`:
    - `ghcr.io/orvigas/restaurante`;
    - `ghcr.io/orvigas/restaurante-migrate`.
-4. `deploy` se ejecuta en el environment `production`.
-   - Solo hay un despliegue a la vez. Si mientras tanto llegó otro commit a `main`, este no se
-     despliega: lo hará el siguiente.
+4. `vigente` comprueba que el commit siga siendo la punta de `main`. Si mientras tanto llegó otro
+   commit, este no se despliega (lo hará el siguiente): su resumen dice **Omitido** y `deploy`
+   queda omitido, sin registro en Deployments.
+5. `deploy` se ejecuta en el environment `production`.
+   - Solo hay un despliegue a la vez. Justo antes del SSH vuelve a comprobar la punta de `main`:
+     si avanzó mientras esperaba, el job falla sin tocar el VPS (resumen **Omitido**).
    - Se conecta por SSH como `deploy` y ejecuta `deploy.sh` con el commit, los dos digests y la
      suma SHA-256 de `restaurante/deploy/`. La llave **solo** puede ejecutar ese script
      (comando forzado).
-5. `deploy.sh` en el VPS:
+6. `deploy.sh` en el VPS:
    1. Comprueba los argumentos, que `.env` tenga permisos 600 y que el `deploy/` instalado sea el
       del commit (la suma).
    2. Descarga las imágenes por digest.
@@ -66,12 +69,27 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
    6. Cambia la app al digest nuevo y espera `healthy`, más una respuesta 200 a través de
       Traefik.
    7. Registra el resultado en `state/release.env` y `state/releases.log`.
-6. Ante un fallo:
+7. Ante un fallo:
    - si fallan la descarga, el volcado o la migración, la app en marcha no se toca y el workflow
      queda en rojo;
    - si la versión nueva no queda sana, `deploy.sh` vuelve al digest anterior con
      `DATABASE_ALLOW_NEWER_SCHEMA=true` y el workflow queda en rojo. La base **no** se restaura
      sola ([Restaurar la base](#9-restaurar-la-base-desde-un-volcado)).
+8. `deploy` escribe siempre un resumen en la ejecución (REQ-F-030): **Desplegado**,
+   **Revertido** (código 21), **Fallido** (con el código), **Omitido** o **Cancelado o
+   interrumpido**, con el SHA corto enlazado al commit y el SHA completo. Solo **Desplegado** deja
+   el job en verde y es un despliegue exitoso en Deployments.
+
+### Qué commit está desplegado
+
+- **Desde GitHub:** la última ejecución del CI con el resumen **Desplegado** en `deploy`. El título
+  de cada ejecución lleva su commit (en un push, el SHA corto aparece debajo del mensaje) y el
+  resumen, el SHA corto enlazado, el SHA completo y los digests. Qué significa cada estado:
+  sección CI del `README.md`, ["Qué se desplegó"](../README.md#qué-se-desplegó).
+- **En el VPS:** `state/release.env` guarda los digests y el commit desplegado
+  (`RESTAURANTE_COMMIT`); `state/releases.log`, el historial de intentos. Tras **Revertido**, el
+  resumen no puede dar el commit anterior: está en `state/release.env`, que no cambia en una vuelta
+  atrás.
 
 > **Migraciones compatibles hacia atrás.** La vuelta atrás automática arranca el código anterior
 > sobre la base ya migrada: añade antes de quitar (expand/contract). Una migración que rompa el
@@ -111,7 +129,7 @@ sudo install -d -o deploy -g deploy -m 700 /opt/restaurante/state /opt/restauran
 | ---- | ----- | --------- |
 | `/opt/restaurante/deploy/` | root (solo lectura para `deploy`) | `compose.prod.yaml`, `deploy.sh`, `mysql/initdb/01-usuarios.sh` |
 | `/opt/restaurante/.env` | deploy, `600` | Secretos y configuración ([paso 3](#3-env-del-vps)) |
-| `/opt/restaurante/state/` | deploy, `700` | `release.env` (digests actuales), `release.env.previous`, `releases.log`, `deploy.lock` |
+| `/opt/restaurante/state/` | deploy, `700` | `release.env` (digests y commit desplegados: `RESTAURANTE_COMMIT`), `release.env.previous`, `releases.log`, `deploy.lock` |
 | `/opt/restaurante/backups/` | deploy, `700` | Volcados `AAAAMMDDTHHMMSSZ-<commit>.sql.gz` (los 7 últimos) |
 
 ### 1.3 Instalar `deploy/`
@@ -360,7 +378,8 @@ valores por defecto (ver `README.md`, "Topes de gasto, lista negra e interruptor
 
 ## 8. Comprobaciones después de cada despliegue
 
-1. Actions → `deploy` en verde, con el commit y los digests en el resumen.
+1. Actions → `deploy` en verde, con el resumen **Desplegado**: el commit (SHA corto enlazado y SHA
+   completo) y los digests.
 2. `https://birriaelmuneco.com/`, `/molotes` y `/birria` responden 200. `/admin` muestra el
    acceso, no un 503.
 3. En el log: `server_started` y, con el bot, `bot_provider_selected` con `meta`. Vigila
@@ -398,8 +417,14 @@ restauración desde ellas y la prueba mensual están en el [paso 11](#11-respald
 
 ## 10. Diagnóstico
 
+El resumen de `deploy` (REQ-F-030) ya indica el estado y el código de salida; el detalle está en
+el log del paso `desplegar`.
+
 | Síntoma (log del job `deploy`) | Causa probable | Qué hacer |
 | ------------------------------ | -------------- | --------- |
+| Resumen **Omitido** (en `vigente` o en `deploy`) | `main` avanzó: este commit no es la punta | Nada: lo despliega la ejecución del commit nuevo |
+| Resumen **Cancelado o interrumpido** | Job cancelado o paso `desplegar` sin terminar (17 min) | Revisa `state/releases.log` y `state/release.env`; vuelve a desplegar la punta de `main` |
+| `vigente` en rojo | La API de GitHub no respondió con el commit de `main` | No se tocó producción; vuelve a ejecutar el job |
 | `Host key verification failed` / `Permission denied (publickey)` | Huella del VPS cambiada o llave revocada | Revisa `VPS_SSH_KNOWN_HOSTS` y `authorized_keys` (paso 1.5) |
 | Código 2 `uso: deploy ...` | Argumentos inválidos (o se usó la llave a mano) | — |
 | Código 3 (`.env`, `RESTAURANTE_*`) | `.env` sin permisos 600, con `DATABASE_ALLOW_NEWER_SCHEMA` o con dominio o registro inválidos | Corrige el `.env` |

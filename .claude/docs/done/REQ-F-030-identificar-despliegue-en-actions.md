@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 ## Aprobación
 
@@ -943,3 +943,24 @@ Estado `READY_FOR_MERGE`.
 - Commit `ffa8f7e`.
 - PR #64 hacia `main`, con el CI en verde.
 - G-1 superado. Ver `## Pull Request`.
+
+### Cierre (T5)
+
+- **2026-10-15: merge.** El usuario confirmó el merge de los PR #64 y #65 con "Fusionados". GitHub registra el merge del PR #64 a las 18:32:34 UTC. Commit de merge en `main`: `e6176d0`. El PR #65 (REQ-F-031) se fusionó 26 s después (`e04d5a2`, 18:33:00 UTC).
+- **Pipeline del merge del PR #64 (ejecución 38786490910, https://github.com/orvigas/negocio/actions/runs/38786490910): success.**
+  - `cambios`, `validado`, `publish` y `vigente` en success.
+  - `calidad`, `docker`, `despliegue` y `auditoria` omitidas: el árbol del merge coincidía con el validado en el PR.
+  - `deploy` omitido porque `e04d5a2` (PR #65) ya era la punta de `main`. Deployments no tiene ningún registro de `e6176d0`.
+- **G-2 (CA-1), título.** El título de la ejecución es "Merge pull request #64 from orvigas/feature/REQ-F-030-identificar-despliegue-en-actions", el título por defecto del push. Confirma que el `run-name` vacío funciona.
+- **G-4 (CA-2) comprobado en real, sin procedimiento manual.** El merge casi simultáneo de los PR #64 y #65 produjo el caso Omitido: `vigente` en success y `deploy` omitido para un commit que ya no era la punta de `main`.
+- **G-2 (CA-1), despliegue (ejecución 38786552360 del merge del PR #65, `e04d5a2`, https://github.com/orvigas/negocio/actions/runs/38786552360): success.**
+  - Corrieron y pasaron `cambios`, `calidad`, `docker`, `despliegue`, `auditoria`, `validado`, `publish`, `vigente` y `deploy`.
+  - En `deploy`, los pasos `commit vigente de main`, `desplegar` y `resumen` terminaron en success. El log de `desplegar` registra "desplegado: ghcr.io/orvigas/restaurante@sha256:0e6d37c4…".
+  - Deployments: registro `production` de `e04d5a2a9b8c59bfac42dff104629e284f9ce61e`, creado a las 18:43:39 UTC, con estado `success` a las 18:44:01 UTC, `environment_url` https://birriaelmuneco.com y enlace al job.
+  - La API no expone el texto del resumen del job (`output.summary` vacío). Falta ver en la UI que dice **Desplegado** y que muestra el enlace, el SHA completo y los dos digests.
+- **Mitigación del PR #62 comprobada en real.** El PR #65 se validó sin el cambio del #64, así que el árbol del merge no coincidía y las cuatro validaciones corrieron de nuevo antes de desplegar.
+- **Pendientes no bloqueantes:**
+  - G-2: confirmar en la UI el resumen **Desplegado** de la ejecución 38786552360.
+  - G-3 (CA-5): `gh workflow run ci.yml --ref main` y comprobar el título `Ejecución manual · <SHA>`.
+  - G-5 (CA-7): el PR de este cierre, que solo cambia documentación, ya tiene sus validaciones omitidas en el CI (ver el PR de cierre). La comprobación completa se hace con el push a `main` tras su merge: el título debe llevar el SHA corto, `vigente` y `deploy` deben quedar omitidos, y no debe haber un registro nuevo en Deployments.
+- Estado: DONE.

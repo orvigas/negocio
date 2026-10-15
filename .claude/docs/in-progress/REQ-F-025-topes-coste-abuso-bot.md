@@ -2,7 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
+
+Pull Request: https://github.com/orvigas/negocio/pull/58
 
 ## Aprobación
 
@@ -1221,3 +1223,4 @@ QA_APPROVED
 ### Commit y Pull Request (T4)
 
 - 2026-10-14: se corrige DEF-001 a petición del usuario ("A"). Validaciones en verde (1706 pruebas). Commit, rebase sobre `origin/main` y PR contra `main`.
+- 2026-10-14: PR #58 (https://github.com/orvigas/negocio/pull/58) con el commit `1475c3f`. CI del PR en verde: `calidad`, `docker`, `despliegue` (prueba de humo del compose de producción) y `auditoria` pasan; `publish` y `deploy` no corren en un PR. Estado: READY_FOR_MERGE.

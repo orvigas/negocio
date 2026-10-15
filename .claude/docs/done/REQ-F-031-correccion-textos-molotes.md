@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 ## Aprobación
 
@@ -611,3 +611,20 @@ Descripción inicial, aprobada el 2026-10-15. Incluye el ajuste de R-11 a "Sin s
 ### Commit y Pull Request (senior-fullstack)
 
 2026-10-15: commit `b4426e5`, push de la rama y PR #65 hacia `main` (https://github.com/orvigas/negocio/pull/65). CI del PR en verde (`calidad`, `docker`, `despliegue`, `auditoria`). CA-13 queda como paso manual del usuario tras el despliegue. Estado: READY_FOR_MERGE.
+
+### Cierre (T5)
+
+- **2026-10-15: merge.** El usuario confirmó el merge de los PR #64 y #65 con "Fusionados". GitHub registra el merge del PR #65 a las 18:33:00 UTC. Commit de merge en `main`: `e04d5a2`.
+- **Pipeline del merge (ejecución 38786552360, https://github.com/orvigas/negocio/actions/runs/38786552360): success.**
+  - Terminaron en success `cambios`, `calidad`, `docker`, `despliegue`, `auditoria`, `validado`, `publish`, `vigente` y `deploy`.
+  - Las validaciones corrieron otra vez porque el PR se validó sin el cambio del PR #64, fusionado antes.
+  - Deployments: `e04d5a2` en `production` con estado `success` a las 18:44:01 UTC. Imagen desplegada: `ghcr.io/orvigas/restaurante@sha256:0e6d37c4…`.
+- **Producción (https://birriaelmuneco.com/molotes, comprobado con curl el 2026-10-15).**
+  - Ya no aparecen "oaxaqueños", "Uber", "Jueves" ni "2x1".
+  - Aparecen "Activar promoción", `tel:+527352782306` y el iframe de `maps/embed`.
+  - La CSP incluye `frame-src https://www.google.com`.
+- **CA-13: pendiente del usuario.** La promoción publicada sigue siendo la anterior: "Promoción Tradicional", "Viernes de Molotes 4x3" y "Suscríbete al Club del Comal…". `current.json` no cambia con el despliegue. Falta editarla en /admin/molotes con los textos de R-10 (ver "Pendientes de revisión manual") y comprobar `/molotes`.
+- **Fuera de este ticket:**
+  - OT-4: el bot de Molotes sigue enviando la ubicación común. Se resolverá en un ticket aparte.
+  - Birria: la corrección de sus textos tendrá su propio ticket, por decisión del usuario ("No, lo trabajamos separado").
+- Estado: DONE.

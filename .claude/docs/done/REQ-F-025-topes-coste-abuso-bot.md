@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 Pull Request: https://github.com/orvigas/negocio/pull/58
 
@@ -1224,3 +1224,17 @@ QA_APPROVED
 
 - 2026-10-14: se corrige DEF-001 a petición del usuario ("A"). Validaciones en verde (1706 pruebas). Commit, rebase sobre `origin/main` y PR contra `main`.
 - 2026-10-14: PR #58 (https://github.com/orvigas/negocio/pull/58) con el commit `1475c3f`. CI del PR en verde: `calidad`, `docker`, `despliegue` (prueba de humo del compose de producción) y `auditoria` pasan; `publish` y `deploy` no corren en un PR. Estado: READY_FOR_MERGE.
+
+### Cierre (T5)
+
+- **2026-10-15: merge.** El usuario confirmó el merge del PR #58 con "Ya está mergeado, hazlo". Commit de merge en `main`: `f472398`.
+- **Reinstalación de `deploy/`.** Antes de que llegara el job `deploy`, la sesión principal reinstaló `deploy/` en el VPS según §1.3 de `docs/despliegue.md`. La suma `dd2dc90d…` coincide en local y en el VPS, así que no hubo fallo con el código 4.
+- **Pipeline del merge (run 38679499883).** Terminaron en success `calidad`, `docker`, `despliegue`, `auditoria`, `publish` y `deploy`.
+- **Producción.** `state/releases.log` registra `2026-10-15T04:14:17Z f472398… result=ok`.
+  - La app está `healthy`.
+  - La migración `20261015024103_bot_proteccion` está aplicada y existen las tablas `bot_audit`, `bot_block`, `bot_control` y `bot_usage`.
+  - `/`, `/molotes` y `/birria` responden 200, y `/admin/bot` responde 303 (al acceso).
+  - El webhook responde 503 porque el bot sigue sin activar, a la espera de que Meta apruebe la plantilla `nuevo_pedido`.
+- **Clave pendiente.** `WHATSAPP_BOT_BLOCKLIST_KEY` todavía no está en el `.env` del VPS. Se añadirá al activar el bot (la app solo la exige con el bot habilitado).
+- **Pendiente no bloqueante.** Tras activar el bot, verificar en producción la pausa y la reanudación desde `/admin/bot` y un bloqueo real: un número bloqueado no recibe respuesta y la acción queda en `bot_audit`.
+- Estado: DONE.

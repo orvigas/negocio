@@ -2,7 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
+
+Pull Request: https://github.com/orvigas/negocio/pull/60 (contra `main`). CI del PR en verde: `calidad`, `docker`, `despliegue` y `auditoria` pasan; `publish` y `deploy` se omiten en un PR.
 
 ## Aprobación
 
@@ -1196,3 +1198,4 @@ Descripción inicial (2026-10-15), a partir de la solicitud del usuario.
 - Decisión del usuario sobre la ronda 1 (2026-10-15): "Acepto las recomendaciones". DEF-001 y DEF-002 se corrigen en este ticket. CA-11 se verifica en Android después del despliegue (el usuario acepta aprobar con CA-11 como verificación posterior al merge; iPhone pendiente). `*MENÚ*` queda como observación de contenido (OBS-1). Estado: `QA_REJECTED`.
 - T3 (2026-10-15): se corrigieron DEF-001 (aclaración en bloques, como el menú) y DEF-002 (partición con encabezado). typecheck y lint en 0, y 1778 pruebas en verde. Sin commit. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
 - Correcciones aprobadas por el usuario (2026-10-15): "Si". QA ronda 2 (senior-qa): DEF-001 y DEF-002 corregidos y verificados (QA reforzó la prueba de DEF-001); `whatsapp-bot-format.test.ts` sin duplicados (50 pruebas: las 49 de la ronda 1 más 1). typecheck y lint en 0; `npm test` con 1778 pruebas en verde (1 fallo esperado de `local-server`). Dorada en `main` con los mismos sha256, y plantilla, flujo y conteos iguales a `main` (`cmp`) con Meta y Twilio. CA-1 a CA-10 en PASS; CA-11 diferido por decisión del usuario (Android tras el despliegue; iPhone pendiente). Estado: `QA_APPROVED`.
+- T4 (2026-10-15): commit `14e2f5e` en `feature/REQ-F-029-formato-textos-bot-whatsapp`, ya al día con `origin/main`, y PR #60 (https://github.com/orvigas/negocio/pull/60). CI en verde: `calidad`, `docker`, `despliegue` y `auditoria` pasan; `publish` y `deploy` se omiten. Estado: `READY_FOR_MERGE`.

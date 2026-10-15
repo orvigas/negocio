@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
 ## Aprobación
 
@@ -575,6 +575,13 @@ Sin JS ni assets nuevos. El iframe es `lazy` (ver OBS-2). Consola sin errores.
 
 QA_APPROVED
 
+## Pull Request
+
+- URL: https://github.com/orvigas/negocio/pull/65 (base `main`, rama `feature/REQ-F-031-correccion-textos-molotes`).
+- Commit: `b4426e5` fix: corrige los textos y datos comerciales de la landing de Molotes.
+- CI del PR (ejecución https://github.com/orvigas/negocio/actions/runs/38779038065): `calidad` pass (8m29s), `docker` pass (2m28s), `despliegue` pass (5m0s), `auditoria` pass (14s), `cambios` pass; `publish`, `deploy` y `validado` omitidos (solo corren tras el merge). GitGuardian pass.
+- Paso manual tras el despliegue (CA-13): destacado en el cuerpo del PR con los textos exactos de R-10 para /admin/molotes.
+
 ## Historial de cambios
 
 ### Versión 1
@@ -600,3 +607,7 @@ Descripción inicial, aprobada el 2026-10-15. Incluye el ajuste de R-11 a "Sin s
 ### QA ronda 1 (senior-qa)
 
 2026-10-15: QA Action Plan aprobado por el usuario ("si"). Ejecución completa: CA-1 a CA-12 en PASS con evidencia, sin defectos; CA-13 queda como paso manual del usuario. Estado: QA_APPROVED.
+
+### Commit y Pull Request (senior-fullstack)
+
+2026-10-15: commit `b4426e5`, push de la rama y PR #65 hacia `main` (https://github.com/orvigas/negocio/pull/65). CI del PR en verde (`calidad`, `docker`, `despliegue`, `auditoria`). CA-13 queda como paso manual del usuario tras el despliegue. Estado: READY_FOR_MERGE.

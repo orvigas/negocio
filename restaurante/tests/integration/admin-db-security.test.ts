@@ -29,7 +29,7 @@ describe('la base de datos falla con el servidor en marcha (CA-5)', () => {
     expect((await session.get('/admin/molotes')).status).toBe(200);
 
     // Fallo real de MySQL: la tabla de usuarios desaparece (DDL con el usuario admin de pruebas).
-    await adminSql(context.database.name, 'DROP TABLE product_change', 'DROP TABLE user_audit', 'DROP TABLE user_business', 'DROP TABLE user');
+    await adminSql(context.database.name, 'DROP TABLE bot_block', 'DROP TABLE bot_audit', 'DROP TABLE bot_control', 'DROP TABLE product_change', 'DROP TABLE user_audit', 'DROP TABLE user_business', 'DROP TABLE user');
 
     const responses = [
       await session.get('/admin/molotes'),

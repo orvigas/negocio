@@ -4,14 +4,26 @@ import type { BusinessId } from '../../config/businesses.ts';
 import type { ProductRepository } from '../../repositories/product-repository.ts';
 import { errorProp } from '../../utils/errors.ts';
 import { silentLogger, type Logger } from '../../utils/logger.ts';
+import { getActiveBusinessId } from '../business-schedule.ts';
 import { buildWhatsAppLink } from '../whatsapp.ts';
 import { buildCatalog } from './catalog.ts';
 import type { ChatBot, InboundDelivery, InboundMessage } from './chat-bot.ts';
 import { handleTurn, type Conversation, type TurnContext, type TurnInput } from './conversation.ts';
 import { createDeterministicInterpreter } from './interpreter/deterministic.ts';
 import type { OrderInterpreter } from './interpreter/types.ts';
-import { buildStaffTemplate, cartTotal, confirmedMessage, staffFailedMessage, staffNoticeText, type OrderDetails } from './messages.ts';
+import {
+  buildStaffTemplate,
+  cartTotal,
+  confirmedMessage,
+  fixedNoticeMessage,
+  orderCapContactMessage,
+  staffFailedMessage,
+  staffNoticeText,
+  type FixedNotice,
+  type OrderDetails,
+} from './messages.ts';
 import { maskPhone } from './phone.ts';
+import type { BotProtection } from './protection/protection.ts';
 import {
   CONVERSATION_IDLE_MS,
   MAX_SEEN,
@@ -41,6 +53,10 @@ import { chunkText } from './text.ts';
  *   con la hora de recepción (D-14 de REQ-F-012).
  * - Los estados (`statuses`) no cambian el flujo (RF-1.5); solo se registra el fallo tardío de un
  *   aviso al personal (PT-3 A; `failed` o `undelivered`).
+ * - Con `protection` (REQ-F-025), cada mensaje pasa antes por el interruptor, la lista negra, el
+ *   enfriamiento, la ráfaga, el tope por minuto, el tope diario del número y la cola global, y cada
+ *   envío por los topes globales (protection/protection.ts). Sin ella (pruebas de la conversación
+ *   y dobles; D-T10), solo el límite por número de REQ-F-009. `createApp` siempre la inyecta.
  * - Logs sin datos personales (RF-9): número enmascarado, nunca textos, nombre, dirección, notas,
  *   código de referencia ni tokens. Cada mensaje interpretado deja `bot_order_interpreted` solo con
  *   contadores (REQ-F-013, RF-11).
@@ -83,6 +99,8 @@ export interface BotOrchestratorOptions {
   newId?: () => string;
   /** Intérprete de pedidos en texto libre (REQ-F-013, D-2); por defecto, el determinista. */
   interpreter?: OrderInterpreter;
+  /** Topes, lista negra e interruptor (REQ-F-025). Sin ella, solo el límite de REQ-F-009 (D-T10). */
+  protection?: BotProtection | undefined;
 }
 
 export function createBotOrchestrator({
@@ -95,6 +113,7 @@ export function createBotOrchestrator({
   newCode = randomReferenceCode,
   newId = () => randomBytes(4).toString('hex'),
   interpreter = createDeterministicInterpreter(),
+  protection,
 }: BotOrchestratorOptions): BotOrchestrator {
   const conversations = createConversationStore();
   const seen = createExpiringMap<true>({ ttlMs: SEEN_TTL_MS, max: MAX_SEEN });
@@ -113,15 +132,35 @@ export function createBotOrchestrator({
     // parte por líneas según el límite del proveedor (nunca corta un producto; DT-7).
     for (const body of messages) {
       for (const part of chunkText(body, chatBot.maxTextLength)) {
+        // REQ-F-025 (paso 8): cada parte es un saliente; con la pausa o un tope global, silencio.
+        const ticket = protection ? protection.reserve('outbound', now()) : undefined;
+        if (ticket === null) return;
         const result = await chatBot.sendText(to, part);
+        if (ticket && protection) protection.settle(ticket, result, now());
         if (!result.ok) return;
       }
     }
   }
 
+  /** Mensaje fijo de un tope (REQ-F-025), con el contacto directo del negocio. */
+  function fixedNotice(to: string, kind: FixedNotice, business: BusinessId): Promise<void> {
+    return reply(to, [fixedNoticeMessage(kind, business, staffContact(business))]);
+  }
+
   /** Aviso al personal (RF-7): una sola vez; con un fallo, D-18. La conversación se cierra. */
   async function notifyStaff(waId: string, conversation: Conversation, order: OrderDetails): Promise<void> {
     const fields = { conversationId: conversation.id, business: order.business, customer: maskPhone(waId) };
+    // REQ-F-025 (RF-1.1, RF-2.1 y RF-9): con la pausa no sale nada; con un tope, el cliente recibe
+    // el contacto directo y no se envía la plantilla.
+    const check = protection ? protection.templateCheck(waId, now()) : 'ok';
+    const ticket = check === 'ok' && protection ? protection.reserve('template', now()) : undefined;
+    if (check !== 'ok' || ticket === null) {
+      conversations.delete(waId);
+      if (check === 'paused') return;
+      logger.warn('bot_order_not_sent', { ...fields, cap: check === 'ok' ? 'templates' : check });
+      await reply(waId, [orderCapContactMessage(order, staffContact(order.business))]);
+      return;
+    }
     const template = buildStaffTemplate(order, waId);
     // DT-1 (REQ-F-013): `lineas` se compactó para que la plantilla no pase de 1024 caracteres.
     if (template.level > 0) logger.warn('bot_staff_notice_compacted', { conversationId: conversation.id, business: order.business, level: template.level });
@@ -130,7 +169,9 @@ export function createBotOrchestrator({
       text: staffNoticeText(order, waId),
     });
     conversations.delete(waId);
+    if (ticket && protection) protection.settle(ticket, result, now());
     if (result.ok) {
+      protection?.orderAccepted(waId, now(), order.business);
       for (const messageId of result.messageIds) staffMessages.set(messageId, order.business, now().getTime());
       logger.info('bot_order_confirmed', { ...fields, lines: order.lines.length, totalCents: cartTotal(order.lines), offHours: order.offHoursOpening !== null });
       await reply(waId, [confirmedMessage(order)]);
@@ -146,6 +187,17 @@ export function createBotOrchestrator({
     if (stored && message.timestamp < stored.lastTimestamp) {
       logger.info('bot_message_out_of_order', { conversationId: stored.conversation.id, customer: maskPhone(message.from) });
       return;
+    }
+    if (!stored && protection) {
+      // REQ-F-025 (RF-1.1 y RF-2.1): sin pedidos disponibles, el contacto directo y ninguna conversación.
+      const check = protection.startCheck(message.from, time);
+      if (check !== 'ok') {
+        if (check !== 'silent') {
+          logger.info('bot_conversation_refused', { customer: maskPhone(message.from), cap: check });
+          await fixedNotice(message.from, check === 'orders' ? 'orderLimitReached' : 'directContactMode', getActiveBusinessId({ now: time, timeZone }));
+        }
+        return;
+      }
     }
     const input: TurnInput = message.text === undefined ? { kind: 'unsupported' } : { kind: 'text', text: message.text };
     const ctx: TurnContext = {
@@ -181,18 +233,23 @@ export function createBotOrchestrator({
   }
 
   function enqueue(message: QueuedMessage): void {
-    const previous = queues.get(message.from) ?? Promise.resolve();
+    enqueueTask(message.from, () => processMessage(message));
+  }
+
+  /** Cola por cliente: sus tareas se ejecutan una tras otra, en orden. */
+  function enqueueTask(from: string, task: () => Promise<void>): void {
+    const previous = queues.get(from) ?? Promise.resolve();
     const run = previous
-      .then(() => processMessage(message))
+      .then(task)
       .catch((err: unknown) => {
         // Sin el mensaje del error: podría llevar datos de la conversación.
         logger.error('bot_processing_failed', { name: errorProp(err, 'name') });
       });
-    queues.set(message.from, run);
+    queues.set(from, run);
     pending.add(run);
     void run.finally(() => {
       pending.delete(run);
-      if (queues.get(message.from) === run) queues.delete(message.from);
+      if (queues.get(from) === run) queues.delete(from);
     });
   }
 
@@ -222,6 +279,17 @@ export function createBotOrchestrator({
         seen.set(message.id, true, time);
         if (time - message.timestamp * 1000 > STALE_MESSAGE_MS) {
           logger.info('bot_message_stale', { customer: maskPhone(message.from), ageSeconds: Math.round(time / 1000 - message.timestamp) });
+          continue;
+        }
+        if (protection) {
+          // REQ-F-025: controles en el orden del requisito (pasos 1 a 6).
+          const admission = protection.admit(message, time, pending.size);
+          if (admission === 'daily_notice') {
+            const business = conversations.get(message.from, time)?.conversation.business ?? getActiveBusinessId({ now: new Date(time), timeZone });
+            conversations.delete(message.from);
+            enqueueTask(message.from, () => fixedNotice(message.from, 'dailyLimitReached', business));
+          }
+          if (admission === 'process') enqueue(message);
           continue;
         }
         const limit = rateLimiter.hit(message.from, time);

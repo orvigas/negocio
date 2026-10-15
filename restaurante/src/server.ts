@@ -4,11 +4,13 @@ import { DEFAULT_PUBLIC_DIR, createApp } from './app.ts';
 import { ConfigError, loadConfig } from './config/env.ts';
 import { createPrismaClient } from './db/client.ts';
 import { probeOf, queryOf, verifyDatabase } from './db/verify.ts';
+import { createPrismaBotControlStore } from './repositories/prisma-bot-control-store.ts';
 import { createPrismaProductStore } from './repositories/prisma-product-store.ts';
 import { createProductRepository } from './repositories/product-repository.ts';
 import { createUserRepository } from './repositories/user-repository.ts';
 import { createImageChecker } from './services/admin-form.ts';
 import { bootstrapAdmin } from './services/admin-bootstrap.ts';
+import { createBotControl } from './services/bot-control.ts';
 import { createFileMenuRepository } from './repositories/file-menu-repository.ts';
 import { errorProp } from './utils/errors.ts';
 import { createLogger, serializeError } from './utils/logger.ts';
@@ -85,7 +87,32 @@ try {
   process.exit(1);
 }
 
-const app = createApp({ config, repository, products, users, logger });
+// Protección del bot (REQ-F-025): lista negra, interruptor y contadores desde la base de datos. Se
+// prepara aunque el bot esté desactivado (la página "Bot" de /admin la muestra). Si la carga
+// inicial falla, el servidor no arranca; después, el bot sigue con la última copia conocida.
+const botControl = createBotControl({
+  store: createPrismaBotControlStore({ prisma }),
+  keys: config.botKeys,
+  limits: config.botLimits,
+  timeZone: config.timezone,
+  staff: config.whatsappBot ? Object.values(config.whatsappBot.staff) : [],
+  logger,
+});
+try {
+  await botControl.init();
+} catch (err) {
+  logger.error('bot_control_init_failed', { name: errorProp(err, 'name'), code: errorProp(errorProp(err, 'details'), 'code') });
+  process.stderr.write('No se pudo preparar la protección del bot en la base de datos.\n');
+  await prisma.$disconnect();
+  process.exit(1);
+}
+// Mantenimiento (D-T5): caducidades y retención al arrancar y cada hora (nunca lanza).
+await botControl.maintenance();
+const BOT_MAINTENANCE_MS = 60 * 60 * 1000;
+const maintenanceTimer = setInterval(() => void botControl.maintenance(), BOT_MAINTENANCE_MS);
+maintenanceTimer.unref();
+
+const app = createApp({ config, repository, products, users, logger, botControl });
 // Escucha solo en HOST (REQ-F-015; 127.0.0.1 por defecto). Si la dirección no existe en la máquina
 // o el puerto está ocupado, termina con 1 y un mensaje claro, sin repetir los valores.
 const server = app.listen(config.port, config.host);
@@ -113,14 +140,20 @@ logger.info('server_started', {
 
 function shutdown(signal: NodeJS.Signals): void {
   logger.info('server_stopping', { signal });
+  clearInterval(maintenanceTimer);
   server.close((err) => {
-    void prisma.$disconnect().finally(() => {
-      if (err) {
-        logger.error('server_stop_failed', { err: serializeError(err) });
-        process.exit(1);
-      }
-      process.exit(0);
-    });
+    // REQ-F-025: los contadores pendientes se guardan antes de cerrar la conexión.
+    void botControl
+      .flush()
+      .catch(() => undefined)
+      .then(() => prisma.$disconnect())
+      .finally(() => {
+        if (err) {
+          logger.error('server_stop_failed', { err: serializeError(err) });
+          process.exit(1);
+        }
+        process.exit(0);
+      });
   });
 }
 

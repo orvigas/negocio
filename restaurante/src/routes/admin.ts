@@ -1,6 +1,7 @@
 import Router from '@koa/router';
 
 import { createAdminAccountController } from '../controllers/admin-account.ts';
+import { createAdminBotController } from '../controllers/admin-bot.ts';
 import { createAdminUsersController } from '../controllers/admin-users.ts';
 import { createAdminProductsController } from '../controllers/admin-products.ts';
 import { createAdminController, type AdminDeps } from '../controllers/admin.ts';
@@ -19,6 +20,11 @@ import { createAdminApiRouter } from './admin-api.ts';
  * GET  /admin/usuarios/nuevo | POST /admin/usuarios          -> crear
  * GET  /admin/usuarios/:id | POST /admin/usuarios/:id         -> editar
  * POST /admin/usuarios/:id/desactivar | …/reactivar           -> desactivar / reactivar
+ * GET  /admin/bot                             -> página "Bot" (REQ-F-025; solo administradores)
+ * POST /admin/bot/interruptor                 -> pausar / reanudar el bot
+ * POST /admin/bot/bloqueos                    -> bloquear un número
+ * POST /admin/bot/bloqueos/:id/quitar         -> quitar un bloqueo
+ * POST /admin/bot/topes/:token/bloquear       -> bloquear desde "alcanzaron un tope hoy"
  * GET  /admin/usuarios/:id/contrasena | POST (misma ruta)     -> restablecer la contraseña
  * GET  /admin/:negocio | POST /admin/:negocio -> ver / guardar (incluye la sobrescritura tras conflicto)
  * GET  /admin/:negocio/restaurar-anterior     -> confirmación
@@ -58,6 +64,12 @@ export function createAdminRouter(deps: AdminDeps): Router<AdminState> {
   router.post('/usuarios/:id/reactivar', usersController.reactivate);
   router.get('/usuarios/:id/contrasena', usersController.passwordPage);
   router.post('/usuarios/:id/contrasena', usersController.resetPassword);
+  const botController = createAdminBotController(deps);
+  router.get('/bot', botController.page);
+  router.post('/bot/interruptor', botController.toggle);
+  router.post('/bot/bloqueos', botController.block);
+  router.post('/bot/bloqueos/:id/quitar', botController.unblock);
+  router.post('/bot/topes/:token/bloquear', botController.blockReached);
   const productsController = createAdminProductsController(deps);
   router.get('/:business/productos/nuevo', productsController.newPage);
   router.post('/:business/productos', productsController.create);

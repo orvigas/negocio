@@ -629,6 +629,60 @@ Twilio):
   usa unos 4 mensajes del bot.
 - **Twilio:** 0.005 USD por mensaje (entrante o saliente), más las tarifas de Meta.
 
+Meta no ofrece un límite de gasto para esta cuenta: el límite real lo pone la tarjeta con la que
+se paga (tarjeta virtual con límite bajo y alertas de facturación). La app añade sus propios topes
+(siguiente sección), con una **estimación** del gasto que puede no coincidir con la factura.
+
+### Topes de gasto, lista negra e interruptor (REQ-F-025)
+
+Controles de cada mensaje entrante, en este orden (uno descartado no cuenta en los siguientes):
+
+1. **Interruptor** (página "Bot" de `/admin`): pausado, el bot no envía nada y descarta lo que
+   llega; el webhook sigue respondiendo 200 y las landings y `/admin` siguen igual.
+2. **Lista negra:** un número bloqueado no recibe respuesta ni cuenta en los topes.
+3. **Enfriamiento:** 5 textos idénticos en 10 minutos (los que no son texto cuentan como el mismo)
+   dan 30 minutos sin respuesta; un segundo enfriamiento el mismo día bloquea el número 24 h,
+   7 d o 30 d según sus bloqueos automáticos de los últimos 30 días.
+4. **Ráfaga y tope por minuto:** 5 mensajes cada 10 s y 20 por minuto; lo demás se ignora.
+5. **Tope diario por número:** 60 mensajes procesados; el siguiente recibe **un** mensaje con el
+   contacto directo y el número queda bloqueado 7 días.
+6. **Cola global:** como mucho 100 mensajes en proceso o en espera; con la cola llena se descartan.
+7. Procesamiento. Una conversación nueva con los pedidos del día del número agotados (3) o con el
+   tope de avisos al personal alcanzado recibe el contacto directo (como mucho una vez cada 2 h).
+8. **Topes globales antes de cada envío:** avisos al personal (60 al día, 1500 al mes), mensajes
+   del bot al cliente (800 al día, 12 000 al mes; cada parte de un texto largo cuenta) y
+   presupuesto mensual estimado (20 USD). Gasto estimado = avisos del mes × tarifa utility +
+   máx(0, mensajes del mes − cupo gratuito) × tarifa de servicio. Con el tope de avisos, quien
+   confirma recibe el contacto directo y no se envía la plantilla; con el de mensajes o el
+   presupuesto, silencio hasta el siguiente periodo. Un envío que el proveedor rechaza no cuenta.
+
+Los números del personal (`WHATSAPP_BOT_STAFF_*`) están exentos de los topes por número y de los
+repetidos, y no se pueden bloquear. `521…` y `52…` de un celular de México son el mismo número.
+Los días y meses se cuentan en `BUSINESS_TIMEZONE`.
+
+- **Persistencia:** la lista negra, la auditoría (`bot_audit`), los contadores globales
+  (`bot_usage`) y el interruptor (`bot_control`) están en MySQL; los topes por número, los
+  enfriamientos y "alcanzaron un tope hoy" viven en memoria y se pierden al reiniciar.
+- **Con MySQL caído,** el bot sigue con la última copia conocida de la lista negra y del
+  interruptor y registra `bot_control_store_failed` (una vez por caída); los contadores y las
+  altas automáticas se guardan cuando vuelve.
+- **Privacidad:** de cada número bloqueado solo se guardan un HMAC-SHA256 con
+  `WHATSAPP_BOT_BLOCKLIST_KEY` (que no está en la base) y sus 4 últimos dígitos. Las entradas
+  vencidas o quitadas se borran a los 30 días; la auditoría, a los 12 meses; los contadores
+  diarios, a los 13 meses (mantenimiento al arrancar y cada hora).
+- **Página "Bot" de `/admin`** (solo administradores): contadores de hoy y del mes frente a sus
+  topes, interruptor, "alcanzaron un tope hoy" (con "Bloquear"), lista negra con alta (número,
+  duración de 24 h, 7 d, 30 d o permanente y motivo opcional, sin números de teléfono) y baja.
+  Cada alta, baja, caducidad y cambio del interruptor queda en `bot_audit`.
+- **Rotar la clave:** pon la nueva en `WHATSAPP_BOT_BLOCKLIST_KEY` y la anterior en
+  `WHATSAPP_BOT_BLOCKLIST_KEY_PREVIOUS`. Cada número bloqueado pasa a la clave nueva cuando vuelve
+  a escribir; la página "Bot" muestra cuántos siguen con la anterior. Quita la anterior cuando
+  llegue a 0 (o cuando esos bloqueos hayan vencido): si se pierde una clave, sus bloqueos dejan
+  de aplicarse.
+- **Desplegar con el bot ya activo:** la clave es obligatoria con el bot. Añádela al `.env` del
+  VPS **antes** de desplegar la versión que la exige; sin ella, la app nueva no arranca y el
+  despliegue vuelve a la versión anterior.
+
 ### Variables del bot
 
 El bot queda habilitado si defines al menos una variable de datos del bot (todas las de la tabla
@@ -656,10 +710,34 @@ app no arranca y pide renombrarla.
 | `WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE` | Opcional (`es_MX`): idioma de la plantilla | No aplica |
 | `WHATSAPP_GRAPH_API_VERSION` | Opcional (`v26.0`): versión de la Graph API (formato `vNN.N`) | No aplica |
 | `WHATSAPP_BOT_WEBHOOK_URL` | No aplica | Obligatoria: URL https completa del webhook, exactamente la configurada en Twilio, terminada en `/webhooks/whatsapp`, sin query ni fragmento |
+| `WHATSAPP_BOT_BLOCKLIST_KEY` | Obligatoria: clave del seudónimo de la lista negra, ≥ 32 bytes en base64, base64url o hex (secreto; `openssl rand -base64 32`). No habilita el bot | Igual |
+| `WHATSAPP_BOT_BLOCKLIST_KEY_PREVIOUS` | Opcional: clave anterior durante una rotación | Igual |
 | `WHATSAPP_MOLOTES` | Número del bot (igual a `WHATSAPP_BIRRIA`) | Igual, y además es el número emisor (`From`): con el sandbox, `14155238886` |
 
 Las bases de las API son fijas (`https://graph.facebook.com` y `https://api.twilio.com`): los
 tokens nunca se envían a otro host, ni van en una URL ni en un log.
+
+Umbrales de la protección (REQ-F-025; opcionales, vacíos = valor por defecto; un valor inválido
+impide arrancar con un mensaje que nombra la variable):
+
+| Variable | Defecto | Valores |
+| --- | --- | --- |
+| `BOT_LIMIT_ORDERS_PER_NUMBER_DAY` | 3 | entero 1-100 |
+| `BOT_LIMIT_MESSAGES_PER_NUMBER_DAY` | 60 | entero 5-10 000 |
+| `BOT_LIMIT_MESSAGES_PER_MINUTE` | 20 | entero 1-1000 |
+| `BOT_LIMIT_BURST` / `BOT_LIMIT_BURST_WINDOW_SECONDS` | 5 / 10 | entero 1-100 / 1-3600 |
+| `BOT_LIMIT_TEMPLATES_DAY` / `BOT_LIMIT_TEMPLATES_MONTH` | 60 / 1500 | entero 1-100 000; diario ≤ mensual |
+| `BOT_LIMIT_OUTBOUND_DAY` / `BOT_LIMIT_OUTBOUND_MONTH` | 800 / 12 000 | entero 1-1 000 000; diario ≤ mensual |
+| `BOT_BUDGET_MONTH_USD` | 20 | USD > 0 y ≤ 10 000, con punto y hasta 4 decimales |
+| `BOT_COST_UTILITY_USD` / `BOT_COST_SERVICE_USD` | 0.0085 / 0.0085 | USD de 0 a 1, hasta 6 decimales |
+| `BOT_FREE_SERVICE_MONTH` | 1000 | entero 0-1 000 000 |
+| `BOT_REPEAT_COUNT` / `BOT_REPEAT_WINDOW_MINUTES` / `BOT_COOLDOWN_MINUTES` | 5 / 10 / 30 | entero 2-100 / 1-1440 / 1-1440 |
+| `BOT_BLOCK_CAP_DAYS` | 7 | entero 1-365 |
+| `BOT_BLOCK_REPEAT_STEPS_HOURS` | `24,168,720` | de 1 a 5 horas crecientes (1-8760) |
+| `BOT_BLOCK_HISTORY_DAYS` | 30 | entero 1-365 |
+| `BOT_AUDIT_RETENTION_MONTHS` | 12 | entero 1-120 |
+| `BOT_QUEUE_MAX` | 100 | entero 1-10 000 |
+| `BOT_CONTROL_REFRESH_SECONDS` | 10 | entero 1-300 |
 
 ### Registrar el webhook en Meta (producción)
 
@@ -798,7 +876,13 @@ Eventos: `bot_provider_selected` (al arrancar, solo con el proveedor), `bot_conv
 `bot_order_confirmed`, `bot_order_cancelled`, `bot_staff_send_failed`,
 `bot_staff_delivery_failed`, `bot_webhook_signature_invalid`, `bot_webhook_verify_failed`,
 `bot_api_error`, `bot_message_stale`, `bot_message_out_of_order`, `bot_rate_limited`,
-`bot_webhook_ignored` y `bot_conversation_evicted`. El número del cliente va enmascarado (solo
+`bot_webhook_ignored` y `bot_conversation_evicted`. De la protección (REQ-F-025):
+`bot_paused_dropped` y `bot_queue_full` (como mucho uno por minuto, con el número de descartes),
+`bot_blocked_message` (como mucho uno por número y hora), `bot_burst_limited`,
+`bot_cooldown_started`, `bot_number_cap_reached`, `bot_auto_blocked`, `bot_conversation_refused`,
+`bot_order_not_sent`, `bot_daily_cap_reached` y `bot_monthly_cap_reached` (nivel error, sin
+números), `bot_block_added`, `bot_block_removed`, `bot_control_paused`, `bot_control_resumed`,
+`bot_control_store_failed`, `bot_control_store_recovered` y `bot_control_maintenance`. El número del cliente va enmascarado (solo
 los 4 últimos dígitos). Nunca se registran el texto de los mensajes, el nombre, la dirección,
 las notas, el código de referencia, los tokens, el Account SID ni el mensaje de error del
 proveedor (solo su código).

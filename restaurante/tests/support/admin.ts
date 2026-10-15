@@ -4,7 +4,9 @@ import { afterEach } from 'vitest';
 import type { Test } from 'supertest';
 
 import { DEFAULT_PUBLIC_DIR, createApp } from '../../src/app.ts';
-import type { Env } from '../../src/config/env.ts';
+import type { BotKeys, Env } from '../../src/config/env.ts';
+import type { BotControlStore } from '../../src/repositories/bot-control-store.ts';
+import { createPrismaBotControlStore } from '../../src/repositories/prisma-bot-control-store.ts';
 import type { MenuRepository } from '../../src/repositories/menu-repository.ts';
 import type { createMemoryMenuRepository } from '../../src/repositories/memory-menu-repository.ts';
 import { createPrismaProductStore } from '../../src/repositories/prisma-product-store.ts';
@@ -12,6 +14,9 @@ import { createProductRepository, type ProductStore } from '../../src/repositori
 import { createUserRepository, type UserRepository } from '../../src/repositories/user-repository.ts';
 import { createImageChecker } from '../../src/services/admin-form.ts';
 import { bootstrapAdmin } from '../../src/services/admin-bootstrap.ts';
+import { createBotControl } from '../../src/services/bot-control.ts';
+import type { BotLimits } from '../../src/services/whatsapp-bot/protection/limits.ts';
+import type { FetchLike } from '../../src/services/whatsapp-bot/providers/select.ts';
 import { makeDatabase, type MakeDatabaseOptions } from './database.ts';
 import { listenLocal, type Browser } from './http.ts';
 import { sourcesFrom } from './products.ts';
@@ -29,7 +34,19 @@ export interface SetupOptions<R extends MenuRepository> {
   wrapProductStore?: (store: ProductStore) => ProductStore;
   /** Destino de la conexión a la base (p. ej. un proxy TCP para cortarla, REQ-F-014 CA-10). */
   routeDatabase?: MakeDatabaseOptions['route'];
+  /**
+   * Protección del bot (REQ-F-025): claves del seudónimo (por defecto, las de la configuración;
+   * sin bot no hay), umbrales y un envoltorio del store de Prisma (p. ej. uno que falla).
+   */
+  botKeys?: BotKeys | null;
+  botLimits?: BotLimits;
+  wrapBotStore?: (store: BotControlStore) => BotControlStore;
+  /** `fetch` del proveedor cuando el bot se crea desde la configuración (un doble). */
+  providerFetch?: FetchLike;
 }
+
+/** Clave de prueba para la lista negra sin bot (REQ-F-025). */
+export const TEST_BOT_KEYS: BotKeys = Object.freeze({ current: Buffer.alloc(32, 7), previous: undefined });
 import { SCRYPT_DEFAULTS, hashPassword } from '../../src/services/admin-auth.ts';
 import { makeConfig, makeRecordingLogger, makeRepository, type RecordingLogger } from '../helpers.ts';
 
@@ -81,6 +98,10 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
   wrapUsers = (users) => users,
   wrapProductStore = (store) => store,
   routeDatabase,
+  botKeys,
+  botLimits,
+  wrapBotStore = (store) => store,
+  providerFetch,
 }: SetupOptions<R> = {}) {
   // Sin repositorio propio se usa el de memoria, que es el tipo por defecto de R.
   const repo = (repository ?? (await makeRepository({ now: clock.now }))) as R;
@@ -99,7 +120,27 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
     logger,
   });
   await products.init(await sourcesFrom(repo));
-  const app = createApp({ config, repository: repo, products, users, hashParams: TEST_HASH_PARAMS, logger, now: clock.now });
+  const botControl = createBotControl({
+    store: wrapBotStore(createPrismaBotControlStore({ prisma: database.prisma })),
+    keys: botKeys === undefined ? config.botKeys : botKeys,
+    limits: botLimits ?? config.botLimits,
+    timeZone: config.timezone,
+    staff: config.whatsappBot ? Object.values(config.whatsappBot.staff) : [],
+    logger,
+    now: clock.now,
+  });
+  await botControl.init();
+  const app = createApp({
+    config: botLimits ? { ...config, botLimits } : config,
+    repository: repo,
+    products,
+    users,
+    hashParams: TEST_HASH_PARAMS,
+    logger,
+    now: clock.now,
+    botControl,
+    ...(providerFetch ? { providerFetch } : {}),
+  });
   const server = await listenLocal(app);
   return {
     app,
@@ -109,6 +150,7 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
     products,
     users: realUsers,
     prisma: database.prisma,
+    botControl,
     /** Base de pruebas (nombre y conexión del usuario de la app). */
     database: { name: database.name, config: database.config },
     /** Cliente nuevo con su propio almacén de cookies (un "navegador"). */

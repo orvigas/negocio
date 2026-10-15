@@ -15,10 +15,12 @@ import type { UserRepository } from './repositories/user-repository.ts';
 import { createRouter } from './routes/index.ts';
 import { SCRYPT_DEFAULTS, createUserAuthenticator, type PasswordHashParams } from './services/admin-auth.ts';
 import { createImageChecker } from './services/admin-form.ts';
+import type { BotControl } from './services/bot-control.ts';
 import { getActiveBusinessId } from './services/business-schedule.ts';
 import { createLoginThrottle } from './services/login-throttle.ts';
 import { createSessionStore } from './services/session-store.ts';
 import { createBotOrchestrator, type BotOrchestrator } from './services/whatsapp-bot/orchestrator.ts';
+import { createBotProtection } from './services/whatsapp-bot/protection/protection.ts';
 import { createChatBot, type FetchLike } from './services/whatsapp-bot/providers/select.ts';
 import { silentLogger, type Logger } from './utils/logger.ts';
 import { renderAdminUnavailable } from './views/admin/index.ts';
@@ -49,6 +51,11 @@ export interface AppOptions {
    * `providerFetch` (por defecto, `fetch`).
    */
   bot?: BotOrchestrator | undefined;
+  /**
+   * Protección del bot y página "Bot" de /admin (REQ-F-025). Obligatoria si el bot se crea desde
+   * la configuración; sin ella, /admin/bot responde 503.
+   */
+  botControl?: BotControl | undefined;
   providerFetch?: FetchLike;
   viewsDir?: string;
   publicDir?: string;
@@ -64,6 +71,7 @@ export function createApp({
   logger = silentLogger,
   now = () => new Date(),
   bot: injectedBot,
+  botControl,
   providerFetch = (url, init) => fetch(url, init),
   viewsDir = DEFAULT_VIEWS_DIR,
   publicDir = DEFAULT_PUBLIC_DIR,
@@ -86,6 +94,7 @@ export function createApp({
   // Plantillas cargadas una sola vez al construir la app.
   const renderer = createRenderer({ viewsDir });
   // Administración: cuentas personales en la base de datos (REQ-F-007).
+  if (!injectedBot && config.whatsappBot && !botControl) throw new TypeError('createApp requiere botControl para crear el bot (REQ-F-025)');
   const admin = users
     ? {
         logger,
@@ -95,6 +104,8 @@ export function createApp({
         throttle: createLoginThrottle({ now }),
         authenticator: createUserAuthenticator({ users, hashParams }),
         imageExists: createImageChecker(publicDir),
+        botControl,
+        botProvider: injectedBot?.chatBot.provider ?? config.whatsappBot?.provider,
       }
     : undefined;
   const renderUnavailable = () =>
@@ -111,6 +122,8 @@ export function createApp({
           products,
           logger,
           now,
+          // REQ-F-025 (D-T10): el bot creado desde la configuración siempre lleva la protección.
+          protection: botControl ? createBotProtection({ control: botControl, limits: config.botLimits, timeZone: config.timezone, logger }) : undefined,
         })
       : undefined);
   // D-13 (REQ-F-012): solo el proveedor, ningún otro valor.

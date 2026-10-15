@@ -4,7 +4,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { MetaBotConfig } from '../../src/config/env.ts';
+import { createMemoryBotControlStore, type MemoryBotControlStore } from '../../src/repositories/memory-bot-control-store.ts';
 import type { ProductRepository } from '../../src/repositories/product-repository.ts';
+import { createBotControl, type BotControl } from '../../src/services/bot-control.ts';
+import { DEFAULT_BOT_LIMITS, type BotLimits } from '../../src/services/whatsapp-bot/protection/limits.ts';
+import { createBotProtection } from '../../src/services/whatsapp-bot/protection/protection.ts';
 import { createBotOrchestrator } from '../../src/services/whatsapp-bot/orchestrator.ts';
 import { parseDelivery } from '../../src/services/whatsapp-bot/providers/meta/webhook.ts';
 import { createChatBot } from '../../src/services/whatsapp-bot/providers/select.ts';
@@ -68,14 +72,36 @@ export const botConfig = (): MetaBotConfig => {
   return whatsappBot;
 };
 
-/** Bot real con Meta (WhatsAppBot), el doble de la Cloud API, reloj controlado y productos en memoria (semillas). */
-export async function makeBotHarness({ at = mx(`${WEEK.tue}T10:00`), products }: { at?: Date; products?: Pick<ProductRepository, 'getPublished'> } = {}) {
+export interface HarnessProtection {
+  /** Umbrales distintos de los de por defecto (REQ-F-025). */
+  limits?: Partial<BotLimits>;
+  /** Store compartido (p. ej. para simular un reinicio o una base caída). */
+  store?: MemoryBotControlStore;
+}
+
+/**
+ * Bot real con Meta (WhatsAppBot), el doble de la Cloud API, reloj controlado y productos en memoria
+ * (semillas). Con `protection`, además la protección de REQ-F-025 con un store en memoria.
+ */
+export async function makeBotHarness({
+  at = mx(`${WEEK.tue}T10:00`),
+  products,
+  protection,
+}: { at?: Date; products?: Pick<ProductRepository, 'getPublished'>; protection?: HarnessProtection } = {}) {
   const clock = { now: at };
   const double = createCloudApiDouble();
   const logger = makeRecordingLogger();
   const config = botConfig();
+  const fullConfig = makeConfig(BOT_ENV);
   const productRepository = products ?? (await makeProductRepository()).repository;
   let codes = 0;
+  const limits: BotLimits = { ...DEFAULT_BOT_LIMITS, ...protection?.limits };
+  const store = protection?.store ?? createMemoryBotControlStore();
+  let control: BotControl | undefined;
+  if (protection) {
+    control = createBotControl({ store, keys: fullConfig.botKeys, limits, timeZone: 'America/Mexico_City', staff: Object.values(config.staff), logger, now: () => clock.now });
+    await control.init();
+  }
   const bot = createBotOrchestrator({
     chatBot: createChatBot(config, { fetch: double.fetch, logger, retryDelayMs: 0 }),
     staff: config.staff,
@@ -84,6 +110,7 @@ export async function makeBotHarness({ at = mx(`${WEEK.tue}T10:00`), products }:
     logger,
     now: () => clock.now,
     newCode: (prefix) => `${prefix}-T${String((codes += 1)).padStart(3, '0')}`,
+    protection: control ? createBotProtection({ control, limits, timeZone: 'America/Mexico_City', logger }) : undefined,
   });
 
   /** Entrega cruda (ya parseada) y espera a que el bot termine. */
@@ -106,7 +133,7 @@ export async function makeBotHarness({ at = mx(`${WEEK.tue}T10:00`), products }:
   /** Igual que `say`, con todo el texto recibido unido (para buscar frases). */
   const ask = async (text: string, options?: { from?: string }): Promise<string> => (await say(text, options)).join('\n---\n');
 
-  return { bot, double, logger, clock, config, products: productRepository, deliver, say, ask };
+  return { bot, double, logger, clock, config, products: productRepository, deliver, say, ask, control, store, limits };
 }
 
 export type BotHarness = Awaited<ReturnType<typeof makeBotHarness>>;

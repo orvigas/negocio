@@ -42,7 +42,7 @@ export interface AdminViewer {
 }
 
 /** Sección actual de la navegación. */
-export type AdminSection = BusinessId | 'home' | 'users' | 'account';
+export type AdminSection = BusinessId | 'home' | 'users' | 'bot' | 'account';
 
 /** Lo común a todas las páginas con sesión. */
 export interface AdminPageContext {
@@ -288,6 +288,8 @@ function renderSchemaFields(
 export const ADMIN_HOME_PATH = '/admin';
 export const USERS_PATH = '/admin/usuarios';
 export const ACCOUNT_PATH = '/admin/cuenta';
+/** Página "Bot" (REQ-F-025), solo para administradores. */
+export const BOT_ADMIN_PATH = '/admin/bot';
 
 /** Navegación según el usuario: solo enlaza a lo que tiene permitido (R-7). */
 function renderHeader(
@@ -298,6 +300,7 @@ function renderHeader(
     { id: 'home', href: ADMIN_HOME_PATH, label: 'Inicio' },
     ...allowedBusinesses(viewer).map((id) => ({ id, href: adminPath(id), label: businessName(id) })),
     ...(isAdmin(viewer) ? [{ id: 'users' as const, href: USERS_PATH, label: 'Usuarios' }] : []),
+    ...(isAdmin(viewer) ? [{ id: 'bot' as const, href: BOT_ADMIN_PATH, label: 'Bot' }] : []),
     { id: 'account', href: ACCOUNT_PATH, label: 'Mi cuenta' },
   ];
   return renderer.render('admin/partials/header', {
@@ -593,6 +596,7 @@ export function renderAdminHome(renderer: Renderer, context: AdminPageContext): 
       description: 'Hero, promociones, productos y precios.',
     })),
     ...(isAdmin(viewer) ? [{ href: USERS_PATH, label: 'Usuarios', description: 'Crear, editar, desactivar y restablecer contraseñas.' }] : []),
+    ...(isAdmin(viewer) ? [{ href: BOT_ADMIN_PATH, label: 'Bot', description: 'Topes de gasto, lista negra e interruptor de emergencia.' }] : []),
     { href: ACCOUNT_PATH, label: 'Mi cuenta', description: 'Cambiar tu contraseña.' },
   ];
   return adminPage(renderer, {

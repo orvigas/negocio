@@ -1,0 +1,55 @@
+<h1 class="text-2xl font-bold text-slate-900">Bot de WhatsApp</h1>
+      <p class="mt-1 mb-6 text-sm text-slate-700">Topes de gasto, lista negra e interruptor de emergencia. Los umbrales se cambian en la configuración del servidor.</p>
+      {{{ notices }}}
+      <section class="bot-panel__section mb-8" aria-labelledby="bot-estado">
+        <h2 id="bot-estado" class="mb-3 text-xl font-bold text-slate-900">Estado</h2>
+        <div class="bot-panel__status rounded-lg border border-slate-300 bg-white p-4 shadow-xs sm:p-6">
+          <dl class="grid gap-3 text-sm sm:grid-cols-2">
+            <div><dt class="font-semibold text-slate-800">Bot</dt><dd class="text-slate-900">{{ botStatus }}</dd></div>
+            <div><dt class="font-semibold text-slate-800">Interruptor</dt><dd class="text-slate-900"><strong>{{ pausedLabel }}</strong>{{ pausedDetail }}</dd></div>
+          </dl>
+          <form class="bot-panel__switch mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" method="post" action="{{ switchAction }}" novalidate>
+            <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+            <input type="hidden" name="accion" value="{{ switchValue }}" />
+            <div class="admin-field sm:flex-1">
+              <label class="admin-field__label block text-sm font-semibold text-slate-800" for="b-motivo-interruptor">Motivo (opcional)</label>
+              <input class="admin-field__input {{ inputClass }}" id="b-motivo-interruptor" name="motivo" type="text" value="" maxlength="200" autocomplete="off"{{{ switchReasonAttrs }}} />
+              {{{ switchReasonError }}}
+            </div>
+            <button class="admin-button {{ switchButtonClass }}" type="submit">{{ switchLabel }}</button>
+          </form>
+        </div>
+      </section>
+      <section class="bot-panel__section mb-8" aria-labelledby="bot-contadores">
+        <h2 id="bot-contadores" class="mb-3 text-xl font-bold text-slate-900">Contadores</h2>
+        <p class="mb-3 text-sm text-slate-700">Hoy: {{ dayPeriod }} · Mes: {{ monthPeriod }} (zona {{ timezone }}). El gasto es una estimación con las tarifas configuradas; el cobro real lo fija Meta.</p>
+        <div class="bot-panel__table relative overflow-x-auto rounded-lg border border-slate-300 bg-white shadow-xs">
+          <table class="w-full text-left text-sm">
+            <caption class="sr-only">Contadores y topes del bot</caption>
+            <thead class="bg-slate-50 text-slate-800">
+              <tr>
+                <th scope="col" class="px-3 py-2 font-semibold">Tope</th>
+                <th scope="col" class="px-3 py-2 font-semibold">Usado</th>
+                <th scope="col" class="px-3 py-2 font-semibold">Límite</th>
+                <th scope="col" class="px-3 py-2 font-semibold">Estado</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200">{{{ usageRows }}}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="bot-panel__section mb-8" aria-labelledby="bot-topes">
+        <h2 id="bot-topes" class="mb-3 text-xl font-bold text-slate-900">Alcanzaron un tope hoy</h2>
+        <p class="mb-3 text-sm text-slate-700">Números que llegaron a un límite por número hoy. Esta lista se pierde al reiniciar el servidor.</p>
+        {{{ reached }}}
+      </section>
+      <section class="bot-panel__section mb-8" aria-labelledby="bot-lista">
+        <h2 id="bot-lista" class="mb-3 text-xl font-bold text-slate-900">Lista negra</h2>
+        <p class="mb-3 text-sm text-slate-700">Un número bloqueado no recibe respuestas ni cuenta en los topes. Solo se guardan sus 4 últimos dígitos.</p>
+        {{{ blocks }}}
+      </section>
+      <section class="bot-panel__section mb-8" aria-labelledby="bot-alta">
+        <h2 id="bot-alta" class="mb-3 text-xl font-bold text-slate-900">Bloquear un número</h2>
+        {{{ addForm }}}
+      </section>

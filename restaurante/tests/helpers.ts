@@ -37,6 +37,8 @@ export const BOT_ENV = Object.freeze({
   WHATSAPP_BOT_STAFF_MOLOTES: '5215511110001',
   WHATSAPP_BOT_STAFF_BIRRIA: '5215522220002',
   WHATSAPP_BOT_STAFF_TEMPLATE: 'nuevo_pedido',
+  // REQ-F-025 (D-T1): clave del seudónimo de la lista negra; nunca debe aparecer en logs ni respuestas.
+  WHATSAPP_BOT_BLOCKLIST_KEY: 'BLOCKLISTkeySECRETOdePRUEBA0123456789abcdefg',
 });
 
 /**
@@ -52,6 +54,7 @@ export const TWILIO_BOT_ENV = Object.freeze({
   WHATSAPP_BOT_WEBHOOK_URL: 'https://tunel.example.com/webhooks/whatsapp',
   WHATSAPP_BOT_STAFF_MOLOTES: '5215511110001',
   WHATSAPP_BOT_STAFF_BIRRIA: '5215522220002',
+  WHATSAPP_BOT_BLOCKLIST_KEY: 'BLOCKLISTkeySECRETOdePRUEBA0123456789abcdefg',
 });
 
 export function makeConfig(overrides: Env = {}): Config {

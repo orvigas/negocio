@@ -1,0 +1,15 @@
+
+              <tr class="bot-panel__reached">
+                <th scope="row" class="px-3 py-2 font-semibold text-slate-900">{{ masked }}</th>
+                <td class="px-3 py-2">{{ cap }}</td>
+                <td class="px-3 py-2">{{ at }}</td>
+                <td class="px-3 py-2">
+                  <form class="bot-panel__block-form flex flex-wrap items-end gap-2" method="post" action="{{ action }}">
+                    <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+                    <input type="hidden" name="motivo" value="" />
+                    <label class="sr-only" for="{{ selectId }}">Duración del bloqueo de {{ masked }}</label>
+                    <select class="admin-field__input {{ inputClass }} w-auto" id="{{ selectId }}" name="duracion">{{{ options }}}</select>
+                    <button class="admin-button admin-button--secondary {{ buttonClass }}" type="submit">Bloquear<span class="sr-only"> {{ masked }}</span></button>
+                  </form>
+                </td>
+              </tr>

@@ -13,13 +13,16 @@ import type { ProductRepository } from '../repositories/product-repository.ts';
 import type { UserRecord, UserRepository } from '../repositories/user-repository.ts';
 import type { PasswordHashParams, UserAuthenticator } from '../services/admin-auth.ts';
 import { parseAdminForm, type ImageExists } from '../services/admin-form.ts';
+import type { BotControl } from '../services/bot-control.ts';
 import { pickPageData } from '../services/menu-schema.ts';
 import type { LoginThrottle } from '../services/login-throttle.ts';
 import type { SessionStore } from '../services/session-store.ts';
+import type { BotProvider } from '../services/whatsapp-bot/chat-bot.ts';
 import { readFormBody } from '../utils/form-body.ts';
 import type { Logger } from '../utils/logger.ts';
 import {
   ACCOUNT_PATH,
+  BOT_ADMIN_PATH,
   ADMIN_HOME_PATH,
   SUCCESS_MESSAGES,
   USERS_PATH,
@@ -63,6 +66,10 @@ export interface AdminDeps {
   hashParams: PasswordHashParams;
   imageExists: ImageExists;
   logger: Logger;
+  /** Protección del bot (REQ-F-025); sin ella, la página "Bot" responde 503. */
+  botControl?: BotControl | undefined;
+  /** Proveedor del bot en uso, o undefined si el bot está desactivado (webhook en 503). */
+  botProvider?: BotProvider | undefined;
 }
 
 /**
@@ -78,7 +85,7 @@ const RESTORE_BODY_LIMIT = 4 * 1024;
 const SAVE_ACTIONS: readonly (string | undefined)[] = Object.freeze([CHANGE_ACTIONS.SAVE, CHANGE_ACTIONS.OVERWRITE_AFTER_CONFLICT]);
 
 /** Solo se vuelve a páginas de administración conocidas (sin redirecciones abiertas). */
-const ALLOWED_NEXT = new Set([ADMIN_HOME_PATH, USERS_PATH, ACCOUNT_PATH, ...BUSINESS_IDS.map(adminPath)]);
+const ALLOWED_NEXT = new Set([ADMIN_HOME_PATH, USERS_PATH, ACCOUNT_PATH, BOT_ADMIN_PATH, ...BUSINESS_IDS.map(adminPath)]);
 const sanitizeNext = (value: unknown): string => (typeof value === 'string' && ALLOWED_NEXT.has(value) ? value : ADMIN_HOME_PATH);
 
 const PROBLEMS = Object.freeze({

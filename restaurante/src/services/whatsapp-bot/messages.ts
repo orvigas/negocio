@@ -175,6 +175,14 @@ export const confirmedMessage = (order: Pick<OrderDetails, 'code' | 'business'>)
 export const staffFailedMessage = (order: Pick<OrderDetails, 'code' | 'business'>, contact: string): string =>
   fill(botText.staffFailed, { codigo: order.code, negocio: nameOf(order.business), contacto: contact });
 
+/** REQ-F-025: mensajes fijos de los topes, con el contacto directo del negocio. */
+export const orderCapContactMessage = (order: Pick<OrderDetails, 'code' | 'business'>, contact: string): string =>
+  fill(botText.orderCapContact, { codigo: order.code, negocio: nameOf(order.business), contacto: contact });
+
+export type FixedNotice = 'orderLimitReached' | 'dailyLimitReached' | 'directContactMode';
+export const fixedNoticeMessage = (kind: FixedNotice, business: BusinessId, contact: string): string =>
+  fill(botText[kind], { negocio: nameOf(business), contacto: contact });
+
 /**
  * Parámetro de plantilla: sin saltos de línea ni tabuladores, sin espacios repetidos y nunca
  * vacío (la Cloud API rechaza esos valores; error 132018).

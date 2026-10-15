@@ -30,11 +30,14 @@ import { parseArgs } from 'node:util';
 import { createApp } from '../src/app.ts';
 import { DEFAULTS, isValidTimeZone, loadConfig } from '../src/config/env.ts';
 import { loadSeedDocument } from '../src/content/seeds.ts';
+import { createMemoryBotControlStore } from '../src/repositories/memory-bot-control-store.ts';
 import { createMemoryMenuRepository } from '../src/repositories/memory-menu-repository.ts';
 import { createMemoryProductStore } from '../src/repositories/memory-product-store.ts';
 import { createProductRepository, type ImportSource } from '../src/repositories/product-repository.ts';
+import { createBotControl } from '../src/services/bot-control.ts';
 import type { MenuDocument } from '../src/services/menu-schema.ts';
 import { createBotOrchestrator } from '../src/services/whatsapp-bot/orchestrator.ts';
+import { createBotProtection } from '../src/services/whatsapp-bot/protection/protection.ts';
 import { createChatBot } from '../src/services/whatsapp-bot/providers/select.ts';
 import { toZonedIsoString } from '../src/utils/datetime.ts';
 import { createLogger } from '../src/utils/logger.ts';
@@ -111,6 +114,8 @@ const config = loadConfig({
   WHATSAPP_BOT_STAFF_BIRRIA: '5215522220002',
   // Obligatoria en la configuración (REQ-F-014), pero el simulador nunca conecta: usa el store en memoria.
   DATABASE_URL: 'mysql://simulador:simulador@127.0.0.1/simulador',
+  // Clave del seudónimo de la lista negra (REQ-F-025): aleatoria en cada ejecución (store en memoria).
+  WHATSAPP_BOT_BLOCKLIST_KEY: randomBytes(32).toString('base64url'),
   ...providerEnv,
 });
 const botConfig = config.whatsappBot;
@@ -129,6 +134,17 @@ await products.init(sources);
 const logger = createLogger({ level: 'silent' });
 const metaDouble = createCloudApiDouble();
 const twilioDouble = createTwilioApiDouble();
+// Protección del bot (REQ-F-025, D-T10) con los umbrales del entorno y un store en memoria.
+const botControl = createBotControl({
+  store: createMemoryBotControlStore(),
+  keys: config.botKeys,
+  limits: config.botLimits,
+  timeZone,
+  staff: Object.values(botConfig.staff),
+  logger,
+  now,
+});
+await botControl.init();
 const bot = createBotOrchestrator({
   chatBot: createChatBot(botConfig, { fetch: provider === 'meta' ? metaDouble.fetch : twilioDouble.fetch, logger }),
   staff: botConfig.staff,
@@ -136,8 +152,9 @@ const bot = createBotOrchestrator({
   products,
   logger,
   now,
+  protection: createBotProtection({ control: botControl, limits: config.botLimits, timeZone, logger }),
 });
-const app = createApp({ config, repository, products, logger, now, bot });
+const app = createApp({ config, repository, products, logger, now, bot, botControl });
 const server: Server = app.listen(0, '127.0.0.1');
 await new Promise<void>((resolve) => server.once('listening', resolve));
 const webhookUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/webhooks/whatsapp`;

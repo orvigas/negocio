@@ -125,7 +125,7 @@ describe('aviso al personal (RF-7, RN-4)', () => {
   it('CA-14: un solo mensaje de plantilla al personal del negocio, con todos los datos', async () => {
     const h = await makeBotHarness();
     await readyToConfirm(h);
-    expect(await h.ask('1')).toContain('¡Listo! 🙌 Tu pedido *M-T001* fue enviado a Moloteando');
+    expect(await h.ask('1')).toContain('¡Listo! 🙌\nTu pedido *M-T001* fue enviado a Moloteando');
     expect(h.double.templatesTo(STAFF.molotes)).toHaveLength(1);
     expect(h.double.templatesTo(STAFF.molotes)[0]?.template).toEqual({
       name: 'nuevo_pedido',

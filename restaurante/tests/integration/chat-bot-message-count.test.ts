@@ -72,12 +72,12 @@ describe.each(PROVIDER_DRIVERS)('conteo de mensajes con $provider (REQ-F-013, D-
     expect(greeting[0]).not.toContain('1. 📋 Ver el menú');
     const cart = (await s.write('2 órdenes de queso y una coca')).join('\n');
     expect(cart).toContain('- 2 × Molotes de Queso Oaxaca (orden de 3)');
-    expect(cart).toContain('- 1 × Refrescos Familia Coca-Cola · Coca-Cola');
+    expect(cart).toContain('- 1 × Refrescos Familia Coca-Cola\n    _Coca-Cola_');
     expect(cart).toContain('*Total: $295*');
     expect(cart).toContain('Solo se usan para este pedido y no se guardan.');
     const summary = (await s.write('Juan, recoger')).join('\n');
-    expect(summary).toContain('Nombre: Juan');
-    expect(summary).toContain('Entrega: Recoger en sucursal');
+    expect(summary).toContain('*Nombre:* Juan');
+    expect(summary).toContain('*Entrega:* Recoger en sucursal');
     expect((await s.write('sí')).join('\n')).toContain('fue enviado a Moloteando');
     expect(s.customerMessages).toBe(4);
     expect(s.botMessages).toBe(4);
@@ -86,12 +86,12 @@ describe.each(PROVIDER_DRIVERS)('conteo de mensajes con $provider (REQ-F-013, D-
 
   it.each([
     ['para recoger', 'Ana, recoger', 'Recoger en sucursal'],
-    ['a domicilio', 'Ana, domicilio, Calle 5 #10, Col. Centro', 'A domicilio: Calle 5 #10, Col. Centro'],
+    ['a domicilio', 'Ana, domicilio, Calle 5 #10, Col. Centro', 'A domicilio\nCalle 5 #10, Col. Centro'],
   ])('CA-1: Birria con 2 productos sin ambigüedad, %s: ≤ 4 del cliente y ≤ 5 del bot', async (_label, data, delivery) => {
     const s = await start(driver, mx(`${WEEK.sat}T10:00`));
     await s.write('Hola, quiero hacer un pedido de birria');
     expect((await s.write('3 quesabirrias y un consome chico con carne')).join('\n')).toContain('*Total: $275*');
-    expect((await s.write(data)).join('\n')).toContain(`Entrega: ${delivery}`);
+    expect((await s.write(data)).join('\n')).toContain(`*Entrega:* ${delivery}`);
     expect((await s.write('confirmo')).join('\n')).toContain('fue enviado a Birriería El Muñeco');
     expect(s.customerMessages).toBeLessThanOrEqual(4);
     expect(s.botMessages).toBeLessThanOrEqual(5);

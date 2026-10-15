@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { BUSINESS, type BusinessId } from '../../src/config/businesses.ts';
+import { botText } from '../../src/content/bot.ts';
 import type { ProductRepository } from '../../src/repositories/product-repository.ts';
 import { toInput } from '../../src/services/product-schema.ts';
 import { createBotOrchestrator } from '../../src/services/whatsapp-bot/orchestrator.ts';
@@ -57,7 +58,7 @@ describe('compatibilidad con los números (CA-7)', () => {
     await h.ask('1');
     const cart = await h.ask('3');
     expect(cart).toContain('- 3 × Molotes de Hongos Zetas con Epazote (pieza)');
-    expect(cart).toContain('1. Agregar otro producto');
+    expect(cart).toContain('*1.* Agregar otro producto');
     expect(await h.ask('2')).toContain('¿Qué producto quitas?');
     expect(await h.ask('1')).toContain('Quitado: Molotes de Hongos Zetas con Epazote (pieza).');
   });
@@ -83,7 +84,7 @@ describe('rechazos (CA-8, CA-9)', () => {
     const reply = await h.ask(text);
     expect(reply).toContain('1 producto(s) más: entiendo hasta 15 por mensaje.');
     const cart = await h.ask('carrito');
-    expect(cart).toContain('15. ');
+    expect(cart).toContain('*15.* ');
     expect(cart).not.toContain('16. ');
   });
 
@@ -95,7 +96,7 @@ describe('rechazos (CA-8, CA-9)', () => {
     await h.ask('Hola');
     const reply = await h.ask('2 tacos y una horchata');
     expect(reply).toContain('- Taco de Birria con Tortilla de Mano: no está disponible por ahora.');
-    expect(reply).toContain('- 1 × Bebidas Frías del Comal (Aguas Frescas) · Horchata');
+    expect(reply).toContain('- 1 × Bebidas Frías del Comal (Aguas Frescas)\n    _Horchata_');
   });
 
   it('"2 tacos de birria" un martes: la nota del otro negocio y nada agregado', async () => {
@@ -135,7 +136,7 @@ describe('rechazos (CA-8, CA-9)', () => {
     const h = await makeBotHarness({ at: SATURDAY });
     await h.ask('Hola');
     const reply = await h.ask('3 tacos de 2 tortillas');
-    expect(reply).toContain('- 3 × Taco de Birria con Tortilla de Mano · 2 tortillas');
+    expect(reply).toContain('- 3 × Taco de Birria con Tortilla de Mano\n    _2 tortillas_');
     expect(reply).not.toMatch(/· 2\n/);
   });
 
@@ -183,12 +184,12 @@ describe('cancelar y quitar (CA-10, RF-7)', () => {
     await h.ask('Hola');
     await h.ask('1 orden de queso, 2 piezas de queso');
     const which = await h.ask('quita el queso');
-    expect(which).toContain('¿Cuál quitas? Escribe su número.');
-    expect(which).toContain('1. Molotes de Queso Oaxaca (orden de 3)');
-    expect(which).toContain('2. Molotes de Queso Oaxaca (pieza)');
+    expect(which).toContain('¿Cuál quitas?\nEscribe su número.');
+    expect(which).toContain('*1.* Molotes de Queso Oaxaca (orden de 3)');
+    expect(which).toContain('*2.* Molotes de Queso Oaxaca (pieza)');
     const reply = await h.ask('2');
     expect(reply).toContain('Quitado: Molotes de Queso Oaxaca (pieza).');
-    expect(reply).toContain('1 × Molotes de Queso Oaxaca (orden de 3)');
+    expect(reply).toContain('*1.* Molotes de Queso Oaxaca (orden de 3)\n    1 × $130');
   });
 });
 
@@ -198,7 +199,7 @@ describe('detalle por línea (CA-11, RF-8)', () => {
   it('se recorta a 60, se ve en el resumen y en la plantilla de Meta, y no cambia el precio', async () => {
     const h = await makeBotHarness({ at: SATURDAY });
     const summary = await toSummary(h, `2 tacos ${longDetail}`);
-    expect(summary).toMatch(/2 × Taco de Birria con Tortilla de Mano · sin cebolla[^\n]*… — \$40 c\/u = \$80/);
+    expect(summary).toMatch(/- Taco de Birria con Tortilla de Mano\n {4}_sin cebolla[^\n]*…_\n {4}2 × \$40 c\/u = \$80/);
     expect(await h.ask('sí')).toContain('fue enviado');
     const params = h.double.templatesTo(STAFF.birria)[0]?.template?.params;
     expect(params?.lineas).toMatch(/^2 × Taco de Birria con Tortilla de Mano · sin cebolla.*… a \$40 = \$80$/);
@@ -219,23 +220,23 @@ describe('datos del cliente (CA-12, RF-5)', () => {
   it('"Juan, recoger" pasa al resumen; "Ana, domicilio, …" lleva la dirección', async () => {
     const pickup = await makeBotHarness();
     const summary = await toSummary(pickup, '2 de queso', 'Juan, recoger');
-    expect(summary).toContain('Nombre: Juan');
-    expect(summary).toContain('Entrega: Recoger en sucursal');
+    expect(summary).toContain('*Nombre:* Juan');
+    expect(summary).toContain('*Entrega:* Recoger en sucursal');
 
     const delivery = await makeBotHarness();
     const home = await toSummary(delivery, '2 de queso', 'Ana, domicilio, Calle 5 #10 Col. Centro');
-    expect(home).toContain('Entrega: A domicilio: Calle 5 #10 Col. Centro');
+    expect(home).toContain('*Entrega:* A domicilio\nCalle 5 #10 Col. Centro');
     expect(home).toContain('El personal te confirmará el costo del envío.');
   });
 
   it('"Ana, domicilio" pide solo la dirección; "recoger" sin nombre pide solo el nombre', async () => {
     const h = await makeBotHarness();
-    expect(await toSummary(h, '2 de queso', 'Ana, domicilio')).toBe('¿Cuál es la dirección de entrega? (calle, número, colonia y referencias)');
-    expect(await h.ask('Calle 5 #10, Centro')).toContain('Entrega: A domicilio: Calle 5 #10, Centro');
+    expect(await toSummary(h, '2 de queso', 'Ana, domicilio')).toBe('¿Cuál es la dirección de entrega?\n(calle, número, colonia y referencias)');
+    expect(await h.ask('Calle 5 #10, Centro')).toContain('*Entrega:* A domicilio\nCalle 5 #10, Centro');
 
     const other = await makeBotHarness();
     expect(await toSummary(other, '2 de queso', 'recoger')).toBe('¿A nombre de quién es el pedido?');
-    expect(await other.ask('Juan')).toContain('Nombre: Juan');
+    expect(await other.ask('Juan')).toContain('*Nombre:* Juan');
   });
 
   it('"Juan" cuando espera productos o datos: la ayuda breve', async () => {
@@ -252,14 +253,14 @@ describe('datos del cliente (CA-12, RF-5)', () => {
     await h.ask('Hola, quiero hacer un pedido');
     await h.ask('2 de queso');
     expect(await h.ask('Ana, domicilio, Calle Tinga 5')).toContain('Tu mensaje trae productos y datos de entrega.');
-    expect(await h.ask('2')).toContain('Entrega: A domicilio: Calle Tinga 5');
+    expect(await h.ask('2')).toContain('*Entrega:* A domicilio\nCalle Tinga 5');
 
     const other = await makeBotHarness();
     await other.ask('Hola, quiero hacer un pedido');
     await other.ask('2 de queso');
     await other.ask('una coca para recoger');
     const reply = await other.ask('1');
-    expect(reply).toContain('- 1 × Refrescos Familia Coca-Cola · Coca-Cola');
+    expect(reply).toContain('- 1 × Refrescos Familia Coca-Cola\n    _Coca-Cola_');
   });
 
   it.each([
@@ -274,7 +275,7 @@ describe('datos del cliente (CA-12, RF-5)', () => {
     expect(reply).toContain('No entendí tu mensaje.');
     expect(reply).toContain('Si es tu nombre, escribe también si es para *recoger* o *a domicilio* (con tu dirección), por ejemplo: *Ana, recoger*.');
     expect(reply).toContain('Puedes escribir tu pedido con tus palabras');
-    expect(await h.ask('Ana, recoger')).toContain('Nombre: Ana');
+    expect(await h.ask('Ana, recoger')).toContain('*Nombre:* Ana');
   });
 
   it('OBS-1: antes de pedir, "Ana" da la ayuda sin el recordatorio de la entrega', async () => {
@@ -291,7 +292,7 @@ describe('datos del cliente (CA-12, RF-5)', () => {
     expect(reply).not.toContain('Calle Falsa');
     expect(reply).toContain('Tus datos de entrega te los pido al final, cuando termines tu pedido.');
     const summary = await h.ask('Juan, recoger');
-    expect(summary).toContain('Nombre: Juan');
+    expect(summary).toContain('*Nombre:* Juan');
     expect(summary).not.toContain('Falsa');
   });
 
@@ -299,7 +300,7 @@ describe('datos del cliente (CA-12, RF-5)', () => {
     const h = await makeBotHarness();
     await h.ask('Hola, soy Ana Secreta, 2 de queso a domicilio');
     const summary = await h.ask('Juan, recoger');
-    expect(summary).toContain('Nombre: Juan');
+    expect(summary).toContain('*Nombre:* Juan');
     expect(summary).not.toContain('Secreta');
   });
 });
@@ -309,17 +310,17 @@ describe('resumen, notas y confirmación (CA-13, RF-6)', () => {
     const h = await makeBotHarness();
     await toSummary(h, '2 de queso');
     const noted = await h.ask('sin picante, por favor');
-    expect(noted).toContain('Notas: sin picante, por favor');
+    expect(noted).toContain('*Notas:* sin picante, por favor');
     expect(noted).toContain('Escribe *sí* para confirmar');
     const edited = await h.ask('agrega una coca');
-    expect(edited).toContain('- 1 × Refrescos Familia Coca-Cola · Coca-Cola');
+    expect(edited).toContain('- 1 × Refrescos Familia Coca-Cola\n    _Coca-Cola_');
     expect(edited).toContain('*Total: $125*');
-    expect(edited).toContain('Notas: sin picante, por favor');
-    expect(await h.ask('no')).toBe('✅ Escribe *sí* para confirmar, o escribe una nota para agregarla. *cancelar* para cancelar.');
+    expect(edited).toContain('*Notas:* sin picante, por favor');
+    expect(await h.ask('no')).toBe(botText.confirmPrompt);
     const removed = await h.ask('sin la coca');
     expect(removed).toContain('Quitado: Refrescos Familia Coca-Cola · Coca-Cola.');
     expect(removed).toContain('*Total: $90*');
-    expect(await h.ask('sin notas')).toContain('Notas: Sin notas');
+    expect(await h.ask('sin notas')).toContain('*Notas:* Sin notas');
     expect(await h.ask('Sí')).toContain('fue enviado');
     expect(h.double.templatesTo(STAFF.molotes)[0]?.template?.params.notas).toBe('Sin notas');
   });
@@ -336,9 +337,9 @@ describe('resumen, notas y confirmación (CA-13, RF-6)', () => {
   );
 
   it.each([
-    ['si, sin cebolla en los tacos', 'Notas: si, sin cebolla en los tacos'],
-    ['sí, agrega una coca', 'Notas: sí, agrega una coca'],
-    ['si quiero picante', 'Notas: si quiero picante'],
+    ['si, sin cebolla en los tacos', '*Notas:* si, sin cebolla en los tacos'],
+    ['sí, agrega una coca', '*Notas:* sí, agrega una coca'],
+    ['si quiero picante', '*Notas:* si quiero picante'],
   ])('precisión aprobada: "%s" no confirma (queda como nota)', async (text, expected) => {
     const h = await makeBotHarness();
     await toSummary(h, '2 de queso');
@@ -350,7 +351,7 @@ describe('resumen, notas y confirmación (CA-13, RF-6)', () => {
   it.each(['no', 'no gracias'])('"%s" en el resumen ni cancela ni confirma (RF-6.5)', async (word) => {
     const h = await makeBotHarness();
     await toSummary(h, '2 de queso');
-    expect(await h.ask(word)).toBe('✅ Escribe *sí* para confirmar, o escribe una nota para agregarla. *cancelar* para cancelar.');
+    expect(await h.ask(word)).toBe(botText.confirmPrompt);
     expect(h.double.templatesTo(STAFF.molotes)).toHaveLength(0);
     expect(h.bot.hasConversation(CUSTOMER)).toBe(true);
   });
@@ -398,7 +399,7 @@ describe('horario (CA-14, RF-9)', () => {
   it('un lunes a las 10:00 los productos se agregan y el resumen lleva la marca', async () => {
     const h = await makeBotHarness({ at: mx(`${WEEK.mon}T10:00`) });
     const summary = await toSummary(h, '2 de queso');
-    expect(summary).toContain('FUERA DE HORARIO: tu pedido se atenderá cuando abramos, mañana martes a las 08:30.');
+    expect(summary).toContain('*FUERA DE HORARIO*\nTu pedido se atenderá cuando abramos, mañana martes a las 08:30.');
   });
 });
 
@@ -461,8 +462,8 @@ describe('intérprete sustituible (D-2)', () => {
       await bot.drain();
     }
     const replies = double.textsTo(CUSTOMER).join('\n');
-    expect(replies).toContain('2 × Molotes de Queso Oaxaca (orden de 3) · como siempre — $130 c/u = $260');
-    expect(replies).toContain('Nombre: Cliente Falso');
+    expect(replies).toContain('- Molotes de Queso Oaxaca (orden de 3)\n    _como siempre_\n    2 × $130 c/u = $260');
+    expect(replies).toContain('*Nombre:* Cliente Falso');
     expect(calls.length).toBeGreaterThanOrEqual(2);
   });
 });

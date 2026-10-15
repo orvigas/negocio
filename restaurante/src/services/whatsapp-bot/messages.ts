@@ -5,7 +5,7 @@ import { getBusinessHours } from '../../content/hours.ts';
 import { formatPesos } from '../price.ts';
 import type { BotCatalog, CatalogOption } from './catalog.ts';
 import { acceptsOrders, describeHours, describeOpening, isOpen, nextOpening } from './schedule.ts';
-import { chunkText, fill } from './text.ts';
+import { INDENT, MAX_LINE_WIDTH, fill, splitMessage, visibleWidth } from './text.ts';
 
 /**
  * Textos que envía el bot (REQ-F-009, RF-4): todo sale del contenido de cada negocio
@@ -51,9 +51,31 @@ export const lineLabel = (line: Pick<CartLine, 'productName' | 'optionLabel' | '
 /** Ejemplo de pedido del negocio (REQ-F-013, RF-4.1). */
 export const exampleOf = (business: BusinessId): string => getBotVocabulary(business).example;
 
-/** "2 × Molotes de Queso Oaxaca (orden de 3) — $130 c/u = $260". */
-export const formatLine = (line: CartLine): string =>
-  `${line.quantity} × ${lineLabel(line)} — ${formatPesos(line.unitPriceCents)} ${botText.priceEach} = ${formatPesos(lineSubtotal(line))}`;
+/** Detalle de una línea del pedido en su renglón, en cursiva y con sangría (REQ-F-029, RF-4). */
+const detailRow = (line: Pick<CartLine, 'detail'>): string[] => (line.detail === '' ? [] : [`${INDENT}_${line.detail}_`]);
+
+/** Separador entre líneas del pedido: sin sangría (respaldo de RF-3), un renglón en blanco (D-1). */
+const ORDER_LINES_SEPARATOR = INDENT === '' ? '\n\n' : '\n';
+
+/**
+ * Bloque de una línea del pedido (REQ-F-029, RF-4): "*1.* Nombre (opción)" en el carrito o
+ * "- Nombre (opción)" en el resumen; el detalle en cursiva y "2 × $130 c/u = $260", con sangría.
+ */
+export const orderLineBlock = (line: CartLine, marker: string): string =>
+  [
+    `${marker} ${productLabel(line.productName, line.optionLabel)}`,
+    ...detailRow(line),
+    `${INDENT}${line.quantity} × ${formatPesos(line.unitPriceCents)} ${botText.priceEach} = ${formatPesos(lineSubtotal(line))}`,
+  ].join('\n');
+
+/** Línea de "Agregado:" (REQ-F-029, RF-4): "- 2 × Nombre (opción)" y el detalle en su renglón. */
+export const addedLineBlock = (line: Pick<CartLine, 'quantity' | 'productName' | 'optionLabel' | 'detail'>): string =>
+  [`- ${line.quantity} × ${productLabel(line.productName, line.optionLabel)}`, ...detailRow(line)].join('\n');
+
+const orderLines = (lines: readonly CartLine[], marker: (index: number) => string): string =>
+  lines.map((line, index) => orderLineBlock(line, marker(index))).join(ORDER_LINES_SEPARATOR);
+
+const totalRow = (lines: readonly CartLine[]): string => `*${fill(botText.total, { total: formatPesos(cartTotal(lines)) })}*`;
 
 export const formatOption = (option: CatalogOption): string =>
   option.label === '' ? formatPesos(option.priceCents) : `${option.label} ${formatPesos(option.priceCents)}`;
@@ -67,12 +89,12 @@ export function greetingHeader(business: BusinessId, now: Date, timeZone: string
   if (isOpen(business, now, timeZone)) status = fill(botText.openNow, { cierre: hours.closes });
   else if (acceptsOrders(business, now, timeZone)) status = fill(botText.closedNow, opening);
   else status = fill(botText.closedNoOrders, opening);
-  return [fill(botText.greeting, { negocio: content.name, lema: content.tagline }), status].join('\n');
+  return [fill(botText.greeting, { negocio: content.name, lema: content.tagline }), status].join('\n\n');
 }
 
 /** Saludo con las opciones iniciales y la invitación a escribir el pedido (RF-4.1, RF-6.2; REQ-F-013 RF-4.1). */
 export const greeting = (business: BusinessId, now: Date, timeZone: string): string =>
-  [greetingHeader(business, now, timeZone), '', botText.rootOptions, fill(botText.orderInvite, { ejemplo: exampleOf(business) }), '', botText.keywordsHint].join('\n');
+  [greetingHeader(business, now, timeZone), botText.rootOptions, fill(botText.orderInvite, { ejemplo: exampleOf(business) }), botText.keywordsHint].join('\n\n');
 
 /** Ayuda breve (REQ-F-013, RF-4.9). */
 export const helpText = (business: BusinessId): string => fill(botText.help, { ejemplo: exampleOf(business) });
@@ -101,71 +123,105 @@ export function ordersClosed(business: BusinessId, now: Date, timeZone: string):
 
 export const personContact = (business: BusinessId, contact: string): string => fill(botText.person, { negocio: nameOf(business), contacto: contact });
 
+/**
+ * Elemento de una lista numerada del bot: "*1.* texto" (REQ-F-029, decisión del usuario). El número
+ * en negrita no dispara la lista automática de WhatsApp; el cliente sigue respondiendo "1".
+ */
+export const listItem = (number: number, text: string): string => `*${number}.* ${text}`;
+
 /** "🧀 Molotes de Queso Oaxaca"; sin emoji asignado, solo el nombre. */
 const withEmoji = (emoji: string | undefined, text: string): string => (emoji === undefined || emoji === '' ? text : `${emoji} ${text}`);
 
-/** Menú numerado por secciones (RF-4.2), partido en mensajes de hasta 4096 caracteres. */
-export const menuMessages = (business: BusinessId, catalog: BotCatalog): string[] => chunkText(menuText(business, catalog));
+/** Menú numerado por secciones (RF-4.2), partido en mensajes de hasta 4096 caracteres sin separar un producto. */
+export const menuMessages = (business: BusinessId, catalog: BotCatalog): string[] => splitMessage(menuText(business, catalog));
+
+/**
+ * Bloque de un producto del menú (REQ-F-029, RF-3): "*1.* 🧀 *Nombre*" y, con sangría, los precios
+ * unidos con " · " si caben en MAX_LINE_WIDTH de ancho visible; si no, uno por renglón.
+ */
+export function menuProductBlock(number: number, emoji: string | undefined, product: Pick<BotCatalog['products'][number], 'name' | 'options'>): string {
+  const options = product.options.map(formatOption);
+  const joined = options.join(' · ');
+  const prices = visibleWidth(joined) <= MAX_LINE_WIDTH ? [joined] : options;
+  return [listItem(number, withEmoji(emoji, `*${product.name}*`)), ...prices.map((price) => `${INDENT}${price}`)].join('\n');
+}
 
 /** Menú numerado como un solo texto (el orquestador lo parte según el proveedor; DT-7 de REQ-F-012). */
 export function menuText(business: BusinessId, catalog: BotCatalog): string {
   const content = getBotContent(business);
-  const lines = [fill(botText.menuTitle, { negocio: content.name })];
+  const blocks = [fill(botText.menuTitle, { negocio: content.name })];
   let number = 0;
   for (const section of catalog.sections) {
-    lines.push('', `*${content.sections[section.category]}*`);
+    // El encabezado en mayúsculas es solo presentación (RF-3): el contenido no cambia.
+    blocks.push(`*${content.sections[section.category].toLocaleUpperCase('es-MX')}*`);
     for (const product of section.products) {
       number += 1;
-      lines.push(`${number}. ${withEmoji(content.emojis[product.slug], product.name)} — ${product.options.map(formatOption).join(' · ')}`);
+      blocks.push(menuProductBlock(number, content.emojis[product.slug], product));
     }
   }
-  lines.push('', menuPrompt(business));
-  return lines.join('\n');
+  blocks.push(menuPrompt(business));
+  return blocks.join('\n\n');
 }
 
 export const menuEmpty = (business: BusinessId): string => fill(botText.menuEmpty, { negocio: nameOf(business) });
 
 export const optionsPrompt = (productName: string, options: readonly CatalogOption[]): string =>
-  fill(botText.chooseOption, { producto: productName, opciones: options.map((option, index) => `${index + 1}. ${formatOption(option)}`).join('\n') });
+  fill(botText.chooseOption, { producto: productName, opciones: options.map((option, index) => listItem(index + 1, formatOption(option))).join('\n') });
 
 export function cartView(lines: readonly CartLine[]): string {
   if (lines.length === 0) return botText.cartEmpty;
-  return [botText.cartTitle, ...lines.map((line, index) => `${index + 1}. ${formatLine(line)}`), `*Total: ${formatPesos(cartTotal(lines))}*`].join('\n');
+  return [botText.cartTitle, orderLines(lines, (index) => `*${index + 1}.*`), totalRow(lines)].join('\n\n');
 }
 
 export const cartWithOptions = (lines: readonly CartLine[]): string => `${cartView(lines)}\n\n${botText.cartOptions}`;
 
 /** Petición de los datos con el aviso de privacidad, en un solo mensaje (REQ-F-013, RF-5.1). */
-export const dataRequest = (): string => `${botText.askData}\n${botText.privacy}`;
+export const dataRequest = (): string => `${botText.askData}\n\n${botText.privacy}`;
+
+/** Opción de una aclaración: "Tazón de Consomé Chico (Con Carne)" y su precio ("$80"), o null si no se encontró. */
+export interface ClarifyOption {
+  readonly label: string;
+  readonly price: string | null;
+}
+
+/** "*2.* Nombre (opción)" y, con sangría, el precio: el mismo bloque que el menú (REQ-F-029, RF-1; DEF-001). */
+const clarifyOptionBlock = (option: ClarifyOption, number: number): string =>
+  [listItem(number, option.label), ...(option.price === null ? [] : [`${INDENT}${option.price}`])].join('\n');
 
 /** Una sola pregunta para todas las líneas ambiguas, con un bloque por línea (REQ-F-013, RF-3.2). */
-export function clarifyQuestion(blocks: readonly { readonly fragment: string; readonly options: readonly string[] }[]): string {
+export function clarifyQuestion(blocks: readonly { readonly fragment: string; readonly options: readonly ClarifyOption[] }[]): string {
   const body = blocks.map((block, index) =>
-    fill(botText.clarifyBlock, { numero: index + 1, fragmento: block.fragment, opciones: block.options.map((option, at) => `${at + 1}. ${option}`).join('\n') }),
+    fill(botText.clarifyBlock, { numero: index + 1, fragmento: block.fragment, opciones: block.options.map((option, at) => clarifyOptionBlock(option, at + 1)).join('\n') }),
   );
   return [botText.clarifyTitle, ...body, fill(botText.clarifyHint, { ejemplo: blocks.length === 1 ? '1' : blocks.map((_, index) => String(index === 0 ? 2 : 1)).join(', ') })].join('\n\n');
 }
 
 export const removePrompt = (lines: readonly CartLine[]): string =>
-  fill(botText.removePrompt, { lineas: lines.map((line, index) => `${index + 1}. ${lineLabel(line)}`).join('\n') });
+  fill(botText.removePrompt, { lineas: lines.map((line, index) => listItem(index + 1, lineLabel(line))).join('\n') });
 
 const deliveryText = (order: Pick<OrderDetails, 'delivery' | 'address'>): string =>
   order.delivery === 'delivery' ? fill(botText.delivery, { direccion: order.address ?? '' }) : botText.pickup;
 
 /** Resumen para el cliente (RF-4.5). */
 export function summary(order: OrderDetails): string {
-  const lines = [
-    fill(botText.summaryTitle, { codigo: order.code, negocio: nameOf(order.business) }),
-    ...order.lines.map(formatLine),
-    `*Total: ${formatPesos(cartTotal(order.lines))}*`,
-    `${botText.deliveryIcons[order.delivery]} Entrega: ${deliveryText(order)}`,
-    `Nombre: ${order.name}`,
-    `Notas: ${order.notes === '' ? botText.noNotes : order.notes}`,
+  const fields = botText.summaryFields;
+  // La entrega del cliente no usa `deliveryText`: ese valor es el parámetro `entrega` de la plantilla (CA-8).
+  const delivery = order.delivery === 'delivery' ? `${botText.deliveryHome}\n${order.address ?? ''}` : botText.pickup;
+  const data = [
+    `${botText.deliveryIcons[order.delivery]} *${fields.delivery}* ${delivery}`,
+    `*${fields.name}* ${order.name}`,
+    `*${fields.notes}* ${order.notes === '' ? botText.noNotes : order.notes}`,
   ];
-  if (order.delivery === 'delivery') lines.push(botText.deliveryCost);
-  if (order.offHoursOpening !== null) lines.push('', fill(botText.offHours, { apertura: order.offHoursOpening }));
-  lines.push('', botText.confirmPrompt);
-  return lines.join('\n');
+  if (order.delivery === 'delivery') data.push(botText.deliveryCost);
+  const blocks = [
+    fill(botText.summaryTitle, { codigo: order.code, negocio: nameOf(order.business) }),
+    orderLines(order.lines, () => '-'),
+    totalRow(order.lines),
+    data.join('\n'),
+  ];
+  if (order.offHoursOpening !== null) blocks.push(fill(botText.offHours, { apertura: order.offHoursOpening }));
+  blocks.push(botText.confirmPrompt);
+  return blocks.join('\n\n');
 }
 
 export const confirmedMessage = (order: Pick<OrderDetails, 'code' | 'business'>): string =>

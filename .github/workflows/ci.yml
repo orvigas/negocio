@@ -13,15 +13,26 @@
 # mergeado (ver su comentario): si lo es, `publish` publica las imágenes en GHCR (privado) sin
 # repetir las validaciones; si no lo es o no se puede decidir (main avanzó después del CI del PR,
 # push directo, error de la API), las cuatro validaciones corren en el push y `publish` solo
-# corre si todas quedan en verde. `deploy` despliega lo publicado en el VPS por SSH, en el
-# environment `production`. Redespliegue manual: `workflow_dispatch` sobre main (cualquier otra
-# rama se rechaza) corre las cuatro validaciones, publica y despliega la punta de main.
+# corre si todas quedan en verde. `vigente` comprueba que el commit siga siendo la punta de main
+# (si no, resumen "Omitido" y no se despliega) y `deploy` despliega lo publicado en el VPS por SSH,
+# en el environment `production`. Redespliegue manual: `workflow_dispatch` sobre main (cualquier
+# otra rama se rechaza) corre las cuatro validaciones, publica y despliega la punta de main.
+#
+# Qué se desplegó (REQ-F-030): el título de cada ejecución lleva su commit (ver `run-name`) y el
+# resumen de `vigente` (Omitido) o de `deploy` (Desplegado, Revertido, Fallido, Omitido o Cancelado
+# o interrumpido) da el estado con el commit enlazado; lo genera restaurante/deploy/ci/resumen.sh. `deploy` solo
+# termina en éxito (y Deployments solo registra un despliegue exitoso) si el commit quedó sirviendo.
 # Permisos por defecto de solo lectura; `validado` añade lectura de actions, checks y
 # pull-requests, y `publish`, packages: write.
 # Los únicos secretos son los del environment production (VPS_*), y solo los ve `deploy`.
 # Las acciones están fijadas por SHA completo (la versión va en el comentario); para
 # actualizarlas, ver la sección "CI" de restaurante/README.md.
 name: CI
+# Título de cada ejecución con su commit (REQ-F-030). PR: título del PR y SHA de la punta de su rama
+# (no el commit de merge de prueba). Manual: "Ejecución manual" y el SHA de main. Push: vacío, así
+# GitHub usa el mensaje del commit y escribe debajo el SHA corto enlazado. Las expresiones no pueden
+# recortar texto: el SHA va completo; sus 7 primeros caracteres son el SHA corto de los resúmenes.
+run-name: ${{ github.event_name == 'pull_request' && format('{0} · {1}', github.event.pull_request.title, github.event.pull_request.head.sha) || github.event_name == 'workflow_dispatch' && format('Ejecución manual · {0}', github.sha) || '' }}
 
 on:
   pull_request:
@@ -358,7 +369,10 @@ jobs:
           persist-credentials: false
       - name: shellcheck
         working-directory: restaurante/deploy
-        run: shellcheck deploy.sh mysql/initdb/01-usuarios.sh ci/smoke.sh
+        run: shellcheck deploy.sh mysql/initdb/01-usuarios.sh ci/smoke.sh ci/resumen.sh ci/resumen-test.sh
+      # Resumen del despliegue (REQ-F-030): cada estado con entradas simuladas.
+      - name: prueba del resumen
+        run: bash restaurante/deploy/ci/resumen-test.sh
       # Respaldos (REQ-F-019): scripts y unidades de systemd de restaurante/ops/backup.
       - name: shellcheck respaldos
         working-directory: restaurante/ops/backup
@@ -465,15 +479,64 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
 
+  # Commit vigente de main (REQ-F-030, RF-3): si mientras tanto llegó otro commit a main, este no se
+  # despliega (lo hará la ejecución del siguiente). También en una ejecución manual. Sin environment
+  # ni secretos: un commit omitido deja `deploy` omitido (skipped), sin registro en Deployments, y
+  # su resumen "Omitido" queda en este job. Si la API falla, el job falla y `deploy` no corre.
+  vigente:
+    name: vigente
+    needs: publish
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      deploy: ${{ steps.head.outputs.deploy }}
+      main: ${{ steps.head.outputs.main }}
+    steps:
+      - name: commit vigente de main
+        id: head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          head=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)
+          if ! [[ "$head" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::La API no devolvió un commit válido para main."
+            exit 1
+          fi
+          echo "main=$head" >> "$GITHUB_OUTPUT"
+          if [ "$head" = "$GITHUB_SHA" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: checkout
+        if: steps.head.outputs.deploy == 'false'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: restaurante/deploy/ci
+      - name: resumen
+        if: steps.head.outputs.deploy == 'false'
+        env:
+          MAIN_SHA: ${{ steps.head.outputs.main }}
+        run: bash restaurante/deploy/ci/resumen.sh vigente >> "$GITHUB_STEP_SUMMARY"
+
   # Despliegue en el VPS (REQ-F-016, RF-4 a RF-6). La llave SSH solo puede ejecutar
   # /opt/restaurante/deploy/deploy.sh (comando forzado en authorized_keys): este job le pasa el SHA,
-  # los dos digests y la suma de restaurante/deploy, que debe coincidir con la instalada.
+  # los dos digests y la suma de restaurante/deploy, que debe coincidir con la instalada. Solo corre
+  # si `vigente` confirmó que el commit es la punta de main. Su resumen (REQ-F-030,
+  # deploy/ci/resumen.sh) se escribe siempre: Desplegado, Revertido (código 21), Fallido, Omitido o
+  # Cancelado o interrumpido; el job solo termina en éxito si quedó Desplegado.
   deploy:
     name: deploy
-    needs: publish
+    needs: [publish, vigente]
     # Explícito: con la condición implícita (success()) se omitiría cuando `publish` corre con
     # validaciones omitidas (árbol ya validado), porque cuenta toda la cadena de dependencias.
-    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    if: >-
+      ${{ !cancelled() && needs.publish.result == 'success' && needs.vigente.result == 'success'
+      && needs.vigente.outputs.deploy == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment:
@@ -486,28 +549,34 @@ jobs:
     permissions:
       contents: read
     steps:
-      # Si mientras tanto llegó otro commit a main, este no se despliega (el siguiente lo hará).
-      # También en una ejecución manual: solo se despliega si sigue siendo la punta de main.
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: restaurante/deploy
+      # Segunda comprobación, justo antes del SSH: main pudo avanzar mientras este job esperaba al
+      # despliegue en curso, o se volvió a ejecutar solo `deploy` de un commit antiguo. El job falla
+      # (sin tocar el VPS) para que Deployments nunca lo registre como desplegado.
       - name: commit vigente de main
         id: head
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           head=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)
-          if [ "$head" != "$GITHUB_SHA" ]; then
-            echo "main ya está en $head: no se despliega $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          if ! [[ "$head" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::La API no devolvió un commit válido para main."
+            exit 1
           fi
-      - name: checkout
-        if: steps.head.outputs.deploy == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          sparse-checkout: restaurante/deploy
+          if [ "$head" != "$GITHUB_SHA" ]; then
+            echo "main=$head" >> "$GITHUB_OUTPUT"
+            echo "omitido=true" >> "$GITHUB_OUTPUT"
+            echo "::error::main ya está en $head: no se despliega $GITHUB_SHA."
+            exit 1
+          fi
+      # Menos tiempo que el job, para que un SSH colgado agote el del paso y el resumen corra.
       - name: desplegar
-        if: steps.head.outputs.deploy == 'true'
+        id: ssh
+        timeout-minutes: 17
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
@@ -525,19 +594,33 @@ jobs:
           printf '%s\n' "$VPS_SSH_KNOWN_HOSTS" > "$dir/known_hosts"
           # La misma suma que calcula deploy.sh sobre los archivos instalados.
           sum=$(cd restaurante/deploy && sha256sum -- compose.prod.yaml deploy.sh mysql/initdb/01-usuarios.sh | sha256sum | cut -c1-64)
+          # El código de deploy.sh (o 255 de ssh) va al resumen; el paso falla con el mismo código.
+          rc=0
           ssh -i "$dir/key" -p "${VPS_SSH_PORT:-22}" \
             -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$dir/known_hosts" -o ServerAliveInterval=30 -o ConnectTimeout=20 \
-            "$VPS_SSH_USER@$VPS_HOST" "deploy $GITHUB_SHA $APP_DIGEST $MIGRATE_DIGEST $sum"
+            "$VPS_SSH_USER@$VPS_HOST" "deploy $GITHUB_SHA $APP_DIGEST $MIGRATE_DIGEST $sum" || rc=$?
+          echo "codigo=$rc" >> "$GITHUB_OUTPUT"
+          exit "$rc"
+      # Siempre, sin secretos. Solo informa: el estado del job lo decide `desplegar`.
       - name: resumen
-        if: steps.head.outputs.deploy == 'true'
+        if: ${{ always() }}
         env:
+          OMITIDO: ${{ steps.head.outputs.omitido }}
+          MAIN_SHA: ${{ steps.head.outputs.main }}
+          SSH_OUTCOME: ${{ steps.ssh.outcome }}
+          SSH_CODE: ${{ steps.ssh.outputs.codigo }}
+          JOB_STATUS: ${{ job.status }}
           APP_DIGEST: ${{ needs.publish.outputs.app-digest }}
           MIGRATE_DIGEST: ${{ needs.publish.outputs.migrate-digest }}
         run: |
-          {
-            echo "### Desplegado"
-            echo "- commit: \`$GITHUB_SHA\`"
-            echo "- app: \`ghcr.io/orvigas/restaurante@$APP_DIGEST\`"
-            echo "- migrate: \`ghcr.io/orvigas/restaurante-migrate@$MIGRATE_DIGEST\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -f restaurante/deploy/ci/resumen.sh ]; then
+            bash restaurante/deploy/ci/resumen.sh deploy >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Fallido"
+              echo
+              echo "- commit: [\`${GITHUB_SHA:0:7}\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA) (\`$GITHUB_SHA\`)"
+              echo "- El despliegue no empezó (falló el checkout): producción no se tocó."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

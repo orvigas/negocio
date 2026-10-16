@@ -2,7 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
+
+Pull Request: https://github.com/orvigas/negocio/pull/69
 
 ## Aprobación
 
@@ -592,3 +594,6 @@ QA Action Plan aprobado ("lo apruebo"). Validación ejecutada: suite, typecheck 
 
 ### Decisión de QA (senior-qa, 2026-10-16)
 El usuario aceptó las dos sugerencias ("Aprueba con todas las sugerencias"): el nombre accesible en mayúsculas cumple CA-1 y CA-2, y la evidencia headless de CA-4 a 320 y 768 px es suficiente. Estado: `QA_APPROVED`.
+
+### Commit y Pull Request (senior-fullstack, 2026-10-16)
+Commit `20a1dc4` (`feat: enlaza Birria y Molotes entre sí desde el pie de cada landing con su logo oficial`) en `feature/REQ-F-033-navegacion-cruzada-footer`. PR #69 contra `main`: https://github.com/orvigas/negocio/pull/69. CI del PR (run 38936083467) en verde: `calidad`, `docker`, `despliegue` y `auditoria` pass (`publish`, `validado` y `vigente` omitidos, como corresponde a un PR). Estado: `READY_FOR_MERGE`.

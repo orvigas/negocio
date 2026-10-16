@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 Pull Request: https://github.com/orvigas/negocio/pull/71
 
@@ -689,3 +689,7 @@ Q2 de `senior-qa` (2026-10-16): el usuario aprueba el QA Action Plan ("si a todo
 ### Versión 6
 
 T4 de `senior-fullstack` (2026-10-16): commit `d0ce7dd` (`feat: el bot de WhatsApp pregunta la forma de pago y guía la transferencia con el código del pedido`) en `feature/REQ-F-035-forma-de-pago-bot`. PR #71 contra `main`: https://github.com/orvigas/negocio/pull/71. CI del PR (run 38945291517) en verde: `calidad`, `docker`, `despliegue` y `auditoria` pass (`publish`, `deploy`, `validado` y `vigente` omitidos, como corresponde a un PR). Estado `READY_FOR_MERGE`.
+
+### Versión 7
+
+T5 de `senior-fullstack` (2026-10-16): el usuario mergeó el PR #71 (https://github.com/orvigas/negocio/pull/71; merge `a38a15c`, 2026-10-16T18:28:02Z) ("Fusionado"). Pipeline de `main` (run 38947561354, https://github.com/orvigas/negocio/actions/runs/38947561354) en verde: `cambios`, `validado`, `publish`, `vigente` y `deploy` success (el despliegue a producción terminó bien). Ticket movido a `done/`; ramas `feature/REQ-F-035-forma-de-pago-bot` local y remota borradas. Estado `DONE`.

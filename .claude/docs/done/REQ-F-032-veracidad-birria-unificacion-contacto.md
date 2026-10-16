@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 ## Aprobación
 
@@ -867,3 +867,6 @@ Corrección aprobada por el usuario ("si"). DEF-001 a DEF-004 corregidos y verif
 
 ### Pull Request (senior-fullstack, 2026-10-15)
 Commit `58fc9d1` y PR #67 contra `main`, con el CI en verde. Estado: READY_FOR_MERGE.
+
+### Cierre (senior-fullstack, 2026-10-16)
+El usuario mergeó el PR #67 (https://github.com/orvigas/negocio/pull/67; merge `6ccfec0`) el 2026-10-16 ("Fusionado"). Ticket movido a `done/`. Estado: DONE.

@@ -668,6 +668,26 @@ describe('REQ-F-032: contacto, ubicación y plataformas de la única sucursal', 
   });
 });
 
+describe('REQ-F-033: navegación cruzada desde el pie', () => {
+  it.each([
+    ['/', FRIDAY_NOON_MX, '/molotes'],
+    ['/', SATURDAY_NOON_MX, '/molotes'],
+    ['/birria', FRIDAY_NOON_MX, '/molotes'],
+    ['/molotes', FRIDAY_NOON_MX, '/birria'],
+  ] as const)('CA-3: el enlace del pie de %s (%s) lleva a %s y esa landing responde 200 sin redirección', async (path, now, target) => {
+    const client = await agent({ now });
+    const { text } = await client.get(path).expect(200);
+    const footer = new JSDOM(text).window.document.querySelector('footer.site-footer')!;
+    const links = [...footer.querySelectorAll('a.cross-link')];
+    expect(links).toHaveLength(1);
+    const href = links[0]!.getAttribute('href')!;
+    expect(href).toBe(target);
+    const res = await client.get(href).redirects(0);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain(`<link rel="canonical" href="${target}" />`);
+  });
+});
+
 describe('horarios reales (REQ-F-010)', () => {
   const MONDAY_10_MX = new Date('2026-10-12T16:00:00Z'); // lunes 10:00 CDMX
 

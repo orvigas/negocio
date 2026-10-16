@@ -107,6 +107,13 @@ describe('contenido por negocio', () => {
     }
   });
 
+  it.each(BUSINESS_IDS)('REQ-F-033: el enlace del pie de %s apunta al otro negocio y tiene texto', (businessId) => {
+    const { crossLink } = getBusinessContent(businessId).footer;
+    expect(BUSINESS_IDS).toContain(crossLink.business);
+    expect(crossLink.business).not.toBe(businessId);
+    expect(crossLink.label.trim()).not.toBe('');
+  });
+
   it.each(BUSINESS_IDS)('%s: la semilla cumple el esquema editable', (businessId) => {
     const seed = seedOf(businessId);
     expect(validateMenuDocument(businessId, seed, seed.data)).toEqual([]);

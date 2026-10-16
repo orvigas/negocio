@@ -1461,6 +1461,13 @@ Hay una sola sucursal (REQ-F-032): su ubicación y su contacto viven solo en
   ubicación del pie de ambas landings. El teléfono no es el WhatsApp del bot, que sigue en
   `WHATSAPP_*`.
 
+El pie de cada landing enlaza con la otra (REQ-F-033): Birria (también en `/`) con `/molotes`
+y Molotes con `/birria`. Cada negocio declara solo el texto y el destino en
+`c.footer.crossLink` (`label` y `business`). `buildCrossLink()` de
+`src/views/landings/index.ts` toma la ruta de `BUSINESS_PATHS` y el logo de
+`images.emblem` del negocio de destino. Ese logo es decorativo (alt vacío), así que el nombre
+accesible del enlace es solo su texto.
+
 El iframe solo funciona porque la CSP de `src/app.ts` añade `frame-src https://www.google.com`
 a la política por defecto de Helmet; es el único origen de iframes permitido.
 

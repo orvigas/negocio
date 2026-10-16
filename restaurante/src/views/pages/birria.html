@@ -335,6 +335,10 @@
           <span class="material-symbols-outlined text-[19px]" aria-hidden="true">verified</span>
           <span>{{ c.footer.about.guarantee }}</span>
         </p>
+        <a class="cross-link flex w-fit max-w-full min-h-11 scroll-mb-28 items-center gap-3 rounded-full border-[1.5px] border-amber-glow bg-[rgba(255,251,235,0.08)] py-1 pr-5 pl-1 font-label text-xs font-bold tracking-wider text-[#fffbeb] uppercase transition-colors hover:bg-[rgba(255,251,235,0.16)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-light" href="{{ crossLink.href }}">
+          <img class="cross-link__logo h-10 w-auto shrink-0 rounded-full bg-cream/90 p-0.5" src="{{ crossLink.logo.src }}" alt="{{ crossLink.logo.alt }}" width="{{ crossLink.logo.width }}" height="{{ crossLink.logo.height }}" loading="lazy" decoding="async" />
+          <span class="cross-link__label min-w-0">{{ crossLink.label }}</span>
+        </a>
       </div>
       <div class="space-y-3">
         <h2 class="font-headline text-base font-bold text-amber-light uppercase">{{ c.footer.hours.title }}</h2>

@@ -31,6 +31,15 @@ export interface LandingView<Id extends BusinessId = BusinessId> {
   menu: VisibleMenuByBusiness[Id];
   /** Aviso de la página de inicio (REQ-F-028); solo lo pinta la landing de Birria en `/`. */
   homeNotice: HomeNotice | null;
+  /** Enlace del pie a la otra landing (REQ-F-033). */
+  crossLink: CrossLink;
+}
+
+/** Enlace a otra landing: texto del negocio actual; ruta y logo (decorativo) del destino. */
+export interface CrossLink {
+  href: string;
+  label: string;
+  logo: ImageDescriptor;
 }
 
 /** Vista sin el renderizador (los constructores de cada landing lo reciben aparte). */
@@ -40,6 +49,15 @@ const BODY_BUILDERS: { readonly [Id in BusinessId]: (view: LandingView<Id>) => S
   [BUSINESS.MOLOTES]: buildMolotesBody,
   [BUSINESS.BIRRIA]: buildBirriaBody,
 });
+
+/**
+ * La ruta sale de BUSINESS_PATHS (la misma que usan el router y la URL canónica) y el logo es el
+ * `emblem` del destino (alt vacío): el nombre accesible del enlace es solo su texto.
+ */
+export function buildCrossLink(businessId: BusinessId): CrossLink {
+  const { label, business: target } = getBusinessContent(businessId).footer.crossLink;
+  return { href: BUSINESS_PATHS[target], label, logo: getBusinessContent(target).images.emblem };
+}
 
 /** URL canónica de la ruta dedicada: absoluta si hay SITE_URL, relativa si no. */
 export function canonicalUrl(siteUrl: string | undefined, path: string): string {
@@ -78,6 +96,7 @@ export function renderLandingPage<Id extends BusinessId>({
     whatsappIcon: renderer.render(`partials/icons/whatsapp-${businessId}`),
     menu: buildVisibleMenu(businessId, menu),
     homeNotice,
+    crossLink: buildCrossLink(businessId),
   };
 
   const canonical = canonicalUrl(config.siteUrl, BUSINESS_PATHS[businessId]);

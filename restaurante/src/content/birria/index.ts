@@ -1,3 +1,4 @@
+import { BUSINESS } from '../../config/businesses.ts';
 import { image } from '../images.ts';
 
 /**
@@ -173,6 +174,9 @@ export const birriaContent = Object.freeze({
     }),
   }),
   footer: Object.freeze({
+    // Enlace a la otra landing en la columna de marca del pie (REQ-F-033). La ruta y el logo
+    // salen del negocio de destino (BUSINESS_PATHS e images.emblem; src/views/landings/index.ts).
+    crossLink: Object.freeze({ label: 'Conoce nuestros Molotes', business: BUSINESS.MOLOTES }),
     about: Object.freeze({
       text: 'Birria de res estilo de Los Altos de Jalisco, de cocción lenta, con carne suavecita y consomé caldosito. ¡Para chuparse los dedos!',
       guarantee: 'Hecha con paciencia',

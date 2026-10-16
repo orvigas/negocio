@@ -1,3 +1,4 @@
+import { BUSINESS } from '../../config/businesses.ts';
 import { image } from '../images.ts';
 
 /**
@@ -135,6 +136,9 @@ export const molotesContent = Object.freeze({
     disclaimer: 'Sin spam molesto.',
   }),
   footer: Object.freeze({
+    // Enlace a la otra landing en la columna de marca del pie (REQ-F-033). La ruta y el logo
+    // salen del negocio de destino (BUSINESS_PATHS e images.emblem; src/views/landings/index.ts).
+    crossLink: Object.freeze({ label: 'Conoce nuestra Birria', business: BUSINESS.BIRRIA }),
     about:
       'Molotes estilo poblano, crujientes y hechos a mano, con crema de rancho, queso fresco y salsas de molcajete.',
     nav: Object.freeze({

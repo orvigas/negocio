@@ -1,6 +1,7 @@
 import type { BusinessId } from '../../../config/businesses.ts';
 import type { BotCatalog } from '../catalog.ts';
 import type { DeliveryMethod } from '../messages.ts';
+import type { PaymentMethod } from '../payment.ts';
 
 /**
  * Contrato del intérprete de pedidos (REQ-F-013, D-2): la conversación (conversation.ts) solo
@@ -80,6 +81,11 @@ export interface CustomerDataInterpretation {
   readonly address?: string;
   /** Con "recoger", lo que sigue a la palabra de entrega (R-6 a). */
   readonly note?: string;
+  /**
+   * Forma de pago escrita como un segmento entero de los datos ("Ana, recoger, efectivo"; REQ-F-035,
+   * RF-2.1). Solo junto con una entrega; si vale para ella lo decide la conversación (RF-2.2).
+   */
+  readonly payment?: PaymentMethod;
 }
 
 export interface OrderInterpreter {

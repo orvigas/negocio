@@ -61,7 +61,7 @@ export const botText = Object.freeze({
   dataHint: 'Si es tu nombre, escribe también si es para *recoger* o *a domicilio* (con tu dirección), por ejemplo: *Ana, recoger*.',
   /** Petición de los datos con el aviso de privacidad (REQ-F-013, RF-5.1; D-17 de REQ-F-009). */
   askData:
-    'Si es todo, envíame:\n- tu nombre\n- 🏪 *recoger* o\n  🛵 *a domicilio*\n  (con tu dirección)\n\nPor ejemplo:\n*Ana, recoger*\n*Ana, domicilio, Calle 5 #10, Centro*',
+    'Si es todo, envíame:\n- tu nombre\n- 🏪 *recoger* o\n  🛵 *a domicilio*\n  (con tu dirección)\n- 💳 cómo vas a pagar\n\nPor ejemplo:\n*Ana, recoger, efectivo*\n*Ana, domicilio, Calle 5 #10, Centro, transferencia*',
   /** Una sola pregunta para todas las líneas ambiguas (REQ-F-013, RF-3.2). */
   clarifyTitle: 'Necesito que me aclares:',
   clarifyBlock: '*{numero}) {fragmento}*\n{opciones}',
@@ -84,6 +84,29 @@ export const botText = Object.freeze({
   askAddress: '¿Cuál es la dirección de entrega?\n(calle, número, colonia y referencias)',
   invalidAddress: 'La dirección debe tener entre {min} y {max} caracteres.',
   invalidNotes: 'Las notas pueden tener hasta {max} caracteres.',
+  /** Forma de pago (REQ-F-035, RF-1): las opciones salen de las válidas para la entrega (RN-1). */
+  askPayment: '💳 *¿Cómo vas a pagar?*\n{opciones}',
+  /** Etiquetas de los métodos de pago para el cliente (opciones y resumen). */
+  paymentLabels: Object.freeze({ cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', onDelivery: 'Pagar al recibir' }),
+  /** Método no válido para la entrega (RF-1.4 y RF-2.2). */
+  paymentNotFor: Object.freeze({
+    pickup: 'Al recoger puedes pagar en efectivo, con tarjeta o por transferencia.',
+    delivery: 'A domicilio puedes pagar al recibir o por transferencia.',
+  }),
+  /**
+   * Bloque de transferencia del resumen y de la confirmación (REQ-F-035, RF-4.2 y RF-5): cada dato
+   * en su renglón, la CLABE sola para copiarla y el contacto del personal solo en el último renglón.
+   */
+  transferData: '🏦 *Datos para transferir*\nBeneficiario:\n{beneficiario}\nBanco: {banco}\nCLABE:\n{clabe}\nConcepto: *{codigo}*',
+  transferConcept: 'Usa tu código *{codigo}* como concepto de la transferencia.',
+  /** RN-4: al recoger en horario se puede transferir el total mostrado. */
+  transferNow: 'Una vez confirmado tu pedido, transfiere el total: *{total}*.',
+  /** RN-4: a domicilio (el total lleva el envío) o fuera de horario, se espera la confirmación del personal. */
+  transferWaitDelivery: 'Espera a que el personal te confirme el total con envío antes de transferir.',
+  transferWaitOffHours: 'Espera a que el personal confirme tu pedido y el total antes de transferir.',
+  /** RN-6: la prueba de pago va al WhatsApp del personal, no al bot. */
+  transferProof:
+    'Para validar tu pago, envía al personal la captura del comprobante de tu banca móvil o, si no puedes enviar la imagen, la referencia o clave de rastreo de tu banco, con tu código *{codigo}*:\n{contacto}',
   /** Íconos de la forma de entrega en el resumen del cliente (no van al aviso al personal). */
   deliveryIcons: Object.freeze({ pickup: '🏪', delivery: '🛵' }),
   pickup: 'Recoger en sucursal',
@@ -91,7 +114,9 @@ export const botText = Object.freeze({
   /** Forma de entrega a domicilio en el resumen del cliente; la dirección va en el renglón siguiente (REQ-F-029). */
   deliveryHome: 'A domicilio',
   /** Etiquetas de los datos del resumen del cliente (en negrita; REQ-F-029, RF-5). */
-  summaryFields: Object.freeze({ delivery: 'Entrega:', name: 'Nombre:', notes: 'Notas:' }),
+  summaryFields: Object.freeze({ delivery: 'Entrega:', payment: 'Pago:', name: 'Nombre:', notes: 'Notas:' }),
+  /** Íconos de los datos del resumen del cliente que no son la entrega (no van al aviso al personal). */
+  summaryIcons: Object.freeze({ payment: '💳' }),
   /** Total del carrito y del resumen (en negrita). */
   total: 'Total: {total}',
   deliveryCost: 'El personal te confirmará el costo del envío.',
@@ -124,6 +149,10 @@ export const botText = Object.freeze({
   person: '🙋 Para hablar con una persona de *{negocio}*, escribe a:\n{contacto}',
   staffHours: 'En horario',
   staffOffHours: 'FUERA DE HORARIO, abre {apertura}',
+  /** Parámetro `entrega` del aviso al personal con la forma de pago (REQ-F-035, RF-6.1; opción B). */
+  staffPayment: '{entrega} · Pago: {pago}',
+  /** Métodos de pago en el aviso al personal (sin emojis: van a un parámetro de la plantilla). */
+  staffPaymentLabels: Object.freeze({ cash: 'efectivo', card: 'tarjeta', transfer: 'transferencia', onDelivery: 'pagar al recibir' }),
   /**
    * Aviso al personal como texto libre (REQ-F-012, D-6: Twilio sin Content Template). Mismo
    * contenido que los parámetros de la plantilla de Meta (REQ-F-009 CA-14).
@@ -174,6 +203,13 @@ export const botVocabulary = Object.freeze({
   /** Forma de entrega (RF-5.3). */
   pickup: Object.freeze(['recoger', 'paso', 'sucursal']),
   delivery: Object.freeze(['domicilio', 'envio', 'a casa']),
+  /** Forma de pago (REQ-F-035, RF-1.3 y RF-2.1): solo como mensaje completo o como un segmento entero de los datos. */
+  payment: Object.freeze({
+    cash: Object.freeze(['efectivo', 'en efectivo', 'pago en efectivo']),
+    card: Object.freeze(['tarjeta', 'con tarjeta', 'pago con tarjeta']),
+    transfer: Object.freeze(['transferencia', 'por transferencia', 'pago por transferencia', 'transferencia bancaria']),
+    onDelivery: Object.freeze(['al recibir', 'pagar al recibir', 'pago al recibir', 'pago contra entrega']),
+  }),
   /** Prefijos del nombre que se quitan ("soy Ana"). */
   namePrefixes: Object.freeze(['soy', 'me llamo', 'mi nombre es', 'a nombre de', 'nombre']),
   /** Confirmación del resumen, como mensaje completo (RF-6.3). */

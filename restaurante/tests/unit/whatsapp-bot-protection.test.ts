@@ -26,7 +26,7 @@ async function protectedHarness(protection: HarnessProtection = {}): Promise<Bot
 }
 
 async function readyToConfirm(h: BotHarness, from = CUSTOMER): Promise<void> {
-  for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez, recoger']) await h.ask(text, { from });
+  for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez, recoger, efectivo']) await h.ask(text, { from });
 }
 
 /** Una entrega con un mensaje, sin avanzar el reloj. */

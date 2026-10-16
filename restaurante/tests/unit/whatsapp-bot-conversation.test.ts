@@ -44,7 +44,7 @@ async function add(h: BotHarness, product: number, quantity: number, option?: nu
  */
 async function checkout(h: BotHarness, { delivery = 1, address = 'Calle Falsa 123, Centro', notes = '' } = {}): Promise<string> {
   await h.ask('4');
-  const summary = await h.ask(delivery === 2 ? `Ana Pérez, domicilio, ${address}` : 'Ana Pérez, recoger');
+  const summary = await h.ask(delivery === 2 ? `Ana Pérez, domicilio, ${address}, al recibir` : 'Ana Pérez, recoger, efectivo');
   return notes === '' ? summary : h.ask(notes);
 }
 
@@ -268,7 +268,9 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     expect(await h.ask('Ana, domicilio')).toContain('¿Cuál es la dirección de entrega?');
     expect(await h.ask('Av')).toContain('La dirección debe tener entre 5 y 200 caracteres.');
     expect(await h.ask('x'.repeat(201))).toContain('La dirección debe tener entre 5 y 200 caracteres.');
-    expect(await h.ask('Calle Falsa 123')).toContain('Escribe *sí* para confirmar.\nO escribe una nota');
+    // REQ-F-035, CA-2: con la dirección válida se pregunta el pago con las 2 opciones de domicilio.
+    expect(await h.ask('Calle Falsa 123')).toBe('💳 *¿Cómo vas a pagar?*\n*1.* Pagar al recibir\n*2.* Transferencia');
+    expect(await h.ask('1')).toContain('Escribe *sí* para confirmar.\nO escribe una nota');
     const summary = await h.ask('Sin cebolla 🌶️');
     expect(summary).toContain('*Entrega:* A domicilio\nCalle Falsa 123');
     expect(summary).toContain('*Notas:* Sin cebolla 🌶️');
@@ -282,7 +284,7 @@ describe('menú y pedido (RF-4, RF-5)', () => {
     await add(h, 9, 1);
     const privacy = await h.ask('4');
     expect(privacy).toContain('Solo se usan para este pedido y no se guardan.');
-    expect(await h.ask(`${'A'.repeat(61)}, recoger`)).toContain('El nombre debe tener entre 1 y 60 caracteres.');
+    expect(await h.ask(`${'A'.repeat(61)}, recoger, efectivo`)).toContain('El nombre debe tener entre 1 y 60 caracteres.');
     expect(await h.ask(`${'😀'.repeat(60)}`)).toContain(`*Nombre:* ${'😀'.repeat(60)}`);
   });
 
@@ -367,7 +369,7 @@ describe('opciones del cliente (D-10, D-15, RF-4.7 a RF-4.9)', () => {
     await h.ask('2');
     await add(h, 9, 1);
     await h.ask('4');
-    expect(await h.ask('Persona Cancelar López, recoger')).toContain('*Nombre:* Persona Cancelar López');
+    expect(await h.ask('Persona Cancelar López, recoger, efectivo')).toContain('*Nombre:* Persona Cancelar López');
   });
 
   it('opción 3: horario y ubicación del contenido del negocio', async () => {

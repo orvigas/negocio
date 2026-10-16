@@ -316,7 +316,7 @@
       "interpretations": [],
       "state": {
         "business": "molotes",
-        "step": "confirm",
+        "step": "payment",
         "pending": null,
         "menu": [
           "queso-oaxaca",
@@ -354,6 +354,58 @@
           "delivery": "pickup",
           "name": "Juan"
         },
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "1",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "molotes",
+        "step": "confirm",
+        "pending": null,
+        "menu": [
+          "queso-oaxaca",
+          "tinga-de-pollo",
+          "papas-con-chorizo",
+          "champinones-epazote",
+          "hongos-zetas-epazote",
+          "picadillo-de-cerdo",
+          "chicharron-prensado",
+          "huitlacoche-epazote",
+          "aguas-frescas",
+          "refrescos"
+        ],
+        "cart": [
+          {
+            "slug": "queso-oaxaca",
+            "optionKey": "orden",
+            "productName": "Molotes de Queso Oaxaca",
+            "optionLabel": "orden de 3",
+            "unitPriceCents": 13000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "refrescos",
+            "optionKey": "unico",
+            "productName": "Refrescos Familia Coca-Cola",
+            "optionLabel": "",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {
+          "delivery": "pickup",
+          "name": "Juan",
+          "payment": "cash"
+        },
         "code": "M-T001",
         "clarify": null,
         "removeChoices": null
@@ -389,6 +441,7 @@
         "name": "Juan",
         "delivery": "pickup",
         "notes": "",
+        "payment": "cash",
         "offHoursOpening": null
       },
       "interpretations": [],
@@ -430,7 +483,8 @@
         ],
         "customer": {
           "delivery": "pickup",
-          "name": "Juan"
+          "name": "Juan",
+          "payment": "cash"
         },
         "code": "M-T001",
         "clarify": null,
@@ -562,7 +616,7 @@
       }
     },
     {
-      "input": "Ana, domicilio, Calle 5 #10, Centro",
+      "input": "Ana, domicilio, Calle 5 #10, Centro, transferencia",
       "replies": 1,
       "cancelled": false,
       "order": null,
@@ -594,6 +648,7 @@
         ],
         "customer": {
           "delivery": "delivery",
+          "payment": "transfer",
           "name": "Ana",
           "address": "Calle 5 #10, Centro"
         },
@@ -635,6 +690,7 @@
         ],
         "customer": {
           "delivery": "delivery",
+          "payment": "transfer",
           "name": "Ana",
           "address": "Calle 5 #10, Centro",
           "notes": "sin cebolla"
@@ -675,6 +731,7 @@
         "delivery": "delivery",
         "address": "Calle 5 #10, Centro",
         "notes": "sin cebolla",
+        "payment": "transfer",
         "offHoursOpening": null
       },
       "interpretations": [],
@@ -705,6 +762,7 @@
         ],
         "customer": {
           "delivery": "delivery",
+          "payment": "transfer",
           "name": "Ana",
           "address": "Calle 5 #10, Centro",
           "notes": "sin cebolla"
@@ -1047,7 +1105,7 @@
       }
     },
     {
-      "input": "Luis, recoger",
+      "input": "Luis, recoger, tarjeta",
       "replies": 1,
       "cancelled": false,
       "order": null,
@@ -1070,6 +1128,7 @@
         ],
         "customer": {
           "delivery": "pickup",
+          "payment": "card",
           "name": "Luis"
         },
         "code": "M-T001",
@@ -1120,6 +1179,7 @@
         ],
         "customer": {
           "delivery": "pickup",
+          "payment": "card",
           "name": "Luis"
         },
         "code": "M-T001",
@@ -1157,6 +1217,7 @@
         "name": "Luis",
         "delivery": "pickup",
         "notes": "",
+        "payment": "card",
         "offHoursOpening": "hoy a las 08:30"
       },
       "interpretations": [],
@@ -1187,6 +1248,7 @@
         ],
         "customer": {
           "delivery": "pickup",
+          "payment": "card",
           "name": "Luis"
         },
         "code": "M-T001",
@@ -1375,7 +1437,7 @@
       "interpretations": [],
       "state": {
         "business": "birria",
-        "step": "confirm",
+        "step": "payment",
         "pending": null,
         "menu": [
           "quesabirria",
@@ -1417,6 +1479,63 @@
         "customer": {
           "delivery": "pickup",
           "name": "Ana"
+        },
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "transferencia",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "confirm",
+        "pending": null,
+        "menu": [
+          "quesabirria",
+          "taco-de-birria",
+          "consome-grande",
+          "consome-chico",
+          "birriamen",
+          "bebidas"
+        ],
+        "cart": [
+          {
+            "slug": "taco-de-birria",
+            "optionKey": "unico",
+            "productName": "Taco de Birria con Tortilla de Mano",
+            "optionLabel": "",
+            "unitPriceCents": 4000,
+            "quantity": 2,
+            "detail": ""
+          },
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          },
+          {
+            "slug": "bebidas",
+            "optionKey": "v:Aguas Frescas",
+            "productName": "Bebidas Frías del Comal",
+            "optionLabel": "Aguas Frescas",
+            "unitPriceCents": 3500,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {
+          "delivery": "pickup",
+          "name": "Ana",
+          "payment": "transfer"
         },
         "code": "B-T001",
         "clarify": null,
@@ -1462,6 +1581,7 @@
         "name": "Ana",
         "delivery": "pickup",
         "notes": "",
+        "payment": "transfer",
         "offHoursOpening": null
       },
       "interpretations": [],
@@ -1508,7 +1628,8 @@
         ],
         "customer": {
           "delivery": "pickup",
-          "name": "Ana"
+          "name": "Ana",
+          "payment": "transfer"
         },
         "code": "B-T001",
         "clarify": null,
@@ -1714,7 +1835,7 @@
       "interpretations": [],
       "state": {
         "business": "birria",
-        "step": "confirm",
+        "step": "payment",
         "pending": null,
         "menu": [],
         "cart": [
@@ -1732,6 +1853,39 @@
           "delivery": "delivery",
           "name": "Ana",
           "address": "Calle 5 #10, Centro"
+        },
+        "code": null,
+        "clarify": null,
+        "removeChoices": null
+      }
+    },
+    {
+      "input": "1",
+      "replies": 1,
+      "cancelled": false,
+      "order": null,
+      "interpretations": [],
+      "state": {
+        "business": "birria",
+        "step": "confirm",
+        "pending": null,
+        "menu": [],
+        "cart": [
+          {
+            "slug": "consome-chico",
+            "optionKey": "v:Con Carne",
+            "productName": "Tazón de Consomé Chico",
+            "optionLabel": "Con Carne",
+            "unitPriceCents": 8000,
+            "quantity": 1,
+            "detail": ""
+          }
+        ],
+        "customer": {
+          "delivery": "delivery",
+          "name": "Ana",
+          "address": "Calle 5 #10, Centro",
+          "payment": "onDelivery"
         },
         "code": "B-T001",
         "clarify": null,
@@ -1763,7 +1917,8 @@
         "customer": {
           "delivery": "delivery",
           "name": "Ana",
-          "address": "Calle 5 #10, Centro"
+          "address": "Calle 5 #10, Centro",
+          "payment": "onDelivery"
         },
         "code": "B-T001",
         "clarify": null,
@@ -1792,6 +1947,7 @@
         "delivery": "delivery",
         "address": "Calle 5 #10, Centro",
         "notes": "",
+        "payment": "onDelivery",
         "offHoursOpening": null
       },
       "interpretations": [],
@@ -1814,7 +1970,8 @@
         "customer": {
           "delivery": "delivery",
           "name": "Ana",
-          "address": "Calle 5 #10, Centro"
+          "address": "Calle 5 #10, Centro",
+          "payment": "onDelivery"
         },
         "code": "B-T001",
         "clarify": null,

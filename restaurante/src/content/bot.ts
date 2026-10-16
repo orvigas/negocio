@@ -1,11 +1,12 @@
 import { BUSINESS, type BusinessId } from '../config/businesses.ts';
 import { birriaBot } from './birria/bot.ts';
 import { botKeywords, botText, botVocabulary } from './common/bot.ts';
+import { getBankAccount, type BankAccount } from './common/payment.ts';
 import { molotesBot } from './molotes/bot.ts';
 
 /** Contenido del bot de WhatsApp por negocio (REQ-F-009; CLAUDE.md §7). */
 
-export { botKeywords, botText, botVocabulary };
+export { botKeywords, botText, botVocabulary, getBankAccount, type BankAccount };
 
 export type BusinessBotContent = typeof molotesBot | typeof birriaBot;
 

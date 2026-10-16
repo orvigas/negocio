@@ -289,7 +289,7 @@ describe('conversación con Twilio (RF-4.2, D-14)', () => {
     for (const kind of ['status-failed', 'status-undelivered'] as const) {
       const h = await makeTwilioBotHarness();
       // REQ-F-013 (RF-5, RF-6): los datos en un solo mensaje y la nota, si la hay, en el resumen.
-      for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez, recoger', '1']) await h.say(text);
+      for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez, recoger, efectivo', '1']) await h.say(text);
       const staffMessage = h.double.sent.find((m) => m.to === STAFF.molotes);
       expect(staffMessage).toBeDefined();
       const sentBefore = h.double.sent.length;

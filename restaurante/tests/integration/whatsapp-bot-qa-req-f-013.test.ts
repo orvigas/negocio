@@ -71,7 +71,7 @@ describe.each(PROVIDER_DRIVERS)('QA REQ-F-013 con $provider', (driver) => {
     expect(await s.write('quita la coca')).toContain('Quitado: Bebidas Frías del Comal (Coca-Cola Vidrio).');
     expect(await s.write('2 de quesabirria, recoger')).toContain('*2.* Son mis datos de entrega');
     expect(await s.write('1')).toContain('2 × Quesabirria con Tortilla de Mano');
-    const summary = await s.write('Zqxnombre, domicilio, Calle Zqxcalle 5, Col. Centro');
+    const summary = await s.write('Zqxnombre, domicilio, Calle Zqxcalle 5, Col. Centro, al recibir');
     expect(summary).toContain('*Nombre:* Zqxnombre');
     expect(await s.write('zqxnota sin picante')).toContain('*Notas:* zqxnota sin picante');
     expect(await s.write('sí por favor')).toContain('fue enviado a Birria El Muñeco');
@@ -97,7 +97,7 @@ describe.each(PROVIDER_DRIVERS)('QA REQ-F-013 con $provider', (driver) => {
     const first = await s.write('2 de queso', id);
     expect(first).toContain('2 × Molotes de Queso Oaxaca (pieza)');
     expect(await s.write('2 de queso', id)).toBe('');
-    expect(await s.write('Ana, recoger')).toContain('*Total: $90*');
+    expect(await s.write('Ana, recoger, efectivo')).toContain('*Total: $90*');
     const confirm = driver.newId();
     expect(await s.write('sí', confirm)).toContain('fue enviado');
     await s.write('sí', confirm);

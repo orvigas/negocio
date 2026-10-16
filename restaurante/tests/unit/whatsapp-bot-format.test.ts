@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { BUSINESS, BUSINESS_IDS, type BusinessId } from '../../src/config/businesses.ts';
-import { botText } from '../../src/content/bot.ts';
+import { botText, getBankAccount } from '../../src/content/bot.ts';
 import { buildCatalog, type BotCatalog, type CatalogProduct } from '../../src/services/whatsapp-bot/catalog.ts';
 import { createDeterministicInterpreter } from '../../src/services/whatsapp-bot/interpreter/deterministic.ts';
 import {
@@ -17,6 +17,7 @@ import {
   orderCapContactMessage,
   orderLineBlock,
   otherBusiness,
+  paymentPrompt,
   personContact,
   staffFailedMessage,
   summary,
@@ -41,8 +42,8 @@ const catalogOf = (business: BusinessId): BotCatalog => buildCatalog(business, r
 const CATALOGS = { [BUSINESS.MOLOTES]: catalogOf(BUSINESS.MOLOTES), [BUSINESS.BIRRIA]: catalogOf(BUSINESS.BIRRIA) };
 const CONTACT = 'https://wa.me/5213300000000';
 
-/** Emojis que ya usaba el bot antes de REQ-F-029 (RF-9: no se agrega ninguno). */
-const ALLOWED_EMOJIS = new Set(['👋', '🕒', '🌙', '📋', '🛒', '🙋', '💬', '🤔', '📍', '✅', '🏪', '🛵', '🧹', '🔒', '📝', '🙌', '😋', '🔔', '🔥', '🧀', '🍗', '🥔', '🍄', '🥕', '🌽', '🍹', '🥤', '🍲', '🌮', '🍜']);
+/** Emojis que ya usaba el bot antes de REQ-F-029 (RF-9: no se agrega ninguno), más 💳 y 🏦 de la forma de pago (REQ-F-035). */
+const ALLOWED_EMOJIS = new Set(['💳', '🏦', '👋', '🕒', '🌙', '📋', '🛒', '🙋', '💬', '🤔', '📍', '✅', '🏪', '🛵', '🧹', '🔒', '📝', '🙌', '😋', '🔔', '🔥', '🧀', '🍗', '🥔', '🍄', '🥕', '🌽', '🍹', '🥤', '🍲', '🌮', '🍜']);
 const graphemes = new Intl.Segmenter('es', { granularity: 'grapheme' });
 const emojisOf = (text: string): string[] => Array.from(graphemes.segment(text), (part) => part.segment).filter((segment) => /\p{Extended_Pictographic}/u.test(segment));
 
@@ -66,6 +67,7 @@ const order = (overrides: Partial<OrderDetails> = {}): OrderDetails => ({
   delivery: 'pickup',
   address: undefined,
   notes: '',
+  payment: 'cash',
   offHoursOpening: null,
   ...overrides,
 });
@@ -221,7 +223,7 @@ describe('líneas del pedido, carrito, "Agregado" y resumen (REQ-F-029, RF-4 y R
   });
 
   it('resumen para recoger, en horario', () => {
-    expect(summary(order())).toBe(
+    expect(summary(order(), CONTACT)).toBe(
       [
         '📝 *Resumen de tu pedido*',
         '*M-AB12* · Moloteando',
@@ -235,6 +237,7 @@ describe('líneas del pedido, carrito, "Agregado" y resumen (REQ-F-029, RF-4 y R
         '*Total: $295*',
         '',
         '🏪 *Entrega:* Recoger en sucursal',
+        '💳 *Pago:* Efectivo',
         '*Nombre:* Ana',
         '*Notas:* Sin notas',
         '',
@@ -248,8 +251,8 @@ describe('líneas del pedido, carrito, "Agregado" y resumen (REQ-F-029, RF-4 y R
   it('resumen a domicilio, fuera de horario, con dirección y notas largas', () => {
     const address = `Calle ${'a'.repeat(190)} #10`;
     const notes = 'n'.repeat(200);
-    const text = summary(order({ delivery: 'delivery', address, notes, offHoursOpening: 'el martes a las 08:30' }));
-    expect(text).toContain(`\n\n🛵 *Entrega:* A domicilio\n${address}\n*Nombre:* Ana\n*Notas:* ${notes}\nEl personal te confirmará el costo del envío.\n\n`);
+    const text = summary(order({ delivery: 'delivery', address, notes, payment: 'onDelivery', offHoursOpening: 'el martes a las 08:30' }), CONTACT);
+    expect(text).toContain(`\n\n🛵 *Entrega:* A domicilio\n${address}\n💳 *Pago:* Pagar al recibir\n*Nombre:* Ana\n*Notas:* ${notes}\nEl personal te confirmará el costo del envío.\n\n`);
     expect(text).toContain('\n\n🌙 *FUERA DE HORARIO*\nTu pedido se atenderá cuando abramos, el martes a las 08:30.\n\n✅ Escribe *sí*');
   });
 });
@@ -305,7 +308,7 @@ describe('contacto y enlaces en su propio renglón (REQ-F-029, RF-6; CA-5)', () 
   });
 
   it('confirmado: el código en negrita y la indicación en otro párrafo', () => {
-    expect(confirmedMessage(order())).toBe('¡Listo! 🙌\nTu pedido *M-AB12* fue enviado a Moloteando.\n\nEl personal te escribirá para confirmarlo. 😋');
+    expect(confirmedMessage(order(), CONTACT)).toBe('¡Listo! 🙌\nTu pedido *M-AB12* fue enviado a Moloteando.\n\nEl personal te escribirá para confirmarlo. 😋');
   });
 });
 
@@ -316,7 +319,7 @@ describe('redacciones aprobadas W-1 a W-6 (REQ-F-029; CA-10)', () => {
     expect(botText.menuPrompt).toBe('Escríbeme tu pedido, por ejemplo:\n*{ejemplo}*\n\nTambién puedes escribir el número de un producto.');
     expect(botText.help).toBe('Puedes escribir tu pedido con tus palabras, por ejemplo:\n*{ejemplo}*\n\nTambién respondo a números de opción y a palabras clave.');
     expect(botText.askData).toBe(
-      'Si es todo, envíame:\n- tu nombre\n- 🏪 *recoger* o\n  🛵 *a domicilio*\n  (con tu dirección)\n\nPor ejemplo:\n*Ana, recoger*\n*Ana, domicilio, Calle 5 #10, Centro*',
+      'Si es todo, envíame:\n- tu nombre\n- 🏪 *recoger* o\n  🛵 *a domicilio*\n  (con tu dirección)\n- 💳 cómo vas a pagar\n\nPor ejemplo:\n*Ana, recoger, efectivo*\n*Ana, domicilio, Calle 5 #10, Centro, transferencia*',
     );
     expect(botText.dataOrProducts).toBe('Tu mensaje trae productos y datos de entrega.\n¿Qué hago?\n*1.* Agregar los productos\n*2.* Son mis datos de entrega');
     expect(botText.offHours).toBe('🌙 *FUERA DE HORARIO*\nTu pedido se atenderá cuando abramos, {apertura}.');
@@ -345,7 +348,12 @@ async function corpus(): Promise<string[]> {
     return Object.values(value as Record<string, string>);
   });
   for (const business of BUSINESS_IDS) texts.push(menuText(business, CATALOGS[business]), greeting(business, TUESDAY, 'America/Mexico_City'));
-  texts.push(summary(order({ delivery: 'delivery', address: 'Calle 5 #10, Centro', offHoursOpening: 'el martes a las 08:30' })));
+  texts.push(summary(order({ delivery: 'delivery', address: 'Calle 5 #10, Centro', offHoursOpening: 'el martes a las 08:30' }), CONTACT));
+  // REQ-F-035: el bloque de transferencia en el resumen y la confirmación, y las preguntas de pago.
+  for (const overrides of [{ payment: 'transfer' as const }, { payment: 'transfer' as const, delivery: 'delivery' as const, address: 'Calle 5 #10, Centro' }, { payment: 'transfer' as const, offHoursOpening: 'el martes a las 08:30' }]) {
+    texts.push(summary(order(overrides), CONTACT), confirmedMessage(order(overrides), CONTACT));
+  }
+  texts.push(paymentPrompt('pickup'), paymentPrompt('delivery'));
   await runFlowScripts((_script, _input, result) => texts.push(...result.replies));
   return texts;
 }
@@ -374,7 +382,7 @@ describe('separación, emojis y renglones estructurados en todo lo que dice el b
   it('RF-1: los renglones estructurados sin datos variables miden 28 o menos (D-9)', () => {
     const structured = [
       // Listas fijas (sus elementos) y palabras clave.
-      ...[botText.rootOptions, botText.cartOptions, botText.askDelivery, botText.dataOrProducts].flatMap((text) => rows(text).filter((row) => row.startsWith('*'))),
+      ...[botText.rootOptions, botText.cartOptions, botText.askDelivery, botText.dataOrProducts, paymentPrompt('pickup'), paymentPrompt('delivery')].flatMap((text) => rows(text).filter((row) => row.startsWith('*'))),
       ...rows(botText.keywordsHint),
       ...rows(botText.askData).filter((row) => !row.startsWith('*')), // Los ejemplos son contenido editable (dato variable).
       botText.cartTitle,
@@ -383,6 +391,8 @@ describe('separación, emojis y renglones estructurados en todo lo que dice el b
       rows(botText.summaryTitle)[0] ?? '',
       rows(botText.offHours)[0] ?? '',
       ...Object.values(botText.summaryFields),
+      // Bloque de transferencia (REQ-F-035): los renglones fijos y los datos de la cuenta.
+      ...rows(fill(botText.transferData, { beneficiario: getBankAccount().beneficiary, banco: getBankAccount().bank, clabe: getBankAccount().clabe, codigo: 'M-AB12' })),
       // Precios, cantidades y totales del menú y de los pedidos.
       ...all.flatMap((text) => rows(text).filter((row) => (row.startsWith(INDENT) && !row.startsWith(`${INDENT}_`)) || /^\*Total: /.test(row) || /^\*[A-ZÁÉÍÓÚÑ ]+\*$/.test(row))),
     ];
@@ -426,7 +436,7 @@ describe('partición con el límite de Twilio sin cortar bloques (REQ-F-029; CA-
       splitMessage(cartView(lines), TWILIO_MAX_TEXT_CHARS),
       lines.map((item, index) => orderLineBlock(item, `*${index + 1}.*`)),
     );
-    const parts = splitMessage(summary(details), TWILIO_MAX_TEXT_CHARS);
+    const parts = splitMessage(summary(details, CONTACT), TWILIO_MAX_TEXT_CHARS);
     expect(parts.length).toBeGreaterThan(1);
     blocksIntact(
       parts,

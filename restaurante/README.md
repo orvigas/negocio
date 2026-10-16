@@ -601,8 +601,9 @@ arrancar queda `bot_provider_selected` con el proveedor en el log.
   molotes de papa y una coca", "3 quesabirrias y un consomé chico con carne") y los números de
   opción siguen funcionando. Flujo típico, 4 mensajes del cliente: el mensaje de la landing (el
   bot saluda y muestra el menú), el pedido (el bot agrega lo que entendió, muestra el carrito y
-  pide los datos con el aviso de privacidad), los datos en un mensaje ("Ana, recoger" o "Ana,
-  domicilio, Calle 5 #10, Centro"; el bot pide solo lo que falte) y "sí" en el resumen. En el
+  pide los datos con el aviso de privacidad), los datos y la forma de pago en un mensaje ("Ana,
+  recoger, efectivo" o "Ana, domicilio, Calle 5 #10, Centro, transferencia"; el bot pide solo lo
+  que falte) y "sí" en el resumen. En el
   resumen, cualquier otro texto es una nota ("sin notas" la borra) y "agrega …" o "quita …"
   editan el carrito. Lo ambiguo ("uno de epazote", "consomé") se pregunta en un solo mensaje y
   lo que no entiende lo dice. "x2" o "2x" junto al producto es la cantidad. Sin separadores ("2
@@ -620,6 +621,23 @@ arrancar queda `bot_provider_selected` con el proveedor en el log.
   línea, hasta 15 líneas), resumen con código de referencia (`M-XXXX` o `B-XXXX`) y
   confirmación. Antes de confirmar vuelve a comprobar precios y disponibilidad. Ver
   [Vocabulario del bot](#vocabulario-del-bot).
+- **Forma de pago (REQ-F-035):** después del nombre, la entrega y la dirección, y antes del
+  resumen, el bot pregunta cómo pagará el cliente si no lo escribió con sus datos. Al recoger:
+  *1.* Efectivo, *2.* Tarjeta, *3.* Transferencia; a domicilio: *1.* Pagar al recibir, *2.*
+  Transferencia. También acepta las palabras ("efectivo", "tarjeta", "transferencia", "al
+  recibir"); un método que no vale para la entrega se avisa y se vuelve a preguntar, y si la
+  entrega cambia, el método que deja de valer se descarta. Con los datos solo se toma como un
+  segmento entre comas ("Ana, recoger, efectivo"); una dirección que contiene la palabra no
+  cuenta. El resumen lleva el renglón "Pago:". Con transferencia, el resumen y el mensaje de
+  confirmación incluyen los datos de la cuenta, el código del pedido como concepto, cuándo
+  transferir (al recoger en horario, el total mostrado; a domicilio o fuera de horario, después de
+  que el personal confirme el total) y la indicación de enviar al WhatsApp del personal del negocio
+  (`WHATSAPP_BOT_STAFF_MOLOTES` / `WHATSAPP_BOT_STAFF_BIRRIA`, con su enlace) la captura del
+  comprobante de la banca móvil o, si no puede enviar la imagen, la referencia o clave de rastreo
+  con su código. El bot no cobra, no valida pagos y no recibe comprobantes. Los datos de la cuenta
+  (beneficiario, banco y CLABE, una sola cuenta para los dos negocios) se editan solo en
+  `src/content/common/payment.ts` y se leen con `getBankAccount()`; los textos, en
+  `src/content/common/bot.ts`. Nunca van al log.
 - **Horario:** sale de `src/content/hours.ts` (REQ-F-010). Fuera de horario avisa cuándo abre,
   deja pedir y marca el resumen "FUERA DE HORARIO". El lunes atiende como Molotes (cerrado; abre
   el martes). Si el negocio no abre ni ese día ni el siguiente (Molotes el viernes después de las
@@ -693,7 +711,7 @@ no usa IA ni servicios externos y se puede sustituir por otro que cumpla la inte
   en `/admin` se reconoce sin tocar nada.
 - **Vocabulario común** (`botVocabulary` en `src/content/common/bot.ts`): cantidades en palabra
   ("una", "media docena"), relleno que se ignora ("hola", "quiero", "por favor"), intención de
-  pedir, palabras de entrega, de confirmación, para terminar, para quitar y para agregar. Las
+  pedir, palabras de entrega, de forma de pago (`payment`, por método), de confirmación, para terminar, para quitar y para agregar. Las
   palabras clave están en `botKeywords`.
 - **Vocabulario de cada negocio** (`vocabulary` en `src/content/<negocio>/bot.ts`):
   - `example`: el ejemplo de la invitación a pedir;
@@ -894,7 +912,7 @@ variable va con su etiqueta y el cuerpo abre y cierra con una frase fija. La pla
 llama `nuevo_pedido` (Utility, `es_MX`, parámetros con nombre).
 
 Ejemplos para la revisión de Meta: `codigo` M-4F7K, `negocio` Moloteando, `horario` En horario,
-`cliente` Ana Pérez, `whatsapp` +5215512345678, `entrega` Recoger en sucursal, `lineas`
+`cliente` Ana Pérez, `whatsapp` +5215512345678, `entrega` Recoger en sucursal · Pago: efectivo, `lineas`
 2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260; 1 × Aguas Frescas Naturales del Día a
 $35 = $35, `total` $295, `notas` Sin notas.
 
@@ -903,8 +921,11 @@ pedido van separadas por `; ` y llevan su detalle (`2 × Taco de Birria con Tort
 sin cebolla a $40 = $80`). El cuerpo de la plantilla admite como máximo 1024 caracteres: si un
 pedido muy grande no cabe, `lineas` se abrevia por niveles (sin precio unitario, detalles más
 cortos y, al final, cada línea recortada con el prefijo "(abreviado)"); si aun así no cabe (nombre,
-dirección y notas al máximo), se recortan con "…" las notas, después la entrega y, por último, el nombre del cliente. Nunca se omite una línea,
-una cantidad ni el total, y queda `bot_staff_notice_compacted` en el log. Este texto de la
+dirección y notas al máximo), se recortan con "…" las notas, después la entrega y, por último, el nombre del cliente (de la entrega
+solo la dirección: "Pago: …" queda completo). Nunca se omite una línea, una cantidad ni el total, y
+queda `bot_staff_notice_compacted` en el log. El parámetro `entrega` lleva la forma de pago
+(REQ-F-035): `Recoger en sucursal · Pago: efectivo` (o `tarjeta`, `transferencia`) y `A domicilio:
+<dirección> · Pago: pagar al recibir` (o `transferencia`). Este texto de la
 plantilla debe coincidir con `STAFF_TEMPLATE_BODY` (`src/services/whatsapp-bot/messages.ts`);
 una prueba lo comprueba. Si Meta acepta el aviso pero avisa después de que no se entregó
 (estado `failed`, p. ej. plantilla pausada o número del personal sin WhatsApp), el cliente ya

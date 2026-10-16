@@ -46,7 +46,7 @@ const added = (reply: string): string[] => {
 };
 const totalOf = (reply: string): string | undefined => /\*Total: (\$[\d,.]+)\*/.exec(reply)?.[1];
 
-async function toSummary(business: BusinessId, items: string, data = 'Ana, recoger'): Promise<BotHarness> {
+async function toSummary(business: BusinessId, items: string, data = 'Ana, recoger, efectivo'): Promise<BotHarness> {
   const h = await started(business);
   await h.ask(items);
   expect(await h.ask(data)).toContain('*Resumen de tu pedido');
@@ -218,6 +218,7 @@ describe('QA REQ-F-013: defectos de la ronda 1, corregidos', () => {
       delivery: 'delivery',
       address: 'C'.repeat(200),
       notes: 'N'.repeat(200),
+      payment: 'onDelivery',
       offHoursOpening: null,
     };
     const body = hydrateStaffTemplate(buildStaffTemplate(order, '5215500001234').params);
@@ -383,7 +384,7 @@ describe('QA REQ-F-013: resumen, edición y notas', () => {
     const h = await makeBotHarness({ at: SATURDAY, products: repository });
     await h.ask(LANDING.birria);
     await h.ask('2 tacos sin cebolla');
-    expect(await h.ask('Ana, recoger')).toContain('- Taco de Birria con Tortilla de Mano\n    _sin cebolla_\n    2 × $40 c/u = $80');
+    expect(await h.ask('Ana, recoger, efectivo')).toContain('- Taco de Birria con Tortilla de Mano\n    _sin cebolla_\n    2 × $40 c/u = $80');
     const products = repository;
     const taco = (await products.list('birria')).find((product) => product.name === 'Taco de Birria con Tortilla de Mano');
     if (!taco) throw new Error('Falta el taco de la semilla');
@@ -449,7 +450,7 @@ describe('QA REQ-F-013: datos del cliente', () => {
   it('"Tina, recoger" son datos aunque se parezca a "tinga" (R-5.5)', async () => {
     const h = await started('birria');
     await h.ask('2 tacos');
-    const summary = await h.ask('Tina, recoger');
+    const summary = await h.ask('Tina, recoger, efectivo');
     expect(summary).toContain('*Nombre:* Tina');
     expect(summary).toContain('*Total: $80*');
   });
@@ -457,7 +458,7 @@ describe('QA REQ-F-013: datos del cliente', () => {
   it('una dirección con palabras de producto: una pregunta y, con "2", la dirección completa', async () => {
     const h = await started('molotes');
     await h.ask('2 de queso');
-    expect(await h.ask('Luis, domicilio, Calle de la Papa 10, Col. Centro')).toContain('*2.* Son mis datos de entrega');
+    expect(await h.ask('Luis, domicilio, Calle de la Papa 10, Col. Centro, transferencia')).toContain('*2.* Son mis datos de entrega');
     const summary = await h.ask('2');
     expect(summary).toContain('*Entrega:* A domicilio\nCalle de la Papa 10, Col. Centro');
     expect(summary).toContain('*Nombre:* Luis');
@@ -467,12 +468,14 @@ describe('QA REQ-F-013: datos del cliente', () => {
   it('datos sin comas y la nota tras "recoger" (R-6 a)', async () => {
     const h = await started('molotes');
     await h.ask('2 de queso');
-    const summary = await h.ask('Paco domicilio Reforma 123');
+    expect(await h.ask('Paco domicilio Reforma 123')).toContain('💳 *¿Cómo vas a pagar?*');
+    const summary = await h.ask('al recibir');
     expect(summary).toContain('*Entrega:* A domicilio\nReforma 123');
     expect(summary).toContain('*Nombre:* Paco');
     const h2 = await started('molotes');
     await h2.ask('2 de queso');
-    expect(await h2.ask('Juan, recoger, paso a las 3')).toContain('*Notas:* a las 3');
+    expect(await h2.ask('Juan, recoger, paso a las 3')).toContain('💳 *¿Cómo vas a pagar?*');
+    expect(await h2.ask('efectivo')).toContain('*Notas:* a las 3');
   });
 
   it('límites: nombre de 61 caracteres y direcciones de 4 y 201 se rechazan', async () => {
@@ -484,14 +487,15 @@ describe('QA REQ-F-013: datos del cliente', () => {
     await h2.ask('Ana, domicilio');
     expect(await h2.ask('Av 1')).toContain('entre 5 y 200');
     expect(await h2.ask('C'.repeat(201))).toContain('entre 5 y 200');
-    expect(await h2.ask('Calle 5 #10')).toContain('*Entrega:* A domicilio\nCalle 5 #10');
+    expect(await h2.ask('Calle 5 #10')).toContain('💳 *¿Cómo vas a pagar?*');
+    expect(await h2.ask('1')).toContain('*Entrega:* A domicilio\nCalle 5 #10');
   });
 
   it('X-5: un nombre y una dirección del primer mensaje no se capturan', async () => {
     const h = await makeBotHarness({ at: TUESDAY });
     const first = await h.ask('Hola soy Pedro, quiero 2 de queso, a domicilio en Calle Falsa 123');
     expect(added(first)).toEqual(['2 × Molotes de Queso Oaxaca (pieza)']);
-    const summary = await h.ask('Ana, recoger');
+    const summary = await h.ask('Ana, recoger, efectivo');
     expect(summary).not.toContain('Pedro');
     expect(summary).not.toContain('Calle Falsa');
   });
@@ -559,6 +563,7 @@ describe('QA REQ-F-013: DT-1 en caracteres, con emojis', () => {
     delivery: 'delivery',
     address: fill.repeat(200),
     notes: fill.repeat(200),
+    payment: 'onDelivery',
     offHoursOpening: 'el martes a las 08:30',
   });
   const line = (index: number, detailChar: string): CartLine => ({

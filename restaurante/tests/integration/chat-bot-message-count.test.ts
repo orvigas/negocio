@@ -75,7 +75,7 @@ describe.each(PROVIDER_DRIVERS)('conteo de mensajes con $provider (REQ-F-013, D-
     expect(cart).toContain('- 1 × Refrescos Familia Coca-Cola\n    _Coca-Cola_');
     expect(cart).toContain('*Total: $295*');
     expect(cart).toContain('Solo se usan para este pedido y no se guardan.');
-    const summary = (await s.write('Juan, recoger')).join('\n');
+    const summary = (await s.write('Juan, recoger, efectivo')).join('\n');
     expect(summary).toContain('*Nombre:* Juan');
     expect(summary).toContain('*Entrega:* Recoger en sucursal');
     expect((await s.write('sí')).join('\n')).toContain('fue enviado a Moloteando');
@@ -85,8 +85,8 @@ describe.each(PROVIDER_DRIVERS)('conteo de mensajes con $provider (REQ-F-013, D-
   });
 
   it.each([
-    ['para recoger', 'Ana, recoger', 'Recoger en sucursal'],
-    ['a domicilio', 'Ana, domicilio, Calle 5 #10, Col. Centro', 'A domicilio\nCalle 5 #10, Col. Centro'],
+    ['para recoger', 'Ana, recoger, efectivo', 'Recoger en sucursal'],
+    ['a domicilio', 'Ana, domicilio, Calle 5 #10, Col. Centro, al recibir', 'A domicilio\nCalle 5 #10, Col. Centro'],
   ])('CA-1: Birria con 2 productos sin ambigüedad, %s: ≤ 4 del cliente y ≤ 5 del bot', async (_label, data, delivery) => {
     const s = await start(driver, mx(`${WEEK.sat}T10:00`));
     await s.write('Hola, quiero hacer un pedido de birria');
@@ -103,7 +103,7 @@ describe.each(PROVIDER_DRIVERS)('conteo de mensajes con $provider (REQ-F-013, D-
     const first = (await s.write('Hola, quiero 2 órdenes de queso y una coca')).join('\n');
     expect(first).toContain('Te atiende el asistente de *Moloteando*');
     expect(first).toContain('*Total: $295*');
-    await s.write('Juan, recoger');
+    await s.write('Juan, recoger, efectivo');
     expect((await s.write('si')).join('\n')).toContain('fue enviado');
     expect(s.customerMessages).toBe(3);
     expect(s.botMessages).toBe(3);
@@ -111,7 +111,7 @@ describe.each(PROVIDER_DRIVERS)('conteo de mensajes con $provider (REQ-F-013, D-
 
   it('CA-3: el ejemplo 1 solo con números (datos en un mensaje): 10 del cliente, mismo carrito, total y aviso', async () => {
     const s = await start(driver, mx(`${WEEK.tue}T10:00`));
-    for (const text of ['Hola, quiero hacer un pedido de molotes', '1', '2', '2', '1', '10', '1', '4', 'Juan, recoger']) await s.write(text);
+    for (const text of ['Hola, quiero hacer un pedido de molotes', '1', '2', '2', '1', '10', '1', '4', 'Juan, recoger, efectivo']) await s.write(text);
     expect((await s.write('1')).join('\n')).toContain('fue enviado a Moloteando');
     expect(s.customerMessages).toBe(10);
     expect(s.double.staffNoticesTo(STAFF.molotes)).toHaveLength(1);
@@ -133,7 +133,7 @@ describe.each(PROVIDER_DRIVERS)('conteo de mensajes con $provider (REQ-F-013, D-
     expect(answer[0]).toContain('- 1 × Tazón de Consomé Chico (Con Carne)');
     expect(answer[0]).toContain('- 1 × Bebidas Frías del Comal (Aguas Frescas)');
     expect(answer[0]).toContain('*Total: $195*');
-    await s.write('Ana, recoger');
+    await s.write('Ana, recoger, efectivo');
     await s.write('sí');
     // 4 del flujo sin ambigüedad + 1 del cliente y 1 del bot por la aclaración.
     expect(s.customerMessages).toBe(5);

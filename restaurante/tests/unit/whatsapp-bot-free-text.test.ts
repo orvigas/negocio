@@ -44,7 +44,7 @@ async function editProduct(h: BotHarness, business: BusinessId, name: string, ch
 }
 
 /** Pide en texto libre desde el mensaje de la landing hasta el resumen. */
-async function toSummary(h: BotHarness, items: string, data = 'Ana Pérez, recoger'): Promise<string> {
+async function toSummary(h: BotHarness, items: string, data = 'Ana Pérez, recoger, efectivo'): Promise<string> {
   await h.ask('Hola, quiero hacer un pedido');
   await h.ask(items);
   return h.ask(data);
@@ -210,7 +210,7 @@ describe('detalle por línea (CA-11, RF-8)', () => {
 
   it('también en el texto libre de Twilio', async () => {
     const h = await makeTwilioBotHarness({ at: SATURDAY });
-    for (const text of ['Hola', `2 tacos ${longDetail}`, 'Ana, recoger', 'sí']) await h.say(text);
+    for (const text of ['Hola', `2 tacos ${longDetail}`, 'Ana, recoger, efectivo', 'sí']) await h.say(text);
     const notice = h.double.sent.find((message) => message.to === STAFF.birria)?.text ?? '';
     expect(notice).toMatch(/2 × Taco de Birria con Tortilla de Mano · sin cebolla[^\n]*… a \$40 = \$80/);
   });
@@ -219,12 +219,12 @@ describe('detalle por línea (CA-11, RF-8)', () => {
 describe('datos del cliente (CA-12, RF-5)', () => {
   it('"Juan, recoger" pasa al resumen; "Ana, domicilio, …" lleva la dirección', async () => {
     const pickup = await makeBotHarness();
-    const summary = await toSummary(pickup, '2 de queso', 'Juan, recoger');
+    const summary = await toSummary(pickup, '2 de queso', 'Juan, recoger, efectivo');
     expect(summary).toContain('*Nombre:* Juan');
     expect(summary).toContain('*Entrega:* Recoger en sucursal');
 
     const delivery = await makeBotHarness();
-    const home = await toSummary(delivery, '2 de queso', 'Ana, domicilio, Calle 5 #10 Col. Centro');
+    const home = await toSummary(delivery, '2 de queso', 'Ana, domicilio, Calle 5 #10 Col. Centro, al recibir');
     expect(home).toContain('*Entrega:* A domicilio\nCalle 5 #10 Col. Centro');
     expect(home).toContain('El personal te confirmará el costo del envío.');
   });
@@ -232,11 +232,13 @@ describe('datos del cliente (CA-12, RF-5)', () => {
   it('"Ana, domicilio" pide solo la dirección; "recoger" sin nombre pide solo el nombre', async () => {
     const h = await makeBotHarness();
     expect(await toSummary(h, '2 de queso', 'Ana, domicilio')).toBe('¿Cuál es la dirección de entrega?\n(calle, número, colonia y referencias)');
-    expect(await h.ask('Calle 5 #10, Centro')).toContain('*Entrega:* A domicilio\nCalle 5 #10, Centro');
+    expect(await h.ask('Calle 5 #10, Centro')).toContain('💳 *¿Cómo vas a pagar?*');
+    expect(await h.ask('2')).toContain('*Entrega:* A domicilio\nCalle 5 #10, Centro\n💳 *Pago:* Transferencia');
 
     const other = await makeBotHarness();
     expect(await toSummary(other, '2 de queso', 'recoger')).toBe('¿A nombre de quién es el pedido?');
-    expect(await other.ask('Juan')).toContain('*Nombre:* Juan');
+    expect(await other.ask('Juan')).toContain('💳 *¿Cómo vas a pagar?*');
+    expect(await other.ask('tarjeta')).toContain('*Nombre:* Juan');
   });
 
   it('"Juan" cuando espera productos o datos: la ayuda breve', async () => {
@@ -252,7 +254,7 @@ describe('datos del cliente (CA-12, RF-5)', () => {
     const h = await makeBotHarness();
     await h.ask('Hola, quiero hacer un pedido');
     await h.ask('2 de queso');
-    expect(await h.ask('Ana, domicilio, Calle Tinga 5')).toContain('Tu mensaje trae productos y datos de entrega.');
+    expect(await h.ask('Ana, domicilio, Calle Tinga 5, al recibir')).toContain('Tu mensaje trae productos y datos de entrega.');
     expect(await h.ask('2')).toContain('*Entrega:* A domicilio\nCalle Tinga 5');
 
     const other = await makeBotHarness();
@@ -275,7 +277,7 @@ describe('datos del cliente (CA-12, RF-5)', () => {
     expect(reply).toContain('No entendí tu mensaje.');
     expect(reply).toContain('Si es tu nombre, escribe también si es para *recoger* o *a domicilio* (con tu dirección), por ejemplo: *Ana, recoger*.');
     expect(reply).toContain('Puedes escribir tu pedido con tus palabras');
-    expect(await h.ask('Ana, recoger')).toContain('*Nombre:* Ana');
+    expect(await h.ask('Ana, recoger, efectivo')).toContain('*Nombre:* Ana');
   });
 
   it('OBS-1: antes de pedir, "Ana" da la ayuda sin el recordatorio de la entrega', async () => {
@@ -291,7 +293,7 @@ describe('datos del cliente (CA-12, RF-5)', () => {
     expect(reply).not.toContain('a domicilio en Calle Falsa');
     expect(reply).not.toContain('Calle Falsa');
     expect(reply).toContain('Tus datos de entrega te los pido al final, cuando termines tu pedido.');
-    const summary = await h.ask('Juan, recoger');
+    const summary = await h.ask('Juan, recoger, efectivo');
     expect(summary).toContain('*Nombre:* Juan');
     expect(summary).not.toContain('Falsa');
   });
@@ -299,7 +301,7 @@ describe('datos del cliente (CA-12, RF-5)', () => {
   it('X-5: un nombre o una dirección en el primer mensaje no se capturan', async () => {
     const h = await makeBotHarness();
     await h.ask('Hola, soy Ana Secreta, 2 de queso a domicilio');
-    const summary = await h.ask('Juan, recoger');
+    const summary = await h.ask('Juan, recoger, efectivo');
     expect(summary).toContain('*Nombre:* Juan');
     expect(summary).not.toContain('Secreta');
   });
@@ -407,7 +409,7 @@ describe('privacidad y logs (CA-15, RF-11)', () => {
   it('el log no tiene textos, detalles, nombres, direcciones ni notas, y sí los contadores', async () => {
     const h = await makeBotHarness({ at: SATURDAY });
     const secrets = ['tacos', 'cebollita morada', 'Rosa Secreta', 'Calle Escondida 99', 'tocar fuerte', 'jsjsj', 'horchata'];
-    for (const text of ['Hola, quiero hacer un pedido de birria', 'jsjsj y 2 tacos con cebollita morada', 'consomé', '1', 'una horchata', 'Rosa Secreta, domicilio, Calle Escondida 99', 'tocar fuerte', 'sí']) {
+    for (const text of ['Hola, quiero hacer un pedido de birria', 'jsjsj y 2 tacos con cebollita morada', 'consomé', '1', 'una horchata', 'Rosa Secreta, domicilio, Calle Escondida 99, al recibir', 'tocar fuerte', 'sí']) {
       await h.ask(text);
     }
     expect(h.double.templatesTo(STAFF.birria)).toHaveLength(1);
@@ -445,7 +447,7 @@ describe('intérprete sustituible (D-2)', () => {
           : { lines: [], overflow: 0, intent: false, hasDeliveryWord: text.includes('#') };
       },
       answer: () => ({ choices: [], looksLikeOrder: false }),
-      customerData: (text) => (text.includes('#') ? { name: 'Cliente Falso', delivery: 'pickup' } : {}),
+      customerData: (text) => (text.includes('#') ? { name: 'Cliente Falso', delivery: 'pickup', payment: 'cash' } : {}),
     };
     let now = TUESDAY;
     const bot = createBotOrchestrator({
@@ -486,6 +488,7 @@ describe('presupuesto de la plantilla del aviso (DT-1)', () => {
     delivery: 'delivery',
     address: 'A'.repeat(200),
     notes: 'B'.repeat(200),
+    payment: 'onDelivery',
     offHoursOpening: 'el martes a las 08:30',
   });
 
@@ -526,7 +529,8 @@ describe('presupuesto de la plantilla del aviso (DT-1)', () => {
     const { params } = buildStaffTemplate(extreme, '5215500001234');
     expect(hydrateStaffTemplate(params).length).toBeLessThanOrEqual(MAX_TEMPLATE_BODY_CHARS);
     expect(params.notas).toBe('…');
-    expect(params.entrega).toMatch(/^A domicilio: (🌮)+…$/u);
+    // REQ-F-035, RF-6.3: se recorta la dirección y nunca " · Pago: …".
+    expect(params.entrega).toMatch(/^A domicilio: (🌮)+… · Pago: pagar al recibir$/u);
     expect(params.cliente).toBe('🌮'.repeat(60));
     expect(params.lineas?.split('; ')).toHaveLength(15);
     expect(params.total).toBe('$37,035');

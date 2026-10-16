@@ -14,6 +14,10 @@ import { WEEK, mx } from './whatsapp.ts';
  * Invariantes doradas de REQ-F-029 (CA-8 y CA-9): lo que no debe cambiar al reacomodar los textos
  * del bot. Los valores esperados están en tests/fixtures/bot-golden/ y se generaron con el código
  * anterior al cambio de formato; las pruebas nunca los regeneran.
+ *
+ * Cambio intencional (REQ-F-035, forma de pago): se regeneraron una sola vez, con revisión del diff.
+ * Cambian solo el parámetro `entrega` (termina en " · Pago: <método>"), el paso `payment`, el campo
+ * `customer.payment`, el `payment` de los pedidos y los turnos de pago agregados a los recorridos.
  */
 
 const GOLDEN_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'bot-golden');
@@ -44,6 +48,7 @@ const order = (overrides: Partial<OrderDetails>): OrderDetails => ({
   delivery: 'pickup',
   address: undefined,
   notes: '',
+  payment: 'cash',
   offHoursOpening: null,
   ...overrides,
 });
@@ -55,6 +60,7 @@ export const TEMPLATE_ORDERS: Readonly<Record<string, OrderDetails>> = Object.fr
     delivery: 'delivery',
     address: 'Calle 5 #10, Centro',
     notes: 'Sin cebolla, por favor',
+    payment: 'transfer',
     offHoursOpening: 'el martes a las 08:30',
   }),
   'birria-domicilio-en-horario': order({
@@ -64,8 +70,9 @@ export const TEMPLATE_ORDERS: Readonly<Record<string, OrderDetails>> = Object.fr
     name: 'Luis',
     delivery: 'delivery',
     address: 'Av. Juárez 120, Col. Americana, frente al parque',
+    payment: 'onDelivery',
   }),
-  'birria-recoger-fuera-de-horario': order({ code: 'B-EF56', business: 'birria', lines: [CONSOME, BEBIDA], offHoursOpening: 'el sábado a las 08:00' }),
+  'birria-recoger-fuera-de-horario': order({ code: 'B-EF56', business: 'birria', lines: [CONSOME, BEBIDA], payment: 'card', offHoursOpening: 'el sábado a las 08:00' }),
   'molotes-grande-compactado': order({
     code: 'M-GH78',
     lines: Array.from({ length: 15 }, (_, index) =>
@@ -75,6 +82,7 @@ export const TEMPLATE_ORDERS: Readonly<Record<string, OrderDetails>> = Object.fr
     delivery: 'delivery',
     address: 'Calle muy larga 1234, Colonia con nombre largo, entre calles A y B, junto a la tienda azul',
     notes: 'Notas largas: sin cebolla, con salsa aparte, tocar el timbre dos veces y esperar en la puerta',
+    payment: 'onDelivery',
   }),
 });
 
@@ -90,19 +98,19 @@ export function templateTraces(): Record<string, unknown> {
 
 /** Recorridos de CA-9: por números y en texto libre, en los dos negocios. */
 export const FLOW_SCRIPTS: readonly { readonly name: string; readonly at: string; readonly inputs: readonly string[] }[] = Object.freeze([
-  { name: 'molotes-numeros', at: `${WEEK.tue}T10:00`, inputs: ['Hola, quiero hacer un pedido de molotes', '1', '2', '2', '1', '10', '1', '4', 'Juan, recoger', '1'] },
+  { name: 'molotes-numeros', at: `${WEEK.tue}T10:00`, inputs: ['Hola, quiero hacer un pedido de molotes', '1', '2', '2', '1', '10', '1', '4', 'Juan, recoger', '1', '1'] },
   {
     name: 'molotes-texto-libre-domicilio',
     at: `${WEEK.tue}T10:00`,
-    inputs: ['Hola, quiero 2 órdenes de queso y una coca', 'quita la coca', '1 coca sin azucar', 'Ana, domicilio, Calle 5 #10, Centro', 'sin cebolla', 'sí'],
+    inputs: ['Hola, quiero 2 órdenes de queso y una coca', 'quita la coca', '1 coca sin azucar', 'Ana, domicilio, Calle 5 #10, Centro, transferencia', 'sin cebolla', 'sí'],
   },
   { name: 'molotes-palabras-clave', at: `${WEEK.wed}T11:00`, inputs: ['Hola', 'ayuda', 'menú', '3', '1', '2', 'carrito', '3', 'persona', 'cancelar'] },
-  { name: 'molotes-fuera-de-horario', at: `${WEEK.tue}T07:00`, inputs: ['Hola', '2 de queso', 'Luis, recoger', 'agrega una coca', 'sí'] },
-  { name: 'birria-aclaracion', at: `${WEEK.sat}T10:00`, inputs: ['Hola, quiero hacer un pedido de birria', 'consomé, una bebida y 2 tacos', '2, 1', 'Ana, recoger', 'sí'] },
+  { name: 'molotes-fuera-de-horario', at: `${WEEK.tue}T07:00`, inputs: ['Hola', '2 de queso', 'Luis, recoger, tarjeta', 'agrega una coca', 'sí'] },
+  { name: 'birria-aclaracion', at: `${WEEK.sat}T10:00`, inputs: ['Hola, quiero hacer un pedido de birria', 'consomé, una bebida y 2 tacos', '2, 1', 'Ana, recoger', 'transferencia', 'sí'] },
   {
     name: 'birria-quitar-y-datos-por-pasos',
     at: `${WEEK.sat}T10:00`,
-    inputs: ['Hola', '3 quesabirrias y un consome chico con carne', '2', '1', '4', 'Ana, domicilio', 'Calle 5 #10, Centro', 'quita las quesabirrias', 'confirmo'],
+    inputs: ['Hola', '3 quesabirrias y un consome chico con carne', '2', '1', '4', 'Ana, domicilio', 'Calle 5 #10, Centro', '1', 'quita las quesabirrias', 'confirmo'],
   },
   { name: 'birria-otro-negocio', at: `${WEEK.sun}T09:00`, inputs: ['Hola, quiero molotes', 'menú', 'quiero hacer un pedido', '1'] },
   { name: 'molotes-sin-pedidos', at: `${WEEK.fri}T18:00`, inputs: ['Hola', '2 de queso', 'menú'] },

@@ -12,7 +12,7 @@ import { CUSTOMER, STAFF, WEEK, inboundPayload, loadFixture, makeBotHarness, mx,
 
 async function readyToConfirm(h: BotHarness): Promise<void> {
   // REQ-F-013 (RF-5, RF-6): los datos en un solo mensaje y la nota, si la hay, en el resumen.
-  for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez, recoger']) await h.ask(text);
+  for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez, recoger, efectivo']) await h.ask(text);
 }
 
 describe('entregas repetidas, desordenadas y viejas', () => {
@@ -136,7 +136,7 @@ describe('aviso al personal (RF-7, RN-4)', () => {
         horario: 'En horario',
         cliente: 'Ana Pérez',
         whatsapp: `+${CUSTOMER}`,
-        entrega: 'Recoger en sucursal',
+        entrega: 'Recoger en sucursal · Pago: efectivo',
         lineas: '1 × Aguas Frescas Naturales del Día a $35 = $35',
         total: '$35',
         notas: 'Sin notas',

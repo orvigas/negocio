@@ -25,6 +25,7 @@ import {
   ordersClosed,
   otherBusiness,
   otherBusinessNote,
+  paymentPrompt,
   personContact,
   productLabel,
   removePrompt,
@@ -33,6 +34,7 @@ import {
   type DeliveryMethod,
   type OrderDetails,
 } from './messages.ts';
+import { isPaymentValid, PAYMENT_OPTIONS, paymentOf, type PaymentMethod } from './payment.ts';
 import { acceptsOrders, describeOpening, isOpen, nextOpening } from './schedule.ts';
 import { cleanText, codePointLength, fill, normalizeInput, parseNumber } from './text.ts';
 
@@ -72,6 +74,7 @@ export type Step =
   | 'name'
   | 'delivery'
   | 'address'
+  | 'payment'
   | 'confirm'
   | 'sending';
 
@@ -83,6 +86,8 @@ export interface Customer {
   delivery?: DeliveryMethod;
   address?: string;
   notes?: string;
+  /** Forma de pago (REQ-F-035); solo se guarda si vale para la entrega (RN-1). */
+  payment?: PaymentMethod;
 }
 
 export interface Conversation {
@@ -283,6 +288,8 @@ class Turn {
         return botText.askDelivery;
       case 'address':
         return botText.askAddress;
+      case 'payment':
+        return paymentPrompt(c.customer.delivery ?? 'pickup');
       case 'confirm':
         return botText.confirmPrompt;
       case 'sending':
@@ -376,7 +383,13 @@ class Turn {
     return notices;
   }
 
-  buildOrder(): OrderDetails {
+  /** Forma de pago guardada si vale para la entrega actual (RN-1), o null. */
+  validPayment(): PaymentMethod | null {
+    const { payment, delivery } = this.conversation.customer;
+    return payment !== undefined && delivery !== undefined && isPaymentValid(payment, delivery) ? payment : null;
+  }
+
+  buildOrder(payment: PaymentMethod): OrderDetails {
     const c = this.conversation;
     c.code ??= this.ctx.newCode(getBotContent(this.business).codePrefix);
     const open = isOpen(this.business, this.ctx.now, this.ctx.timeZone);
@@ -388,6 +401,7 @@ class Turn {
       delivery: c.customer.delivery ?? 'pickup',
       address: c.customer.address,
       notes: c.customer.notes ?? '',
+      payment,
       offHoursOpening: open ? null : describeOpening(nextOpening(this.business, this.ctx.now, this.ctx.timeZone)),
     };
   }
@@ -401,8 +415,14 @@ class Turn {
       this.showMenu();
       return;
     }
+    // RN-2: sin una forma de pago válida no hay resumen (defensa; askNext la pide antes).
+    const payment = this.validPayment();
+    if (payment === null) {
+      this.say(...before);
+      return this.askNext();
+    }
     c.step = 'confirm';
-    this.say([...before, summary(this.buildOrder())].join('\n\n'));
+    this.say([...before, summary(this.buildOrder(payment), this.ctx.staffContact(this.business))].join('\n\n'));
   }
 
   // --- Interpretación y carrito (REQ-F-013) ---------------------------------------
@@ -625,8 +645,8 @@ class Turn {
 
   // --- Datos del cliente (RF-5) ---------------------------------------------------
 
-  /** Pide lo que falte (RF-5.4) o muestra el resumen. */
-  askNext(): void {
+  /** Pide lo que falte (RF-5.4; REQ-F-035, RF-1.1) o muestra el resumen. `paymentRejected`: avisa que el método escrito no vale para la entrega (RF-2.2). */
+  askNext(paymentRejected = false): void {
     const c = this.conversation;
     const customer = c.customer;
     if (customer.name === undefined) {
@@ -638,6 +658,10 @@ class Turn {
     } else if (customer.delivery === 'delivery' && customer.address === undefined) {
       c.step = 'address';
       this.say(botText.askAddress);
+    } else if (this.validPayment() === null) {
+      c.step = 'payment';
+      const question = paymentPrompt(customer.delivery);
+      this.say(paymentRejected ? `${botText.paymentNotFor[customer.delivery]}\n\n${question}` : question);
     } else {
       this.showSummary();
     }
@@ -650,6 +674,15 @@ class Turn {
     if (data.delivery) {
       c.customer.delivery = data.delivery;
       if (data.delivery === 'pickup') delete c.customer.address;
+      // RF-3: si la entrega cambia y el método guardado ya no vale, se descarta y se vuelve a preguntar.
+      if (c.customer.payment !== undefined && !isPaymentValid(c.customer.payment, data.delivery)) delete c.customer.payment;
+    }
+    // RF-2: el pago escrito con los datos se toma solo si vale para la entrega (RF-2.2).
+    let paymentRejected = false;
+    if (data.payment !== undefined) {
+      const delivery = c.customer.delivery;
+      if (delivery !== undefined && isPaymentValid(data.payment, delivery)) c.customer.payment = data.payment;
+      else paymentRejected = true;
     }
     if (data.note !== undefined) c.customer.notes = [...cleanText(data.note)].slice(0, notesMax).join('');
     if (data.name !== undefined) {
@@ -673,7 +706,7 @@ class Turn {
       }
       c.customer.address = address;
     }
-    this.askNext();
+    this.askNext(paymentRejected);
   }
 }
 
@@ -889,6 +922,27 @@ function handleAddress(turn: Turn, text: string): void {
   return turn.applyData({ address: text });
 }
 
+/**
+ * Forma de pago (REQ-F-035, RF-1): número de opción de la entrega o el nombre del método como
+ * mensaje completo. Un método de la otra entrega o una respuesta no válida repiten la pregunta
+ * (RF-1.4); una palabra de entrega cambia la entrega (RF-3).
+ */
+function handlePayment(turn: Turn, text: string, normalized: string): void {
+  const customer = turn.conversation.customer;
+  const delivery = customer.delivery;
+  if (delivery === undefined) return turn.askNext();
+  const number = parseNumber(turn.text);
+  const method = number === null ? (paymentOf(normalized) ?? paymentOf(withoutCourtesy(normalized))) : (PAYMENT_OPTIONS[delivery][number - 1] ?? null);
+  if (method !== null) {
+    if (!isPaymentValid(method, delivery)) return turn.say(`${botText.paymentNotFor[delivery]}\n\n${turn.prompt()}`);
+    customer.payment = method;
+    return turn.askNext();
+  }
+  const data = number === null ? turn.ctx.interpreter.customerData(text) : {};
+  if (data.delivery !== undefined) return turn.applyData(data);
+  return turn.say(`${botText.invalidNumber}\n\n${turn.prompt()}`);
+}
+
 function handleConfirm(turn: Turn, text: string, normalized: string): void {
   const c = turn.conversation;
   if (REJECT_WORDS.includes(normalized)) return turn.cancel();
@@ -904,8 +958,11 @@ function handleConfirm(turn: Turn, text: string, normalized: string): void {
       c.step = 'address';
       return turn.say(botText.askAddress);
     }
+    // RN-2: sin una forma de pago válida para la entrega, se pide antes de confirmar.
+    const payment = turn.validPayment();
+    if (payment === null) return turn.askNext();
     c.step = 'sending';
-    turn.confirmedOrder = turn.buildOrder();
+    turn.confirmedOrder = turn.buildOrder(payment);
     return undefined;
   }
   // RF-6.5: "no" ni cancela ni es una nota.
@@ -973,6 +1030,8 @@ function handleText(turn: Turn, text: string): void {
       return handleDelivery(turn, text);
     case 'address':
       return handleAddress(turn, text);
+    case 'payment':
+      return handlePayment(turn, text, normalized);
     case 'confirm':
       return handleConfirm(turn, text, normalized);
     case 'sending':

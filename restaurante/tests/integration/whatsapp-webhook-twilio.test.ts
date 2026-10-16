@@ -54,7 +54,7 @@ async function start({ env = {} }: { env?: Record<string, string> } = {}) {
 
   async function order(): Promise<void> {
     // REQ-F-013 (RF-5, RF-6): los datos en un solo mensaje y la nota, si la hay, en el resumen.
-    for (const text of ['Hola', '2', '1', '2', '2', '1', '9', '1', '4', 'Ana Pérez, domicilio, Calle Secreta 742, Colonia Oculta', 'Tocar el timbre azul']) await write(text);
+    for (const text of ['Hola', '2', '1', '2', '2', '1', '9', '1', '4', 'Ana Pérez, domicilio, Calle Secreta 742, Colonia Oculta, al recibir', 'Tocar el timbre azul']) await write(text);
   }
 
   return { bot, double, logger, server, post, write, order };
@@ -148,7 +148,7 @@ describe('pedido completo con Twilio (CA-5, CA-7b, CA-13)', () => {
         'En horario',
         'Cliente: Ana Pérez',
         `WhatsApp: +${CUSTOMER}`,
-        'Entrega: A domicilio: Calle Secreta 742, Colonia Oculta',
+        'Entrega: A domicilio: Calle Secreta 742, Colonia Oculta · Pago: pagar al recibir',
         '2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260',
         '1 × Aguas Frescas Naturales del Día a $35 = $35',
         'Total: $295',
@@ -171,7 +171,7 @@ describe('pedido completo con Twilio (CA-5, CA-7b, CA-13)', () => {
       3: 'En horario',
       4: 'Ana Pérez',
       5: `+${CUSTOMER}`,
-      6: 'A domicilio: Calle Secreta 742, Colonia Oculta',
+      6: 'A domicilio: Calle Secreta 742, Colonia Oculta · Pago: pagar al recibir',
       7: '2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260; 1 × Aguas Frescas Naturales del Día a $35 = $35',
       8: '$295',
       9: 'Tocar el timbre azul',

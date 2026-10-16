@@ -9,7 +9,7 @@ import { runNode } from '../support/process.ts';
  */
 
 /** El flujo de REQ-F-013 en texto libre: el mensaje de la landing, el pedido, los datos y "sí". */
-const ORDER = ['Hola, quiero hacer un pedido de molotes', '2 órdenes de queso y una coca', 'Ana, recoger', 'sí', '/salir'].join('\n');
+const ORDER = ['Hola, quiero hacer un pedido de molotes', '2 órdenes de queso y una coca', 'Ana, recoger, efectivo', 'sí', '/salir'].join('\n');
 const run = (args: string[]) => runNode(['scripts/bot-chat.ts', '--ahora', '2026-10-06T10:00', ...args], { env: { BUSINESS_TIMEZONE: 'America/Mexico_City' }, input: `${ORDER}\n` });
 
 describe('bot:chat (CA-15b)', () => {

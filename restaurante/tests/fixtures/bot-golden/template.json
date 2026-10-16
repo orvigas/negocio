@@ -6,14 +6,14 @@
       "horario": "En horario",
       "cliente": "Ana",
       "whatsapp": "+5215500001234",
-      "entrega": "Recoger en sucursal",
+      "entrega": "Recoger en sucursal · Pago: efectivo",
       "lineas": "2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260; 1 × Refrescos Familia Coca-Cola · Coca-Cola Sin Azúcar a $35 = $35",
       "total": "$295",
       "notas": "Sin notas"
     },
     "level": 0,
-    "body": "Hola, acaba de llegar un nuevo pedido por WhatsApp.\n\nCódigo del pedido: M-AB12\nNegocio: Moloteando\nHorario: En horario\nNombre del cliente: Ana\nWhatsApp del cliente: +5215500001234\nForma de entrega: Recoger en sucursal\nProductos: 2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260; 1 × Refrescos Familia Coca-Cola · Coca-Cola Sin Azúcar a $35 = $35\nTotal a cobrar: $295\nNotas del cliente: Sin notas\n\nPor favor confirma el pedido respondiendo directamente al cliente por WhatsApp.",
-    "text": "🔔 *Nuevo pedido M-AB12* - Moloteando\nEn horario\nCliente: Ana\nWhatsApp: +5215500001234\nEntrega: Recoger en sucursal\n2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260\n1 × Refrescos Familia Coca-Cola · Coca-Cola Sin Azúcar a $35 = $35\nTotal: $295\nNotas: Sin notas"
+    "body": "Hola, acaba de llegar un nuevo pedido por WhatsApp.\n\nCódigo del pedido: M-AB12\nNegocio: Moloteando\nHorario: En horario\nNombre del cliente: Ana\nWhatsApp del cliente: +5215500001234\nForma de entrega: Recoger en sucursal · Pago: efectivo\nProductos: 2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260; 1 × Refrescos Familia Coca-Cola · Coca-Cola Sin Azúcar a $35 = $35\nTotal a cobrar: $295\nNotas del cliente: Sin notas\n\nPor favor confirma el pedido respondiendo directamente al cliente por WhatsApp.",
+    "text": "🔔 *Nuevo pedido M-AB12* - Moloteando\nEn horario\nCliente: Ana\nWhatsApp: +5215500001234\nEntrega: Recoger en sucursal · Pago: efectivo\n2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260\n1 × Refrescos Familia Coca-Cola · Coca-Cola Sin Azúcar a $35 = $35\nTotal: $295\nNotas: Sin notas"
   },
   "molotes-domicilio-fuera-de-horario": {
     "params": {
@@ -22,14 +22,14 @@
       "horario": "FUERA DE HORARIO, abre el martes a las 08:30",
       "cliente": "Ana",
       "whatsapp": "+5215500001234",
-      "entrega": "A domicilio: Calle 5 #10, Centro",
+      "entrega": "A domicilio: Calle 5 #10, Centro · Pago: transferencia",
       "lineas": "2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260; 1 × Refrescos Familia Coca-Cola · Coca-Cola Sin Azúcar a $35 = $35",
       "total": "$295",
       "notas": "Sin cebolla, por favor"
     },
     "level": 0,
-    "body": "Hola, acaba de llegar un nuevo pedido por WhatsApp.\n\nCódigo del pedido: M-AB12\nNegocio: Moloteando\nHorario: FUERA DE HORARIO, abre el martes a las 08:30\nNombre del cliente: Ana\nWhatsApp del cliente: +5215500001234\nForma de entrega: A domicilio: Calle 5 #10, Centro\nProductos: 2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260; 1 × Refrescos Familia Coca-Cola · Coca-Cola Sin Azúcar a $35 = $35\nTotal a cobrar: $295\nNotas del cliente: Sin cebolla, por favor\n\nPor favor confirma el pedido respondiendo directamente al cliente por WhatsApp.",
-    "text": "🔔 *Nuevo pedido M-AB12* - Moloteando\nFUERA DE HORARIO, abre el martes a las 08:30\nCliente: Ana\nWhatsApp: +5215500001234\nEntrega: A domicilio: Calle 5 #10, Centro\n2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260\n1 × Refrescos Familia Coca-Cola · Coca-Cola Sin Azúcar a $35 = $35\nTotal: $295\nNotas: Sin cebolla, por favor"
+    "body": "Hola, acaba de llegar un nuevo pedido por WhatsApp.\n\nCódigo del pedido: M-AB12\nNegocio: Moloteando\nHorario: FUERA DE HORARIO, abre el martes a las 08:30\nNombre del cliente: Ana\nWhatsApp del cliente: +5215500001234\nForma de entrega: A domicilio: Calle 5 #10, Centro · Pago: transferencia\nProductos: 2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260; 1 × Refrescos Familia Coca-Cola · Coca-Cola Sin Azúcar a $35 = $35\nTotal a cobrar: $295\nNotas del cliente: Sin cebolla, por favor\n\nPor favor confirma el pedido respondiendo directamente al cliente por WhatsApp.",
+    "text": "🔔 *Nuevo pedido M-AB12* - Moloteando\nFUERA DE HORARIO, abre el martes a las 08:30\nCliente: Ana\nWhatsApp: +5215500001234\nEntrega: A domicilio: Calle 5 #10, Centro · Pago: transferencia\n2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260\n1 × Refrescos Familia Coca-Cola · Coca-Cola Sin Azúcar a $35 = $35\nTotal: $295\nNotas: Sin cebolla, por favor"
   },
   "birria-domicilio-en-horario": {
     "params": {
@@ -38,14 +38,14 @@
       "horario": "En horario",
       "cliente": "Luis",
       "whatsapp": "+5215500001234",
-      "entrega": "A domicilio: Av. Juárez 120, Col. Americana, frente al parque",
+      "entrega": "A domicilio: Av. Juárez 120, Col. Americana, frente al parque · Pago: pagar al recibir",
       "lineas": "1 × Tazón de Consomé Chico (Con Carne) a $80 = $80; 2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70",
       "total": "$150",
       "notas": "Sin notas"
     },
     "level": 0,
-    "body": "Hola, acaba de llegar un nuevo pedido por WhatsApp.\n\nCódigo del pedido: B-CD34\nNegocio: Birria El Muñeco\nHorario: En horario\nNombre del cliente: Luis\nWhatsApp del cliente: +5215500001234\nForma de entrega: A domicilio: Av. Juárez 120, Col. Americana, frente al parque\nProductos: 1 × Tazón de Consomé Chico (Con Carne) a $80 = $80; 2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal a cobrar: $150\nNotas del cliente: Sin notas\n\nPor favor confirma el pedido respondiendo directamente al cliente por WhatsApp.",
-    "text": "🔔 *Nuevo pedido B-CD34* - Birria El Muñeco\nEn horario\nCliente: Luis\nWhatsApp: +5215500001234\nEntrega: A domicilio: Av. Juárez 120, Col. Americana, frente al parque\n1 × Tazón de Consomé Chico (Con Carne) a $80 = $80\n2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal: $150\nNotas: Sin notas"
+    "body": "Hola, acaba de llegar un nuevo pedido por WhatsApp.\n\nCódigo del pedido: B-CD34\nNegocio: Birria El Muñeco\nHorario: En horario\nNombre del cliente: Luis\nWhatsApp del cliente: +5215500001234\nForma de entrega: A domicilio: Av. Juárez 120, Col. Americana, frente al parque · Pago: pagar al recibir\nProductos: 1 × Tazón de Consomé Chico (Con Carne) a $80 = $80; 2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal a cobrar: $150\nNotas del cliente: Sin notas\n\nPor favor confirma el pedido respondiendo directamente al cliente por WhatsApp.",
+    "text": "🔔 *Nuevo pedido B-CD34* - Birria El Muñeco\nEn horario\nCliente: Luis\nWhatsApp: +5215500001234\nEntrega: A domicilio: Av. Juárez 120, Col. Americana, frente al parque · Pago: pagar al recibir\n1 × Tazón de Consomé Chico (Con Carne) a $80 = $80\n2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal: $150\nNotas: Sin notas"
   },
   "birria-recoger-fuera-de-horario": {
     "params": {
@@ -54,14 +54,14 @@
       "horario": "FUERA DE HORARIO, abre el sábado a las 08:00",
       "cliente": "Ana",
       "whatsapp": "+5215500001234",
-      "entrega": "Recoger en sucursal",
+      "entrega": "Recoger en sucursal · Pago: tarjeta",
       "lineas": "1 × Tazón de Consomé Chico (Con Carne) a $80 = $80; 2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70",
       "total": "$150",
       "notas": "Sin notas"
     },
     "level": 0,
-    "body": "Hola, acaba de llegar un nuevo pedido por WhatsApp.\n\nCódigo del pedido: B-EF56\nNegocio: Birria El Muñeco\nHorario: FUERA DE HORARIO, abre el sábado a las 08:00\nNombre del cliente: Ana\nWhatsApp del cliente: +5215500001234\nForma de entrega: Recoger en sucursal\nProductos: 1 × Tazón de Consomé Chico (Con Carne) a $80 = $80; 2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal a cobrar: $150\nNotas del cliente: Sin notas\n\nPor favor confirma el pedido respondiendo directamente al cliente por WhatsApp.",
-    "text": "🔔 *Nuevo pedido B-EF56* - Birria El Muñeco\nFUERA DE HORARIO, abre el sábado a las 08:00\nCliente: Ana\nWhatsApp: +5215500001234\nEntrega: Recoger en sucursal\n1 × Tazón de Consomé Chico (Con Carne) a $80 = $80\n2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal: $150\nNotas: Sin notas"
+    "body": "Hola, acaba de llegar un nuevo pedido por WhatsApp.\n\nCódigo del pedido: B-EF56\nNegocio: Birria El Muñeco\nHorario: FUERA DE HORARIO, abre el sábado a las 08:00\nNombre del cliente: Ana\nWhatsApp del cliente: +5215500001234\nForma de entrega: Recoger en sucursal · Pago: tarjeta\nProductos: 1 × Tazón de Consomé Chico (Con Carne) a $80 = $80; 2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal a cobrar: $150\nNotas del cliente: Sin notas\n\nPor favor confirma el pedido respondiendo directamente al cliente por WhatsApp.",
+    "text": "🔔 *Nuevo pedido B-EF56* - Birria El Muñeco\nFUERA DE HORARIO, abre el sábado a las 08:00\nCliente: Ana\nWhatsApp: +5215500001234\nEntrega: Recoger en sucursal · Pago: tarjeta\n1 × Tazón de Consomé Chico (Con Carne) a $80 = $80\n2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal: $150\nNotas: Sin notas"
   },
   "molotes-grande-compactado": {
     "params": {
@@ -70,13 +70,13 @@
       "horario": "En horario",
       "cliente": "Nombre de cliente bastante largo para la prueba",
       "whatsapp": "+5215500001234",
-      "entrega": "A domicilio: Calle muy larga 1234, Colonia con nombre largo, entre calles A y B, junto a la tienda azul",
-      "lineas": "(abreviado) 1 × Producto de prueba con…; 2 × Producto de prueba con…; 3 × Producto de prueba con…; 4 × Producto de prueba con…; 5 × Producto de prueba con…; 6 × Producto de prueba con…; 7 × Producto de prueba con…; 8 × Producto de prueba con…; 9 × Producto de prueba con…; 1 × Producto de prueba con…; 2 × Producto de prueba con…; 3 × Producto de prueba con…; 4 × Producto de prueba con…; 5 × Producto de prueba con…; 6 × Producto de prueba con…",
+      "entrega": "A domicilio: Calle muy larga 1234, Colonia con nombre largo, entre calles A y B, junto a la tienda azul · Pago: pagar al recibir",
+      "lineas": "(abreviado) 1 × Producto de prueba c…; 2 × Producto de prueba c…; 3 × Producto de prueba c…; 4 × Producto de prueba c…; 5 × Producto de prueba c…; 6 × Producto de prueba c…; 7 × Producto de prueba c…; 8 × Producto de prueba c…; 9 × Producto de prueba c…; 1 × Producto de prueba c…; 2 × Producto de prueba c…; 3 × Producto de prueba c…; 4 × Producto de prueba c…; 5 × Producto de prueba c…; 6 × Producto de prueba c…",
       "total": "$3,469",
       "notas": "Notas largas: sin cebolla, con salsa aparte, tocar el timbre dos veces y esperar en la puerta"
     },
     "level": 3,
-    "body": "Hola, acaba de llegar un nuevo pedido por WhatsApp.\n\nCódigo del pedido: M-GH78\nNegocio: Moloteando\nHorario: En horario\nNombre del cliente: Nombre de cliente bastante largo para la prueba\nWhatsApp del cliente: +5215500001234\nForma de entrega: A domicilio: Calle muy larga 1234, Colonia con nombre largo, entre calles A y B, junto a la tienda azul\nProductos: (abreviado) 1 × Producto de prueba con…; 2 × Producto de prueba con…; 3 × Producto de prueba con…; 4 × Producto de prueba con…; 5 × Producto de prueba con…; 6 × Producto de prueba con…; 7 × Producto de prueba con…; 8 × Producto de prueba con…; 9 × Producto de prueba con…; 1 × Producto de prueba con…; 2 × Producto de prueba con…; 3 × Producto de prueba con…; 4 × Producto de prueba con…; 5 × Producto de prueba con…; 6 × Producto de prueba con…\nTotal a cobrar: $3,469\nNotas del cliente: Notas largas: sin cebolla, con salsa aparte, tocar el timbre dos veces y esperar en la puerta\n\nPor favor confirma el pedido respondiendo directamente al cliente por WhatsApp.",
-    "text": "🔔 *Nuevo pedido M-GH78* - Moloteando\nEn horario\nCliente: Nombre de cliente bastante largo para la prueba\nWhatsApp: +5215500001234\nEntrega: A domicilio: Calle muy larga 1234, Colonia con nombre largo, entre calles A y B, junto a la tienda azul\n1 × Producto de prueba con un nombre largo número 1 · Detalle de sesenta caracteres para medir la compactación ok a $45 = $45\n2 × Producto de prueba con un nombre largo número 2 · Detalle de sesenta caracteres para medir la compactación ok a $46 = $92\n3 × Producto de prueba con un nombre largo número 3 · Detalle de sesenta caracteres para medir la compactación ok a $47 = $141\n4 × Producto de prueba con un nombre largo número 4 · Detalle de sesenta caracteres para medir la compactación ok a $48 = $192\n5 × Producto de prueba con un nombre largo número 5 · Detalle de sesenta caracteres para medir la compactación ok a $49 = $245\n6 × Producto de prueba con un nombre largo número 6 · Detalle de sesenta caracteres para medir la compactación ok a $50 = $300\n7 × Producto de prueba con un nombre largo número 7 · Detalle de sesenta caracteres para medir la compactación ok a $51 = $357\n8 × Producto de prueba con un nombre largo número 8 · Detalle de sesenta caracteres para medir la compactación ok a $52 = $416\n9 × Producto de prueba con un nombre largo número 9 · Detalle de sesenta caracteres para medir la compactación ok a $53 = $477\n1 × Producto de prueba con un nombre largo número 10 · Detalle de sesenta caracteres para medir la compactación ok a $54 = $54\n2 × Producto de prueba con un nombre largo número 11 · Detalle de sesenta caracteres para medir la compactación ok a $55 = $110\n3 × Producto de prueba con un nombre largo número 12 · Detalle de sesenta caracteres para medir la compactación ok a $56 = $168\n4 × Producto de prueba con un nombre largo número 13 · Detalle de sesenta caracteres para medir la compactación ok a $57 = $228\n5 × Producto de prueba con un nombre largo número 14 · Detalle de sesenta caracteres para medir la compactación ok a $58 = $290\n6 × Producto de prueba con un nombre largo número 15 · Detalle de sesenta caracteres para medir la compactación ok a $59 = $354\nTotal: $3,469\nNotas: Notas largas: sin cebolla, con salsa aparte, tocar el timbre dos veces y esperar en la puerta"
+    "body": "Hola, acaba de llegar un nuevo pedido por WhatsApp.\n\nCódigo del pedido: M-GH78\nNegocio: Moloteando\nHorario: En horario\nNombre del cliente: Nombre de cliente bastante largo para la prueba\nWhatsApp del cliente: +5215500001234\nForma de entrega: A domicilio: Calle muy larga 1234, Colonia con nombre largo, entre calles A y B, junto a la tienda azul · Pago: pagar al recibir\nProductos: (abreviado) 1 × Producto de prueba c…; 2 × Producto de prueba c…; 3 × Producto de prueba c…; 4 × Producto de prueba c…; 5 × Producto de prueba c…; 6 × Producto de prueba c…; 7 × Producto de prueba c…; 8 × Producto de prueba c…; 9 × Producto de prueba c…; 1 × Producto de prueba c…; 2 × Producto de prueba c…; 3 × Producto de prueba c…; 4 × Producto de prueba c…; 5 × Producto de prueba c…; 6 × Producto de prueba c…\nTotal a cobrar: $3,469\nNotas del cliente: Notas largas: sin cebolla, con salsa aparte, tocar el timbre dos veces y esperar en la puerta\n\nPor favor confirma el pedido respondiendo directamente al cliente por WhatsApp.",
+    "text": "🔔 *Nuevo pedido M-GH78* - Moloteando\nEn horario\nCliente: Nombre de cliente bastante largo para la prueba\nWhatsApp: +5215500001234\nEntrega: A domicilio: Calle muy larga 1234, Colonia con nombre largo, entre calles A y B, junto a la tienda azul · Pago: pagar al recibir\n1 × Producto de prueba con un nombre largo número 1 · Detalle de sesenta caracteres para medir la compactación ok a $45 = $45\n2 × Producto de prueba con un nombre largo número 2 · Detalle de sesenta caracteres para medir la compactación ok a $46 = $92\n3 × Producto de prueba con un nombre largo número 3 · Detalle de sesenta caracteres para medir la compactación ok a $47 = $141\n4 × Producto de prueba con un nombre largo número 4 · Detalle de sesenta caracteres para medir la compactación ok a $48 = $192\n5 × Producto de prueba con un nombre largo número 5 · Detalle de sesenta caracteres para medir la compactación ok a $49 = $245\n6 × Producto de prueba con un nombre largo número 6 · Detalle de sesenta caracteres para medir la compactación ok a $50 = $300\n7 × Producto de prueba con un nombre largo número 7 · Detalle de sesenta caracteres para medir la compactación ok a $51 = $357\n8 × Producto de prueba con un nombre largo número 8 · Detalle de sesenta caracteres para medir la compactación ok a $52 = $416\n9 × Producto de prueba con un nombre largo número 9 · Detalle de sesenta caracteres para medir la compactación ok a $53 = $477\n1 × Producto de prueba con un nombre largo número 10 · Detalle de sesenta caracteres para medir la compactación ok a $54 = $54\n2 × Producto de prueba con un nombre largo número 11 · Detalle de sesenta caracteres para medir la compactación ok a $55 = $110\n3 × Producto de prueba con un nombre largo número 12 · Detalle de sesenta caracteres para medir la compactación ok a $56 = $168\n4 × Producto de prueba con un nombre largo número 13 · Detalle de sesenta caracteres para medir la compactación ok a $57 = $228\n5 × Producto de prueba con un nombre largo número 14 · Detalle de sesenta caracteres para medir la compactación ok a $58 = $290\n6 × Producto de prueba con un nombre largo número 15 · Detalle de sesenta caracteres para medir la compactación ok a $59 = $354\nTotal: $3,469\nNotas: Notas largas: sin cebolla, con salsa aparte, tocar el timbre dos veces y esperar en la puerta"
   }
 }

@@ -58,11 +58,26 @@ describe.each(PROVIDER_DRIVERS)('contrato de ChatBot con $provider (CA-19)', (dr
   it('pedido completo: un solo aviso al personal del negocio y la confirmación al cliente', async () => {
     const { bot, double, write } = await start(driver);
     // REQ-F-013 (RF-5, RF-6): los datos en un solo mensaje y la nota, si la hay, en el resumen.
-    for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez, recoger']) await write(text);
+    for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez, recoger, efectivo']) await write(text);
     expect(await write('1')).toContain('¡Listo! 🙌\nTu pedido *M-T001* fue enviado a Moloteando');
     expect(double.staffNoticesTo(STAFF.molotes)).toEqual([{ codigo: 'M-T001' }]);
     expect(double.staffNoticesTo(STAFF.birria)).toEqual([]);
     expect(bot.hasConversation(CUSTOMER)).toBe(false);
+  });
+
+  it('pedido con transferencia (REQ-F-035): pregunta del pago, bloque de transferencia en el resumen y la confirmación', async () => {
+    const { double, write } = await start(driver);
+    for (const text of ['Hola', '2', '9', '1', '4']) await write(text);
+    expect(await write('Ana Pérez, recoger')).toContain('*3.* Transferencia');
+    const summary = await write('3');
+    expect(summary).toContain('💳 *Pago:* Transferencia');
+    expect(summary).toContain('Concepto: *M-T001*');
+    expect(summary).toContain(`https://wa.me/${STAFF.molotes}`);
+    const confirmed = await write('sí');
+    expect(confirmed).toContain('Tu pedido *M-T001* fue enviado a Moloteando');
+    expect(confirmed).toContain('Concepto: *M-T001*');
+    expect(confirmed.split('\n').at(-1)).toBe(`https://wa.me/${STAFF.molotes}`);
+    expect(double.staffNoticesTo(STAFF.molotes)).toEqual([{ codigo: 'M-T001' }]);
   });
 
   it('cancelación: no avisa al personal y cierra la conversación', async () => {

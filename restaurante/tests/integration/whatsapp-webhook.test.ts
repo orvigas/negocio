@@ -53,7 +53,7 @@ async function start({ at = mx(`${WEEK.tue}T10:00`) } = {}) {
 async function order(write: (text: string) => Promise<string>, { delivery = '2' } = {}): Promise<void> {
   // REQ-F-013, RF-5 y RF-6: los datos en un mensaje y la nota en el resumen.
   for (const text of ['Hola', '2', '1', '2', '2', '1', '9', '1', '4']) await write(text);
-  await write(delivery === '2' ? 'Ana Pérez, domicilio, Calle Secreta 742, Colonia Oculta' : 'Ana Pérez, recoger');
+  await write(delivery === '2' ? 'Ana Pérez, domicilio, Calle Secreta 742, Colonia Oculta, al recibir' : 'Ana Pérez, recoger, efectivo');
   await write('Tocar el timbre azul');
 }
 
@@ -182,7 +182,7 @@ describe('pedido completo (CA-14, CA-15, CA-21, CA-22)', () => {
       horario: 'En horario',
       cliente: 'Ana Pérez',
       whatsapp: `+${CUSTOMER}`,
-      entrega: 'A domicilio: Calle Secreta 742, Colonia Oculta',
+      entrega: 'A domicilio: Calle Secreta 742, Colonia Oculta · Pago: pagar al recibir',
       lineas: '2 × Molotes de Queso Oaxaca (orden de 3) a $130 = $260; 1 × Aguas Frescas Naturales del Día a $35 = $35',
       total: '$295',
       notas: 'Tocar el timbre azul',

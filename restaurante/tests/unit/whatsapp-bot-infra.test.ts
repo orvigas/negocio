@@ -264,6 +264,7 @@ describe('texto, teléfono y plantilla', () => {
       delivery: 'delivery',
       address: 'Calle 1\n\nCol.     Centro',
       notes: '',
+      payment: 'transfer',
       offHoursOpening: null,
     };
     const params = staffTemplateParams(order, '5215500001234');
@@ -273,7 +274,7 @@ describe('texto, teléfono y plantilla', () => {
       horario: 'En horario',
       cliente: 'Ana Pérez',
       whatsapp: '+5215500001234',
-      entrega: 'A domicilio: Calle 1 Col. Centro',
+      entrega: 'A domicilio: Calle 1 Col. Centro · Pago: transferencia',
       lineas: '2 × Agua a $35 = $70',
       total: '$70',
       notas: 'Sin notas',

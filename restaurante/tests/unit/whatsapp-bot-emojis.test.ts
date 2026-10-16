@@ -134,14 +134,16 @@ describe('uso moderado y accesible de los emojis', () => {
     delivery: 'delivery',
     address: 'Calle 5 #10',
     notes: '',
+    payment: 'transfer',
     offHoursOpening: 'mañana a las 9:00',
   };
+  const contact = 'https://wa.me/5213300000000';
 
   it('como mucho dos emojis por línea y nunca una línea solo de emojis', () => {
     const texts = [
       ...Object.values(botText).flatMap((value) => (typeof value === 'string' ? [value] : [])),
       ...BUSINESSES.flatMap(([business, at]) => [greeting(business, at, 'America/Mexico_City'), menuText(business, SCOPES[business].catalog)]),
-      summary(order),
+      summary(order, contact),
     ];
     for (const text of texts) {
       for (const line of text.split('\n')) {
@@ -152,8 +154,8 @@ describe('uso moderado y accesible de los emojis', () => {
   });
 
   it('el resumen acompaña la forma de entrega con su ícono', () => {
-    expect(summary(order)).toContain('🛵 *Entrega:* A domicilio\nCalle 5 #10');
-    expect(summary({ ...order, delivery: 'pickup', address: undefined })).toContain('🏪 *Entrega:* Recoger en sucursal');
+    expect(summary(order, contact)).toContain('🛵 *Entrega:* A domicilio\nCalle 5 #10');
+    expect(summary({ ...order, delivery: 'pickup', address: undefined }, contact)).toContain('🏪 *Entrega:* Recoger en sucursal');
   });
 
   it('los parámetros de la plantilla de Meta no llevan emojis (su texto lo fija la plantilla aprobada)', () => {

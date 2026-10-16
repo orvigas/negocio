@@ -1,9 +1,10 @@
 import { BUSINESS_IDS, type BusinessId } from '../../config/businesses.ts';
 import { commonContent } from '../../content/index.ts';
-import { botText, getBotContent, getBotVocabulary } from '../../content/bot.ts';
+import { botText, getBankAccount, getBotContent, getBotVocabulary, type BankAccount } from '../../content/bot.ts';
 import { getBusinessHours } from '../../content/hours.ts';
 import { formatPesos } from '../price.ts';
 import type { BotCatalog, CatalogOption } from './catalog.ts';
+import { PAYMENT_OPTIONS, type PaymentMethod } from './payment.ts';
 import { acceptsOrders, describeHours, describeOpening, isOpen, nextOpening } from './schedule.ts';
 import { INDENT, MAX_LINE_WIDTH, fill, splitMessage, visibleWidth } from './text.ts';
 
@@ -33,6 +34,8 @@ export interface OrderDetails {
   readonly delivery: DeliveryMethod;
   readonly address: string | undefined;
   readonly notes: string;
+  /** Forma de pago, válida para la entrega (REQ-F-035, RN-1 y RN-2). */
+  readonly payment: PaymentMethod;
   /** Próxima apertura si el pedido se hace fuera de horario (RF-6.2), o null. */
   readonly offHoursOpening: string | null;
 }
@@ -202,13 +205,41 @@ export const removePrompt = (lines: readonly CartLine[]): string =>
 const deliveryText = (order: Pick<OrderDetails, 'delivery' | 'address'>): string =>
   order.delivery === 'delivery' ? fill(botText.delivery, { direccion: order.address ?? '' }) : botText.pickup;
 
-/** Resumen para el cliente (RF-4.5). */
-export function summary(order: OrderDetails): string {
+/** Pregunta de la forma de pago con las opciones válidas para la entrega (REQ-F-035, RF-1.2). */
+export const paymentPrompt = (delivery: DeliveryMethod): string =>
+  fill(botText.askPayment, { opciones: PAYMENT_OPTIONS[delivery].map((method, index) => listItem(index + 1, botText.paymentLabels[method])).join('\n') });
+
+/**
+ * Bloque de transferencia del resumen y de la confirmación (REQ-F-035, RF-4.2 y RF-5): datos de la
+ * cuenta con el código como concepto (RN-3), cuándo transferir (RN-4) y a quién enviar el comprobante
+ * o la referencia (RN-6), con el contacto del personal solo en el último renglón. '' sin transferencia.
+ */
+export function transferBlock(
+  order: Pick<OrderDetails, 'code' | 'lines' | 'delivery' | 'payment' | 'offHoursOpening'>,
+  contact: string,
+  account: BankAccount = getBankAccount(),
+): string {
+  if (order.payment !== 'transfer') return '';
+  let when: string;
+  if (order.delivery === 'delivery') when = botText.transferWaitDelivery;
+  else if (order.offHoursOpening !== null) when = botText.transferWaitOffHours;
+  else when = fill(botText.transferNow, { total: formatPesos(cartTotal(order.lines)) });
+  return [
+    fill(botText.transferData, { beneficiario: account.beneficiary, banco: account.bank, clabe: account.clabe, codigo: order.code }),
+    fill(botText.transferConcept, { codigo: order.code }),
+    when,
+    fill(botText.transferProof, { codigo: order.code, contacto: contact }),
+  ].join('\n\n');
+}
+
+/** Resumen para el cliente (RF-4.5); con transferencia, el bloque de REQ-F-035 (RF-4.2). */
+export function summary(order: OrderDetails, contact: string): string {
   const fields = botText.summaryFields;
   // La entrega del cliente no usa `deliveryText`: ese valor es el parámetro `entrega` de la plantilla (CA-8).
   const delivery = order.delivery === 'delivery' ? `${botText.deliveryHome}\n${order.address ?? ''}` : botText.pickup;
   const data = [
     `${botText.deliveryIcons[order.delivery]} *${fields.delivery}* ${delivery}`,
+    `${botText.summaryIcons.payment} *${fields.payment}* ${botText.paymentLabels[order.payment]}`,
     `*${fields.name}* ${order.name}`,
     `*${fields.notes}* ${order.notes === '' ? botText.noNotes : order.notes}`,
   ];
@@ -220,12 +251,15 @@ export function summary(order: OrderDetails): string {
     data.join('\n'),
   ];
   if (order.offHoursOpening !== null) blocks.push(fill(botText.offHours, { apertura: order.offHoursOpening }));
+  const transfer = transferBlock(order, contact);
+  if (transfer !== '') blocks.push(transfer);
   blocks.push(botText.confirmPrompt);
   return blocks.join('\n\n');
 }
 
-export const confirmedMessage = (order: Pick<OrderDetails, 'code' | 'business'>): string =>
-  fill(botText.confirmed, { codigo: order.code, negocio: nameOf(order.business) });
+/** Pedido enviado al personal; con transferencia repite el bloque del resumen (REQ-F-035, RF-5). */
+export const confirmedMessage = (order: OrderDetails, contact: string): string =>
+  [fill(botText.confirmed, { codigo: order.code, negocio: nameOf(order.business) }), transferBlock(order, contact)].filter((block) => block !== '').join('\n\n');
 
 /** D-18: el aviso al personal falló; contacto directo. */
 export const staffFailedMessage = (order: Pick<OrderDetails, 'code' | 'business'>, contact: string): string =>
@@ -329,7 +363,7 @@ export function buildStaffTemplate(order: OrderDetails, customerWaId: string): {
     horario: order.offHoursOpening === null ? botText.staffHours : fill(botText.staffOffHours, { apertura: order.offHoursOpening }),
     cliente: order.name,
     whatsapp: `+${customerWaId}`,
-    entrega: deliveryText(order),
+    entrega: fill(botText.staffPayment, { entrega: deliveryText(order), pago: botText.staffPaymentLabels[order.payment] }),
     total: formatPesos(cartTotal(order.lines)),
     notas: order.notes === '' ? botText.noNotes : order.notes,
   };
@@ -345,6 +379,16 @@ export function buildStaffTemplate(order: OrderDetails, customerWaId: string): {
   for (const key of FREE_TEXT_PARAMS) {
     const overflow = hydrateStaffTemplate(params).length - MAX_TEMPLATE_BODY_CHARS;
     if (overflow <= 0) break;
+    if (key === 'entrega') {
+      // REQ-F-035, RF-6.3: se recorta solo la dirección; " · Pago: …" queda completo. Para recoger no hay qué recortar.
+      if (order.delivery !== 'delivery') continue;
+      const address = templateParam(order.address ?? '');
+      const clipped = clip(address, Math.max(1, address.length - overflow));
+      params[key] = templateParam(
+        fill(botText.staffPayment, { entrega: fill(botText.delivery, { direccion: clipped }), pago: botText.staffPaymentLabels[order.payment] }),
+      );
+      continue;
+    }
     const value = params[key] ?? '';
     params[key] = clip(value, Math.max(1, value.length - overflow));
   }

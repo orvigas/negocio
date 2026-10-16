@@ -18,7 +18,7 @@ const PATH = '/admin/bot';
 const WEBHOOK = '/webhooks/whatsapp';
 
 async function readyToConfirm(h: BotHarness, from: string): Promise<void> {
-  for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez, recoger']) await h.ask(text, { from });
+  for (const text of ['Hola', '2', '9', '1', '4', 'Ana Pérez, recoger, efectivo']) await h.ask(text, { from });
 }
 
 const templates = (h: BotHarness) => h.double.sent.filter((m) => m.template !== undefined);

@@ -174,7 +174,7 @@ export function createBotOrchestrator({
       protection?.orderAccepted(waId, now(), order.business);
       for (const messageId of result.messageIds) staffMessages.set(messageId, order.business, now().getTime());
       logger.info('bot_order_confirmed', { ...fields, lines: order.lines.length, totalCents: cartTotal(order.lines), offHours: order.offHoursOpening !== null });
-      await reply(waId, [confirmedMessage(order)]);
+      await reply(waId, [confirmedMessage(order, staffContact(order.business))]);
     } else {
       logger.error('bot_staff_send_failed', { ...fields, failure: result.kind, status: result.status, errorCode: result.errorCode });
       await reply(waId, [staffFailedMessage(order, staffContact(order.business))]);

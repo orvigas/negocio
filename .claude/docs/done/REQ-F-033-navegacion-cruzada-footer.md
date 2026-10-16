@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 Pull Request: https://github.com/orvigas/negocio/pull/69
 
@@ -597,3 +597,6 @@ El usuario aceptó las dos sugerencias ("Aprueba con todas las sugerencias"): el
 
 ### Commit y Pull Request (senior-fullstack, 2026-10-16)
 Commit `20a1dc4` (`feat: enlaza Birria y Molotes entre sí desde el pie de cada landing con su logo oficial`) en `feature/REQ-F-033-navegacion-cruzada-footer`. PR #69 contra `main`: https://github.com/orvigas/negocio/pull/69. CI del PR (run 38936083467) en verde: `calidad`, `docker`, `despliegue` y `auditoria` pass (`publish`, `validado` y `vigente` omitidos, como corresponde a un PR). Estado: `READY_FOR_MERGE`.
+
+### Cierre (senior-fullstack, 2026-10-16)
+El usuario mergeó el PR #69 (https://github.com/orvigas/negocio/pull/69; merge `cd20e43`) el 2026-10-16 ("Fusinado"). Ticket movido a `done/`. Estado: DONE.

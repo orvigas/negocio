@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
 ## Aprobación
 
@@ -836,6 +836,12 @@ Ninguno.
 #### Resultado final
 QA_APPROVED
 
+## Pull Request
+
+- PR: #67, https://github.com/orvigas/negocio/pull/67 (base `main`, rama `feature/REQ-F-032-veracidad-birria-unificacion-contacto`).
+- Commit: `58fc9d1` (`feat: publica textos veraces de Birria y unifica ubicación, contacto y mapa de la sucursal`).
+- CI del PR (run 38827063233): `calidad`, `docker`, `despliegue` y `auditoria` en verde (además de `cambios` y GitGuardian). `publish`, `deploy`, `validado` y `vigente` aparecen omitidos (*skipped*), como corresponde a un PR.
+
 ## Historial de cambios
 
 ### Versión 1
@@ -858,3 +864,6 @@ DEF-001 a DEF-004 corregidos con utilidades responsivas, sin cambiar textos. Ver
 
 ### QA ronda 2 (senior-qa, 2026-10-15)
 Corrección aprobada por el usuario ("si"). DEF-001 a DEF-004 corregidos y verificados; CA-1 a CA-9 en PASS. Estado: QA_APPROVED.
+
+### Pull Request (senior-fullstack, 2026-10-15)
+Commit `58fc9d1` y PR #67 contra `main`, con el CI en verde. Estado: READY_FOR_MERGE.

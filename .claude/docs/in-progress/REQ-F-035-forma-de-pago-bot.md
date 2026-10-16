@@ -2,7 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
+
+Pull Request: https://github.com/orvigas/negocio/pull/71
 
 ## Aprobación
 
@@ -683,3 +685,7 @@ Q1 de `senior-qa` (2026-10-16): el usuario aprueba la implementación ("apruebo 
 ### Versión 5
 
 Q2 de `senior-qa` (2026-10-16): el usuario aprueba el QA Action Plan ("si a todo"). Ronda 1: CA-1 a CA-19 en PASS; typecheck y lint en 0; 1928 pruebas superadas (incluidas 41 nuevas de QA); fixtures dorados conformes; sin defectos. Estado `QA_APPROVED`.
+
+### Versión 6
+
+T4 de `senior-fullstack` (2026-10-16): commit `d0ce7dd` (`feat: el bot de WhatsApp pregunta la forma de pago y guía la transferencia con el código del pedido`) en `feature/REQ-F-035-forma-de-pago-bot`. PR #71 contra `main`: https://github.com/orvigas/negocio/pull/71. CI del PR (run 38945291517) en verde: `calidad`, `docker`, `despliegue` y `auditoria` pass (`publish`, `deploy`, `validado` y `vigente` omitidos, como corresponde a un PR). Estado `READY_FOR_MERGE`.

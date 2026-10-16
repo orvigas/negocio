@@ -34,7 +34,7 @@
   "birria-domicilio-en-horario": {
     "params": {
       "codigo": "B-CD34",
-      "negocio": "Birriería El Muñeco",
+      "negocio": "Birria El Muñeco",
       "horario": "En horario",
       "cliente": "Luis",
       "whatsapp": "+5215500001234",
@@ -44,13 +44,13 @@
       "notas": "Sin notas"
     },
     "level": 0,
-    "body": "Hola, acaba de llegar un nuevo pedido por WhatsApp.\n\nCódigo del pedido: B-CD34\nNegocio: Birriería El Muñeco\nHorario: En horario\nNombre del cliente: Luis\nWhatsApp del cliente: +5215500001234\nForma de entrega: A domicilio: Av. Juárez 120, Col. Americana, frente al parque\nProductos: 1 × Tazón de Consomé Chico (Con Carne) a $80 = $80; 2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal a cobrar: $150\nNotas del cliente: Sin notas\n\nPor favor confirma el pedido respondiendo directamente al cliente por WhatsApp.",
-    "text": "🔔 *Nuevo pedido B-CD34* - Birriería El Muñeco\nEn horario\nCliente: Luis\nWhatsApp: +5215500001234\nEntrega: A domicilio: Av. Juárez 120, Col. Americana, frente al parque\n1 × Tazón de Consomé Chico (Con Carne) a $80 = $80\n2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal: $150\nNotas: Sin notas"
+    "body": "Hola, acaba de llegar un nuevo pedido por WhatsApp.\n\nCódigo del pedido: B-CD34\nNegocio: Birria El Muñeco\nHorario: En horario\nNombre del cliente: Luis\nWhatsApp del cliente: +5215500001234\nForma de entrega: A domicilio: Av. Juárez 120, Col. Americana, frente al parque\nProductos: 1 × Tazón de Consomé Chico (Con Carne) a $80 = $80; 2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal a cobrar: $150\nNotas del cliente: Sin notas\n\nPor favor confirma el pedido respondiendo directamente al cliente por WhatsApp.",
+    "text": "🔔 *Nuevo pedido B-CD34* - Birria El Muñeco\nEn horario\nCliente: Luis\nWhatsApp: +5215500001234\nEntrega: A domicilio: Av. Juárez 120, Col. Americana, frente al parque\n1 × Tazón de Consomé Chico (Con Carne) a $80 = $80\n2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal: $150\nNotas: Sin notas"
   },
   "birria-recoger-fuera-de-horario": {
     "params": {
       "codigo": "B-EF56",
-      "negocio": "Birriería El Muñeco",
+      "negocio": "Birria El Muñeco",
       "horario": "FUERA DE HORARIO, abre el sábado a las 08:00",
       "cliente": "Ana",
       "whatsapp": "+5215500001234",
@@ -60,8 +60,8 @@
       "notas": "Sin notas"
     },
     "level": 0,
-    "body": "Hola, acaba de llegar un nuevo pedido por WhatsApp.\n\nCódigo del pedido: B-EF56\nNegocio: Birriería El Muñeco\nHorario: FUERA DE HORARIO, abre el sábado a las 08:00\nNombre del cliente: Ana\nWhatsApp del cliente: +5215500001234\nForma de entrega: Recoger en sucursal\nProductos: 1 × Tazón de Consomé Chico (Con Carne) a $80 = $80; 2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal a cobrar: $150\nNotas del cliente: Sin notas\n\nPor favor confirma el pedido respondiendo directamente al cliente por WhatsApp.",
-    "text": "🔔 *Nuevo pedido B-EF56* - Birriería El Muñeco\nFUERA DE HORARIO, abre el sábado a las 08:00\nCliente: Ana\nWhatsApp: +5215500001234\nEntrega: Recoger en sucursal\n1 × Tazón de Consomé Chico (Con Carne) a $80 = $80\n2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal: $150\nNotas: Sin notas"
+    "body": "Hola, acaba de llegar un nuevo pedido por WhatsApp.\n\nCódigo del pedido: B-EF56\nNegocio: Birria El Muñeco\nHorario: FUERA DE HORARIO, abre el sábado a las 08:00\nNombre del cliente: Ana\nWhatsApp del cliente: +5215500001234\nForma de entrega: Recoger en sucursal\nProductos: 1 × Tazón de Consomé Chico (Con Carne) a $80 = $80; 2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal a cobrar: $150\nNotas del cliente: Sin notas\n\nPor favor confirma el pedido respondiendo directamente al cliente por WhatsApp.",
+    "text": "🔔 *Nuevo pedido B-EF56* - Birria El Muñeco\nFUERA DE HORARIO, abre el sábado a las 08:00\nCliente: Ana\nWhatsApp: +5215500001234\nEntrega: Recoger en sucursal\n1 × Tazón de Consomé Chico (Con Carne) a $80 = $80\n2 × Bebidas Frías del Comal (Aguas Frescas) · Horchata a $35 = $70\nTotal: $150\nNotas: Sin notas"
   },
   "molotes-grande-compactado": {
     "params": {

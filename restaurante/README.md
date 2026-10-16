@@ -1,4 +1,4 @@
-# Restaurante — Moloteando / Birriería El Muñeco
+# Restaurante — Moloteando / Birria El Muñeco
 
 > **Estado:** ambas landings implementan el diseño de `../_stich_source_/`
 > (`moloteando_aut_nticos_molotes_artesanales` y
@@ -10,7 +10,7 @@ backend está escrito en TypeScript estricto y Node lo ejecuta directamente (typ
 sin paso de compilación); el JavaScript del navegador (`public/js/`) es Vanilla JS.
 
 - **Moloteando (molotes)**: martes a viernes (`/molotes`).
-- **Birriería El Muñeco (birria)**: sábado y domingo (`/birria`). Es también la página de
+- **Birria El Muñeco (birria)**: sábado y domingo (`/birria`). Es también la página de
   inicio (`/`) todos los días.
 - **Lunes:** descanso, no abre ningún negocio.
 
@@ -535,9 +535,9 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 
 | Ruta             | Respuesta                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------------ |
-| `GET /`          | Landing de Birriería El Muñeco, siempre, con el aviso del día en `BUSINESS_TIMEZONE` (lunes descanso, martes a viernes Molotes, fin de semana ninguno; REQ-F-028) |
+| `GET /`          | Landing de Birria El Muñeco, siempre, con el aviso del día en `BUSINESS_TIMEZONE` (lunes descanso, martes a viernes Molotes, fin de semana ninguno; REQ-F-028) |
 | `GET /molotes`   | Landing de Moloteando, siempre                                                             |
-| `GET /birria`    | Landing de Birriería El Muñeco, siempre                                                    |
+| `GET /birria`    | Landing de Birria El Muñeco, siempre                                                    |
 | `GET /favicon.ico`, `GET /apple-touch-icon.png`, `GET /apple-touch-icon-precomposed.png` | Icono de Birria, el de `/` (ver [Iconos](#iconos-favicons-y-pantalla-de-inicio)) |
 | `GET /molotes.webmanifest`, `GET /birria.webmanifest` | Web App Manifest de cada negocio                                  |
 | `GET /<archivo>` | Estáticos de `public/` (sin índices ni archivos ocultos)                                   |
@@ -594,7 +594,7 @@ el webhook solo usan `ChatBot`. Cambiar de proveedor es cambiar las variables y 
 arrancar queda `bot_provider_selected` con el proveedor en el log.
 
 - **Negocio:** el del día en `BUSINESS_TIMEZONE`, con la misma regla que las landings (L-V
-  Moloteando, S-D Birriería El Muñeco). Se fija con el primer mensaje y se mantiene hasta que el
+  Moloteando, S-D Birria El Muñeco). Se fija con el primer mensaje y se mantiene hasta que el
   pedido se confirma o se cancela, o tras 2 h sin actividad. Si el cliente pide el otro negocio
   (p. ej. llega desde `/birria` un martes), el bot le indica sus días y atiende con el del día.
 - **Conversación (REQ-F-013):** solo texto. El cliente escribe su pedido como lo diría ("2
@@ -1345,7 +1345,7 @@ restaurante/
 │   └── styles/
 │       ├── shared/base.css   # Base común de ambos diseños
 │       ├── molotes/main.css  # Entrada Tailwind + tokens @theme de Moloteando
-│       ├── birria/main.css   # Entrada Tailwind + tokens @theme de Birriería El Muñeco
+│       ├── birria/main.css   # Entrada Tailwind + tokens @theme de Birria El Muñeco
 │       ├── admin/main.css    # Entrada Tailwind de la administración
 │       └── components/       # Bloques BEM propios (sin uso por ahora)
 ├── public/
@@ -1353,7 +1353,7 @@ restaurante/
 │   ├── js/
 │   │   ├── modules/          # Módulos ES compartidos (promo-form, variant-selector)
 │   │   ├── molotes/main.js   # Entrada JS de Moloteando
-│   │   └── birria/main.js    # Entrada JS de Birriería El Muñeco
+│   │   └── birria/main.js    # Entrada JS de Birria El Muñeco
 │   └── img/
 │       ├── common/           # Imágenes usadas por ambas landings
 │       ├── molotes/          # icons/: favicons e iconos de pantalla de inicio (generados)
@@ -1449,21 +1449,30 @@ Extraídos de `../_stich_source_/moloteando_aut_nticos_molotes_artesanales/code.
 - **Fuentes:** Google Fonts (familias del diseño y Material Symbols), una hoja por landing
   declarada en `content.assets.fontsHref`.
 
-La ubicación común (Google Maps) está en `src/content/common/index.ts` → `location.mapsUrl`: la
-usan la landing de Birria (y `/`) y el bot de WhatsApp. Molotes tiene su ubicación propia
-(REQ-F-031) en `src/content/molotes/index.ts` → `location` (`mapsUrl` para los enlaces y
-`embedSrc`/`embedTitle` para el mapa embebido de la sección "Servicio y Domicilio"). El iframe
-solo funciona porque la CSP de `src/app.ts` añade `frame-src https://www.google.com` a la
-política por defecto de Helmet; es el único origen de iframes permitido.
+Hay una sola sucursal (REQ-F-032): su ubicación y su contacto viven solo en
+`src/content/common/index.ts` y los usan ambas landings y el bot de WhatsApp.
+
+- `location`: `mapsUrl` (enlaces "Cómo llegar", "Recoger en sucursal" y el pie; también la
+  respuesta "Horario y ubicación" del bot) y `embedSrc` (mapa embebido de Street View en la
+  tarjeta de sucursal de Birria y en "Servicio y Domicilio" de Molotes). El `title` de cada
+  mapa es propio del negocio (`c.locations.branches.mapTitle` en Birria,
+  `c.service.mapTitle` en Molotes).
+- `contact`: teléfono de llamadas (`tel:`), correo (`mailto:`) y texto del enlace a la
+  ubicación del pie de ambas landings. El teléfono no es el WhatsApp del bot, que sigue en
+  `WHATSAPP_*`.
+
+El iframe solo funciona porque la CSP de `src/app.ts` añade `frame-src https://www.google.com`
+a la política por defecto de Helmet; es el único origen de iframes permitido.
 
 El layout carga `/css/<negocio>/main.css` y `/js/<negocio>/main.js` según el negocio activo.
 Cada hoja de Tailwind solo escanea las vistas de su negocio (`@source`), así una landing no
 incluye las clases de la otra.
 
 Todos los CTA de pedido (header, hero, banner, plataformas y botón flotante) usan el enlace
-calculado desde `WHATSAPP_MOLOTES*` / `WHATSAPP_BIRRIA*`. En Birria, los enlaces "Cómo llegar",
-la dirección del footer y las sucursales usan `location.mapsUrl` (común); en Molotes, "Cómo
-llegar" y el enlace del footer usan `c.location.mapsUrl` (propia).
+calculado desde `WHATSAPP_MOLOTES*` / `WHATSAPP_BIRRIA*`. Las plataformas de pedido son, en
+ambas landings, WhatsApp (enlace al bot), "Motomandados" (informativa: el costo del envío
+depende de la distancia) y "Recoger en sucursal" (enlace a la ubicación común), en una
+cuadrícula de 2 columnas donde la tercera casilla ocupa la fila completa.
 
 ### Iconos (favicons y pantalla de inicio)
 
@@ -1508,17 +1517,19 @@ los PNG de alta resolución de `../_stich_source_/logo_<negocio>.png/screen.png`
 
 - Enlaces `href="#"` del diseño: "Aviso de Privacidad" y "Términos" son texto hasta que
   existan esas páginas.
-- Molotes (REQ-F-031): las plataformas son solo WhatsApp (enlace al bot) y "Motomandados"
-  (informativa) en lugar de las cuatro del diseño (Uber Eats, Rappi y "En Sucursal" no existen);
-  la sección "Servicio y Domicilio" añade el mapa embebido, que el diseño no tiene, y el pie no
-  muestra correo hasta que exista uno confirmado. Los textos comerciales (promoción, métricas,
-  contacto) prevalecen sobre los del diseño. El menú de navegación apunta a las secciones de la página.
+- Plataformas (REQ-F-031 y REQ-F-032): en ambas landings son WhatsApp, "Motomandados" y
+  "Recoger en sucursal" en lugar de las cuatro del diseño (Uber Eats y Rappi no existen); la
+  tercera casilla ocupa la fila completa para que la cuadrícula no tenga huecos.
+- Molotes (REQ-F-031): la sección "Servicio y Domicilio" añade el mapa embebido, que el diseño
+  no tiene. Los textos comerciales (promoción, métricas, contacto) prevalecen sobre los del
+  diseño. El menú de navegación apunta a las secciones de la página.
 - Navegación por anclas: desplazamiento suave nativo (`scroll-behavior: smooth`, solo con
   `prefers-reduced-motion: no-preference`) y `scroll-padding-top` con el alto del header fijo
   de cada landing (`--landing-header-height` en `src/styles/<negocio>/main.css`). Los
   destinos tienen `tabindex="-1"` para que el foco quede en la sección. Sin JavaScript.
-- El mapa estático remoto de Birria se sustituye por un enlace a Google Maps con la textura
-  `fondo-birria.jpg` (no se usan imágenes remotas de Stitch).
+- Birria (REQ-F-032): una sola sucursal (el diseño muestra tres) y, en lugar del mapa estático
+  remoto, el mapa embebido de la ubicación común con el enlace "Abrir en Google Maps" debajo.
+  Los textos siguen la tabla editorial aprobada en REQ-F-032 (solo afirmaciones confirmadas).
 - Accesibilidad: etiquetas (`sr-only`) en los campos, `aria-hidden` en iconos decorativos,
   `aria-pressed` en variantes, skip link, animaciones solo con `motion-safe`, jerarquía de
   encabezados corregida (h4/h5 del diseño ajustados) y, en Moloteando, textos pequeños sobre

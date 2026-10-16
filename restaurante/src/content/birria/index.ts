@@ -1,22 +1,24 @@
 import { image } from '../images.ts';
 
 /**
- * Contenido de Birriería El Muñeco (landing de sábado y domingo; su horario de servicio está en ./hours.ts).
+ * Contenido de Birria El Muñeco (landing de sábado y domingo; su horario de servicio está en ./hours.ts).
  * Fuente: _stich_source_/birrier_a_el_mu_eco_aut_ntica_birria_de_res_color_adobo/code.html
+ * Textos: tabla editorial aprobada de REQ-F-032 (solo afirmaciones confirmadas).
  *
- * Solo datos estáticos (textos, horarios, contacto, imágenes). Los datos editables desde
- * /admin/birria (platillos, showcase del hero y textos del club) viven en el repositorio
- * de menús; su semilla es ./seed.json. El marcado vive en
+ * Solo datos estáticos (textos, horarios, imágenes). La ubicación, el teléfono y el correo son
+ * los de la única sucursal, comunes a ambas landings y al bot (../common/index.ts). Los datos
+ * editables desde /admin/birria (platillos, showcase del hero y textos del club) viven en el
+ * repositorio de menús; su semilla es ./seed.json. El marcado vive en
  * src/views/pages/birria.html y src/views/partials/birria/; los tonos visuales se
  * expresan con claves semánticas (`highlight`) que resuelve src/views/landings/birria.ts.
  */
 export const birriaContent = Object.freeze({
   id: 'birria',
-  name: 'Birriería El Muñeco',
+  name: 'Birria El Muñeco',
   seo: Object.freeze({
-    title: 'Birriería El Muñeco | Auténtica Birria de Res',
+    title: 'Birria El Muñeco | Birria de Res Estilo Los Altos de Jalisco',
     description:
-      'Carne tatemada con chiles secos, especias de Jalisco y cocción lenta de 14 horas. Servida con consomé hirviendo, tortillas doradas en grasa de adobo y queso hebra derretido.',
+      'Birria de res estilo de Los Altos de Jalisco, de cocción lenta y con consomé caldosito. Sábados y domingos de 8:00 a 15:00. Pide por WhatsApp y te la llevamos hasta tu puerta.',
   }),
   assets: Object.freeze({
     // Una sola hoja de Google Fonts por landing (familias del diseño + iconos Material Symbols).
@@ -32,138 +34,120 @@ export const birriaContent = Object.freeze({
     themeColor: '#290808',
     manifest: Object.freeze({ name: 'Birria El Muñeco', shortName: 'El Muñeco' }),
   }),
-  // Imágenes en public/img/birria/ (alt tomados del diseño; alt vacío = decorativa).
+  // Imágenes en public/img/birria/ (alt vacío = decorativa).
   images: Object.freeze({
-    logo: image('/img/birria/logo-birria.webp', 'Logo Birriería El Muñeco', 418, 512),
+    logo: image('/img/birria/logo-birria.webp', 'Birria El Muñeco', 418, 512),
     // Las repeticiones del logo junto al nombre del negocio son decorativas.
     emblem: image('/img/birria/logo-birria.webp', '', 418, 512),
     fondo: image('/img/birria/fondo-birria.jpg', '', 476, 512),
     hero: image('/img/birria/quesabirria.jpg', 'Quesatacos de birria de res con consomé', 512, 382),
-    ritual: image('/img/birria/quesabirria.jpg', 'Quesatacos sumergidos en adobo artesanal hirviendo', 512, 382),
+    ritual: image('/img/birria/quesabirria.jpg', 'Quesabirrias con su consomé', 512, 382),
   }),
   brand: Object.freeze({
     shortName: 'El Muñeco',
-    tagline: 'Auténtica Birria de Res',
+    tagline: 'Birria de Res Estilo Los Altos',
   }),
   cta: Object.freeze({ label: 'Ordenar ya!' }),
   nav: Object.freeze([
     Object.freeze({ label: 'Inicio', href: '#inicio' }),
     Object.freeze({ label: 'Menú de Birria', href: '#menu-especialidades' }),
     Object.freeze({ label: 'Quesabirrias & Consomé', href: '#menu-especialidades' }),
-    Object.freeze({ label: 'Nuestra Receta', href: '#el-ritual' }),
-    Object.freeze({ label: 'Ubicaciones', href: '#ubicaciones-pedidos' }),
+    Object.freeze({ label: 'Nuestra Birria', href: '#el-ritual' }),
+    Object.freeze({ label: 'Ubicación', href: '#ubicaciones-pedidos' }),
   ]),
   hero: Object.freeze({
-    eyebrow: 'Tradición Tapatía de Res',
-    titleLead: 'Auténtica Birria de Res y',
-    titleHighlight: 'Quesabirrias al Horno',
+    eyebrow: 'Estilo Los Altos de Jalisco',
+    titleLead: 'Birria de res bien perrona y',
+    titleHighlight: 'Quesabirrias de Rechupete',
     description:
-      'Carne tatemada con chiles secos, especias de Jalisco y cocción lenta de 14 horas. Servida con consomé hirviendo, tortillas doradas en grasa de adobo y queso hebra derretido.',
-    secondaryCta: Object.freeze({ label: 'Conoce Nuestra Tradición', href: '#el-ritual' }),
+      '¡Raza, aquí el antojo se pone serio! Birria de res estilo de Los Altos de Jalisco, de cocción lenta, con carne suavecita y consomé caldosito para que no dejes ni una gota.',
+    secondaryCta: Object.freeze({ label: 'Conoce Nuestra Birria', href: '#el-ritual' }),
     badges: Object.freeze([
-      Object.freeze({ icon: 'timer', value: '14 Horas', label: 'A Fuego Lento' }),
-      Object.freeze({ icon: 'soup_kitchen', value: '100% Puro', label: 'Consomé de Res' }),
-      Object.freeze({ icon: 'star', value: '4.9 ★', label: '+3,400 Opiniones' }),
+      Object.freeze({ icon: 'local_fire_department', value: 'Cocción lenta', label: 'Con paciencia' }),
+      Object.freeze({ icon: 'soup_kitchen', value: 'Consomé', label: 'Caldosito' }),
+      Object.freeze({ icon: 'calendar_month', value: 'Sáb y Dom', label: '8:00 a 15:00' }),
     ]),
   }),
   menu: Object.freeze({
-    eyebrow: 'Especialidades del Comal',
-    title: 'Nuestro Menú de Birria Artesanal',
-    description:
-      'Tradición tapatía con carne de res tatemada a fuego lento de 14 horas, tortillas hechas a mano y consomé servido hirviendo.',
+    eyebrow: 'Nuestro Menú',
+    title: 'Menú de Birria El Muñeco',
+    description: 'Birria de res de cocción lenta con su consomé para chopear sin pena. Escoge tu antojo y pídelo con todo.',
     orderBanner: Object.freeze({
-      title: 'Haz tu pedido directamente con nuestro asistente de WhatsApp',
-      description:
-        'Menú interactivo, cotización instantánea y confirmación automática sin comisiones ni registros.',
+      title: 'Haz tu pedido por WhatsApp',
+      description: 'Escríbenos, arma tu pedido y te confirmamos el total. Sin comisiones.',
     }),
   }),
   ritual: Object.freeze({
-    eyebrow: 'El Ritual y La Receta',
-    title: 'La Magia de la Olla de Barro y las Brasas',
+    eyebrow: 'Nuestra Birria',
+    title: 'Lumbre bajita y paciencia de la buena',
     intro: Object.freeze({
       before: 'En ',
-      strong: 'Birriería El Muñeco',
-      after:
-        ' no existen atajos modernos. No usamos saborizantes industriales ni polvos artificiales. Nuestra carne de res de primera selección se macera pacientemente en un adobo rojo vivo que ha pasado de generación en generación desde los Altos de Jalisco.',
+      strong: 'Birria El Muñeco',
+      after: ' preparamos birria de res estilo de Los Altos de Jalisco con cocción lenta, sin prisas y con mucho cariño.',
     }),
-    body: 'Al sellar la olla con masa de maíz fresco, el vapor atrapa la esencia profunda de los chiles tostados, desprendiendo los jugos colágenos directamente sobre el consomé, dejándolo espeso, aromático y reconfortante.',
-    method: Object.freeze({ label: 'Método de Cocción', title: 'Olla Sellada con Masa' }),
+    body: 'El resultado: carne suavecita que se deshace sola y un consomé caldosito para chopear con todo. Nomás sábados y domingos, así que no te quedes con las ganas.',
+    method: Object.freeze({ label: 'Preparación', title: 'Cocción lenta' }),
     steps: Object.freeze([
-      Object.freeze({
-        icon: 'flare',
-        title: '1. Marinado en Crudo',
-        text: '24 horas en adobo de chiles guajillo, ancho, pimienta gorda, clavo y canela en rama.',
-      }),
-      Object.freeze({
-        icon: 'local_fire_department',
-        title: '2. Horno de Pozo',
-        text: 'Sellado hermético sobre pencas de maguey a fuego manso toda la madrugada.',
-      }),
+      Object.freeze({ icon: 'schedule', title: '1. Sin prisas', text: 'Cocción lenta para que la carne quede suavecita.' }),
+      Object.freeze({ icon: 'soup_kitchen', title: '2. A chopear', text: 'Consomé caldosito para que no dejes ni una gota.' }),
     ]),
     metrics: Object.freeze([
-      Object.freeze({ value: '+18', label: 'Años de Tradición' }),
-      Object.freeze({ value: '3', label: 'Sucursales Activas' }),
-      Object.freeze({ value: '1.8k', label: 'Lts Consomé / Sem' }),
+      Object.freeze({ value: '1', label: 'Sucursal' }),
+      Object.freeze({ value: 'Sáb y Dom', label: 'Días de birria' }),
+      Object.freeze({ value: 'A domicilio', label: 'Por motomandados' }),
     ]),
     quote: Object.freeze({
-      text: '"El secreto no es apurar la lumbre, sino dejar que el calor de la brasa haga suave hasta el corte más rebelde."',
-      author: "— Maestro Birriero 'El Muñeco'",
+      text: '"Aquí la birria no se apura: lumbre bajita, paciencia y antojo del bueno."',
+      author: '— Birria El Muñeco',
     }),
   }),
   locations: Object.freeze({
-    eyebrow: 'Directo a tu Mesa o Domicilio',
-    title: 'Visítanos o Pide en Línea',
+    eyebrow: 'A domicilio o en la sucursal',
+    title: 'Visítanos o pide por WhatsApp',
     description:
-      'El comal arde desde temprana hora los fines de semana. Reserva tus litros de consomé antes de que se agoten.',
+      'Sábados y domingos el consomé está listo desde las 8 de la mañana. Pide por WhatsApp o date una vuelta por la sucursal.',
     schedule: Object.freeze({
-      title: 'Horarios de Servicio',
+      title: 'Horario de servicio',
       slots: Object.freeze([
         Object.freeze({
           days: 'Sábado y Domingo',
           hours: '08:00 AM – 03:00 PM',
-          note: 'Consomé matutino y quesabirrias crujientes.',
+          note: 'Birria, consomé y quesabirrias para el antojo del finde.',
         }),
         Object.freeze({
           days: 'Lunes a Viernes',
           hours: 'Cerrado',
-          note: 'Reposo y Adobo.',
+          note: 'De martes a viernes te esperan nuestros Molotes.',
         }),
       ]),
     }),
     branches: Object.freeze({
-      title: 'Nuestras 3 Sucursales',
-      badge: 'Estacionamiento Disponible',
-      directionsLabel: 'Cómo Llegar',
-      mapLabel: 'Haz click para abrir en Navegador GPS',
-      // Sin enlace propio por sucursal: se usa la ubicación común (common.location.mapsUrl).
-      items: Object.freeze([
-        Object.freeze({ name: 'Matriz San Rafael', address: 'Calle Ribera de San Cosme #142, CDMX' }),
-        Object.freeze({ name: 'Sucursal Narvarte', address: 'Av. Cuauhtémoc #789, Col. Narvarte Poniente' }),
-        Object.freeze({
-          name: 'Sucursal Coyoacán',
-          address: 'Av. Miguel Ángel de Quevedo #450, Barrio del Niño Jesús',
-        }),
-      ]),
+      title: 'Nuestra Sucursal',
+      badge: 'Pasa por tu pedido',
+      mapLabel: 'Abrir en Google Maps',
+      // Mapa embebido de la ubicación común (common.location.embedSrc; REQ-F-032, R-4).
+      mapTitle: 'Ubicación de Birria El Muñeco en Google Maps',
+      // Una sola sucursal (R-5): "Cómo llegar" enlaza a la ubicación común (common.location.mapsUrl).
+      items: Object.freeze([Object.freeze({ name: 'Birria El Muñeco', address: 'Consulta la ubicación en el mapa.' })]),
     }),
     delivery: Object.freeze({
-      title: 'Pide a Domicilio Inmediato',
+      title: 'Te la llevamos a tu puerta',
       description:
-        'Garantizamos empaque térmico especial que conserva las quesabirrias crujientes y el consomé quemando hasta tu puerta.',
-      // WhatsApp enlaza al bot configurado y Pick Up a la ubicación común; el resto no
-      // tiene enlace configurado todavía y se muestra como información.
+        'Pide por WhatsApp y te llevamos tu birria hasta la puerta con motomandados. El costo del envío depende de la distancia; te lo decimos al hacer tu pedido.',
+      // WhatsApp enlaza al bot configurado, "Motomandados" es informativa y "Recoger en
+      // sucursal" enlaza a la ubicación común (REQ-F-032, R-8). El orden coincide con la plantilla.
       platforms: Object.freeze([
         Object.freeze({ name: 'WhatsApp', note: 'Sin comisiones' }),
-        Object.freeze({ name: 'Uber Eats', note: 'Entrega Rápida' }),
-        Object.freeze({ name: 'Rappi', note: 'Puntos & Turbo' }),
-        Object.freeze({ name: 'Pick Up', note: 'Pasa al mostrador' }),
+        Object.freeze({ name: 'Motomandados', note: 'Costo según distancia' }),
+        Object.freeze({ name: 'Recoger en sucursal', note: 'Pasa por tu pedido' }),
       ]),
     }),
     club: Object.freeze({
       inputLabel: 'Correo electrónico o teléfono',
       placeholder: 'Ingresa tu correo o teléfono',
-      submit: 'Unirme',
-      success: '¡Listo! Te avisaremos el sábado en cuanto prenda el horno.',
-      disclaimer: 'Sin spam. Solo antojo, consomé y promociones reales.',
+      submit: 'Activar promoción',
+      success: '¡Listo! Pregunta por la promoción vigente al pedir por WhatsApp.',
+      disclaimer: 'Sin spam. Solo antojo y promociones reales.',
     }),
   }),
   /**
@@ -190,30 +174,27 @@ export const birriaContent = Object.freeze({
   }),
   footer: Object.freeze({
     about: Object.freeze({
-      text: 'Sabor de tradición jalisciense cocinado a fuego lento con chiles secos, especias enteras y el inconfundible aroma de leña de encino.',
-      guarantee: 'Garantía de Sazón Artesanal',
+      text: 'Birria de res estilo de Los Altos de Jalisco, de cocción lenta, con carne suavecita y consomé caldosito. ¡Para chuparse los dedos!',
+      guarantee: 'Hecha con paciencia',
     }),
     hours: Object.freeze({
-      title: 'Horarios del Comal',
+      title: 'Horario',
+      // La segunda fila (días de servicio) va destacada en la plantilla.
       rows: Object.freeze([
-        Object.freeze({ days: 'Miércoles - Viernes:', hours: 'Cerrado' }),
+        Object.freeze({ days: 'Lunes:', hours: 'Cerrado' }),
         Object.freeze({ days: 'Sábados y Domingos:', hours: '08:00 - 15:00' }),
-        Object.freeze({ days: 'Lunes y Martes:', hours: 'Reposo y Adobo' }),
+        Object.freeze({ days: 'Martes a Viernes:', hours: 'Hay Molotes' }),
       ]),
     }),
-    contact: Object.freeze({
-      title: 'Contacto & Pedidos',
-      phone: Object.freeze({ label: '+52 (55) 4123-9080', href: 'tel:+525541239080' }),
-      email: Object.freeze({ label: 'ordenes@birriaelmuneco.mx', href: 'mailto:ordenes@birriaelmuneco.mx' }),
-      address: 'Mercado Central & Sucursales',
-    }),
+    // Teléfono, correo y ubicación son los de la única sucursal: common.contact (REQ-F-032, R-6).
+    contact: Object.freeze({ title: 'Contacto y pedidos' }),
     secret: Object.freeze({
-      title: 'El Secreto del Consomé',
-      text: 'Servido siempre hirviendo, desgrasado a mano o con gordito al gusto, acompañado de tortillas recién pasadas por el comal con manteca colorada.',
-      badgeTitle: 'Consomé 100% Puro',
-      badgeText: 'Sin espesantes artificiales ni concentrados',
+      title: 'El Consomé',
+      text: 'Caldosito, calientito y listo para chopear tus quesabirrias sin pena.',
+      badgeTitle: 'Consomé para chopear',
+      badgeText: 'Pídelo con tu orden por WhatsApp.',
     }),
-    copyright: '© 2024 Birriería El Muñeco. Tradición, Fuego y Sabor Puro de Res.',
+    copyright: '© 2026 Birria El Muñeco. Todos los derechos reservados.',
     legal: Object.freeze(['Aviso de Privacidad', 'Términos del Servicio']),
   }),
 });

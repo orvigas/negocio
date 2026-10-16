@@ -92,7 +92,7 @@ describe.each(PROVIDER_DRIVERS)('conteo de mensajes con $provider (REQ-F-013, D-
     await s.write('Hola, quiero hacer un pedido de birria');
     expect((await s.write('3 quesabirrias y un consome chico con carne')).join('\n')).toContain('*Total: $275*');
     expect((await s.write(data)).join('\n')).toContain(`*Entrega:* ${delivery}`);
-    expect((await s.write('confirmo')).join('\n')).toContain('fue enviado a Birriería El Muñeco');
+    expect((await s.write('confirmo')).join('\n')).toContain('fue enviado a Birria El Muñeco');
     expect(s.customerMessages).toBeLessThanOrEqual(4);
     expect(s.botMessages).toBeLessThanOrEqual(5);
     expect(s.double.staffNoticesTo(STAFF.birria)).toHaveLength(1);

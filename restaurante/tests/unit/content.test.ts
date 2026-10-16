@@ -77,13 +77,8 @@ describe('contenido por negocio', () => {
     expect(isHttpsUrl(getBusinessContent(businessId).assets.fontsHref)).toBe(true);
   });
 
-  it('la ubicación compartida es un enlace https de Google Maps', () => {
-    expect(isHttpsUrl(commonContent.location.mapsUrl)).toBe(true);
-    expect(new URL(commonContent.location.mapsUrl).hostname).toBe('maps.app.goo.gl');
-  });
-
-  it('REQ-F-031 (R-15): Molotes tiene ubicación propia en www.google.com con sus coordenadas oficiales', () => {
-    const { location } = getBusinessContent('molotes');
+  it('REQ-F-031 (R-15) y REQ-F-032 (R-3): la ubicación de la única sucursal es común, en www.google.com y con sus coordenadas oficiales', () => {
+    const { location } = commonContent;
     const maps = new URL(location.mapsUrl);
     const embed = new URL(location.embedSrc);
     for (const url of [maps, embed]) {
@@ -95,8 +90,21 @@ describe('contenido por negocio', () => {
     expect(maps.searchParams.get('query')).toBe('18.81823603166285,-98.96914471124853');
     expect(embed.pathname).toBe('/maps/embed');
     expect(embed.searchParams.get('pb')).toContain('!1d18.81823603166285!2d-98.96914471124853');
-    expect(location.embedTitle).toBe('Ubicación de Moloteando en Google Maps');
-    expect(location.mapsUrl).not.toBe(commonContent.location.mapsUrl);
+    // Ningún negocio guarda una copia propia de la ubicación (RN-3).
+    for (const businessId of BUSINESS_IDS) expect(getBusinessContent(businessId)).not.toHaveProperty('location');
+    expect(getBusinessContent('molotes').service.mapTitle).toBe('Ubicación de Moloteando en Google Maps');
+    expect(getBusinessContent('birria').locations.branches.mapTitle).toBe('Ubicación de Birria El Muñeco en Google Maps');
+  });
+
+  it('REQ-F-032 (R-6): el teléfono y el correo comunes enlazan al mismo dato que muestran', () => {
+    const { phone, email } = commonContent.contact;
+    expect(phone).toEqual({ label: '+52 735 278 2306', href: 'tel:+527352782306' });
+    expect(phone.href.replace(/\D/g, '')).toBe(phone.label.replace(/\D/g, ''));
+    expect(email).toEqual({ label: 'ordenes@birriaelmuneco.mx', href: 'mailto:ordenes@birriaelmuneco.mx' });
+    expect(email.href).toBe(`mailto:${email.label}`);
+    for (const businessId of BUSINESS_IDS) {
+      expect(Object.keys(getBusinessContent(businessId).footer.contact)).toEqual(['title']);
+    }
   });
 
   it.each(BUSINESS_IDS)('%s: la semilla cumple el esquema editable', (businessId) => {

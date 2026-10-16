@@ -254,13 +254,21 @@
                   <span class="font-label-md text-label-md text-on-surface">{{ c.service.platforms.1.name }}</span>
                   <span class="font-label-sm text-[9px] text-outline">{{ c.service.platforms.1.note }}</span>
                 </li>
+                <li class="col-span-2">
+                  <a class="platform group flex h-full flex-col items-center justify-center gap-1 rounded-xl bg-surface-container p-space-sm text-center transition-colors hover:bg-surface-container-high" href="{{ location.mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">
+                    <span class="material-symbols-outlined text-2xl text-primary transition-transform group-hover:scale-110" aria-hidden="true">storefront</span>
+                    <span class="font-label-md text-label-md text-on-surface">{{ c.service.platforms.2.name }}</span>
+                    <span class="font-label-sm text-[9px] text-outline">{{ c.service.platforms.2.note }}</span>
+                    <span class="sr-only"> {{ location.assistiveText }}</span>
+                  </a>
+                </li>
               </ul>
             </div>
             <div class="service__map space-y-space-xs">
               <div class="service__map-frame aspect-video w-full overflow-hidden rounded-2xl bg-surface-container shadow-md">
-                <iframe class="block h-full w-full border-0" src="{{ c.location.embedSrc }}" title="{{ c.location.embedTitle }}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+                <iframe class="block h-full w-full border-0" src="{{ location.embedSrc }}" title="{{ c.service.mapTitle }}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
               </div>
-              <a class="service__directions inline-flex items-center gap-space-xs font-label-md text-label-md font-bold text-[rgb(3,43,95)] transition-colors hover:text-secondary" href="{{ c.location.mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">
+              <a class="service__directions inline-flex items-center gap-space-xs font-label-md text-label-md font-bold text-[rgb(3,43,95)] transition-colors hover:text-secondary" href="{{ location.mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">
                 <span class="material-symbols-outlined text-[20px]" aria-hidden="true">directions</span>{{ location.label }}<span class="sr-only"> {{ location.assistiveText }}</span>
               </a>
             </div>
@@ -338,8 +346,9 @@
       <h2 class="font-title-md text-title-md font-semibold text-on-surface">{{ c.footer.contact.title }}</h2>
       <address class="not-italic">
         <ul class="space-y-space-sm font-body-md text-body-md">
-          <li class="flex items-start gap-space-xs"><span class="material-symbols-outlined mt-0.5 text-[20px] text-secondary" aria-hidden="true">location_on</span><a class="hover:text-secondary" href="{{ c.location.mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">{{ c.footer.contact.address }}<span class="sr-only"> {{ c.footer.contact.addressAssistiveText }}</span></a></li>
-          <li class="flex items-center gap-space-xs"><span class="material-symbols-outlined text-[20px] text-tertiary" aria-hidden="true">call</span><a class="hover:text-secondary" href="{{ c.footer.contact.phone.href }}">{{ c.footer.contact.phone.label }}</a></li>
+          <li class="flex items-start gap-space-xs"><span class="material-symbols-outlined mt-0.5 text-[20px] text-secondary" aria-hidden="true">location_on</span><a class="hover:text-secondary" href="{{ location.mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">{{ common.contact.mapLabel }}<span class="sr-only"> {{ location.newTabText }}</span></a></li>
+          <li class="flex items-center gap-space-xs"><span class="material-symbols-outlined text-[20px] text-tertiary" aria-hidden="true">call</span><a class="hover:text-secondary" href="{{ common.contact.phone.href }}">{{ common.contact.phone.label }}</a></li>
+          <li class="flex items-center gap-space-xs"><span class="material-symbols-outlined text-[20px] text-tertiary" aria-hidden="true">mail</span><a class="break-all hover:text-secondary" href="{{ common.contact.email.href }}">{{ common.contact.email.label }}</a></li>
         </ul>
       </address>
     </div>

@@ -132,8 +132,8 @@ export function createApp({
 
   app.use(createRequestLogger({ logger }));
   app.use(createErrorHandler({ logger, exposeStack: config.nodeEnv === 'development' }));
-  // CSP por defecto de Helmet más un único origen de iframes: el mapa embebido de Molotes
-  // (REQ-F-031, R-17). Ninguna otra directiva cambia.
+  // CSP por defecto de Helmet más un único origen de iframes: el mapa embebido de la sucursal,
+  // en ambas landings (REQ-F-031, R-17; REQ-F-032, R-4). Ninguna otra directiva cambia.
   app.use(helmet({ contentSecurityPolicy: { directives: { 'frame-src': ['https://www.google.com'] } } }));
   app.use(createAdminGate({ config, logger, users, renderUnavailable }));
   app.use(

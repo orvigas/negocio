@@ -74,7 +74,7 @@ describe.each(PROVIDER_DRIVERS)('QA REQ-F-013 con $provider', (driver) => {
     const summary = await s.write('Zqxnombre, domicilio, Calle Zqxcalle 5, Col. Centro');
     expect(summary).toContain('*Nombre:* Zqxnombre');
     expect(await s.write('zqxnota sin picante')).toContain('*Notas:* zqxnota sin picante');
-    expect(await s.write('sí por favor')).toContain('fue enviado a Birriería El Muñeco');
+    expect(await s.write('sí por favor')).toContain('fue enviado a Birria El Muñeco');
     expect(s.double.staffNoticesTo(STAFF.birria)).toHaveLength(1);
     const notice = JSON.stringify(s.double.requests);
     expect(notice).toContain('2 × Taco de Birria con Tortilla de Mano · zqxdetalle a $40 = $80');

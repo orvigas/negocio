@@ -53,20 +53,20 @@
                 <span>{{ c.hero.secondaryCta.label }}</span>
               </a>
             </div>
-            <ul class="hero__badges grid w-full max-w-xl grid-cols-3 gap-3 pt-2">
-              <li class="trust-badge flex flex-col rounded-xl border border-[#ab2215]/50 bg-[#550c0c]/85 p-3.5 shadow-md backdrop-blur-sm">
+            <ul class="hero__badges grid w-full max-w-xl grid-cols-3 gap-2 pt-2 sm:gap-3">
+              <li class="trust-badge flex flex-col rounded-xl border border-[#ab2215]/50 bg-[#550c0c]/85 p-2.5 shadow-md backdrop-blur-sm sm:p-3.5">
                 <span class="material-symbols-outlined text-[24px] text-amber-light" aria-hidden="true">{{ c.hero.badges.0.icon }}</span>
-                <span class="mt-1 font-headline text-xl font-bold text-white">{{ c.hero.badges.0.value }}</span>
+                <span class="mt-1 font-headline text-sm font-bold text-white min-[360px]:text-base sm:text-xl">{{ c.hero.badges.0.value }}</span>
                 <span class="font-label text-[11px] text-[#ffd1c7] uppercase">{{ c.hero.badges.0.label }}</span>
               </li>
-              <li class="trust-badge flex flex-col rounded-xl border border-[#ab2215]/50 bg-[#550c0c]/85 p-3.5 shadow-md backdrop-blur-sm">
+              <li class="trust-badge flex flex-col rounded-xl border border-[#ab2215]/50 bg-[#550c0c]/85 p-2.5 shadow-md backdrop-blur-sm sm:p-3.5">
                 <span class="material-symbols-outlined text-[24px] text-amber-glow" aria-hidden="true">{{ c.hero.badges.1.icon }}</span>
-                <span class="mt-1 font-headline text-xl font-bold text-white">{{ c.hero.badges.1.value }}</span>
+                <span class="mt-1 font-headline text-sm font-bold text-white min-[360px]:text-base sm:text-xl">{{ c.hero.badges.1.value }}</span>
                 <span class="font-label text-[11px] text-[#ffd1c7] uppercase">{{ c.hero.badges.1.label }}</span>
               </li>
-              <li class="trust-badge flex flex-col rounded-xl border border-[#ab2215]/50 bg-[#550c0c]/85 p-3.5 shadow-md backdrop-blur-sm">
+              <li class="trust-badge flex flex-col rounded-xl border border-[#ab2215]/50 bg-[#550c0c]/85 p-2.5 shadow-md backdrop-blur-sm sm:p-3.5">
                 <span class="material-symbols-outlined text-[24px] text-amber-300" aria-hidden="true">{{ c.hero.badges.2.icon }}</span>
-                <span class="mt-1 font-headline text-xl font-bold text-white">{{ c.hero.badges.2.value }}</span>
+                <span class="mt-1 font-headline text-sm font-bold text-white min-[360px]:text-base sm:text-xl">{{ c.hero.badges.2.value }}</span>
                 <span class="font-label text-[11px] text-[#ffd1c7] uppercase">{{ c.hero.badges.2.label }}</span>
               </li>
             </ul>
@@ -178,18 +178,18 @@
             <h2 id="ritual-title" class="font-headline text-3xl font-black tracking-tight text-white uppercase sm:text-4xl">{{ c.ritual.title }}</h2>
             <p class="font-body text-base leading-relaxed text-cream-muted">{{ c.ritual.intro.before }}<strong class="font-bold text-white">{{ c.ritual.intro.strong }}</strong>{{ c.ritual.intro.after }}</p>
             <p class="font-body text-base leading-relaxed text-cream-muted">{{ c.ritual.body }}</p>
-            <dl class="ritual__metrics grid grid-cols-3 gap-3.5 pt-2">
+            <dl class="ritual__metrics grid grid-cols-1 gap-3.5 pt-2 sm:grid-cols-3">
               <div class="flex flex-col-reverse rounded-xl border border-amber-glow/40 bg-[#781515] p-4 text-center shadow-lg">
                 <dt class="mt-2 block font-label text-xs font-bold text-cream uppercase">{{ c.ritual.metrics.0.label }}</dt>
-                <dd class="block font-headline text-3xl leading-none font-black text-amber-glow sm:text-4xl">{{ c.ritual.metrics.0.value }}</dd>
+                <dd class="block font-headline text-3xl leading-none font-black text-amber-glow sm:text-2xl lg:text-xl xl:text-2xl">{{ c.ritual.metrics.0.value }}</dd>
               </div>
               <div class="flex flex-col-reverse rounded-xl border border-amber-glow/40 bg-[#781515] p-4 text-center shadow-lg">
                 <dt class="mt-2 block font-label text-xs font-bold text-cream uppercase">{{ c.ritual.metrics.1.label }}</dt>
-                <dd class="block font-headline text-3xl leading-none font-black text-amber-light sm:text-4xl">{{ c.ritual.metrics.1.value }}</dd>
+                <dd class="block font-headline text-3xl leading-none font-black text-amber-light sm:text-2xl lg:text-xl xl:text-2xl">{{ c.ritual.metrics.1.value }}</dd>
               </div>
               <div class="flex flex-col-reverse rounded-xl border border-amber-glow/40 bg-[#781515] p-4 text-center shadow-lg">
                 <dt class="mt-2 block font-label text-xs font-bold text-cream uppercase">{{ c.ritual.metrics.2.label }}</dt>
-                <dd class="block font-headline text-3xl leading-none font-black text-amber-300 sm:text-4xl">{{ c.ritual.metrics.2.value }}</dd>
+                <dd class="block font-headline text-3xl leading-none font-black text-amber-300 sm:text-2xl lg:text-xl xl:text-2xl">{{ c.ritual.metrics.2.value }}</dd>
               </div>
             </dl>
             <div class="ritual__quote flex items-start gap-3 rounded-r-xl border-l-4 border-amber-glow bg-[#6b1010] p-5 shadow-md">
@@ -247,14 +247,16 @@
               <ol class="space-y-3">
                 {{{ branches }}}
               </ol>
-              <a class="branches-card__map relative block h-44 w-full overflow-hidden rounded-xl border border-[#9b1e1e] bg-cover bg-center shadow-inner focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-glow" style="background-image: url('{{ img.fondo.src }}')" href="{{ location.mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">
-                <span class="pointer-events-none absolute inset-0 bg-[#871414]/25" aria-hidden="true"></span>
-                <span class="absolute bottom-3 left-3 flex items-center gap-2 rounded-lg border border-amber-glow/40 bg-[#4a0808]/95 px-3 py-1.5 backdrop-blur-sm">
+              <div class="branches-card__map space-y-3">
+                <div class="branches-card__map-frame aspect-video w-full overflow-hidden rounded-xl border border-[#9b1e1e] bg-[#590d0d] shadow-inner">
+                  <iframe class="block h-full w-full border-0" src="{{ location.embedSrc }}" title="{{ c.locations.branches.mapTitle }}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+                </div>
+                <a class="branches-card__map-link inline-flex items-center gap-2 rounded-lg border border-amber-glow/40 bg-[#4a0808] px-3 py-1.5 transition-colors hover:bg-[#781515] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-glow" href="{{ location.mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">
                   <span class="material-symbols-outlined text-[18px] text-amber-glow" aria-hidden="true">pin_drop</span>
                   <span class="font-label text-xs font-semibold text-white uppercase">{{ c.locations.branches.mapLabel }}</span>
-                  <span class="sr-only"> {{ location.assistiveText }}</span>
-                </span>
-              </a>
+                  <span class="sr-only"> {{ location.newTabText }}</span>
+                </a>
+              </div>
             </div>
           </div>
           <div class="flex flex-col space-y-6 lg:col-span-5">
@@ -263,7 +265,7 @@
               <p class="font-body text-sm text-cream-muted">{{ c.locations.delivery.description }}</p>
               <ul class="grid grid-cols-2 gap-3 pt-1">
                 <li>
-                  <a class="platform flex h-full items-center gap-2.5 rounded-xl border border-[#8e1919] bg-[#590d0d] p-3.5 shadow-xs transition-all hover:border-green-400/60 hover:bg-[#781515]" href="{{ whatsapp.href }}" target="_blank" rel="noopener noreferrer" data-action="whatsapp-order" data-business="{{ businessId }}">
+                  <a class="platform flex h-full flex-col items-start gap-1.5 rounded-xl border border-[#8e1919] bg-[#590d0d] p-3.5 shadow-xs transition-all hover:border-green-400/60 sm:flex-row sm:items-center sm:gap-2.5 hover:bg-[#781515]" href="{{ whatsapp.href }}" target="_blank" rel="noopener noreferrer" data-action="whatsapp-order" data-business="{{ businessId }}">
                     <span class="material-symbols-outlined text-[26px] text-green-400" aria-hidden="true">chat</span>
                     <span class="flex flex-col">
                       <span class="font-label text-xs font-bold text-white">{{ c.locations.delivery.platforms.0.name }}</span>
@@ -272,26 +274,19 @@
                     </span>
                   </a>
                 </li>
-                <li class="platform flex items-center gap-2.5 rounded-xl border border-[#8e1919] bg-[#590d0d] p-3.5 shadow-xs">
-                  <span class="material-symbols-outlined text-[26px] text-amber-glow" aria-hidden="true">delivery_dining</span>
+                <li class="platform flex flex-col items-start gap-1.5 rounded-xl border border-[#8e1919] bg-[#590d0d] p-3.5 shadow-xs sm:flex-row sm:items-center sm:gap-2.5">
+                  <span class="material-symbols-outlined text-[26px] text-orange-400" aria-hidden="true">moped</span>
                   <span class="flex flex-col">
                     <span class="font-label text-xs font-bold text-white">{{ c.locations.delivery.platforms.1.name }}</span>
                     <span class="font-body text-[11px] text-cream-muted">{{ c.locations.delivery.platforms.1.note }}</span>
                   </span>
                 </li>
-                <li class="platform flex items-center gap-2.5 rounded-xl border border-[#8e1919] bg-[#590d0d] p-3.5 shadow-xs">
-                  <span class="material-symbols-outlined text-[26px] text-orange-400" aria-hidden="true">moped</span>
-                  <span class="flex flex-col">
-                    <span class="font-label text-xs font-bold text-white">{{ c.locations.delivery.platforms.2.name }}</span>
-                    <span class="font-body text-[11px] text-cream-muted">{{ c.locations.delivery.platforms.2.note }}</span>
-                  </span>
-                </li>
-                <li>
-                  <a class="platform flex h-full items-center gap-2.5 rounded-xl border border-[#8e1919] bg-[#590d0d] p-3.5 shadow-xs transition-all hover:border-amber-light/60 hover:bg-[#781515]" href="{{ location.mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">
+                <li class="col-span-2">
+                  <a class="platform flex h-full flex-col items-start gap-1.5 rounded-xl border border-[#8e1919] bg-[#590d0d] p-3.5 shadow-xs transition-all hover:border-amber-light/60 hover:bg-[#781515] sm:flex-row sm:items-center sm:gap-2.5" href="{{ location.mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">
                     <span class="material-symbols-outlined text-[26px] text-amber-300" aria-hidden="true">shopping_bag</span>
                     <span class="flex flex-col">
-                      <span class="font-label text-xs font-bold text-white">{{ c.locations.delivery.platforms.3.name }}</span>
-                      <span class="font-body text-[11px] text-cream-muted">{{ c.locations.delivery.platforms.3.note }}</span>
+                      <span class="font-label text-xs font-bold text-white">{{ c.locations.delivery.platforms.2.name }}</span>
+                      <span class="font-body text-[11px] text-cream-muted">{{ c.locations.delivery.platforms.2.note }}</span>
                       <span class="sr-only"> {{ location.assistiveText }}</span>
                     </span>
                   </a>
@@ -353,9 +348,9 @@
         <h2 class="font-headline text-base font-bold text-amber-light uppercase">{{ c.footer.contact.title }}</h2>
         <address class="not-italic">
           <ul class="space-y-2 font-body text-sm">
-            <li class="flex items-center gap-2"><span class="material-symbols-outlined text-[19px] text-amber-glow" aria-hidden="true">call</span><a class="text-white hover:underline" href="{{ c.footer.contact.phone.href }}">{{ c.footer.contact.phone.label }}</a></li>
-            <li class="flex items-center gap-2"><span class="material-symbols-outlined text-[19px] text-amber-glow" aria-hidden="true">mail</span><a class="text-white hover:underline" href="{{ c.footer.contact.email.href }}">{{ c.footer.contact.email.label }}</a></li>
-            <li class="flex items-center gap-2"><span class="material-symbols-outlined text-[19px] text-amber-glow" aria-hidden="true">location_on</span><a class="text-white hover:underline" href="{{ location.mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">{{ c.footer.contact.address }}<span class="sr-only"> {{ location.assistiveText }}</span></a></li>
+            <li class="flex items-center gap-2"><span class="material-symbols-outlined text-[19px] text-amber-glow" aria-hidden="true">call</span><a class="text-white hover:underline" href="{{ common.contact.phone.href }}">{{ common.contact.phone.label }}</a></li>
+            <li class="flex items-center gap-2"><span class="material-symbols-outlined text-[19px] text-amber-glow" aria-hidden="true">mail</span><a class="break-all text-white hover:underline" href="{{ common.contact.email.href }}">{{ common.contact.email.label }}</a></li>
+            <li class="flex items-center gap-2"><span class="material-symbols-outlined text-[19px] text-amber-glow" aria-hidden="true">location_on</span><a class="text-white hover:underline" href="{{ location.mapsUrl }}" target="_blank" rel="noopener noreferrer" data-action="open-map">{{ common.contact.mapLabel }}<span class="sr-only"> {{ location.newTabText }}</span></a></li>
           </ul>
         </address>
       </div>

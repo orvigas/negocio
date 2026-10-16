@@ -1,7 +1,7 @@
 import { birriaContent } from './index.ts';
 
 /**
- * Textos propios de Birriería El Muñeco en el bot de WhatsApp (REQ-F-009). Los textos del flujo
+ * Textos propios de Birria El Muñeco en el bot de WhatsApp (REQ-F-009). Los textos del flujo
  * están en src/content/common/bot.ts; el horario sale de ./hours.ts.
  */
 export const birriaBot = Object.freeze({

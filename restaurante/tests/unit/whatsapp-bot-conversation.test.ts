@@ -57,7 +57,7 @@ describe('selección del negocio (RF-3)', () => {
     expect(greetingTue).toContain('Estamos abiertos hasta las 15:00');
 
     const saturday = await makeBotHarness({ at: mx(`${WEEK.sat}T10:00`) });
-    expect(await saturday.ask('Hola')).toContain('Birriería El Muñeco');
+    expect(await saturday.ask('Hola')).toContain('Birria El Muñeco');
   });
 
   it('CA-6a: un pedido de Molotes del lunes a las 23:50 confirmado el martes 00:10 sigue siendo de Molotes', async () => {
@@ -90,10 +90,10 @@ describe('selección del negocio (RF-3)', () => {
 
   it('CA-6b: lo mismo con Birria entre el domingo 23:50 y el lunes 00:10', async () => {
     const h = await makeBotHarness({ at: mx(`${WEEK.sun}T23:50`) });
-    expect(await h.ask('Hola')).toContain('Birriería El Muñeco');
+    expect(await h.ask('Hola')).toContain('Birria El Muñeco');
     h.clock.now = mx(`${WEEK.nextMon}T00:10`);
-    expect(await h.ask('menu')).toContain('Menú de Birriería El Muñeco');
-    expect(await h.ask('2')).toContain('Birriería El Muñeco* no está tomando pedidos: abre el sábado a las 08:00');
+    expect(await h.ask('menu')).toContain('Menú de Birria El Muñeco');
+    expect(await h.ask('2')).toContain('Birria El Muñeco* no está tomando pedidos: abre el sábado a las 08:00');
   });
 
   it('CA-7: tras 2 h sin actividad empieza una conversación nueva con el negocio de ese momento', async () => {
@@ -102,7 +102,7 @@ describe('selección del negocio (RF-3)', () => {
     expect(h.bot.hasConversation(CUSTOMER)).toBe(true);
     h.clock.now = mx(`${WEEK.sat}T00:31`);
     expect(h.bot.hasConversation(CUSTOMER)).toBe(false);
-    expect(await h.ask('Hola')).toContain('Birriería El Muñeco');
+    expect(await h.ask('Hola')).toContain('Birria El Muñeco');
     expect(h.logger.lines.filter((line) => line.msg === 'bot_conversation_started').map((line) => line.business)).toEqual(['molotes', 'birria']);
   });
 
@@ -110,14 +110,14 @@ describe('selección del negocio (RF-3)', () => {
     const h = await makeBotHarness({ at: mx(`${WEEK.tue}T10:00`) });
     const reply = await h.ask('Hola, quiero hacer un pedido de birria');
     expect(reply).toContain('Te atiende el asistente de *Moloteando*');
-    expect(reply).toContain('*Birriería El Muñeco* atiende sábado y domingo de 08:00 a 15:00');
+    expect(reply).toContain('*Birria El Muñeco* atiende sábado y domingo de 08:00 a 15:00');
   });
 
   it('RF-3.4: también si lo pide más tarde, en el menú', async () => {
     const h = await makeBotHarness({ at: mx(`${WEEK.tue}T10:00`) });
     await h.ask('Hola');
     await h.ask('1');
-    expect(await h.ask('quiero quesabirria')).toContain('Birriería El Muñeco* atiende sábado y domingo');
+    expect(await h.ask('quiero quesabirria')).toContain('Birria El Muñeco* atiende sábado y domingo');
   });
 });
 
@@ -375,7 +375,9 @@ describe('opciones del cliente (D-10, D-15, RF-4.7 a RF-4.9)', () => {
     await h.ask('Hola');
     const reply = await h.ask('3');
     expect(reply).toContain('*Moloteando* atiende martes a viernes de 08:30 a 15:00');
-    expect(reply).toContain('https://maps.app.goo.gl/');
+    // Ubicación de la única sucursal (REQ-F-032, R-10).
+    expect(reply).toContain('https://www.google.com/maps/search/?api=1&query=18.81823603166285,-98.96914471124853');
+    expect(reply).not.toContain('maps.app.goo.gl');
   });
 });
 
@@ -383,7 +385,7 @@ describe('horario (RF-6, D-16)', () => {
   it.each([
     [`${WEEK.wed}T16:00`, 'Moloteando', 'mañana jueves a las 08:30'],
     [`${WEEK.wed}T07:00`, 'Moloteando', 'hoy a las 08:30'],
-    [`${WEEK.sat}T16:00`, 'Birriería El Muñeco', 'mañana domingo a las 08:00'],
+    [`${WEEK.sat}T16:00`, 'Birria El Muñeco', 'mañana domingo a las 08:00'],
   ])('CA-19: %s avisa cuándo abre, deja pedir y marca el resumen', async (local, name, opening) => {
     const h = await makeBotHarness({ at: mx(local) });
     const greeting = await h.ask('Hola');
@@ -411,8 +413,8 @@ describe('horario (RF-6, D-16)', () => {
   });
 
   it.each([
-    [`${WEEK.fri}T16:00`, 'Moloteando', 'el martes a las 08:30', 'Birriería El Muñeco', 'mañana sábado a las 08:00'],
-    [`${WEEK.sun}T16:00`, 'Birriería El Muñeco', 'el sábado a las 08:00', 'Moloteando', 'el martes a las 08:30'],
+    [`${WEEK.fri}T16:00`, 'Moloteando', 'el martes a las 08:30', 'Birria El Muñeco', 'mañana sábado a las 08:00'],
+    [`${WEEK.sun}T16:00`, 'Birria El Muñeco', 'el sábado a las 08:00', 'Moloteando', 'el martes a las 08:30'],
   ])('CA-28: %s no toma el pedido, informa las aperturas y ofrece una persona', async (local, name, opening, other, otherOpening) => {
     const h = await makeBotHarness({ at: mx(local) });
     const greeting = await h.ask('Hola');

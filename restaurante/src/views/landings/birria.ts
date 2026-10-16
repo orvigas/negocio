@@ -10,7 +10,7 @@ type DetailRenderer<T extends DetailsType> = (
 ) => SafeHtml;
 
 /**
- * Landing de Birriería El Muñeco: compone src/views/pages/birria.html.
+ * Landing de Birria El Muñeco: compone src/views/pages/birria.html.
  * Cada platillo tiene un bloque de detalle distinto según el diseño (`details.type`).
  */
 const DETAIL_RENDERERS: { readonly [T in DetailsType]: DetailRenderer<T> } = Object.freeze({
@@ -80,11 +80,11 @@ function renderBranches(renderer: Renderer, view: LandingViewData<'birria'>): Sa
     'partials/birria/branch',
     branches.items.map((branch, index) => ({
       ...branch,
-      // La matriz (primera sucursal) se destaca en el diseño.
+      // La primera sucursal se destaca en el diseño (hoy hay una sola; REQ-F-032, R-5).
       number: renderer.render(index === 0 ? 'partials/birria/branch-number-main' : 'partials/birria/branch-number', {
         number: index + 1,
       }),
-      directionsLabel: branches.directionsLabel,
+      directionsLabel: view.location.label,
       mapsUrl: view.location.mapsUrl,
       assistiveText: view.location.assistiveText,
     })),

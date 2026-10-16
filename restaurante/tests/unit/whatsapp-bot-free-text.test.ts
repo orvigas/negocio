@@ -103,7 +103,7 @@ describe('rechazos (CA-8, CA-9)', () => {
     const h = await makeBotHarness({ at: TUESDAY });
     await h.ask('Hola');
     const reply = await h.ask('2 tacos de birria');
-    expect(reply).toContain('*Birriería El Muñeco* atiende sábado y domingo');
+    expect(reply).toContain('*Birria El Muñeco* atiende sábado y domingo');
     expect(reply).not.toContain('Agregado');
     expect(await h.ask('carrito')).toContain('Tu carrito está vacío.');
   });

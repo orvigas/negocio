@@ -6,7 +6,7 @@ import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../../src/app.ts';
-import { BUSINESS, BUSINESS_IDS, type BusinessId } from '../../src/config/businesses.ts';
+import { BUSINESS_IDS, type BusinessId } from '../../src/config/businesses.ts';
 import type { Config } from '../../src/config/env.ts';
 import { commonContent, getBusinessContent } from '../../src/content/index.ts';
 import { loadSeedDocument } from '../../src/content/seeds.ts';
@@ -48,10 +48,10 @@ const PAGES = {
     title: 'Moloteando | Auténticos Molotes Artesanales',
     whatsapp: WA_MOLOTES,
     fonts: 'family=Epilogue:ital',
-    other: 'Birriería',
+    other: 'Quesabirrias',
   },
   birria: {
-    title: 'Birriería El Muñeco | Auténtica Birria de Res',
+    title: 'Birria El Muñeco | Birria de Res Estilo Los Altos de Jalisco',
     whatsapp: WA_BIRRIA,
     fonts: 'family=Plus+Jakarta+Sans',
     other: 'Moloteando',
@@ -301,10 +301,14 @@ describe('GET /birria: contenido del diseño', () => {
     expect(text).toContain('Quesabirria con Tortilla de Mano');
   });
 
-  it('enlaza las sucursales a la ubicación común de Google Maps', async () => {
+  it('muestra una sola sucursal enlazada a la ubicación común (REQ-F-032, R-5)', async () => {
     const { text } = await (await agent()).get('/birria');
-    expect(text.match(/href="https:\/\/maps\.app\.goo\.gl\/sAFDEeLdKzs7GGPz9"/g)!.length).toBeGreaterThanOrEqual(3);
-    expect(text).toContain('Matriz San Rafael');
+    const document = new JSDOM(text).window.document;
+    const branches = document.querySelectorAll('.branches-card ol > li');
+    expect(branches).toHaveLength(1);
+    expect(branches[0]!.querySelector('h4')?.textContent).toBe('Birria El Muñeco');
+    expect(branches[0]!.querySelector('a')?.getAttribute('href')).toBe(commonContent.location.mapsUrl);
+    expect(text).not.toContain('Matriz San Rafael');
   });
 });
 
@@ -338,7 +342,6 @@ describe('GET /molotes: textos y datos comerciales reales (REQ-F-031)', () => {
   const MAPS_URL = 'https://www.google.com/maps/search/?api=1&query=18.81823603166285,-98.96914471124853';
   const EMBED_SRC =
     'https://www.google.com/maps/embed?pb=!4v1792064722212!6m8!1m7!1sCliD7xRS-mkCpf6MwseHcQ!2m2!1d18.81823603166285!2d-98.96914471124853!3f189.613958693852!4f-9.01272483181998!5f0.7820865974627469';
-  const COMMON_MAPS_URL = 'https://maps.app.goo.gl/sAFDEeLdKzs7GGPz9';
 
   const molotesPage = async () => {
     const { text } = await (await agent()).get('/molotes');
@@ -377,18 +380,21 @@ describe('GET /molotes: textos y datos comerciales reales (REQ-F-031)', () => {
     expect(molotes.promo.success).toBe(normalized(success.textContent));
   });
 
-  it('CA-3 y CA-4: el pie lleva el teléfono oficial y ninguna línea de correo', async () => {
-    const { html, document } = await molotesPage();
+  // REQ-F-032 (R-6) revierte "sin correo en Molotes": el pie lleva el teléfono y el correo comunes.
+  it('CA-3 y CA-4 (REQ-F-032, R-6): el pie lleva el teléfono oficial y el correo común', async () => {
+    const { document } = await molotesPage();
     const footer = document.querySelector('footer')!;
     const phone = footer.querySelector('a[href^="tel:"]')!;
     expect(phone.getAttribute('href')).toBe('tel:+527352782306');
     expect(normalized(phone.textContent)).toBe('+52 735 278 2306');
-    expect(html).not.toContain('mailto:');
-    expect(normalized(footer.textContent)).not.toContain('@');
+    const emails = footer.querySelectorAll('a[href^="mailto:"]');
+    expect(emails).toHaveLength(1);
+    expect(emails[0]!.getAttribute('href')).toBe('mailto:ordenes@birriaelmuneco.mx');
+    expect(normalized(emails[0]!.textContent)).toBe('ordenes@birriaelmuneco.mx');
     expect(normalized(footer.textContent)).toContain('Contacto y ubicación');
   });
 
-  it('CA-5 y CA-6: un solo mapa embebido con el src oficial y dos enlaces a la ubicación de Molotes', async () => {
+  it('CA-5 y CA-6: un solo mapa embebido con el src oficial y tres enlaces a la ubicación (REQ-F-032 suma "Recoger en sucursal")', async () => {
     const { html, document } = await molotesPage();
     const iframes = document.querySelectorAll('iframe');
     expect(iframes).toHaveLength(1);
@@ -402,8 +408,9 @@ describe('GET /molotes: textos y datos comerciales reales (REQ-F-031)', () => {
     expect(iframe.hasAttribute('width')).toBe(false);
 
     const links = [...document.querySelectorAll('a')].filter((a) => a.getAttribute('href') === MAPS_URL);
-    expect(links).toHaveLength(2);
-    const [directions, footerLink] = links;
+    expect(links).toHaveLength(3);
+    const [pickup, directions, footerLink] = links;
+    expect(pickup!.closest('#pedidos-seccion ul')).not.toBeNull();
     expect(directions!.closest('#pedidos-seccion')).not.toBeNull();
     expect(normalized(directions!.textContent)).toBe(`directions${commonContent.location.label} ${commonContent.location.assistiveText}`);
     expect(footerLink!.closest('footer')).not.toBeNull();
@@ -415,24 +422,26 @@ describe('GET /molotes: textos y datos comerciales reales (REQ-F-031)', () => {
     expect(html).not.toContain('maps.app.goo.gl');
   });
 
-  it('CA-7: / y /birria conservan la ubicación común, sin mapa embebido, y el bot sigue enviándola', async () => {
+  // REQ-F-032 (R-3, R-4 y R-10) revierte "enlace corto común": hay una sola ubicación, con mapa en ambas landings.
+  it('CA-7 (REQ-F-032): / y /birria usan la ubicación única con su mapa embebido, y el bot la envía', async () => {
     const client = await agent();
     for (const path of ['/', '/birria']) {
       const { text } = await client.get(path);
-      expect(text, path).toContain(`href="${COMMON_MAPS_URL}"`);
-      expect(text, path).not.toContain('<iframe');
-      expect(text, path).not.toContain('18.81823603166285');
+      const document = new JSDOM(text).window.document;
+      expect(document.querySelectorAll(`a[href="${MAPS_URL}"]`).length, path).toBeGreaterThan(0);
+      expect(document.querySelectorAll('iframe'), path).toHaveLength(1);
+      expect(document.querySelector('iframe')!.getAttribute('src'), path).toBe(EMBED_SRC);
+      expect(text, path).not.toContain('maps.app.goo.gl');
     }
-    for (const businessId of BUSINESS_IDS) expect(hoursAndLocation(businessId)).toContain(COMMON_MAPS_URL);
-    expect(hoursAndLocation(BUSINESS.MOLOTES)).not.toContain(MAPS_URL);
+    for (const businessId of BUSINESS_IDS) expect(hoursAndLocation(businessId)).toContain(MAPS_URL);
   });
 
-  it('CA-8: dos casillas de plataformas: WhatsApp (enlace al bot) y Motomandados (informativa)', async () => {
+  it('CA-8: casillas de plataformas: WhatsApp (enlace al bot), Motomandados (informativa) y Recoger en sucursal (REQ-F-032, R-8)', async () => {
     const { document } = await molotesPage();
     const list = document.querySelector('#pedidos-seccion ul')!;
     expect(list.className).toBe('grid grid-cols-2 gap-space-sm');
     const items = [...list.children];
-    expect(items).toHaveLength(2);
+    expect(items).toHaveLength(3);
     const whatsapp = items[0]!.querySelector('a.platform')!;
     expect(whatsapp.getAttribute('data-action')).toBe('whatsapp-order');
     expect(whatsapp.getAttribute('href')).toBe(WA_MOLOTES);
@@ -440,6 +449,13 @@ describe('GET /molotes: textos y datos comerciales reales (REQ-F-031)', () => {
     expect(items[1]!.classList.contains('platform')).toBe(true);
     expect(items[1]!.querySelector('a')).toBeNull();
     expect(normalized(items[1]!.textContent)).toBe('moped Motomandados Costo según distancia');
+    // La tercera casilla ocupa la fila completa: la cuadrícula de 2 columnas no deja huecos.
+    expect(items[2]!.className).toBe('col-span-2');
+    const pickup = items[2]!.querySelector('a.platform')!;
+    expect(pickup.getAttribute('href')).toBe(MAPS_URL);
+    expect(pickup.getAttribute('target')).toBe('_blank');
+    expect(pickup.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(normalized(pickup.textContent)).toBe(`storefront Recoger en sucursal Pasa por tu pedido ${commonContent.location.assistiveText}`);
   });
 
   it('CA-9: los textos corregidos coinciden con sus requisitos', async () => {
@@ -489,7 +505,8 @@ describe('GET /molotes: textos y datos comerciales reales (REQ-F-031)', () => {
       'frame-src': ['https://www.google.com'],
     };
     const client = await agent();
-    for (const path of ['/molotes', '/', '/admin/login']) {
+    // REQ-F-032 (CA-5): /birria tiene ahora su mapa embebido con la misma política.
+    for (const path of ['/molotes', '/', '/birria', '/admin/login']) {
       const header = (await client.get(path)).headers['content-security-policy'] as string;
       const directives = Object.fromEntries(
         header
@@ -499,6 +516,154 @@ describe('GET /molotes: textos y datos comerciales reales (REQ-F-031)', () => {
           .map(([name, ...values]) => [name, values]),
       );
       expect(directives, path).toEqual(EXPECTED);
+    }
+  });
+});
+
+describe('REQ-F-032: contacto, ubicación y plataformas de la única sucursal', () => {
+  const MAPS_URL = 'https://www.google.com/maps/search/?api=1&query=18.81823603166285,-98.96914471124853';
+  const EMBED_SRC =
+    'https://www.google.com/maps/embed?pb=!4v1792064722212!6m8!1m7!1sCliD7xRS-mkCpf6MwseHcQ!2m2!1d18.81823603166285!2d-98.96914471124853!3f189.613958693852!4f-9.01272483181998!5f0.7820865974627469';
+  const PATHS = ['/', '/birria', '/molotes'] as const;
+  const normalized = (text: string | null | undefined) => (text ?? '').replace(/\s+/g, ' ').trim();
+  const load = async (path: string, now?: Date) => {
+    const { text } = await (await agent(now ? { now } : {})).get(path);
+    return { html: text, document: new JSDOM(text).window.document };
+  };
+  const hrefs = (document: Document, prefix: string) =>
+    new Set([...document.querySelectorAll(`a[href^="${prefix}"]`)].map((a) => a.getAttribute('href')));
+
+  it.each(PATHS)('CA-3: %s solo enlaza al teléfono y al correo comunes, en el pie', async (path) => {
+    const { document } = await load(path);
+    expect(hrefs(document, 'tel:')).toEqual(new Set(['tel:+527352782306']));
+    expect(hrefs(document, 'mailto:')).toEqual(new Set(['mailto:ordenes@birriaelmuneco.mx']));
+    // El pie de página es el último <footer> (la cita del ritual de Birria también usa uno).
+    const footer = [...document.querySelectorAll('footer')].at(-1)!;
+    expect(normalized(footer.querySelector('a[href^="tel:"]')?.textContent)).toBe('+52 735 278 2306');
+    expect(normalized(footer.querySelector('a[href^="mailto:"]')?.textContent)).toBe('ordenes@birriaelmuneco.mx');
+    const location = [...footer.querySelectorAll('a')].find((a) => a.getAttribute('href') === MAPS_URL)!;
+    expect(normalized(location.textContent)).toBe('Ver ubicación en Google Maps (se abre en una pestaña nueva)');
+  });
+
+  it.each(PATHS)('CA-4: %s no usa el enlace corto', async (path) => {
+    const { html } = await load(path);
+    expect(html).not.toContain('maps.app.goo.gl');
+  });
+
+  it('CA-4 y R-10: "Horario y ubicación" del bot envía la ubicación única para ambos negocios', () => {
+    for (const businessId of BUSINESS_IDS) {
+      expect(hoursAndLocation(businessId)).toContain(MAPS_URL);
+      expect(hoursAndLocation(businessId)).not.toContain('maps.app.goo.gl');
+    }
+  });
+
+  it.each([
+    ['/ (lunes)', '/', new Date('2026-10-12T16:00:00Z')], // lunes 10:00 CDMX
+    ['/ (martes)', '/', TUESDAY_NOON_MX],
+    ['/ (sábado)', '/', SATURDAY_NOON_MX],
+    ['/birria', '/birria', FRIDAY_NOON_MX],
+  ] as const)('CA-5: %s tiene un solo mapa embebido de la sucursal, diferido', async (_name, path, now) => {
+    const { document } = await load(path, now);
+    const iframes = document.querySelectorAll('iframe');
+    expect(iframes).toHaveLength(1);
+    const iframe = iframes[0]!;
+    expect(iframe.closest('#ubicaciones-pedidos .branches-card')).not.toBeNull();
+    expect(iframe.getAttribute('src')).toBe(EMBED_SRC);
+    expect(iframe.getAttribute('title')).toBe('Ubicación de Birria El Muñeco en Google Maps');
+    expect(iframe.getAttribute('loading')).toBe('lazy');
+    expect(iframe.getAttribute('referrerpolicy')).toBe('strict-origin-when-cross-origin');
+  });
+
+  it('R-4 y R-5: una sola sucursal, sin dirección postal, con "Cómo llegar" y "Abrir en Google Maps"', async () => {
+    const { document } = await load('/birria');
+    const card = document.querySelector('.branches-card')!;
+    expect(normalized(card.querySelector('h3')?.textContent)).toBe('Nuestra Sucursal');
+    const branches = card.querySelectorAll('ol > li');
+    expect(branches).toHaveLength(1);
+    expect(normalized(branches[0]!.querySelector('p')?.textContent)).toBe('Consulta la ubicación en el mapa.');
+    const links = [...card.querySelectorAll('a')];
+    expect(links.map((a) => normalized(a.textContent))).toEqual([
+      `${commonContent.location.label} Birria El Muñeco ${commonContent.location.assistiveText}`,
+      'pin_drop Abrir en Google Maps (se abre en una pestaña nueva)',
+    ]);
+    for (const link of links) {
+      expect(link.getAttribute('href')).toBe(MAPS_URL);
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(link.querySelector('.sr-only')).not.toBeNull();
+    }
+    expect(normalized(card.textContent)).not.toContain('Estacionamiento');
+  });
+
+  it('CA-6: Birria tiene exactamente sus tres plataformas, sin huecos en la cuadrícula de 2 columnas', async () => {
+    const { document } = await load('/birria');
+    const list = document.querySelector('.delivery-card ul')!;
+    expect(list.className).toBe('grid grid-cols-2 gap-3 pt-1');
+    const items = [...list.children];
+    expect(items.map((item) => normalized(item.textContent))).toEqual([
+      `chat WhatsApp Sin comisiones ${commonContent.cta.assistiveText}`,
+      'moped Motomandados Costo según distancia',
+      `shopping_bag Recoger en sucursal Pasa por tu pedido ${commonContent.location.assistiveText}`,
+    ]);
+    expect(items[0]!.querySelector('a')?.getAttribute('href')).toBe(WA_BIRRIA);
+    expect(items[1]!.querySelector('a')).toBeNull();
+    expect(items[2]!.className).toBe('col-span-2');
+    const pickup = items[2]!.querySelector('a')!;
+    expect(pickup.getAttribute('href')).toBe(MAPS_URL);
+    for (const link of [items[0]!.querySelector('a')!, pickup]) {
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(link.querySelector('.sr-only')).not.toBeNull();
+    }
+  });
+
+  it('CA-7: el horario de la sección y del pie de /birria coincide con R-7', async () => {
+    const { document } = await load('/birria');
+    const rows = [...[...document.querySelectorAll('footer')].at(-1)!.querySelector('ul')!.querySelectorAll('li')].map((li) =>
+      [...li.querySelectorAll('span')].map((span) => normalized(span.textContent)),
+    );
+    expect(rows).toEqual([
+      ['Lunes:', 'Cerrado'],
+      ['Sábados y Domingos:', '08:00 - 15:00'],
+      ['Martes a Viernes:', 'Hay Molotes'],
+    ]);
+    const text = normalized(document.body.textContent);
+    expect(text).toContain('Sábado y Domingo 08:00 AM – 03:00 PM');
+    expect(text).toContain('Lunes a Viernes Cerrado');
+  });
+
+  // QA ronda 1 (DEF-001 a DEF-004): textos aprobados que no caben a 320–375 px. jsdom no
+  // calcula el layout: aquí se fijan las utilidades responsivas; la medida real se hizo con
+  // Chrome headless a 320, 360, 375, 414, 640, 768, 1024, 1280 y 1440 px.
+  it('DEF-001 a DEF-003: plataformas, métricas e insignias de Birria se adaptan al ancho móvil', async () => {
+    const { document } = await load('/birria');
+    for (const platform of document.querySelectorAll('.delivery-card .platform')) {
+      expect(platform.classList.contains('flex-col'), 'en columna en móvil').toBe(true);
+      expect(platform.classList.contains('sm:flex-row'), 'en fila desde sm').toBe(true);
+    }
+    const metrics = document.querySelector('.ritual__metrics')!;
+    expect(metrics.classList.contains('grid-cols-1')).toBe(true);
+    expect(metrics.classList.contains('sm:grid-cols-3')).toBe(true);
+    for (const value of metrics.querySelectorAll('dd')) expect(value.classList.contains('lg:text-xl')).toBe(true);
+    const badges = document.querySelectorAll('.hero__badges .trust-badge');
+    expect(badges).toHaveLength(3);
+    for (const badge of badges) {
+      expect(badge.classList.contains('p-2.5')).toBe(true);
+      expect(badge.querySelector('span.font-headline')!.classList.contains('text-sm')).toBe(true);
+    }
+  });
+
+  it('DEF-004: el icono de "Recoger en sucursal" de Molotes usa un color de la paleta con contraste', async () => {
+    const { document } = await load('/molotes');
+    const icon = [...document.querySelectorAll('#pedidos-seccion .platform .material-symbols-outlined')].find((node) => node.textContent === 'storefront')!;
+    expect(icon.classList.contains('text-primary')).toBe(true);
+    expect(icon.className).not.toContain('rgb(3,43,95)');
+  });
+
+  it.each(PATHS)('CA-8: ningún botón ni enlace de %s contiene "2x1" ni "2×1"', async (path) => {
+    const { document } = await load(path);
+    for (const control of document.querySelectorAll('button, a')) {
+      expect(control.textContent ?? '').not.toMatch(/2\s*[x×]\s*1/i);
     }
   });
 });
@@ -536,18 +701,19 @@ describe('horarios reales (REQ-F-010)', () => {
 
   it('CA-2: /birria publica exactamente los textos de D-8', async () => {
     const { text } = await (await agent()).get('/birria');
+    // Textos de REQ-F-032 (R-7, tabla editorial).
     expect(birriaScheduleCard(text)).toEqual([
       'Sábado y Domingo',
       '08:00 AM – 03:00 PM',
-      'Consomé matutino y quesabirrias crujientes.',
+      'Birria, consomé y quesabirrias para el antojo del finde.',
       'Lunes a Viernes',
       'Cerrado',
-      'Reposo y Adobo.',
+      'De martes a viernes te esperan nuestros Molotes.',
     ]);
     expect(footerHourRows(text)).toEqual([
-      ['Miércoles - Viernes:', 'Cerrado'],
+      ['Lunes:', 'Cerrado'],
       ['Sábados y Domingos:', '08:00 - 15:00'],
-      ['Lunes y Martes:', 'Reposo y Adobo'],
+      ['Martes a Viernes:', 'Hay Molotes'],
     ]);
   });
 
@@ -723,7 +889,7 @@ describe('landings con productos guardados (REQ-F-001 y REQ-F-008)', () => {
     });
     const { text } = await client.get('/birria');
     const section = text.slice(text.indexOf('id="menu-especialidades"'), text.indexOf('</section>', text.indexOf('id="menu-especialidades"')));
-    expect(section).toContain('Nuestro Menú de Birria Artesanal');
+    expect(section).toContain('Menú de Birria El Muñeco');
     expect(section).toContain('Por ahora no tenemos productos disponibles en esta sección. Escríbenos por WhatsApp.');
     expect(section).not.toContain('<article id="card-');
   });

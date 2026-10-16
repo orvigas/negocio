@@ -42,15 +42,6 @@ export const molotesContent = Object.freeze({
     motivos: image('/img/molotes/motivos-molotes.webp', '', 476, 512),
     hero: image('/img/molotes/molotes-artesanales.jpg', 'Molotes artesanales recién dorados con crema, aguacate y salsa', 512, 382),
   }),
-  // Ubicación propia de Molotes (REQ-F-031, R-15): enlace "Cómo llegar" y mapa embebido (Street View).
-  // `common.location` sigue siendo la de Birria y del bot. El origen del iframe (www.google.com)
-  // es el único permitido en `frame-src` de la CSP (src/app.ts).
-  location: Object.freeze({
-    mapsUrl: 'https://www.google.com/maps/search/?api=1&query=18.81823603166285,-98.96914471124853',
-    embedSrc:
-      'https://www.google.com/maps/embed?pb=!4v1792064722212!6m8!1m7!1sCliD7xRS-mkCpf6MwseHcQ!2m2!1d18.81823603166285!2d-98.96914471124853!3f189.613958693852!4f-9.01272483181998!5f0.7820865974627469',
-    embedTitle: 'Ubicación de Moloteando en Google Maps',
-  }),
   announcement: 'Horario de Comal: Mar - Vie 08:30 a 15:00 hrs • Salsas Caseras y Masa Recién Frita',
   cta: Object.freeze({ label: 'Ordenar ya!' }),
   nav: Object.freeze([
@@ -124,11 +115,15 @@ export const molotesContent = Object.freeze({
     }),
     platformsLabel: 'Plataformas y Pedido Directo:',
     // WhatsApp enlaza al bot configurado; "Motomandados" es informativa (el costo del envío
-    // se consulta por WhatsApp; REQ-F-031, R-7). El orden coincide con las casillas de la plantilla.
+    // se consulta por WhatsApp; REQ-F-031, R-7) y "Recoger en sucursal" enlaza a la ubicación
+    // común (REQ-F-032, R-8). El orden coincide con las casillas de la plantilla.
     platforms: Object.freeze([
       Object.freeze({ name: 'WhatsApp', note: 'Sin comisiones' }),
       Object.freeze({ name: 'Motomandados', note: 'Costo según distancia' }),
+      Object.freeze({ name: 'Recoger en sucursal', note: 'Pasa por tu pedido' }),
     ]),
+    // Mapa embebido de la ubicación común (common.location.embedSrc; REQ-F-031, R-15).
+    mapTitle: 'Ubicación de Moloteando en Google Maps',
   }),
   promo: Object.freeze({
     nameLabel: 'Tu nombre',
@@ -160,16 +155,8 @@ export const molotesContent = Object.freeze({
         Object.freeze({ days: 'Lunes', hours: 'Cerrado' }),
       ]),
     }),
-    contact: Object.freeze({
-      title: 'Contacto y ubicación',
-      // Texto del enlace a la ubicación de Molotes (`location.mapsUrl`). No hay dirección postal
-      // ni correo confirmados (REQ-F-031, RN-1): cuando exista el correo, se añade aquí y su <li>.
-      address: 'Ver ubicación en Google Maps',
-      // Texto de apoyo propio: el visible ya dice "en Google Maps" (el común lo repetiría).
-      addressAssistiveText: '(se abre en una pestaña nueva)',
-      // Teléfono de llamadas; distinto del WhatsApp del bot (WHATSAPP_MOLOTES; RN-3).
-      phone: Object.freeze({ label: '+52 735 278 2306', href: 'tel:+527352782306' }),
-    }),
+    // Ubicación, teléfono y correo son los de la única sucursal: common.contact (REQ-F-032, R-6).
+    contact: Object.freeze({ title: 'Contacto y ubicación' }),
     copyright: '© 2026 Moloteando. Todos los derechos reservados.',
     legal: Object.freeze(['Aviso de Privacidad', 'Términos de Servicio']),
   }),

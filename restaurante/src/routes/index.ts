@@ -17,10 +17,10 @@ import { createAdminRouter } from './admin.ts';
 export type AdminRouteDeps = Omit<AdminDeps, 'config' | 'renderer' | 'now' | 'repository' | 'products'>;
 
 /**
- * GET /           -> landing de Birriería El Muñeco, siempre, con el aviso del día (REQ-F-028):
+ * GET /           -> landing de Birria El Muñeco, siempre, con el aviso del día (REQ-F-028):
  *                    lunes descanso, de martes a viernes Molotes, fin de semana ninguno.
  * GET /molotes    -> landing de Moloteando, siempre.
- * GET /birria     -> landing de Birriería El Muñeco, siempre.
+ * GET /birria     -> landing de Birria El Muñeco, siempre.
  * GET /favicon.ico, /apple-touch-icon.png, /apple-touch-icon-precomposed.png
  *                 -> iconos de Birria (los de `/`; REQ-F-028), con revalidación (REQ-F-002).
  * GET /molotes.webmanifest, /birria.webmanifest -> manifest de cada negocio.

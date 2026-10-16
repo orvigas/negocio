@@ -22,7 +22,7 @@ async function molotesEditor() {
 
 function expectForbidden(res: { status: number; text: string }) {
   expect(res.status).toBe(403);
-  expect(res.text).toMatch(/role="alert"[^>]*>\s*<p class="admin-notice__title font-bold">No tienes permiso para administrar Birriería El Muñeco\.<\/p>/);
+  expect(res.text).toMatch(/role="alert"[^>]*>\s*<p class="admin-notice__title font-bold">No tienes permiso para administrar Birria El Muñeco\.<\/p>/);
   expect(textOf(res.text)).toContain('No se cambió nada.');
 }
 

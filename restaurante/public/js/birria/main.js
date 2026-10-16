@@ -1,5 +1,5 @@
 /**
- * Entrada JS de la landing de Birriería El Muñeco (birria).
+ * Entrada JS de la landing de Birria El Muñeco (birria).
  * Fuente: manejadores onclick/onsubmit en línea de
  * _stich_source_/birrier_a_el_mu_eco_aut_ntica_birria_de_res_color_adobo/code.html
  */

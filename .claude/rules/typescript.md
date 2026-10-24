@@ -14,7 +14,7 @@ El backend (`src/`), las pruebas (`tests/`), los scripts de Node (`scripts/`) y 
 
 ## Ejecución
 
-- Node 24 (≥ 24.3) ejecuta los `.ts` directamente con type stripping: no hay paso de compilación ni carpeta `dist/`.
+- Node 24 (≥ 24.22.1) ejecuta los `.ts` directamente con type stripping: no hay paso de compilación ni carpeta `dist/`.
 - `tsc` solo verifica tipos (`npm run typecheck`, con `noEmit`). No lo uses para generar archivos.
 - No agregues `.js` propios en `src/`, `tests/` ni `scripts/`.
 

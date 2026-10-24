@@ -38,8 +38,10 @@ Paso a paso, con enlaces a las secciones de este README:
 
 ## Requisitos
 
-- Node.js >= 24.3 (ver `.nvmrc`; con nvm: `nvm use`). Desde 24.3 Node ejecuta los `.ts` sin
-  avisos; las versiones 24.0 a 24.2 escriben un `ExperimentalWarning` en stderr.
+- Node.js >= 24.22.1 (ver `.nvmrc`; con nvm: `nvm use`). Es el piso de seguridad de la línea 24:
+  las versiones anteriores tienen los CVE del boletín de Node de octubre de 2026 (ver
+  [Versión de Node y avisos atendidos](#versión-de-node-y-avisos-atendidos)). Node ejecuta los
+  `.ts` sin avisos desde 24.3.
 - npm
 - Docker con Compose v2 (o un MySQL 8.4 propio): la base de datos es MySQL 8.4 y el
   `compose.yaml` del proyecto levanta uno local solo en `127.0.0.1:3307` (`npm run db:up`). Sin
@@ -147,8 +149,11 @@ producción. Antes de `npm test`: `npm run db:up` (el MySQL local de `compose.ya
 Los archivos están en esta carpeta: `Dockerfile`, `.dockerignore`, `compose.yaml` (MySQL local
 `mysql-dev` y el servicio `test`) y `docker/mysql/initdb/` (bases y usuarios del MySQL local).
 
-El `Dockerfile` es multi-stage y todas las etapas parten de `node:24-alpine` (flotante dentro de
-la versión 24: una reconstrucción puede traer un parche más reciente de Node o Alpine):
+El `Dockerfile` es multi-stage y todas las etapas parten de `node:24.22.1-alpine`: la versión
+exacta de Node, la misma de `.nvmrc`, para que una caché o un mirror nunca construyan la imagen
+con un 24.x vulnerable. La etiqueta solo flota en los parches de Alpine. Subir Node es un cambio
+explícito en tres sitios a la vez: `.nvmrc`, `engines.node` de `package.json` y el `FROM` del
+`Dockerfile` (ver [Versión de Node y avisos atendidos](#versión-de-node-y-avisos-atendidos)):
 
 | Etapa        | Contenido                                                                      |
 | ------------ | ------------------------------------------------------------------------------ |
@@ -464,10 +469,45 @@ concreto durante 30 días como máximo:
 
 Al subir Prisma, revisa si cada override sigue haciendo falta.
 
+#### Versión de Node y avisos atendidos
+
+`.nvmrc`, `engines.node` y el `FROM` del `Dockerfile` fijan **Node 24.22.1**. El CI toma la
+versión de `.nvmrc`. Al publicarse un boletín de seguridad de Node
+([nodejs.org/en/blog/vulnerability](https://nodejs.org/en/blog/vulnerability/)) que afecte a la
+línea 24, se suben los tres juntos a la versión corregida en un PR.
+
+**2026-10-24: boletín de Node del 21 de octubre de 2026**
+([october-2026-security-releases](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)).
+La línea 24.x se corrige en v24.22.1; antes se usaba 24.21.0 (local) y `node:24-alpine`. CVE que
+afectan a 24.x:
+
+| CVE | Severidad | Módulo | Exposición en esta app |
+| --- | --- | --- | --- |
+| CVE-2026-111497 | high | `node:zlib` (decodificador Brotli; puede llegar a RCE) | `src/` no usa `node:zlib` |
+| CVE-2026-105482 | high | `dns.resolve*` (trunca en NUL) | `src/` no usa `node:dns` |
+| CVE-2026-105483, CVE-2026-106069 | high | `tls.checkServerIdentity` con IP no canónicas | Indirecta: `fetch` (undici y TLS de Node) llama a Meta y Twilio por nombre de host, no por IP |
+| CVE-2026-106072 | medium | TLS (mismo tema) | Igual que la anterior |
+| CVE-2026-105481 | medium | `http.Agent` (respuesta no solicitada en keep-alive) | `src/` no usa `http.Agent` |
+| CVE-2026-106074 | medium | Entropía de `randomUUID`/`randomInt` en snapshots o SEA | La app no usa snapshots ni SEA |
+| CVE-2026-106073 | low | `fs.realpathSync` y el Permission Model | La app no usa el Permission Model |
+
+La versión también actualiza el undici, OpenSSL, c-ares y SQLite incluidos en Node y retira el CA
+intermedio comprometido de eMudhra. La exposición directa es baja, pero el runtime era
+vulnerable.
+
+En la misma revisión, `npm audit fix` (sin `--force`) corrigió en `package-lock.json`:
+
+| Paquete | Versión | Avisos | Llega por |
+| --- | --- | --- | --- |
+| `undici` | 8.11.2 → 8.12.3 | GHSA-4qv8-2p9j-2685, GHSA-f72v-6w45-q472, GHSA-xjj6-f33q-929c (high) | `jsdom` (solo desarrollo) |
+| `fast-uri` | 3.1.8 → 3.1.9 | GHSA-w74x-v6f9-j3xg, GHSA-xhq7-xmqj-769h, GHSA-wjr9-j795-jxcr, GHSA-333x-w4r6-6crp (moderate y low) | `prisma` → `@prisma/dev` → `@prisma/streams-local` → `ajv` (imagen `migrate`) |
+
+El servidor ya desplegado sigue con la versión anterior hasta el siguiente despliegue.
+
 ### Dependabot
 
-`.github/dependabot.yml` (REQ-F-020) revisa cada lunes las dependencias npm de `restaurante/` y
-las acciones de GitHub. Las alertas y las actualizaciones de seguridad de Dependabot están
+`.github/dependabot.yml` (REQ-F-020) revisa cada lunes las dependencias npm de `restaurante/`,
+la imagen base de su `Dockerfile` y las acciones de GitHub. Las alertas y las actualizaciones de seguridad de Dependabot están
 activadas en el repositorio (**Settings → Code security**).
 
 - **Actualización rutinaria:** un PR semanal agrupado con las versiones menores y de parche. Las
@@ -479,6 +519,11 @@ activadas en el repositorio (**Settings → Code security**).
   sus scripts de instalación.
 - **Acciones:** siguen fijadas por SHA completo; Dependabot actualiza el SHA y el comentario de
   versión.
+- **Imagen de Node:** el `FROM node:24.22.1-alpine` recibe PR con las versiones menores y de
+  parche de la línea 24 (las mayores se revisan a mano). Dependabot solo cambia el `Dockerfile`:
+  en el mismo PR sube `.nvmrc` y `engines.node` de `package.json` a la misma versión (ver
+  [Versión de Node y avisos atendidos](#versión-de-node-y-avisos-atendidos)); el CI toma la
+  versión de `.nvmrc`.
 - **Sin merge automático:** cada merge a `main` despliega en producción. Los PR de Dependabot
   pasan por el mismo CI y se revisan a mano.
 

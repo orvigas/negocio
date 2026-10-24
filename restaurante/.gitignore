@@ -31,3 +31,6 @@ src/generated/
 *.db-wal
 *.db-shm
 *.db-journal
+
+# Salida local de Vitest (p. ej. reporter JSON de una corrida manual)
+.vitest/

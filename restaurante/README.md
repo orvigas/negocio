@@ -459,15 +459,9 @@ concreto durante 30 días como máximo:
 
 #### Overrides vigentes
 
-`package.json` no admite comentarios; el motivo de cada override está aquí:
-
-| Override | Motivo |
-| --- | --- |
-| `mariadb` → `$mariadb` (3.4.7) | `@prisma/adapter-mariadb` 7.10.0 fija `mariadb` 3.4.5 exacto, afectado por GHSA-cqhc-2h57-wpxf, GHSA-r3rv-jm3r-62q2, GHSA-v6pj-gxxw-phfw y GHSA-48qf-xh34-q73r (high). 3.4.7 es un parche con las mismas dependencias. Queda GHSA-cx2f-j9fh-8g68 (moderate, solo con autenticación ed25519 de MariaDB, que MySQL 8.4 no usa; se corrige en 3.5.4). Desde 7.10.1 el adaptador fija `mariadb` 3.5.4, la misma versión que la dependencia directa: el override ya no cambia nada y puede retirarse |
-| `prisma` → `mysql2` 3.24.6 | El CLI de Prisma 7.10.0 fija `mysql2` 3.15.3 (GHSA-3f6p-5ww8-9rcr, high; GHSA-rgwj-5xj2-c3m3, moderate). Solo lo usa Prisma Studio; `migrate deploy` no lo carga. Misma versión mayor. Desde 7.10.1 el CLI fija `mysql2` 3.24.4, sin avisos conocidos: el override puede retirarse |
-| `@prisma/config` → `deepmerge-ts` 8.0.2 | `@prisma/config` 7.10.0 fija `deepmerge-ts` 7.1.5 (GHSA-ggr8-5vv4-36mx, high; la rama 7 no se corrige). Solo fusiona `prisma.config.ts`; la API `deepmerge` no cambia en la 8 y `migrate deploy` lo valida en `calidad`, `docker` y `despliegue`. Desde 7.10.1 `@prisma/config` ya fija `deepmerge-ts` 8.0.2: el override puede retirarse |
-
-Al subir Prisma, revisa si cada override sigue haciendo falta.
+Ninguno. Si hace falta uno (`overrides` en `package.json`), documenta aquí su motivo, porque
+`package.json` no admite comentarios, y retíralo en cuanto la dependencia que lo exige publique
+la corrección.
 
 #### Versión de Node y avisos atendidos
 

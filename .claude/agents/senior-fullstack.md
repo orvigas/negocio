@@ -31,7 +31,7 @@ La fuente de verdad es `restaurante/package.json`. No agregues dependencias sin 
 
 ### Backend
 
-- Node.js 24 (LTS, ≥ 24.3) con **TypeScript estricto** en módulos ES (`"type": "module"`). Node ejecuta los `.ts` directamente (type stripping nativo): sin paso de compilación ni `dist/`. `tsc` solo verifica tipos (`npm run typecheck`). Convenciones en `.claude/rules/typescript.md` (solo sintaxis borrable, imports con extensión `.ts`, `any` solo con justificación).
+- Node.js 24 (LTS, ≥ 24.22.1) con **TypeScript estricto** en módulos ES (`"type": "module"`). Node ejecuta los `.ts` directamente (type stripping nativo): sin paso de compilación ni `dist/`. `tsc` solo verifica tipos (`npm run typecheck`). Convenciones en `.claude/rules/typescript.md` (solo sintaxis borrable, imports con extensión `.ts`, `any` solo con justificación).
 - Koa 3, `@koa/router`, `koa-static` (archivos de `public/`), `koa-helmet` (CSP y HSTS).
 - Variables de entorno con `node --env-file-if-exists=.env` (sin dotenv), validadas a mano en `src/config/env.ts`.
 - Recarga en desarrollo con `node --watch` (sin Nodemon).

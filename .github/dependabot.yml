@@ -9,6 +9,10 @@
 #   package.json (prisma@x.y.z y @prisma/engines@x.y.z): hasta entonces, `npm ci
 #   --strict-allow-scripts` lo deja en rojo.
 # - Las acciones siguen fijadas por SHA completo; Dependabot actualiza el SHA y el comentario.
+# - La imagen base del Dockerfile (`node:24.22.1-alpine`) va fijada a la versión exacta de Node.
+#   Dependabot solo propone menores y parches de la línea 24 (las mayores se revisan a mano). Un
+#   PR que suba la imagen también debe subir `.nvmrc` y `engines.node` de package.json a la misma
+#   versión: Dependabot no los toca y el CI toma la versión de `.nvmrc`.
 # - Sin merge automático: cada merge a main despliega en producción.
 version: 2
 updates:
@@ -50,3 +54,16 @@ updates:
     groups:
       acciones:
         patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /restaurante
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: America/Mexico_City
+    commit-message:
+      prefix: "chore(deps)"
+    allow:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-minor", "version-update:semver-patch"]

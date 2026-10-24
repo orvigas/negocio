@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Imagen de la app (REQ-F-003 y REQ-F-014). Etapas:
-#   base       -> Node 24 Alpine y directorio de trabajo.
+#   base       -> Node 24.22.1 Alpine (versión exacta, igual que .nvmrc) y directorio de trabajo.
 #   deps       -> todas las dependencias (npm ci); solo depende de package*.json. Los scripts
 #                 de instalación solo corren si están aprobados en `allowScripts` de
 #                 package.json (--strict-allow-scripts; REQ-F-007).
@@ -21,7 +21,7 @@
 #                 TypeScript ni el CLI de Prisma instalados.
 # La configuración (DATABASE_URL, WHATSAPP_*, DATA_DIR, ADMIN_*, ...) se inyecta al ejecutar, nunca aquí.
 
-FROM node:24-alpine AS base
+FROM node:24.22.1-alpine AS base
 WORKDIR /app
 # CLI de Prisma (deps/build/test): sin telemetría ni avisos de actualización.
 ENV CHECKPOINT_DISABLE=1 \

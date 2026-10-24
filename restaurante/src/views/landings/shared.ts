@@ -1,3 +1,4 @@
+import { BUSINESS_PATHS, type BusinessId } from '../../config/businesses.ts';
 import { formatPesos } from '../../services/price.ts';
 import type { Renderer, SafeHtml, TemplateData } from '../render.ts';
 import type { LandingViewData } from './index.ts';
@@ -11,6 +12,14 @@ export function requireOption<M extends object>(map: M, key: string, kind: strin
   if (!Object.hasOwn(map, key)) throw new Error(`${kind} desconocido: ${key}`);
   // Clave propia de `map`: comprobado con Object.hasOwn.
   return map[key as keyof M];
+}
+
+/**
+ * Aviso con enlace a otra landing: el contenido nombra el negocio de destino y la ruta sale de
+ * BUSINESS_PATHS, como el enlace del pie (REQ-F-033; REQ-F-034, RT-2).
+ */
+export function withNoticeHref<T extends { business: BusinessId }>(notice: T): T & { href: string } {
+  return { ...notice, href: BUSINESS_PATHS[notice.business] };
 }
 
 // Vive en src/services/price.ts (también la usa el bot de WhatsApp, REQ-F-009).

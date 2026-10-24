@@ -1,7 +1,7 @@
 import type { VisibleBirriaItem } from '../../services/visible-menu.ts';
 import type { Renderer, SafeHtml } from '../render.ts';
 import type { LandingView, LandingViewData } from './index.ts';
-import { formatPesos, priceMxn, renderListOrEmpty, requireOption } from './shared.ts';
+import { formatPesos, priceMxn, renderListOrEmpty, requireOption, withNoticeHref } from './shared.ts';
 
 type DetailsType = VisibleBirriaItem['detailsType'];
 type DetailRenderer<T extends DetailsType> = (
@@ -98,7 +98,7 @@ function renderBranches(renderer: Renderer, view: LandingViewData<'birria'>): Sa
 function renderHomeNotice(renderer: Renderer, view: LandingViewData<'birria'>): SafeHtml {
   const { homeNotice } = view;
   if (homeNotice === null) return renderer.join([]);
-  const notice = view.c.homeNotices[homeNotice];
+  const notice = withNoticeHref(view.c.homeNotices[homeNotice]);
   return renderer.render('partials/birria/home-notice', {
     variant: homeNotice,
     notice,

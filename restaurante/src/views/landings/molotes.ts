@@ -1,6 +1,7 @@
-import type { SafeHtml } from '../render.ts';
+import { getBusinessContent } from '../../content/index.ts';
+import type { Renderer, SafeHtml } from '../render.ts';
 import type { LandingView, LandingViewData } from './index.ts';
-import { formatPesos, priceMxn, renderListOrEmpty, requireOption } from './shared.ts';
+import { formatPesos, priceMxn, renderListOrEmpty, requireOption, withNoticeHref } from './shared.ts';
 
 /**
  * Landing de Moloteando: compone src/views/pages/molotes.html.
@@ -22,6 +23,34 @@ const DRINK_TONES = Object.freeze({
   amber: Object.freeze({ iconBgClass: 'bg-secondary-container/20', iconClass: 'text-[#d97706]' }),
   red: Object.freeze({ iconBgClass: 'bg-[#fee2e2]', iconClass: 'text-[#dc2626]' }),
 });
+
+/** Botón que cierra el aviso: secundario junto al enlace a Birria; principal si es el único. */
+const NOTICE_CLOSE_TONES = Object.freeze({
+  weekend: 'border border-on-surface/50 text-on-surface hover:bg-on-surface/10',
+  rest: 'bg-secondary-container text-on-secondary shadow-[0_4px_16px_rgba(243,163,0,0.35)] hover:bg-secondary',
+});
+
+/**
+ * Aviso de `/molotes` (REQ-F-034): un `<dialog>` cerrado que abre public/js/modules/home-notice.js,
+ * el mismo módulo del aviso de `/`. Entre semana no se pinta nada.
+ */
+function renderNotice(renderer: Renderer, view: LandingViewData<'molotes'>): SafeHtml {
+  const { homeNotice: variant } = view;
+  if (variant === null) return renderer.join([]);
+  const closeClass = requireOption(NOTICE_CLOSE_TONES, variant, 'Aviso');
+  if (variant === 'rest') {
+    return renderer.render('partials/molotes/notice', { variant, notice: view.c.notices.rest, action: renderer.join([]), closeClass });
+  }
+  const linked = withNoticeHref(view.c.notices.weekend);
+  // El texto del enlace ya nombra el destino: su logo es decorativo (emblem, alt vacío).
+  const notice = { ...linked, logo: getBusinessContent(linked.business).images.emblem };
+  return renderer.render('partials/molotes/notice', {
+    variant,
+    notice,
+    action: renderer.render('partials/molotes/notice-weekend-action', { notice }),
+    closeClass,
+  });
+}
 
 /** Combina el contenido estático con los datos editables ya filtrados por disponibilidad. */
 function withEditableContent(view: LandingViewData<'molotes'>) {
@@ -63,5 +92,11 @@ export function buildMolotesBody({ renderer, ...view }: LandingView<'molotes'>):
     })),
   );
 
-  return renderer.render('pages/molotes', { ...view, c: withEditableContent(view), menuCards, drinkItems });
+  return renderer.render('pages/molotes', {
+    ...view,
+    c: withEditableContent(view),
+    menuCards,
+    drinkItems,
+    notice: renderNotice(renderer, view),
+  });
 }

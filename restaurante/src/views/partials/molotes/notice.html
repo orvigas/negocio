@@ -1,0 +1,8 @@
+<dialog class="home-notice m-auto w-[calc(100%-2rem)] max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border-0 border-t-2 border-t-secondary-container bg-surface-container p-6 text-on-surface shadow-[0_16px_40px_-8px_rgba(0,0,0,0.85)] backdrop:bg-black/75 sm:p-8" data-home-notice="{{ variant }}" aria-labelledby="home-notice-title">
+  <h2 class="home-notice__title font-headline-md text-headline-md text-secondary sm:font-headline-lg sm:text-headline-lg" id="home-notice-title">{{ notice.title }}</h2>
+  <p class="home-notice__body mt-space-md font-body-lg text-body-lg text-on-surface">{{ notice.body }}</p>
+  <div class="home-notice__actions mt-space-lg flex flex-col gap-space-sm">
+    {{{ action }}}
+    <button class="home-notice__close {{ closeClass }} w-full rounded-full px-5 py-2.5 font-label-lg text-label-lg tracking-wider uppercase transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary" type="button" data-action="close-home-notice">{{ notice.closeLabel }}</button>
+  </div>
+</dialog>

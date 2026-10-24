@@ -3,7 +3,7 @@
 > **Estado:** ambas landings implementan el diseño de `../_stich_source_/`
 > (`moloteando_aut_nticos_molotes_artesanales` y
 > `birrier_a_el_mu_eco_aut_ntica_birria_de_res_color_adobo`), con Birria como página de
-> inicio, un aviso según el día y rutas dedicadas por negocio.
+> inicio, avisos según el día y rutas dedicadas por negocio.
 
 Aplicación Koa.js (Node.js 24 LTS) que sirve dos landing pages desde un mismo proyecto. El
 backend está escrito en TypeScript estricto y Node lo ejecuta directamente (type stripping,
@@ -14,9 +14,16 @@ sin paso de compilación); el JavaScript del navegador (`public/js/`) es Vanilla
   inicio (`/`) todos los días.
 - **Lunes:** descanso, no abre ningún negocio.
 
-En `/`, según el día, se abre además un aviso (REQ-F-028): de martes a viernes, que la birria
-es de fin de semana y un enlace a `/molotes`; los lunes, que ese día se descansa. El fin de
-semana no hay aviso. El día se calcula en la zona horaria del negocio (`BUSINESS_TIMEZONE`),
+Según el día se abre además un aviso (modal) en `/` (REQ-F-028) y en `/molotes` (REQ-F-034);
+`/birria` nunca lleva aviso:
+
+| Día               | `/`                                   | `/molotes`                                   | `/birria` |
+| ----------------- | ------------------------------------- | -------------------------------------------- | --------- |
+| Lunes             | "Descanso", con enlace a `/molotes`   | "Descanso" (un solo botón, "Ver el menú")    | Ninguno   |
+| Martes a viernes  | "Molotes", con enlace a `/molotes`    | Ninguno                                      | Ninguno   |
+| Sábado y domingo  | Ninguno                               | "Hoy toca birria", con enlace a `/birria`    | Ninguno   |
+
+El día se calcula en la zona horaria del negocio (`BUSINESS_TIMEZONE`),
 no en la del servidor ni en la del dispositivo. Cada landing tiene un CTA de pedido por WhatsApp configurable. El contenido estático
 vive en `src/content/`; los menús, precios, showcase del hero y promociones se editan desde
 `/admin/molotes` y `/admin/birria` y se guardan en archivos JSON (ver
@@ -575,7 +582,7 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | Ruta             | Respuesta                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------------ |
 | `GET /`          | Landing de Birria El Muñeco, siempre, con el aviso del día en `BUSINESS_TIMEZONE` (lunes descanso, martes a viernes Molotes, fin de semana ninguno; REQ-F-028) |
-| `GET /molotes`   | Landing de Moloteando, siempre                                                             |
+| `GET /molotes`   | Landing de Moloteando, siempre, con el aviso del día en `BUSINESS_TIMEZONE` (lunes descanso, sábado y domingo "hoy toca birria", martes a viernes ninguno; REQ-F-034) |
 | `GET /birria`    | Landing de Birria El Muñeco, siempre                                                    |
 | `GET /favicon.ico`, `GET /apple-touch-icon.png`, `GET /apple-touch-icon-precomposed.png` | Icono de Birria, el de `/` (ver [Iconos](#iconos-favicons-y-pantalla-de-inicio)) |
 | `GET /molotes.webmanifest`, `GET /birria.webmanifest` | Web App Manifest de cada negocio                                  |
@@ -585,17 +592,22 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `GET`/`POST /webhooks/whatsapp` | Webhook del bot de WhatsApp: verificación de la suscripción y recepción de mensajes firmados (ver [Bot de WhatsApp](#bot-de-whatsapp)); 503 si el bot no está configurado |
 
 Las tres rutas HTML usan el mismo controlador (`src/controllers/landing.ts`): con un
-`businessId` fijo renderiza ese negocio y sin él (`/`) renderiza Birria con el aviso del día.
-Responden con `Cache-Control: no-cache`, así que cada carga de `/` trae el aviso del día. La
+`businessId` fijo renderiza ese negocio y sin él (`/`) renderiza Birria con el aviso del día;
+`/molotes` lleva el suyo (tabla de `getMolotesNotice` en `src/services/business-schedule.ts`).
+Responden con `Cache-Control: no-cache`, así que cada carga de `/` y de `/molotes` trae el aviso
+del día. La
 `<link rel="canonical">` siempre apunta a la ruta dedicada (`/` apunta a `/birria`), así que no
 hay contenido duplicado para SEO.
 
-El aviso es un `<dialog>` que el servidor pinta cerrado y que abre
-`public/js/modules/home-notice.js` una sola vez por sesión del navegador (`sessionStorage`).
-Sin JavaScript no se ve ni tapa nada. Sus textos están en `homeNotices`, en
-`src/content/birria/index.ts`. En desarrollo (`NODE_ENV=development`), `/?dia=lunes`, `martes`,
-`miercoles`, `jueves`, `viernes`, `sabado` o `domingo` fuerza el día del aviso. En `test` y
-`production` el parámetro se ignora.
+Cada aviso es un `<dialog>` que el servidor pinta cerrado y que abre
+`public/js/modules/home-notice.js` una sola vez por sesión del navegador (`sessionStorage`, clave
+`homeNotice:<variante>:seen`). El aviso de descanso del lunes comparte la marca entre `/` y
+`/molotes`: se ve una sola vez entre ambas rutas. Sin JavaScript no se ve ni tapa nada. Los
+textos de `/` están en `homeNotices` (`src/content/birria/index.ts`) y los de `/molotes`, en
+`notices` (`src/content/molotes/index.ts`); el destino de cada enlace se indica con `business` y
+la ruta sale de `BUSINESS_PATHS`. En desarrollo (`NODE_ENV=development`), `?dia=lunes`, `martes`,
+`miercoles`, `jueves`, `viernes`, `sabado` o `domingo` fuerza el día del aviso en `/` y en
+`/molotes`. En `test` y `production` el parámetro se ignora.
 Cualquier otra ruta responde 404 y los métodos distintos de GET/HEAD, 405 (salvo los POST de
 la administración y del webhook del bot).
 

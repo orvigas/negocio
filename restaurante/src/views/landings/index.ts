@@ -3,7 +3,7 @@ import type { Config } from '../../config/env.ts';
 import { getIconLinks } from '../../content/icons.ts';
 import type { ImageDescriptor } from '../../content/images.ts';
 import { commonContent, getBusinessContent, type BusinessContentById } from '../../content/index.ts';
-import type { HomeNotice } from '../../services/business-schedule.ts';
+import type { NoticeByBusiness } from '../../services/business-schedule.ts';
 import type { MenuDataByBusiness } from '../../services/menu-schema.ts';
 import { buildVisibleMenu, type VisibleMenuByBusiness } from '../../services/visible-menu.ts';
 import type { Renderer, SafeHtml } from '../render.ts';
@@ -29,8 +29,11 @@ export interface LandingView<Id extends BusinessId = BusinessId> {
   location: typeof commonContent.location;
   whatsappIcon: SafeHtml;
   menu: VisibleMenuByBusiness[Id];
-  /** Aviso de la página de inicio (REQ-F-028); solo lo pinta la landing de Birria en `/`. */
-  homeNotice: HomeNotice | null;
+  /**
+   * Aviso del día: el de `/` en Birria (REQ-F-028) o el de `/molotes` (REQ-F-034); null sin aviso
+   * (`/birria` siempre).
+   */
+  homeNotice: NoticeByBusiness[Id] | null;
   /** Enlace del pie a la otra landing (REQ-F-033). */
   crossLink: CrossLink;
 }
@@ -76,7 +79,7 @@ export function renderLandingPage<Id extends BusinessId>({
   config: Pick<Config, 'whatsapp' | 'siteUrl'>;
   businessId: Id;
   menu: MenuDataByBusiness[Id];
-  homeNotice?: HomeNotice | null;
+  homeNotice?: NoticeByBusiness[Id] | null;
 }): SafeHtml {
   if (!menu) throw new TypeError('renderLandingPage requiere los datos editables del menú');
   const content = getBusinessContent(businessId);

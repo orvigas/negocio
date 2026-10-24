@@ -135,6 +135,25 @@ export const molotesContent = Object.freeze({
     success: '¡Gracias por tu interés! Pregunta por la promoción vigente al pedir por WhatsApp.',
     disclaimer: 'Sin spam molesto.',
   }),
+  /**
+   * Avisos de `/molotes` (REQ-F-034): el lunes, descanso; sábado y domingo, "hoy toca birria"
+   * (src/views/partials/molotes/notice.html). `business` es el destino del enlace: la ruta sale
+   * de BUSINESS_PATHS y el logo (decorativo) es el `emblem` del destino.
+   */
+  notices: Object.freeze({
+    weekend: Object.freeze({
+      title: '¡Raza, hoy toca birria!',
+      body: '¡Qué bueno que se te antojaron unos molotes! Los nuestros son de estilo poblano y te esperan de martes a viernes. Pero no te vayas con el antojo: este fin de semana nos ponemos bien birrieros con Birria El Muñeco. ¡Échale un ojo al menú y descubre qué se te antoja hoy!',
+      linkLabel: 'Ver Birria El Muñeco',
+      business: BUSINESS.BIRRIA,
+      closeLabel: 'Quedarme en Molotes',
+    }),
+    rest: Object.freeze({
+      title: '¡Los lunes descansamos!',
+      body: 'Hoy el comal agarra fuerzas. Mañana martes volvemos con molotes estilo poblano recién hechecitos. Mientras, échale un ojo al menú y ve escogiendo tu antojo.',
+      closeLabel: 'Ver el menú',
+    }),
+  }),
   footer: Object.freeze({
     // Enlace a la otra landing en la columna de marca del pie (REQ-F-033). La ruta y el logo
     // salen del negocio de destino (BUSINESS_PATHS e images.emblem; src/views/landings/index.ts).

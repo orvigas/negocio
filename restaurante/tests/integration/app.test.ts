@@ -70,6 +70,9 @@ function homeNoticeOf(html: string): string | null {
 
 const MONDAY_LATE_MX_TUESDAY_UTC = new Date('2026-10-13T05:30:00Z'); // lunes 23:30 CDMX = martes UTC
 const TUESDAY_NOON_MX = new Date('2026-10-13T18:00:00Z');
+const WEDNESDAY_NOON_MX = new Date('2026-10-14T18:00:00Z');
+const THURSDAY_NOON_MX = new Date('2026-10-15T18:00:00Z');
+const SUNDAY_NOON_MX = new Date('2026-10-11T18:00:00Z');
 
 describe('GET / (siempre Birria, con el aviso del día; REQ-F-028)', () => {
   it.each([
@@ -121,9 +124,10 @@ describe('GET / (siempre Birria, con el aviso del día; REQ-F-028)', () => {
     expect(homeNoticeOf(utc.text)).toBe('molotes');
   });
 
-  it.each(['/birria', '/molotes'])('CA-4: %s nunca lleva aviso, ningún día', async (path) => {
-    for (const now of [MONDAY_EARLY_MX, TUESDAY_NOON_MX, FRIDAY_NOON_MX, SATURDAY_NOON_MX]) {
-      const { text } = await (await agent({ now })).get(path);
+  // REQ-F-034 (RT-3): /molotes ya tiene sus avisos (lunes y fin de semana); /birria sigue sin ninguno.
+  it('CA-4 (REQ-F-034, CA-3): /birria nunca lleva aviso, ningún día', async () => {
+    for (const now of [MONDAY_EARLY_MX, TUESDAY_NOON_MX, WEDNESDAY_NOON_MX, THURSDAY_NOON_MX, FRIDAY_NOON_MX, SATURDAY_NOON_MX, SUNDAY_NOON_MX]) {
+      const { text } = await (await agent({ now })).get('/birria');
       expect(text).not.toContain('data-home-notice');
       expect(text).not.toContain('<dialog');
     }
@@ -162,10 +166,11 @@ describe('GET / (siempre Birria, con el aviso del día; REQ-F-028)', () => {
     expect(homeNoticeOf((await weekday.get('/?dia=sabado')).text)).toBe('molotes');
   });
 
-  it('CA-13: ?dia en desarrollo no afecta a /birria ni a /molotes', async () => {
+  it('CA-13: ?dia en desarrollo no afecta a /birria', async () => {
     const client = await agent({ now: TUESDAY_NOON_MX, config: makeConfig({ NODE_ENV: 'development' }) });
-    expect((await client.get('/birria?dia=lunes')).text).not.toContain('data-home-notice');
-    expect((await client.get('/molotes?dia=lunes')).text).not.toContain('data-home-notice');
+    for (const dia of ['lunes', 'martes', 'sabado', 'domingo']) {
+      expect((await client.get(`/birria?dia=${dia}`)).text).not.toContain('data-home-notice');
+    }
   });
 
   it('envía cabeceras de seguridad', async () => {
@@ -286,6 +291,88 @@ describe.each(Object.keys(PAGES) as BusinessId[])('GET /%s (ruta dedicada)', (bu
     for (const [, id] of text.matchAll(/<input id="([^"]+)"/g)) {
       expect(text).toContain(`<label class="sr-only" for="${id}">`);
     }
+  });
+});
+
+describe('GET /molotes: aviso de descanso y de fin de semana (REQ-F-034)', () => {
+  it.each([
+    ['lunes 00:30', MONDAY_EARLY_MX, 'rest'],
+    ['lunes 23:30 (martes en UTC)', MONDAY_LATE_MX_TUESDAY_UTC, 'rest'],
+    ['martes', TUESDAY_NOON_MX, null],
+    ['miércoles', WEDNESDAY_NOON_MX, null],
+    ['jueves', THURSDAY_NOON_MX, null],
+    ['viernes', FRIDAY_NOON_MX, null],
+    ['sábado', SATURDAY_NOON_MX, 'weekend'],
+    ['domingo', SUNDAY_NOON_MX, 'weekend'],
+    ['domingo 23:30', SUNDAY_LATE_MX, 'weekend'],
+  ])('CA-1, CA-2: el %s el aviso de /molotes es %s', async (_label, now, notice) => {
+    const res = await (await agent({ now })).get('/molotes');
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-cache');
+    expect(res.text).toContain('data-business="molotes"');
+    expect(homeNoticeOf(res.text)).toBe(notice);
+    expect(res.text.match(/<dialog\b/g) ?? []).toHaveLength(notice === null ? 0 : 1);
+  });
+
+  it('CA-1: el sábado llega cerrado, con su título asociado, los textos de R-2 y el enlace a /birria', async () => {
+    const { text } = await (await agent({ now: SATURDAY_NOON_MX })).get('/molotes');
+    const { document } = new JSDOM(text).window;
+    const dialog = document.querySelector('dialog[data-home-notice="weekend"]')!;
+    expect(dialog.hasAttribute('open')).toBe(false);
+    expect(document.getElementById(dialog.getAttribute('aria-labelledby')!)!.textContent).toBe('¡Raza, hoy toca birria!');
+    expect(dialog.querySelector('a')!.getAttribute('href')).toBe('/birria');
+    expect(dialog.querySelector('a')!.textContent.trim()).toBe('Ver Birria El Muñeco');
+    expect(dialog.querySelector('button')!.textContent).toBe('Quedarme en Molotes');
+    expect(text).toContain('<script type="module" src="/js/molotes/main.js"></script>');
+  });
+
+  it('CA-2: el lunes lleva los textos de R-3 y un único botón "Ver el menú"', async () => {
+    const { text } = await (await agent({ now: MONDAY_EARLY_MX })).get('/molotes');
+    const { document } = new JSDOM(text).window;
+    const dialog = document.querySelector('dialog[data-home-notice="rest"]')!;
+    expect(document.getElementById(dialog.getAttribute('aria-labelledby')!)!.textContent).toBe('¡Los lunes descansamos!');
+    expect(dialog.querySelectorAll('a')).toHaveLength(0);
+    expect([...dialog.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Ver el menú']);
+  });
+
+  it('CA-3: el aviso de / no cambia (lunes descanso, martes a viernes Molotes, fin de semana ninguno)', async () => {
+    for (const [now, notice] of [
+      [MONDAY_EARLY_MX, 'rest'],
+      [TUESDAY_NOON_MX, 'molotes'],
+      [FRIDAY_NOON_MX, 'molotes'],
+      [SATURDAY_NOON_MX, null],
+      [SUNDAY_NOON_MX, null],
+    ] as const) {
+      expect(homeNoticeOf((await (await agent({ now })).get('/')).text)).toBe(notice);
+    }
+  });
+
+  it.each([
+    ['sabado', 'weekend'],
+    ['domingo', 'weekend'],
+    ['lunes', 'rest'],
+    ['martes', null],
+    ['viernes', null],
+  ])('CA-7: en desarrollo /molotes?dia=%s muestra %s', async (dia, notice) => {
+    const client = await agent({ now: TUESDAY_NOON_MX, config: makeConfig({ NODE_ENV: 'development' }) });
+    expect(homeNoticeOf((await client.get(`/molotes?dia=${dia}`)).text)).toBe(notice);
+  });
+
+  it('CA-7: en desarrollo, /molotes?dia=martes un sábado no muestra aviso y un ?dia no válido se ignora', async () => {
+    const client = await agent({ now: SATURDAY_NOON_MX, config: makeConfig({ NODE_ENV: 'development' }) });
+    expect(homeNoticeOf((await client.get('/molotes?dia=martes')).text)).toBeNull();
+    for (const dia of ['Sabado', 'sábado', 'sat', '', '__proto__']) {
+      expect(homeNoticeOf((await client.get(`/molotes?dia=${encodeURIComponent(dia)}`)).text), dia).toBe('weekend');
+    }
+  });
+
+  it.each(['production', 'test'] as const)('CA-7: con NODE_ENV=%s, ?dia no tiene efecto en /molotes', async (nodeEnv) => {
+    const config = makeConfig(nodeEnv === 'production' ? { NODE_ENV: 'production', DATA_DIR: '/var/lib/restaurante' } : { NODE_ENV: 'test' });
+    const tuesday = await agent({ now: TUESDAY_NOON_MX, config });
+    expect(homeNoticeOf((await tuesday.get('/molotes?dia=sabado')).text)).toBeNull();
+    expect(homeNoticeOf((await tuesday.get('/molotes?dia=lunes')).text)).toBeNull();
+    const saturday = await agent({ now: SATURDAY_NOON_MX, config });
+    expect(homeNoticeOf((await saturday.get('/molotes?dia=martes')).text)).toBe('weekend');
   });
 });
 

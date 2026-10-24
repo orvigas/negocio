@@ -66,6 +66,35 @@ export function getHomeNotice({ now = new Date(), timeZone, forcedDay }: { now?:
   return HOME_NOTICES[forcedDay ?? getWeekday(now, timeZone)];
 }
 
+/**
+ * Aviso de `/molotes` (REQ-F-034): orienta a quien llega un día sin molotes.
+ *   lunes            -> 'rest'    (descanso; comparte la marca de sesión con el de `/`)
+ *   martes a viernes -> null      (hay molotes)
+ *   sábado y domingo -> 'weekend' (hoy toca birria)
+ */
+export type MolotesNotice = 'rest' | 'weekend';
+
+const MOLOTES_NOTICES: Readonly<Record<Weekday, MolotesNotice | null>> = Object.freeze({
+  Mon: 'rest',
+  Tue: null,
+  Wed: null,
+  Thu: null,
+  Fri: null,
+  Sat: 'weekend',
+  Sun: 'weekend',
+});
+
+/** Misma forma que `getHomeNotice`; `forcedDay` sustituye al día calculado. */
+export function getMolotesNotice({ now = new Date(), timeZone, forcedDay }: { now?: Date; timeZone: string; forcedDay?: Weekday | undefined }): MolotesNotice | null {
+  return MOLOTES_NOTICES[forcedDay ?? getWeekday(now, timeZone)];
+}
+
+/** Aviso que puede pintar cada landing (`/birria` nunca pinta ninguno). */
+export interface NoticeByBusiness {
+  birria: HomeNotice;
+  molotes: MolotesNotice;
+}
+
 /** Valores de `?dia=` (solo en desarrollo), sin acentos para escribirlos fácil en la URL. */
 const FORCED_DAYS: Readonly<Record<string, Weekday>> = Object.freeze({
   lunes: 'Mon',

@@ -8,7 +8,7 @@ Desarrollar una aplicación web tipo Landing Page para dos negocios dentro de la
 - **Birria El Muñeco** — abre sábados y domingos. Su landing está en `/birria` y es también la página de inicio (`/`) todos los días.
 - **Lunes** — descanso: no abre ningún negocio.
 
-La página de inicio muestra siempre Birria y, según el día de la semana, abre automáticamente un aviso (modal), sin intervención manual (REQ-F-028).
+La página de inicio muestra siempre Birria y, según el día de la semana, abre automáticamente un aviso (modal), sin intervención manual (REQ-F-028). `/molotes` también abre un aviso los días en que no hay molotes: el lunes (descanso) y el fin de semana ("hoy toca birria"; REQ-F-034).
 
 Ambas landing pages deben incluir un botón visible para realizar pedidos mediante un bot de WhatsApp.
 
@@ -114,13 +114,21 @@ Renderiza siempre:
 Birria El Muñeco
 ```
 
-Según el día, abre además un aviso (modal) solo en `/`:
+Según el día, abre además un aviso (modal):
 
 - **Lunes:** aviso "Descanso" (ese día no abre ningún negocio), con un enlace a `/molotes`.
 - **Martes a viernes:** aviso "Molotes" (la birria es de fin de semana), con un enlace a `/molotes`.
 - **Sábado y domingo:** ningún aviso.
 
-El aviso se decide en el servidor con la fecha del negocio, se muestra una vez por sesión del navegador, sus textos son editables en el contenido de Birria y, sin JavaScript, no tapa nada. `/molotes` y `/birria` nunca muestran el aviso.
+### Avisos de `/molotes` (REQ-F-034)
+
+- **Lunes:** aviso "Descanso" (comparte la marca de sesión con el de `/`: se ve una sola vez entre ambas rutas).
+- **Martes a viernes:** ningún aviso.
+- **Sábado y domingo:** aviso "Hoy toca birria", con un enlace a `/birria` y un botón para quedarse en Molotes.
+
+`/birria` nunca muestra aviso.
+
+Cada aviso se decide en el servidor con la fecha del negocio, se muestra una vez por sesión del navegador, sus textos son editables en el contenido del negocio que lo muestra (Birria para `/`, Molotes para `/molotes`), no impide consultar la página y, sin JavaScript, no tapa nada.
 
 ### Reglas
 
@@ -195,7 +203,7 @@ El contenido SEO debe corresponder al negocio que se está mostrando.
 
 ## 11. Fecha y zona horaria
 
-La elección del aviso de la página de inicio debe considerar explícitamente la zona horaria del negocio.
+La elección del aviso de la página de inicio y del de `/molotes` debe considerar explícitamente la zona horaria del negocio (`BUSINESS_TIMEZONE`).
 
 No depender exclusivamente de la zona horaria accidental del servidor.
 
@@ -218,5 +226,15 @@ Viernes   → Birria El Muñeco + aviso "Molotes"
 Sábado    → Birria El Muñeco (sin aviso)
 Domingo   → Birria El Muñeco (sin aviso)
 ```
+
+Y en `/molotes`:
+
+```text
+Lunes             → Molotes + aviso "Descanso"
+Martes a viernes  → Molotes (sin aviso)
+Sábado y domingo  → Molotes + aviso "Hoy toca birria"
+```
+
+`/birria` no muestra aviso ningún día.
 
 No depender tampoco del reloj del dispositivo del cliente: el servidor decide el aviso.

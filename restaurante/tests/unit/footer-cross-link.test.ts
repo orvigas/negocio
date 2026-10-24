@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_VIEWS_DIR } from '../../src/app.ts';
 import type { BusinessId } from '../../src/config/businesses.ts';
-import type { HomeNotice } from '../../src/services/business-schedule.ts';
+import type { NoticeByBusiness } from '../../src/services/business-schedule.ts';
 import { renderLandingPage } from '../../src/views/landings/index.ts';
 import { createRenderer } from '../../src/views/render.ts';
 import { makeConfig, seedData } from '../helpers.ts';
@@ -11,12 +11,12 @@ import { makeConfig, seedData } from '../helpers.ts';
 /**
  * REQ-F-033: enlace del pie a la otra landing, con el logo oficial del destino.
  * Birria se renderiza con cada aviso posible de `/` (lunes, martes a viernes, fin de semana) y
- * sin aviso, que es también `/birria`.
+ * sin aviso, que es también `/birria`; Molotes, sin aviso y con los de `/molotes` (REQ-F-034).
  */
 
 const renderer = createRenderer({ viewsDir: DEFAULT_VIEWS_DIR });
 
-function footerOf(businessId: BusinessId, homeNotice: HomeNotice | null = null) {
+function footerOf(businessId: BusinessId, homeNotice: NoticeByBusiness[BusinessId] | null = null) {
   const html = renderLandingPage({ renderer, config: makeConfig(), businessId, menu: seedData(businessId), homeNotice }).toString();
   const { document } = new JSDOM(html).window;
   return { document, footer: document.querySelector('footer.site-footer')! };
@@ -34,6 +34,8 @@ const CASES = [
   ['birria', 'molotes', '/molotes', '/img/molotes/logo-molotes.webp', 'Conoce nuestros Molotes'],
   ['birria', 'rest', '/molotes', '/img/molotes/logo-molotes.webp', 'Conoce nuestros Molotes'],
   ['molotes', null, '/birria', '/img/birria/logo-birria.webp', 'Conoce nuestra Birria'],
+  ['molotes', 'weekend', '/birria', '/img/birria/logo-birria.webp', 'Conoce nuestra Birria'],
+  ['molotes', 'rest', '/birria', '/img/birria/logo-birria.webp', 'Conoce nuestra Birria'],
 ] as const;
 
 describe('REQ-F-033: navegación cruzada desde el pie', () => {

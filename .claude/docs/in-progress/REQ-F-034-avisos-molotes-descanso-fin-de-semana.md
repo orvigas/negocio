@@ -2,13 +2,17 @@
 
 ## Estado
 
-NEEDS_IMPLEMENTATION_APPROVAL
+QA_APPROVED
 
 ## Aprobación
 
 Aprobado por el usuario (versión 1, fecha 2026-10-15). Respuesta textual a "¿Apruebas los tres tickets con estos textos?": "si".
 
 Technical Action Plan aprobado por el usuario el 2026-10-24. Respuesta textual a "¿Apruebas el Technical Action Plan de REQ-F-034 para que senior-fullstack empiece la implementación?": "Sí, apruebo el plan".
+
+Implementación aprobada por el usuario el 2026-10-24. Respuesta textual a "¿Apruebas la implementación de REQ-F-034 para pasar a QA (senior-qa)?": "Sí, pasa a QA".
+
+QA Action Plan aprobado por el usuario el 2026-10-24. Respuesta textual a "¿Apruebas el plan?": "Sí, ejecuta QA".
 
 Serie de tickets y orden obligatorio: **REQ-F-032 → REQ-F-033 → REQ-F-034**. Este es el tercero y empieza cuando REQ-F-033 esté integrado.
 
@@ -336,6 +340,198 @@ Sin cambios: un error de plantilla lo atiende el manejador central.
 - Verificación manual con teclado (Tab contenido y Escape) en un navegador real, con `npm run dev` y `/molotes?dia=sabado` y `/molotes?dia=lunes`.
 - Marca de sesión sin fecha (comportamiento heredado de REQ-F-028, aceptado en el plan).
 
+## QA Action Plan
+
+### Objetivo
+Validar con evidencia que `/molotes` muestra el aviso correcto según el día de `BUSINESS_TIMEZONE` (lunes "Descanso", fin de semana "Hoy toca birria", martes a viernes ninguno), con el comportamiento del aviso de `/`, y que `/` y `/birria` no cambian.
+
+### Requisito bajo prueba
+R-1 a R-8 y CA-1 a CA-11 de este ticket. Fuera de alcance: textos y comportamiento del aviso de `/` (solo regresión), avisos en `/birria`, horarios.
+
+### Criterios de aceptación
+| CA | Pruebas que lo cubren |
+|---|---|
+| CA-1 | F-1, F-2, N-1 (integración + jsdom); B-1 (navegador: se abre solo) |
+| CA-2 | F-3, F-4 (integración, lunes y martes a viernes); B-2 |
+| CA-3 | RG-1, RG-2, RG-3 (integración, snapshot y REQ-F-028); B-7, B-8 |
+| CA-4 | F-5 (jsdom); B-3, B-4, B-5 (navegador: Tab contenido, Escape, retorno del foco, enlace a `/birria`) |
+| CA-5 | F-6 (jsdom); B-6 (navegador: recarga y marca compartida entre `/?dia=lunes` y `/molotes?dia=lunes`) |
+| CA-6 | N-2, N-3 (jsdom); B-9 (navegador sin JS: página consultable, `<dialog>` cerrado) |
+| CA-7 | N-4 (integración en development/test/production); B-1, B-2 con `?dia` |
+| CA-8 | L-1 (unitarias con fecha inyectada) |
+| CA-9 | RS-1 a RS-3 (navegador a 320, 768 y 1280); A-4 (contraste recalculado) |
+| CA-10 | D-1 (lectura dirigida de `.claude/CLAUDE.md` §1, §5, §11 y del README) |
+| CA-11 | AU-1 (`npm ls`/diff de `package*.json`, `typecheck`, `lint`, `test`, snapshot) |
+
+### Riesgos identificados
+- Regresión del aviso de `/` por el cambio `linkHref` → `business` + `withNoticeHref` (RT-2): el `href` debe seguir siendo `/molotes`.
+- Marca de sesión compartida `homeNotice:rest:seen`: debe compartirse entre `/` y `/molotes`, pero `homeNotice:molotes:seen` no debe bloquear `weekend`.
+- Escape, foco contenido y retorno del foco dependen de `showModal()` nativo: jsdom no los cubre; solo se validan en navegador.
+- `id="home-notice-title"` debe ser único en `/molotes` (no colisionar con otro id de la página).
+- El aviso al final del body (fuera de `<main>`) no debe alterar la jerarquía: un solo `h1`, el `h2` del aviso dentro del `<dialog>`.
+- `?dia` solo debe tener efecto con `NODE_ENV=development`.
+- Desviación 2 (botón único "Ver el menú" con estilo principal dorado): contrastar con `_stich_source_/moloteando_tradicional/DESIGN.md` §Buttons (fondo `#F4A300`, texto oscuro, pill, glow `0 4px 16px rgba(244,163,0,0.35)`) y con los CTA dorados existentes de `/molotes`. Nota: DESIGN.md indica texto `#081830`; la implementación usa `on-secondary`. Se compara con los botones dorados ya aprobados de la landing (misma clase de texto); solo es defecto si difiere de ellos.
+
+### Pruebas funcionales
+- F-1. `/molotes` en sábado y en domingo (reloj inyectado): HTML con `<dialog data-home-notice="weekend" aria-labelledby="home-notice-title">`, título, mensaje y botones con los textos exactos de R-2.
+- F-2. Enlace "Ver Birria El Muñeco": `href="/birria"`, logo `/img/birria/logo-birria.webp` (o el `emblem` de Birria; verificar que es el logo oficial) con `alt=""`; nombre accesible "Ver Birria El Muñeco".
+- F-3. `/molotes` en lunes: textos exactos de R-3 y un único botón "Ver el menú", sin enlace.
+- F-4. `/molotes` de martes a viernes: sin `<dialog>`.
+- F-5. "Quedarme en Molotes" y "Ver el menú" cierran el diálogo (jsdom).
+- F-6. Marcas de sesión: recargar no reabre; `rest` compartida en ambos sentidos; `homeNotice:molotes:seen` no impide `weekend`.
+
+### Pruebas negativas y casos límite
+- N-1. El diálogo llega sin atributo `open` (sin JS no tapa nada).
+- N-2. sessionStorage que lanza: el aviso se abre y se cierra.
+- N-3. Sin aviso, el HTML de `/molotes` es idéntico al de main salvo nada (snapshot).
+- N-4. `?dia=sabado|lunes|martes` en development surte efecto; en test y production se ignora; valores inválidos (`?dia=foo`, repetido, `__proto__`) se ignoran.
+- L-1. Transiciones viernes 23:59 → sábado 00:00, domingo 23:59 → lunes 00:00 y lunes 23:59 → martes 00:00 en `America/Mexico_City`, con servidor en UTC (día del negocio, no de UTC).
+- L-2. Interacción previa: si la página ya se desplazó o tiene foco antes del JS, no se abre (jsdom existente; navegador: abrir con scroll si es reproducible).
+- L-3. `pagehide`/bfcache: tras navegar a `/birria` desde el aviso y volver atrás, el aviso no aparece abierto (navegador).
+
+### Pruebas responsive (viewports: 320×568, 375×812, 768×1024, 1280×800, 1440×900)
+- RS-1. Ambas variantes caben en pantalla; si el contenido excede, desplazamiento interno del diálogo (`max-h` + `overflow-y-auto`), sin overflow horizontal del documento.
+- RS-2. Textos sin cortes, logo sin deformar, botones de al menos 44 px de alto táctil.
+- RS-3. Tras cerrar, la landing sigue igual (CTA de WhatsApp visible en móvil).
+- Si la ventana de Chrome no baja de ~500 px, 320 se valida con un `iframe` de 320 px o emulación vía `javascript_tool`, y se anota.
+
+### Pruebas de accesibilidad
+- A-1. Un solo `h1` en `/molotes`; `h2` del aviso con `id` único referenciado por `aria-labelledby`.
+- A-2. Teclado: al abrir, el foco entra al diálogo; Tab/Shift+Tab no salen; Escape cierra; el foco vuelve a la página; foco visible en enlace y botones.
+- A-3. Enlace para navegar (`<a href>`) y botón para cerrar (`<button type="button">`); sin ARIA innecesario.
+- A-4. Contraste AA de título, texto, botón principal, botón secundario y del botón único del lunes, con los colores computados en navegador.
+
+### Pruebas UX/UI (vs. _stich_source_/)
+- U-1. No hay equivalente del aviso en `_stich_source_/` (diferencia deliberada, R-6). Se valida que use la paleta, tipografía (Epilogue/labels) y forma pill de Molotes según `moloteando_tradicional/DESIGN.md` y que replique la estructura del aviso de `/`.
+- U-2. Desviación 2: el botón único "Ver el menú" con estilo principal dorado se compara con DESIGN.md §Buttons y con los CTA dorados existentes de `/molotes`. Resultado esperado: coherente con el botón principal del sistema; cualquier diferencia se reporta, sin juzgar estética.
+
+### Pruebas de integración (WhatsApp)
+- W-1. Regresión: el CTA de WhatsApp de `/molotes` conserva `href`, `target` y `rel`, y queda accesible tras cerrar el aviso (no se sigue el enlace).
+
+### Pruebas de performance
+- P-1. Sin requests nuevas salvo el logo de Birria en fin de semana (verificar peso y formato `webp`, con `width`/`height`); ningún request extra entre semana.
+- P-2. Consola sin errores en `/`, `/molotes` y `/birria`. `Cache-Control: no-cache` en `/molotes`.
+
+### Pruebas SEO
+- S-1. `title`, meta description, canonical y Open Graph de `/molotes` sin cambios respecto a main (snapshot); el aviso no introduce un `h1` ni altera la jerarquía.
+
+### Pruebas de regresión
+- RG-1. `/` con lunes, martes a viernes y fin de semana: mismo aviso que antes y enlaces a `/molotes` (el `href` sale ahora de `BUSINESS_PATHS`).
+- RG-2. `/birria` sin aviso los 7 días.
+- RG-3. Snapshots de landing: Birria intacto; Molotes sin aviso sin cambios.
+- RG-4. Pie con enlace cruzado (REQ-F-033) único con y sin aviso.
+- RG-5. Formularios de promoción de `/molotes` (`initPromoForms`) siguen funcionando con el aviso cerrado.
+- Blast radius: `initHomeNotice` lo consumen `birria/main.js` y ahora `molotes/main.js` (`tests/unit/home-notice.test.ts`); `renderLandingPage`, `createLandingController` y los parciales de Birria cubren `/` y `/birria` (`tests/integration/app.test.ts`, snapshot, `footer-cross-link`).
+
+### Pruebas automatizadas
+- Existentes (desde `restaurante/` del worktree): `npm run build:css`, `npm run typecheck`, `npm run lint` (sin `lint:fix`), `npm test` (MySQL local con `npm run db:up` si hace falta). Se revisa que las pruebas nombradas en el Technical Action Plan existen y cubren los CA.
+- AU-1. `git diff origin/main...HEAD -- restaurante/package.json restaurante/package-lock.json` vacío (sin dependencias nuevas).
+- Nuevas: solo si una revisión encuentra un hueco en lo anterior (p. ej. `?dia` inválido en `/molotes` o `id` único del título); se crearían únicamente en `restaurante/tests/` y se reportarían. No se prevén dependencias de testing nuevas.
+
+### Pruebas en navegador
+Servidor desde el worktree, en segundo plano y en puerto libre (el worktree no tiene `.env`; se usa el del checkout principal sin copiarlo): `NODE_ENV=development PORT=3100 node --env-file=/Users/orvigas/Desktop/Negocio/restaurante/.env scripts/dev-server.ts` (o `npm start` con `NODE_ENV=development`). Se detiene al terminar. Pestaña nueva con Claude in Chrome; sessionStorage se limpia entre escenarios.
+- B-1. `/molotes?dia=sabado` y `?dia=domingo`: se abre solo, textos de R-2.
+- B-2. `/molotes?dia=lunes`: se abre, textos de R-3, un solo botón; `/molotes?dia=martes` y `?dia=viernes`: sin aviso.
+- B-3. Tab/Shift+Tab con el aviso abierto (lunes y sábado): el foco no sale del diálogo.
+- B-4. Escape cierra en ambas variantes; "Quedarme en Molotes" y "Ver el menú" cierran; el foco vuelve a la página.
+- B-5. "Ver Birria El Muñeco": se verifica `href="/birria"` y la navegación a `/birria` (ruta interna); luego "atrás" no devuelve el aviso abierto (L-3).
+- B-6. Recargar no reabre. Con sesión limpia: `/?dia=lunes` primero → `/molotes?dia=lunes` no lo muestra; y al revés. Con `homeNotice:molotes:seen` (visitar `/?dia=martes`), `/molotes?dia=sabado` sí lo muestra.
+- B-7. `/` con `?dia=lunes`, `?dia=martes` y `?dia=sabado`: aviso de `/` como antes.
+- B-8. `/birria?dia=lunes|sabado`: sin aviso.
+- B-9. Sin JS (si la extensión lo permite; si no, se acepta la evidencia jsdom/HTML de N-1): la página se consulta y el diálogo no se ve.
+- RS-1 a RS-3 y A-2, A-4 en las dos variantes.
+
+### Evidencia requerida
+- Salida resumida de `build:css`, `typecheck`, `lint` y `npm test` (archivos y pruebas superadas, 0 fallos).
+- Diff de `package*.json` vacío.
+- Por escenario de navegador: captura o lectura del DOM (`read_page`/`javascript_tool`: `dialog.open`, `document.activeElement`, `href`), y consola.
+- Capturas a 320, 768 y 1280 en ambas variantes; colores computados para contraste.
+- Fragmentos de `.claude/CLAUDE.md` y README para CA-10.
+
+### Criterios de aprobación
+- CA-1 a CA-11 en PASS con evidencia; CA-4 y CA-9 con evidencia de navegador.
+- `typecheck`, `lint` y `npm test` en 0; sin dependencias nuevas.
+- Sin defectos BLOCKER ni CRITICAL; MAJOR solo con aceptación explícita del usuario.
+- Sin regresión en `/`, `/birria`, pie cruzado, WhatsApp ni formularios de promoción.
+- Si la extensión de Chrome no responde, CA-4 (Tab/Escape) y CA-9 dependen de ella: el resultado sería `NEEDS_USER_DECISION` con verificación manual pendiente, no `QA_APPROVED`.
+
+## QA Report
+
+### Ronda
+1 (2026-10-24), rama `feature/REQ-F-034-avisos-molotes-descanso-fin-de-semana` en `a9b5deb`, worktree limpio salvo este ticket.
+
+### Pruebas ejecutadas
+- `npm run build:css`: 0. `npm run typecheck`: 0. `npm run lint`: 0, sin errores ni avisos.
+- `npm test`: 93 archivos, 1980 pruebas superadas y 1 *expected fail* preexistente; 0 fallos (69.9 s, MySQL local).
+- `git diff origin/main...HEAD -- package.json package-lock.json`: vacío.
+- Servidor de desarrollo en `127.0.0.1:3100` (`NODE_ENV=development`, `.env` del checkout principal con `--env-file`, sin copiarlo). Bloqueo de entorno: ese `.env` tiene una `WHATSAPP_BOT_BLOCKLIST_KEY` inválida y el servidor no arrancaba. Se resolvió pasando por la línea de comandos una clave aleatoria de un solo uso (`openssl rand -base64 32`), sin escribir archivos. No es un defecto del ticket. Servidor detenido al terminar.
+- `curl` sobre el HTML servido: aviso por ruta y día, textos, `href`, `h1`, `id` y cabeceras.
+- Claude in Chrome (pestaña nueva, cerrada al terminar): apertura, teclado real (Tab, Shift+Tab, Escape), clics en los botones, navegación a `/birria` y "atrás", marcas de sesión, contraste con colores calculados y consola.
+- Responsive: la ventana de Chrome no cambia de tamaño y la CSP (`frame-src`) bloquea iframes del mismo origen. Se usó Chrome headless con perfil temporal y `Emulation.setDeviceMetricsOverride` por el protocolo DevTools (script desechable en `/tmp`, fuera del repo) a 320×568, 375×812, 768×1024, 1280×800 y 1440×900, con capturas en `/tmp/qa034-shots/`.
+
+### Criterios de aceptación
+- **CA-1: PASS.** `/molotes?dia=sabado|domingo`, y también sin `?dia` en el día real (sábado 2026-10-24): `data-home-notice="weekend"` con el título, el mensaje, "Ver Birria El Muñeco" y "Quedarme en Molotes" idénticos a R-2. En Chrome se abre solo: `open: true`, `:modal`, foco inicial en el enlace y marca `homeNotice:weekend:seen`.
+- **CA-2: PASS.** Lunes: textos idénticos a R-3 y un único `<button>` "Ver el menú", sin enlace. Martes a viernes: ningún `<dialog>`. Fuera del diálogo, el HTML de sábado es idéntico al de martes (`diff` vacío).
+- **CA-3: PASS.** `/birria` sin `<dialog>` con `?dia=lunes|martes|sabado` (curl y Chrome). `/` mantiene el aviso `rest` el lunes, `molotes` el martes y ninguno el sábado, con `href="/molotes"`. Pruebas de REQ-F-028 y snapshots de Molotes y Birria en verde.
+- **CA-4: PASS.**
+  - Clic en "Ver Birria El Muñeco": navega a `/birria`.
+  - "Quedarme en Molotes" y "Ver el menú" cierran el aviso (clic real).
+  - Escape lo cierra en las dos variantes; el foco vuelve a la página y el siguiente Tab sigue en la página.
+  - Tab y Shift+Tab: 12 pulsaciones con el aviso del sábado y 10 con el del lunes. Todos los `focusin` registrados caen dentro del diálogo (`IN`), ninguno en el contenido de detrás. La parada intermedia en la interfaz del navegador es nativa de `showModal()`.
+  - Foco visible: `outline` sólido `rgb(255,196,114)`.
+- **CA-5: PASS** (Chrome).
+  - Recargar no reabre el aviso.
+  - Con la sesión limpia: `/?dia=lunes` se abre y después `/molotes?dia=lunes` no. Al revés, igual.
+  - Con `homeNotice:molotes:seen` (tras `/?dia=martes`), `/molotes?dia=sabado` sí se abre.
+- **CA-6: PASS.** Sin JS (headless con scripts desactivados, 375 px): `dialog.open=false`, `display:none`; el `h1` y las 8 tarjetas del menú se pueden consultar. Con sessionStorage que lanza: pruebas jsdom en verde.
+- **CA-7: PASS.**
+  - En desarrollo, `?dia=lunes` da `rest`; `?dia=sabado|domingo` da `weekend`; `?dia=martes|miercoles|jueves|viernes` no da aviso.
+  - `?dia=foo`, `?dia=sabado&dia=lunes` y `?dia=__proto__` se ignoran: decide el día real.
+  - Con `NODE_ENV=production` y `NODE_ENV=test`, `?dia` no tiene efecto en `/molotes` (integración).
+- **CA-8: PASS.** Unitarias: viernes→sábado, domingo→lunes y lunes→martes a las 00:00 de CDMX, y día del negocio frente a UTC.
+- **CA-9: PASS.**
+  - A 320, 375, 768, 1280 y 1440 el diálogo cabe en el viewport en las dos variantes, sin desplazamiento horizontal del documento ni título cortado.
+  - A 320 el aviso de fin de semana usa el desplazamiento interno (288×536) y el último botón se alcanza.
+  - El logo se muestra a 33×40 (natural 418×512): proporción conservada.
+  - Contraste calculado en Chrome sobre `rgb(16,32,56)`: título 10.41:1; mensaje 12.67:1; enlace dorado (`#452b00` sobre `#f3a300`) 6.29:1; "Quedarme en Molotes" 12.67:1. El botón único "Ver el menú" usa los mismos colores que el enlace dorado: 6.29:1.
+- **CA-10: PASS.** `.claude/CLAUDE.md` §1 (l. 11), §5 ("Avisos de `/molotes`", l. 123–131) y §11 (l. 206 y 230) y el README (tabla, l. 17–24, y rutas HTTP, l. 585 y 597) describen la regla nueva.
+- **CA-11: PASS.** Sin dependencias nuevas; `typecheck`, `lint` y `test` en 0; snapshot de Molotes sin cambios.
+
+### Defectos encontrados
+Ninguno.
+
+Observaciones, sin defecto:
+- **OBS-1, desviación 2 frente a Stitch.** El botón dorado de `_stich_source_/moloteando_*/code.html` usa `text-on-secondary-container` (`#613e00`) y pasa a `text-on-secondary` al pasar el ratón. El aviso usa `text-on-secondary` (`#452b00`) en el enlace del fin de semana y en "Ver el menú", tal como fija el Technical Action Plan aprobado. Coinciden con Stitch la forma de píldora, el fondo `#f3a300`, el resplandor `0 4px 16px rgba(243,163,0,0.35)`, la tipografía Epilogue en mayúsculas y el espaciado de letras. El contraste es AA (6.29:1). Que "Ver el menú" se pinte como botón principal es coherente con el botón principal del sistema.
+- **OBS-2.** Los botones miden 40–42 px de alto y el enlace 56 px. Cumplen WCAG 2.2 AA (24 px como mínimo) y siguen el mismo patrón `py-2.5` que el aviso de `/`.
+- **OBS-3, entorno.** La `WHATSAPP_BOT_BLOCKLIST_KEY` del `.env` del checkout principal no es válida para la configuración actual: conviene regenerarla fuera de este ticket.
+
+### Regresión
+`/` y `/birria` sin cambios (curl, Chrome e integración); snapshots intactos. El enlace cruzado del pie sigue siendo único con y sin aviso (`footer-cross-link`). Las pruebas de integración de WhatsApp de `/molotes` (`href`, `target`, `rel`) y de `initPromoForms` siguen en verde. Consola sin errores en `/molotes`, `/birria` y `/`. `Cache-Control: no-cache` en `/molotes`.
+
+### Responsive
+PASS en 320, 375, 768, 1280 y 1440 en las dos variantes (datos en CA-9; capturas en `/tmp/qa034-shots/`).
+
+### Accesibilidad
+- Un solo `h1`; el `h2` del aviso tiene un `id` único (`home-notice-title`) referenciado por `aria-labelledby`.
+- `<a href>` para navegar y `<button type="button">` para cerrar; sin ARIA extra.
+- El logo del enlace es decorativo (`alt=""`) y el nombre accesible es "Ver Birria El Muñeco".
+- Foco contenido y visible; contraste AA.
+
+### UX/UI
+El aviso no tiene equivalente en `_stich_source_/` (R-6). Usa la paleta, la tipografía y las píldoras de Molotes y la misma estructura que el aviso de `/`. Ver OBS-1.
+
+### Performance
+Sin requests nuevas: el logo de Birria (`webp`, 75.8 KB, con `width` y `height`) ya lo carga el pie de `/molotes` (REQ-F-033). El JS solo añade un import pequeño del módulo existente.
+
+### SEO
+`title`, description, canonical y Open Graph de `/molotes` sin cambios (snapshot e integración). El aviso no añade otro `h1`.
+
+### Pendientes de revisión manual
+Ninguno. Las validaciones de teclado y responsive se ejecutaron en un navegador real o con emulación de viewport.
+
+### Resultado final
+QA_APPROVED
+
 ## Trazabilidad
 
 | Respuesta del usuario | Decisión | Requisitos | Criterios |
@@ -362,3 +558,9 @@ Descripción inicial, aprobada por el usuario el 2026-10-15.
 
 ### Versión 3 (senior-fullstack, T2)
 2026-10-24: Technical Action Plan aprobado por el usuario ("Sí, apruebo el plan"). Ticket a `in-progress/`, estado `IN_PROGRESS`; implementación en la rama `feature/REQ-F-034-avisos-molotes-descanso-fin-de-semana`, validada (`build:css`, `typecheck`, `lint`, `test`). Estado `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### Versión 4 (senior-qa, Q1)
+2026-10-24: implementación aprobada por el usuario ("Sí, pasa a QA"). QA Action Plan redactado. Estado `NEEDS_QA_PLAN_APPROVAL`.
+
+### Versión 5 (senior-qa, Q2)
+2026-10-24: QA Action Plan aprobado por el usuario ("Sí, ejecuta QA"). Validación ejecutada (ronda 1): CA-1 a CA-11 en PASS, sin defectos. Estado `QA_APPROVED`.

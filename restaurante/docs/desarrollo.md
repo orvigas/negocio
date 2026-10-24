@@ -11,7 +11,7 @@ Todos los comandos se ejecutan desde la carpeta `restaurante/` salvo que se indi
 
 | Herramienta | Para qué | Notas |
 | ----------- | -------- | ----- |
-| Node.js >= 24.3 | Ejecutar la app, las pruebas y los scripts | Versión en `.nvmrc` (`24`); con nvm: `nvm use`. Las versiones 24.0 a 24.2 funcionan, pero escriben un `ExperimentalWarning` en cada arranque |
+| Node.js >= 24.22.1 | Ejecutar la app, las pruebas y los scripts | Versión en `.nvmrc` (`24.22.1`); con nvm: `nvm install && nvm use`. Es el piso de seguridad: las 24.x anteriores tienen los CVE del boletín de Node de octubre de 2026 (ver [Versión de Node y avisos atendidos](../README.md#versión-de-node-y-avisos-atendidos)) |
 | npm | Dependencias y scripts | El que trae Node 24 |
 | git | Clonar y trabajar en ramas | |
 | Docker con Compose v2 | **MySQL 8.4 local** (`npm run db:up`), pruebas en contenedor y build de las imágenes | Sin Docker necesitas un MySQL 8.4 propio con utf8mb4 y `utf8mb4_es_0900_as_cs` (ver el [paso 4](#4-mysql-local-y-carpeta-de-datos-data_dir)) |
@@ -23,7 +23,7 @@ Todos los comandos se ejecutan desde la carpeta `restaurante/` salvo que se indi
 ```sh
 git clone git@github.com:orvigas/negocio.git
 cd negocio/restaurante
-nvm use                               # o asegúrate de tener Node >= 24.3
+nvm install && nvm use                # o asegúrate de tener Node >= 24.22.1
 npm ci --strict-allow-scripts         # mismas dependencias que el lockfile, igual que CI y Docker
 npm run db:generate                   # cliente de Prisma en src/generated/prisma (no se versiona)
 npm run db:up                         # MySQL 8.4 local (ver el paso 4)

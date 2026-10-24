@@ -137,6 +137,8 @@ Mantén esta estructura salvo que exista una razón técnica clara para cambiarl
 
 ## Exploración del código: CodeGraph primero
 
+Regla obligatoria: `.claude/rules/codegraph.md`.
+
 Antes de leer o modificar código en `restaurante/src`, `restaurante/public/js` o `restaurante/tests`, usa `codegraph_explore` para entender relaciones, consumidores, dependencias, impacto de los cambios, componentes reutilizables y pruebas existentes.
 
 Si la herramienta MCP no está disponible, usa el CLI por Bash, que devuelve la misma salida: `codegraph explore "<consulta>"` (para un símbolo o archivo concreto: `codegraph node <nombre>`). Si ambos fallan, **no reintentes**: indícalo una vez en tu resultado y continúa con Grep, Glob y Read.

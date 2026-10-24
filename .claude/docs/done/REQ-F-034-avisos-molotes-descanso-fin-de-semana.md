@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
 
 Pull Request: https://github.com/orvigas/negocio/pull/80 (base `main`). CI del PR en verde en `5da664e`: `calidad`, `docker`, `despliegue` y `auditoria` superadas (ejecución https://github.com/orvigas/negocio/actions/runs/40140745285).
 
@@ -569,3 +569,6 @@ Descripción inicial, aprobada por el usuario el 2026-10-15.
 
 ### Versión 6 (senior-fullstack, T4)
 2026-10-24: rama al día con `origin/main` (sin cambios nuevos en main). Commit del ticket con `QA_APPROVED` (`5da664e`), Pull Request #80 contra `main` (https://github.com/orvigas/negocio/pull/80) y CI en verde (`calidad`, `docker`, `despliegue`, `auditoria`). Estado `READY_FOR_MERGE`.
+
+### Versión 7 (senior-fullstack, T5)
+2026-10-24: el usuario mergeó el PR #80 (https://github.com/orvigas/negocio/pull/80; merge `b8f9be6`, 2026-10-24T23:27:48Z) ("mergeado"). Pipeline de `main` (run 40142837211, https://github.com/orvigas/negocio/actions/runs/40142837211) en verde: `cambios`, `validado`, `publish`, `vigente` y `deploy` success (el despliegue a producción terminó bien). Ticket movido a `done/`; ramas `feature/REQ-F-034-avisos-molotes-descanso-fin-de-semana` local y remota borradas. Estado `DONE`.

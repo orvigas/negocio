@@ -2,7 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
+
+Pull Request: https://github.com/orvigas/negocio/pull/80 (base `main`). CI del PR en verde en `5da664e`: `calidad`, `docker`, `despliegue` y `auditoria` superadas (ejecución https://github.com/orvigas/negocio/actions/runs/40140745285).
 
 ## Aprobación
 
@@ -564,3 +566,6 @@ Descripción inicial, aprobada por el usuario el 2026-10-15.
 
 ### Versión 5 (senior-qa, Q2)
 2026-10-24: QA Action Plan aprobado por el usuario ("Sí, ejecuta QA"). Validación ejecutada (ronda 1): CA-1 a CA-11 en PASS, sin defectos. Estado `QA_APPROVED`.
+
+### Versión 6 (senior-fullstack, T4)
+2026-10-24: rama al día con `origin/main` (sin cambios nuevos en main). Commit del ticket con `QA_APPROVED` (`5da664e`), Pull Request #80 contra `main` (https://github.com/orvigas/negocio/pull/80) y CI en verde (`calidad`, `docker`, `despliegue`, `auditoria`). Estado `READY_FOR_MERGE`.

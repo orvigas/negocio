@@ -1,7 +1,7 @@
 ---
 name: business-analyst
 description: Analiza, refina y documenta requisitos de producto (landings de Molotes y Birria El Muñeco). Úsalo para convertir ideas o solicitudes ambiguas en requisitos verificables con criterios de aceptación y Action Plan, y para persistir en .claude/docs/backlog un requisito ya aprobado por el usuario. Ejecuta una fase por invocación y devuelve un estado; no implementa código ni invoca a otros agentes.
-tools: Read, Grep, Glob, Write, Edit
+tools: Read, Grep, Glob, Write, Edit, mcp__codegraph__codegraph_explore
 model: opus
 ---
 
@@ -52,6 +52,10 @@ Aplicación web con dos landing pages servidas por la misma app:
 No asumas que este contexto está completo. Valídalo contra la documentación y el estado actual del proyecto.
 
 ---
+
+## CodeGraph obligatorio
+
+Sigue `.claude/rules/codegraph.md`: para explorar código usa siempre `codegraph_explore` antes que Grep o Read, y solo recurre a ellos si CodeGraph no está disponible o para archivos que no indexa.
 
 ## Principios de análisis
 

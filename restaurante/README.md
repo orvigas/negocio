@@ -255,19 +255,21 @@ atrás) está en `deploy/` y se describe en [docs/despliegue.md](docs/despliegue
 ## CI
 
 El workflow `.github/workflows/ci.yml` (en la raíz del repositorio, GitHub Actions) comprueba
-cada PR hacia `main` y, en `main`, publica y despliega (REQ-F-016). Las comprobaciones no
+cada PR hacia `main` o hacia la rama intermedia `epic/arquitectura` ([Rama
+intermedia](#rama-intermedia)) y, en `main`, publica y despliega (REQ-F-016). Las comprobaciones no
 necesitan secretos ni `.env`: las pruebas usan su propia configuración (`tests/helpers.ts`). Solo
 el job `deploy` usa secretos (los del environment `production`).
 
 ### Cuándo se ejecuta
 
-- En cada PR hacia `main`, al abrirlo, al actualizarlo (push nuevo) o al reabrirlo.
+- En cada PR hacia `main` o hacia `epic/arquitectura`, al abrirlo, al actualizarlo (push nuevo) o
+  al reabrirlo.
 - En cada push a `main` (por ejemplo, al hacer merge de un PR).
 - A mano, sobre `main` ([Redespliegue manual](#redespliegue-manual)).
 - Un push nuevo al mismo PR cancela la ejecución anterior de ese PR; las de `main` (push o
   manuales) nunca se cancelan.
-- Primero corre el job `cambios`, que clasifica con `git diff` los archivos que el PR agrega a
-  `main` (o los del push a `main`). Son **solo documentación** si todos están en `.claude/`, son
+- Primero corre el job `cambios`, que clasifica con `git diff` los archivos que el PR agrega a su
+  rama base (o los del push a `main`). Son **solo documentación** si todos están en `.claude/`, son
   `*.md` fuera de `restaurante/` o están en `restaurante/docs/` con extensión `.md`. Los demás
   `*.md` de `restaurante/` cuentan como código (`tests/unit/whatsapp-bot-free-text.test.ts` lee
   este README y `tests/fixtures/` forma parte de las pruebas), igual que cualquier otro archivo
@@ -283,6 +285,22 @@ el job `deploy` usa secretos (los del environment `production`).
   despliega.
 - Cada comprobación tiene un tiempo máximo de 20 minutos (`despliegue`, 30; `auditoria`, 10;
   `cambios`, `validado` y `vigente`, 5).
+
+### Rama intermedia
+
+Los PR de los pasos del plan de migración ([`docs/arquitectura.md`](docs/arquitectura.md) §8) van
+a `epic/arquitectura`, no a `main`, hasta que la épica esté madura. La regla de qué va a cada rama
+está en `.claude/rules/git.md`.
+
+- Un PR hacia `epic/arquitectura` corre lo mismo que uno hacia `main` (`cambios`, `calidad`,
+  `docker`, `despliegue` y `auditoria`, con la misma regla de solo documentación), pero nunca
+  publica ni despliega: `publish`, `vigente` y `deploy` quedan omitidos.
+- El merge a `epic/arquitectura` no dispara el CI (no hay `push` sobre esa rama): cada cambio ya
+  se validó en su PR contra la punta de la épica, y nada se publica desde ella.
+- La épica llega a `main` con un PR de `epic/arquitectura` hacia `main`, que corre su propio CI.
+  Al mergearlo, el push a `main` se trata como cualquier otro ([Árbol ya
+  validado](#árbol-ya-validado)): si el contenido es el que validó ese PR, se publica y se
+  despliega sin repetir las validaciones.
 
 ### Árbol ya validado
 

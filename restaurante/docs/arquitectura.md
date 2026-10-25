@@ -179,6 +179,9 @@ avisar al personal.
 
 Se sigue el patrón *strangler fig*: lo nuevo crece alrededor de lo actual y lo reemplaza por partes.
 **Cada paso es un ticket y un PR desplegable**; las pruebas actuales son la red de seguridad.
+Los PR de los pasos van a la rama intermedia `epic/arquitectura`, que valida sin desplegar, y la
+épica llega a `main` con un solo PR cuando está madura (`.claude/rules/git.md` y la sección "Rama
+intermedia" del CI en `restaurante/README.md`).
 
 | Paso | Qué hace | Cambia el comportamiento |
 | --- | --- | --- |

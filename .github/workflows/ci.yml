@@ -1,7 +1,8 @@
 # CI (REQ-F-006 y REQ-F-014): tipos, lint, pruebas contra MySQL 8.4, divergencia entre esquema y
-# migraciones, y build de las imágenes production y migrate en cada PR hacia main. MySQL es el
-# servicio mysql-dev de restaurante/compose.yaml (solo en 127.0.0.1, credenciales de desarrollo):
-# el mismo que en local, porque un `services:` de GitHub no permite fijar la colación del servidor.
+# migraciones, y build de las imágenes production y migrate en cada PR hacia main o hacia la rama
+# intermedia epic/arquitectura (ver "Rama intermedia" más abajo). MySQL es el servicio mysql-dev
+# de restaurante/compose.yaml (solo en 127.0.0.1, credenciales de desarrollo): el mismo que en
+# local, porque un `services:` de GitHub no permite fijar la colación del servidor.
 #
 # Solo documentación: el job `cambios` compara los archivos del PR (o del push a main) y, si todos
 # son documentación (ver su comentario), calidad, docker, despliegue y auditoria quedan omitidas
@@ -17,6 +18,12 @@
 # (si no, resumen "Omitido" y no se despliega) y `deploy` despliega lo publicado en el VPS por SSH,
 # en el environment `production`. Redespliegue manual: `workflow_dispatch` sobre main (cualquier
 # otra rama se rechaza) corre las cuatro validaciones, publica y despliega la punta de main.
+#
+# Rama intermedia (epic/arquitectura): los PR de los pasos de restaurante/docs/arquitectura.md van
+# a esa rama y corren las mismas validaciones que un PR hacia main, sin publicar ni desplegar
+# (`publish` exige push o ejecución manual sobre main). No hay `push` a epic/arquitectura: cada
+# merge ya se validó en su PR, y la integración en main pasa por un PR de la épica hacia main, que
+# corre su propio CI; al mergearlo, `validado` lo trata como cualquier otro PR hacia main.
 #
 # Qué se desplegó (REQ-F-030): el título de cada ejecución lleva su commit (ver `run-name`) y el
 # resumen de `vigente` (Omitido) o de `deploy` (Desplegado, Revertido, Fallido, Omitido o Cancelado
@@ -36,7 +43,7 @@ run-name: ${{ github.event_name == 'pull_request' && format('{0} · {1}', github
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, epic/arquitectura]
     types: [opened, synchronize, reopened]
   push:
     branches: [main]
@@ -60,10 +67,10 @@ jobs:
   # un borrado o el origen de un renombrado) cuenta como código. Los *.md de restaurante/ fuera de
   # docs/ cuentan como código: tests/unit/whatsapp-bot-free-text.test.ts lee el README.md y
   # tests/fixtures/ forma parte de las pruebas. En un PR compara el commit de merge que prueba
-  # GitHub (refs/pull/N/merge) con su primer padre, la punta de main: lo que el PR agrega a main, y
-  # deja el tree de ese commit de merge en una anotación `arbol-validado` (la lee `validado` en el
-  # push a main). En un push a main, el rango before..sha; si `before` no existe en el historial
-  # (force push), corre todo. En una ejecución manual todo es código; fuera de main, falla y no
+  # GitHub (refs/pull/N/merge) con su primer padre, la punta de su rama base (main o
+  # epic/arquitectura): lo que el PR agrega a su base, y deja el tree de ese commit de merge en una
+  # anotación `arbol-validado` (la lee `validado` en el push a main). En un push a main, el rango
+  # before..sha; si `before` no existe en el historial (force push), corre todo. En una ejecución manual todo es código; fuera de main, falla y no
   # corre nada más.
   cambios:
     name: cambios
@@ -130,7 +137,9 @@ jobs:
   # ese PR → en alguna, calidad, auditoria, docker y despliegue en success y la anotación de
   # `cambios` igual al tree de este commit. Si coincide, validado=true. Cualquier otra cosa (sin
   # PR, varios PR, error de la API, sin ejecución válida, tree distinto) da validado=false y las
-  # validaciones corren en el push. Ante la duda, siempre se valida.
+  # validaciones corren en el push. Ante la duda, siempre se valida. Solo cuenta el PR hacia main
+  # (al integrar la épica, el de epic/arquitectura → main): un PR hacia epic/arquitectura nunca
+  # valida un push a main, salvo que su anotación coincida con el tree exacto de main.
   validado:
     name: validado
     needs: cambios

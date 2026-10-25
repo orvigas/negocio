@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
 ## Aprobación
 
@@ -801,6 +801,28 @@ QA_APPROVED, con estas condiciones antes de llevar la épica a `main`:
 - CA-13 completado con la toma del domingo y por debajo del 80 %, o con la decisión A revisada si lo supera;
 - CA-9 y CA-10 verificados tras el merge de `epic/arquitectura` a `main`.
 
+## Pull Request
+
+- **PR:** #84, https://github.com/orvigas/negocio/pull/84, de `feature/REQ-F-036-monorepo-workspaces-landing-pages` hacia `epic/arquitectura`, la rama intermedia de la épica, por decisión del usuario. El merge a la épica no publica ni despliega.
+- **Commit:** `01de22e`, `refactor: convierte restaurante/ en un monorepo con la app en el workspace landing-pages`, rebasado sobre `origin/epic/arquitectura` (`334e5dc`).
+- **Conflictos del rebase:** solo dos comentarios de `.github/workflows/ci.yml`, la cabecera y el del job `cambios`. Se conservan los dos lados: los PR hacia `main` o hacia `epic/arquitectura` ("Rama intermedia" y "su rama base") junto con las rutas del monorepo (`landing-pages/tests/...` y el README de la raíz). Los disparadores `branches: [main, epic/arquitectura]` no cambian. El README, `arquitectura.md` §8 y `.claude/rules/git.md` se fusionaron solos; lo que añadió el #83 no cita rutas de la app.
+- **Validación tras el rebase:** `typecheck` 0, `lint` 0, `npm test` 0 (1981 pruebas en 93 archivos) y actionlint 0 (contenedor `rhysd/actionlint`).
+- **CI del PR** (ejecución 40162001194):
+
+  | Job | Resultado |
+  | --- | --- |
+  | `cambios` | pass, 6 s |
+  | `calidad` | pass, 7 min 10 s |
+  | `auditoria` | pass, 13 s |
+  | `docker` | pass, 3 min 8 s |
+  | `despliegue` | pass, 4 min 41 s |
+  | `validado`, `publish`, `vigente` y `deploy` | omitidos, como corresponde a un PR |
+
+  Con esto se cumple **CA-4**.
+- **CA-5:** el `case` de `cambios` trata `.claude/*` y `restaurante/docs/*.md` como documentación y cualquier otro `restaurante/*` (también `restaurante/landing-pages/**`) como código. En este PR, `cambios` marcó código y corrieron las cuatro validaciones. Un PR solo con `restaurante/docs/*.md` o `.claude/**` las omitiría. No se abrió ningún PR de prueba.
+- **DEF-001 corregido:** `arquitectura.md` §10 indica que la toma con tráfico se registra el domingo 2026-10-25, entre 08:00 y 15:00, antes del merge en `epic/arquitectura`, y que el paso 1 se valida en el PR hacia la épica, con el despliegue real cuando la épica llegue a `main`.
+- **Condición de merge:** **no mergear hasta registrar la toma de memoria con tráfico del domingo (CA-13).** CA-9 y CA-10 se verifican cuando la épica llegue a `main`.
+
 ## Historial de cambios
 
 ### Versión 1
@@ -835,3 +857,7 @@ El usuario aprueba el QA Action Plan, con PR a `epic/arquitectura`. `senior-qa` 
 - Un defecto `TRIVIAL` de documentación (DEF-001).
 
 Quedan pendientes CA-4 y CA-5 (CI del PR), CA-13 (toma del domingo) y CA-9 y CA-10 (merge de la épica a `main`). Estado: `QA_APPROVED`.
+
+### Pull Request (2026-10-24)
+
+Commit `01de22e` rebasado sobre `epic/arquitectura` y PR #84 hacia `epic/arquitectura`. El CI está en verde (`cambios`, `calidad`, `auditoria`, `docker` y `despliegue`). DEF-001 corregido. El merge queda condicionado a la toma de memoria con tráfico del domingo (CA-13). Estado: `READY_FOR_MERGE`.

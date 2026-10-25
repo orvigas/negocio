@@ -16,7 +16,8 @@ import {
 } from '../../src/services/menu-schema.ts';
 import { isHttpsUrl } from '../../src/services/whatsapp.ts';
 
-const STITCH = join(import.meta.dirname, '..', '..', '..', '_stich_source_');
+// Diseño fuente en la raíz del repositorio (landing-pages/tests/unit → cuatro niveles; REQ-F-036).
+const STITCH = join(import.meta.dirname, '..', '..', '..', '..', '_stich_source_');
 const DESIGN_SOURCES = Object.freeze({
   molotes: 'moloteando_aut_nticos_molotes_artesanales',
   birria: 'birrier_a_el_mu_eco_aut_ntica_birria_de_res_color_adobo',

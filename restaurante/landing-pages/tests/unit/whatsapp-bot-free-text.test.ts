@@ -550,7 +550,7 @@ describe('presupuesto de la plantilla del aviso (DT-1)', () => {
   });
 
   it('el README documenta el mismo cuerpo de la plantilla', () => {
-    const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
+    const readme = readFileSync(new URL('../../../README.md', import.meta.url), 'utf8');
     expect(readme).toContain(STAFF_TEMPLATE_BODY);
   });
 });

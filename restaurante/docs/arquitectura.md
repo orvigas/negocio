@@ -8,13 +8,14 @@ necesita desviarse de este documento, lo actualiza en el mismo PR.
 
 | | |
 | --- | --- |
-| Estado | **Aceptada** (estrategia general). Quedan abiertas las decisiones de la [sección 9](#9-decisiones-pendientes) |
+| Estado | **Aceptada** (estrategia general). Decisión A tomada el 2026-10-24; quedan abiertas B y C ([sección 9](#9-decisiones)). Paso 1 aplicado en REQ-F-036 |
 | Fecha | 2026-10-24 |
 | Alcance | Estructura del código, regla de dependencias, contratos, consumo de la API y orden de la migración. No cambia el stack de `.claude/CLAUDE.md` §2 |
 
 ## 1. Contexto
 
-Hoy `restaurante/` es **una sola app Koa** que hace todo:
+Hoy `restaurante/` es **una sola app Koa** que hace todo (desde el paso 1, en el workspace
+`restaurante/landing-pages/`; las rutas `src/...` de este documento son relativas a él):
 
 - **Landings** por SSR (`src/views/`, `src/content/`, `public/`), con el aviso del día decidido en
   el servidor (REQ-F-028 y REQ-F-034).
@@ -90,7 +91,13 @@ sin tocar los demás.
 ```text
 restaurante/
 ├── package.json             ← raíz de workspaces: scripts, lint y typecheck comunes
-├── tsconfig.base.json       ← opciones estrictas compartidas
+├── package-lock.json        ← lockfile único
+├── tsconfig.base.json       ← opciones estrictas compartidas (desde el paso 2)
+├── compose.yaml, docker/    ← MySQL de desarrollo y pruebas (compartido)
+├── deploy/                  ← producción: compose.prod.yaml, deploy.sh, mysql/initdb y ci/
+├── ops/                     ← respaldos del host (ops/backup)
+├── security/                ← excepciones de la auditoría de dependencias
+├── docs/                    ← guías (desarrollo, despliegue y este documento)
 ├── packages/
 │   ├── core/                ← dominio y casos de uso. TS puro: sin Koa, sin Prisma, sin HTML
 │   │   ├── catalog/         (productos y menú visible)
@@ -128,6 +135,13 @@ packages/core/inventory/
 | `inventory-manager` | `contracts` | `core`, `db`, Prisma |
 
 - **Las flechas apuntan hacia `core`.** Entre módulos de `core`, solo a través de su `index.ts`.
+- **Lo compartido queda en la raíz** (desviación registrada en el paso 1, REQ-F-036): `deploy/`,
+  `ops/`, `security/`, `docs/`, `compose.yaml` y `docker/` no pertenecen a ninguna app. `deploy/`
+  conserva su ubicación porque la suma de `compose.prod.yaml`, `deploy.sh` y
+  `mysql/initdb/01-usuarios.sh` debe coincidir con la instalada en el VPS.
+- **En el paso 1 no hay `tsconfig.base.json` ni lint común:** con un solo workspace, `tsconfig.json`
+  y `eslint.config.ts` siguen en `landing-pages/` y los scripts de la raíz delegan en él. Se
+  extraen a la raíz en el paso 2, cuando haya paquetes.
 - **La regla la aplica el lint**, no la memoria: `npm run lint` rechaza un import que la rompa
   (con `no-restricted-imports` o una regla de rutas en `eslint.config.ts`), igual que hoy rechaza los
   imports `./x.js` fuera de `public/js`.
@@ -149,7 +163,7 @@ packages/core/inventory/
 | | Landing pages | Inventory manager |
 | --- | --- | --- |
 | Endpoints | `GET /api/v1/public/...`: menú visible, horarios y aviso del día. Públicos y de solo lectura | `/api/v1/admin/...`: lectura y escritura, con autenticación y permisos por negocio |
-| Renderizado | **Sigue en SSR** con Koa: el SEO y la regla de que el servidor decide el aviso no cambian | Ver la [decisión B](#9-decisiones-pendientes) |
+| Renderizado | **Sigue en SSR** con Koa: el SEO y la regla de que el servidor decide el aviso no cambian | Ver la [decisión B](#9-decisiones) |
 | Resiliencia | Caché corta con `stale-while-revalidate` y la última copia buena como respaldo: una caída de la API no tira las landings | Muestra el error de la API (503 o 409) y no pierde lo que se estaba editando |
 | Seguridad | **Sin credenciales de la base** (mínimo privilegio) | Sesión con cookie `SameSite=Strict` y token CSRF, como hoy en `/admin` |
 
@@ -185,7 +199,7 @@ intermedia" del CI en `restaurante/README.md`).
 
 | Paso | Qué hace | Cambia el comportamiento |
 | --- | --- | --- |
-| 1 | **Monorepo sin cambios funcionales.** Workspaces en `restaurante/` y la app actual pasa tal cual a `landing-pages/`. Se ajustan el CI (`.github/workflows/ci.yml`, Dependabot), el `Dockerfile`, `compose.yaml`, `deploy/` y la documentación | No |
+| 1 | **Monorepo sin cambios funcionales** (REQ-F-036). Workspaces en `restaurante/` y la app actual pasa tal cual a `landing-pages/`. Se ajustan el CI (`.github/workflows/ci.yml`, Dependabot), el `Dockerfile`, `compose.yaml` y la documentación. De `deploy/` no se toca ningún archivo de la suma (`compose.prod.yaml`, `deploy.sh`, `mysql/initdb/01-usuarios.sh`): las imágenes y sus nombres no cambian | No |
 | 2 | **Extraer `core`, `contracts` y `db`** del `src/` actual. Se mueven los archivos y se ajustan los imports, sin reescribir la lógica | No |
 | 3 | **Crear `api/`** con los endpoints públicos. Las landings pasan a consumirlos y dejan de acceder a la base | No (mismo HTML) |
 | 4 | **Llevar `/admin`** (productos, usuarios y control del bot) a `/api/v1/admin` y al nuevo `inventory-manager`. El `/admin` actual se retira cuando el nuevo tenga lo mismo | Sí: nueva interfaz de administración |
@@ -209,23 +223,61 @@ intermedia" del CI en `restaurante/README.md`).
 
 Los nombres exactos de archivos y endpoints los fija el plan técnico de cada ticket.
 
-## 9. Decisiones pendientes
+## 9. Decisiones
 
 | | Decisión | Recomendación | Alternativa |
 | --- | --- | --- | --- |
-| **A** | **Despliegue** | Tres contenedores (`api`, `landing-pages` e `inventory-manager`) detrás del Traefik del VPS: el dominio actual para las landings y un subdominio de administración, con la API en `admin.<dominio>/api`. El admin y la API comparten origen, así que la cookie funciona sin CORS | Un solo contenedor con las tres apps: menos memoria en el VPS, pero se despliegan juntas |
+| **A** | **Despliegue** (**tomada**, ver abajo) | Tres contenedores (`api`, `landing-pages` e `inventory-manager`) detrás del Traefik del VPS: el dominio actual para las landings y un subdominio de administración, con la API en `admin.<dominio>/api`. El admin y la API comparten origen, así que la cookie funciona sin CORS | Un solo contenedor con las tres apps: menos memoria en el VPS, pero se despliegan juntas |
 | **B** | **Tecnología del inventory manager** | Vanilla JS con Web Components y Tailwind, respetando `.claude/CLAUDE.md` §2 | Cambiar la regla de §2 solo para el admin, para permitir un framework |
 | **C** | **Validación de esquemas en `contracts`** | Una librería de esquemas (por ejemplo Zod o Valibot) que da tipos y validación desde una sola definición, justificada según `.claude/rules/dependencias.md` | Seguir con validadores propios, como `product-schema.ts` hoy |
 
 Cada decisión se toma antes del paso que la necesita (A en el paso 1, C en el paso 2 y B en el paso 4)
-y se registra aquí, con la fecha y lo que respondió el usuario.
+y se registra aquí, con la fecha y lo que respondió el usuario. B y C siguen pendientes.
+
+### Decisión A: tomada
+
+- **Fecha:** 2026-10-24 (REQ-F-036).
+- **Respuesta del usuario:** "tres contenedores".
+- **Opción elegida:** la recomendación. Tres contenedores, `api`, `landing-pages` e
+  `inventory-manager`, detrás del Traefik del VPS. El dominio actual queda para las landings y la
+  API va en `admin.<dominio>/api`.
+- **Qué aplica en cada paso:**
+
+| Paso | Qué se hace |
+| --- | --- |
+| 1 (REQ-F-036) | La imagen y el contenedor actuales salen del workspace `landing-pages/`, con los mismos nombres (`ghcr.io/orvigas/restaurante`, `restaurante-migrate`, servicio `app` y routers `restaurante*`), el mismo dominio y las mismas rutas. Se mide la memoria del VPS ([sección 10](#10-riesgos)) |
+| 3 | Contenedor e imagen de `api`. Antes se revisa la memoria con el umbral del 80 % |
+| 4 | Contenedor `inventory-manager`, `admin.<dominio>`, DNS y certificado. `/admin` pasa al subdominio y el `/admin` actual se retira en un ticket propio |
 
 ## 10. Riesgos
 
-- **El paso 1 toca el pipeline de producción.** Se valida con el despliegue de `main` y el
-  `smoke.sh` del CI antes de seguir.
+- **El paso 1 toca el pipeline de producción.** Se valida con el CI completo (incluido el
+  `smoke.sh`) en el PR hacia `epic/arquitectura`; el despliegue real llega cuando la épica se
+  mergea a `main`.
 - **Las landings pasan a depender de la API** (paso 3). Se mitiga con la caché y la última copia
   buena de la [sección 6](#6-cómo-se-consume-la-api).
-- **Memoria del VPS** con más contenedores (decisión A): se mide en el paso 1.
+- **Memoria del VPS** con más contenedores (decisión A): se mide en el paso 1. Umbral: si la
+  estimación con tres contenedores supera el 80 % de la RAM total, la decisión A se revisa con el
+  usuario antes del paso 3. Ver [Medición de memoria](#medición-de-memoria-del-vps).
 - **Dos administraciones a la vez** durante el paso 4: el `/admin` actual se mantiene hasta que el
   nuevo tenga lo mismo, y se retira en un ticket propio.
+
+### Medición de memoria del VPS
+
+Medida en el paso 1 (REQ-F-036) por SSH, solo con comandos de lectura (`free -m`, `nproc` y
+`docker stats --no-stream`). En MiB.
+
+| Toma | Fecha y hora (America/Mexico_City) | RAM total | Usada en el host | `app` | MySQL | Traefik |
+| --- | --- | --- | --- | --- | --- | --- |
+| En reposo | 2026-10-24 19:57 (sábado, fuera del horario de servicio) | 3915 (1 vCPU, swap de 2047 sin usar) | 1066 (27,2 %) | 67,2 | 509,9 | 118,4 |
+| Con tráfico normal | Pendiente: domingo 2026-10-25, entre 08:00 y 15:00 (horario de servicio de la birria) | | | | | |
+
+- **Estimación con tres contenedores:** el uso del host más dos contenedores Node con el mismo uso
+  que `app` (cota de `api` e `inventory-manager`): 1066 + 2 × 67,2 = **1200 MiB, el 30,7 %** de la
+  RAM total. Está muy por debajo del umbral del 80 % (3132 MiB): **la decisión A se mantiene**.
+- **Margen:** aun si cada contenedor Node usara cinco veces lo medido en reposo (unos 340 MiB),
+  la estimación sería de unos 1740 MiB (44 %).
+- **Pendiente:** la toma con tráfico normal se registra aquí el domingo 2026-10-25, entre 08:00 y
+  15:00, antes del merge del PR de REQ-F-036 en `epic/arquitectura`. Si cambia la conclusión
+  (estimación por encima del 80 %), la decisión A se revisa con el usuario antes del paso 3.
+- El Traefik es el del VPS y también sirve otros sitios: su uso no depende de este proyecto.

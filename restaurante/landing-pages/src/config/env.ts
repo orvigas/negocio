@@ -133,7 +133,7 @@ const isCompleteWhatsApp = (
   value: Partial<Record<BusinessId, WhatsAppConfig>>,
 ): value is Record<BusinessId, WhatsAppConfig> => BUSINESS_IDS.every((businessId) => value[businessId] !== undefined);
 
-/** Raíz del proyecto (restaurante/). */
+/** Raíz del workspace de la app (restaurante/landing-pages/; en la imagen, /app/landing-pages). */
 export const PROJECT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** Carpeta de datos por defecto fuera de producción (está en .gitignore). */
 export const DEFAULT_DATA_DIR = join(PROJECT_DIR, 'data');

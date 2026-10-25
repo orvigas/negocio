@@ -46,7 +46,7 @@ Aplicación web con dos landing pages servidas por la misma app:
 - La landing activa se elige automáticamente según el día en la zona horaria del negocio.
 - Ambas permiten iniciar un pedido por WhatsApp.
 - El diseño fuente está en `_stich_source_/` (Google Stitch).
-- El contenido actual de cada negocio está en `restaurante/src/content/`.
+- El contenido actual de cada negocio está en `restaurante/landing-pages/src/content/`.
 - La experiencia debe ser responsive, accesible, clara y orientada a conversión.
 
 No asumas que este contexto está completo. Valídalo contra la documentación y el estado actual del proyecto.
@@ -95,7 +95,7 @@ Revisa, cuando existan:
 
 - `CLAUDE.md` y `.claude/rules/`;
 - `restaurante/README.md`;
-- `restaurante/src/content/` (contenido real de cada negocio);
+- `restaurante/landing-pages/src/content/` (contenido real de cada negocio);
 - `_stich_source_/`;
 - los tickets existentes en `.claude/docs/backlog/`, `.claude/docs/in-progress/` y `.claude/docs/done/`.
 

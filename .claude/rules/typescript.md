@@ -4,13 +4,13 @@
 
 paths:
 
-- "/src"
-- "/tests"
-- "/scripts"
+- "/restaurante/landing-pages/src"
+- "/restaurante/landing-pages/tests"
+- "/restaurante/landing-pages/scripts"
 
 ---
 
-El backend (`src/`), las pruebas (`tests/`), los scripts de Node (`scripts/`) y `vitest.config.ts` están en TypeScript estricto. El frontend (`public/js`) sigue en JavaScript Vanilla (`.claude/rules/javascript.md`).
+El backend (`src/`), las pruebas (`tests/`), los scripts de Node (`scripts/`) y `vitest.config.ts`, todos en `restaurante/landing-pages/`, están en TypeScript estricto. El frontend (`public/js`) sigue en JavaScript Vanilla (`.claude/rules/javascript.md`).
 
 ## Ejecución
 

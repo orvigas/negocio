@@ -1,4 +1,5 @@
-# Contexto de build de Docker (REQ-F-003). Nada de secretos, datos editables ni artefactos
+# Contexto de build de Docker (REQ-F-003): restaurante/, la raíz de los workspaces (REQ-F-036;
+# el Dockerfile está en landing-pages/). Nada de secretos, datos editables ni artefactos
 # locales: la imagen instala sus dependencias y compila su CSS.
 
 # Dependencias (se instalan con npm ci dentro de la imagen)
@@ -14,12 +15,13 @@ node_modules
 
 # Datos editables de la administración (DATA_DIR por defecto fuera de producción)
 data
+landing-pages/data
 
 # Cliente de Prisma generado localmente (la etapa build lo genera)
-src/generated
+landing-pages/src/generated
 
 # CSS generado localmente (la etapa build lo compila); se conserva public/css/.gitkeep
-public/css/*/
+landing-pages/public/css/*/
 
 # Logs y cobertura
 coverage
@@ -39,10 +41,14 @@ Thumbs.db
 *.swp
 
 # Archivos de Docker (no los necesita la imagen)
-Dockerfile
+landing-pages/Dockerfile
 compose.yaml
 .dockerignore
 docker
 
-# Scripts de respaldo del host (REQ-F-019): no forman parte de la imagen
+# Lo compartido del monorepo que ninguna imagen usa: despliegue (REQ-F-016), respaldos del host
+# (REQ-F-019), excepciones de la auditoría (REQ-F-020) y documentación
+deploy
 ops
+security
+docs

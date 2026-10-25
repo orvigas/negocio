@@ -1,14 +1,12 @@
-# Dependencias
+# Común a todo el monorepo (REQ-F-036). Lo propio de cada workspace va en su .gitignore.
+
+# Dependencias (npm workspaces: se instalan en la raíz y, si hace falta, en cada workspace)
 node_modules/
 
-# Variables de entorno (usar .env.example como plantilla)
+# Variables de entorno (usar landing-pages/.env.example como plantilla)
 .env
 .env.*
 !.env.example
-
-# Build de CSS (generado por Tailwind desde src/styles/)
-public/css/*
-!public/css/.gitkeep
 
 # Logs y cobertura
 *.log
@@ -19,18 +17,3 @@ coverage/
 .DS_Store
 .vscode/
 .idea/
-
-# Datos editables de la administración en desarrollo (DATA_DIR por defecto; REQ-F-001)
-data/
-
-# Cliente de Prisma generado (`npm run db:generate`; REQ-F-007)
-src/generated/
-
-# Restos locales de la antigua base SQLite (antes de REQ-F-014): nunca en el repositorio
-*.db
-*.db-wal
-*.db-shm
-*.db-journal
-
-# Salida local de Vitest (p. ej. reporter JSON de una corrida manual)
-.vitest/

@@ -1,10 +1,17 @@
 # syntax=docker/dockerfile:1
 
-# Imagen de la app (REQ-F-003 y REQ-F-014). Etapas:
+# Imagen de la app (REQ-F-003 y REQ-F-014), workspace landing-pages del monorepo (REQ-F-036).
+# Contexto de build: restaurante/ (la raíz de los workspaces, con el package-lock.json único):
+#   docker build -f landing-pages/Dockerfile --target production .   (desde restaurante/)
+# Dentro de la imagen se conserva la forma del workspace: /app/package.json y package-lock.json de
+# la raíz, /app/node_modules (dependencias elevadas) y la app en /app/landing-pages, que es el
+# WORKDIR. Así, los comandos relativos (node src/server.ts, node scripts/admin-recover.ts,
+# prisma migrate deploy con su prisma.config.ts) son los mismos que antes del monorepo.
+# Etapas:
 #   base       -> Node 24.22.1 Alpine (versión exacta, igual que .nvmrc) y directorio de trabajo.
-#   deps       -> todas las dependencias (npm ci); solo depende de package*.json. Los scripts
-#                 de instalación solo corren si están aprobados en `allowScripts` de
-#                 package.json (--strict-allow-scripts; REQ-F-007).
+#   deps       -> todas las dependencias (npm ci); solo depende de los package*.json. Los scripts
+#                 de instalación solo corren si están aprobados en `allowScripts` del
+#                 package.json de la raíz (--strict-allow-scripts; REQ-F-007).
 #   build      -> código, cliente de Prisma generado (npm run db:generate; REQ-F-007),
 #                 verificación de tipos (npm run typecheck; REQ-F-004) y CSS compilado con
 #                 Tailwind. Si hay errores de tipos, no se construye ninguna de las imágenes
@@ -13,6 +20,7 @@
 #                 (compose.yaml levanta mysql-dev y pasa TEST_DATABASE_URL/TEST_ADMIN_DATABASE_URL).
 #                 Necesita el contexto adicional "design" (../_stich_source_, que define
 #                 compose.yaml): tests/unit/content.test.ts compara la semilla con el diseño.
+#                 Incluye el README.md de la raíz: una prueba del bot lo compara.
 #   migrate    -> solo aplica las migraciones (prisma migrate deploy) con MIGRATION_DATABASE_URL
 #                 (usuario de MySQL con DDL; REQ-F-014, D-3). Proceso puntual: termina con 0 o 1.
 #   production -> dependencias de producción, código, CSS, migraciones (la app las lee para
@@ -22,17 +30,19 @@
 # La configuración (DATABASE_URL, WHATSAPP_*, DATA_DIR, ADMIN_*, ...) se inyecta al ejecutar, nunca aquí.
 
 FROM node:24.22.1-alpine AS base
-WORKDIR /app
+WORKDIR /app/landing-pages
 # CLI de Prisma (deps/build/test): sin telemetría ni avisos de actualización.
 ENV CHECKPOINT_DISABLE=1 \
     PRISMA_HIDE_UPDATE_MESSAGE=1
 
 FROM base AS deps
-COPY package.json package-lock.json ./
-RUN npm ci --strict-allow-scripts --no-audit --no-fund
+COPY package.json package-lock.json /app/
+COPY landing-pages/package.json ./
+RUN cd /app && npm ci --strict-allow-scripts --no-audit --no-fund
 
 FROM deps AS build
-COPY . .
+COPY landing-pages/ ./
+COPY README.md /app/README.md
 RUN npm run db:generate
 RUN npm run typecheck
 RUN npm run build:css
@@ -47,15 +57,17 @@ CMD ["npm", "test"]
 
 FROM base AS migrate
 ENV NODE_ENV=production
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json /app/
+COPY landing-pages/package.json ./
 # Sin --omit=optional: npm instala el CLI de Prisma (par opcional de @prisma/client) y su schema
 # engine, sin las herramientas de desarrollo (vitest, eslint, tailwind...).
-RUN npm ci --omit=dev --strict-allow-scripts --no-audit --no-fund && npm cache clean --force
-COPY prisma/schema.prisma ./prisma/schema.prisma
-COPY prisma/migrations ./prisma/migrations
-COPY prisma.config.ts ./
+RUN cd /app && npm ci --omit=dev --strict-allow-scripts --no-audit --no-fund && npm cache clean --force
+COPY landing-pages/prisma/schema.prisma ./prisma/schema.prisma
+COPY landing-pages/prisma/migrations ./prisma/migrations
+COPY landing-pages/prisma.config.ts ./
 USER node
-ENTRYPOINT ["node_modules/.bin/prisma", "migrate", "deploy"]
+# CLI elevado a la raíz de los workspaces; se ejecuta en el WORKDIR (lee su prisma.config.ts).
+ENTRYPOINT ["/app/node_modules/.bin/prisma", "migrate", "deploy"]
 
 FROM base AS production
 # HOST=0.0.0.0 (REQ-F-015, RF-9): dentro del contenedor se escucha en todas sus interfaces para que
@@ -64,18 +76,19 @@ FROM base AS production
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json /app/
+COPY landing-pages/package.json ./
 # --omit=optional: @prisma/client declara el CLI de Prisma y TypeScript como peerDependencies
 # (devOptional en el lockfile); sin él, npm los instalaría igualmente (+~275 MB).
-RUN npm ci --omit=dev --omit=optional --strict-allow-scripts --no-audit --no-fund && npm cache clean --force
+RUN cd /app && npm ci --omit=dev --omit=optional --strict-allow-scripts --no-audit --no-fund && npm cache clean --force
 # src incluye el cliente de Prisma generado en build (src/generated/prisma).
-COPY --from=build /app/src ./src
-COPY --from=build /app/public ./public
-COPY --from=build /app/prisma/migrations ./prisma/migrations
+COPY --from=build /app/landing-pages/src ./src
+COPY --from=build /app/landing-pages/public ./public
+COPY --from=build /app/landing-pages/prisma/migrations ./prisma/migrations
 # Comandos de consola: admin:recover y admin:hash-password y su soporte. scripts/bot-chat.ts
 # (simulador del bot de WhatsApp, REQ-F-009) es solo de desarrollo: usa el doble de tests/.
-COPY --from=build /app/scripts/admin-recover.ts /app/scripts/hash-password.ts ./scripts/
-COPY --from=build /app/scripts/support ./scripts/support
+COPY --from=build /app/landing-pages/scripts/admin-recover.ts /app/landing-pages/scripts/hash-password.ts ./scripts/
+COPY --from=build /app/landing-pages/scripts/support ./scripts/support
 # Punto de montaje sugerido para DATA_DIR (JSON de página y changes.jsonl): un volumen con nombre
 # hereda dueño y permisos.
 RUN mkdir -p /var/lib/restaurante \

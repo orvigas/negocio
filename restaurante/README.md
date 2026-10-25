@@ -42,6 +42,8 @@ Paso a paso, con enlaces a las secciones de este README:
 - [Despliegue a producción en la VM](docs/despliegue.md): `.env` de producción con Meta, `DATA_DIR`
   en el disco persistente, migraciones, webhook de Meta, comprobaciones, actualización, rollback y
   copias de seguridad.
+- [Arquitectura](docs/arquitectura.md): estrategia para separar la app en una API Koa, las landing
+  pages y el inventory manager (capas por módulo, regla de dependencias y plan de migración).
 
 ## Requisitos
 

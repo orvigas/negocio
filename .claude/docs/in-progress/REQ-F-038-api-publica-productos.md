@@ -826,6 +826,7 @@ Decisión del usuario: DEF-001 "Corregirlo (Recomendado)"; DEF-002 y DEF-003 "Co
 | `deploy/ci/resumen-test.sh` | Todas las comprobaciones pasaron |
 | `deploy/ci/smoke.sh` en local (imágenes reconstruidas con el código actual y Zod 4.6.7; runner `docker:cli` en macOS) | "todas las comprobaciones pasaron", incluido el caso DEF-001 |
 | Suma de `deploy/` | Recalculada: `76103d8931cba2dc231de569ea5d549558897bddc855c750b20d82137c3a0420` (antes `485616fd…e6a6b`) |
+| Suma de `deploy/` tras la corrección de T4 (SC2015 en `deploy.sh`) | `619893815e17853fcec531fefed85d39ba4fdffe06b099afcb554686b63ba792` |
 
 **Archivos de la ronda 1:** `deploy/deploy.sh`, `deploy/ci/smoke.sh`, `deploy/ci/resumen.sh`, `docs/despliegue.md`, `README.md`, `landing-pages/src/services/landing-products.ts`, `src/controllers/admin.ts`, `src/controllers/admin-products.ts`, `src/views/admin/index.ts`, `src/app.ts`, `tests/support/landing-products.ts`, `tests/unit/landing-products.test.ts` y `tests/integration/landing-products-api.test.ts`.
 

@@ -135,7 +135,7 @@ compose_new() { compose "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" "$@"; }
 running_image() { # running_image <servicio>
   local id
   id=$(compose_new ps -aq "$1" 2>/dev/null | head -n 1)
-  [[ -n "$id" ]] && docker inspect -f '{{.Config.Image}}' "$id" 2>/dev/null || true
+  if [[ -n "$id" ]]; then docker inspect -f '{{.Config.Image}}' "$id" 2>/dev/null || true; fi
 }
 if [[ -z "$PREVIOUS_API_IMAGE" ]]; then
   PREVIOUS_API_IMAGE=$(running_image api)

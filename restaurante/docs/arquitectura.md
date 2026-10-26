@@ -270,14 +270,35 @@ Medida en el paso 1 (REQ-F-036) por SSH, solo con comandos de lectura (`free -m`
 | Toma | Fecha y hora (America/Mexico_City) | RAM total | Usada en el host | `app` | MySQL | Traefik |
 | --- | --- | --- | --- | --- | --- | --- |
 | En reposo | 2026-10-24 19:57 (sábado, fuera del horario de servicio) | 3915 (1 vCPU, swap de 2047 sin usar) | 1066 (27,2 %) | 67,2 | 509,9 | 118,4 |
-| Con tráfico normal | Pendiente: domingo 2026-10-25, entre 08:00 y 15:00 (horario de servicio de la birria) | | | | | |
+| Con tráfico simulado | 2026-10-25 20:32 a 20:59 (domingo, fuera del horario de servicio; carga generada). Media / pico | 3915 | 1106,9 / 1142 (29,2 % en el pico) | 80,1 / 84,1 | 515,3 / 515,3 | 124,5 / 127,1 |
 
-- **Estimación con tres contenedores:** el uso del host más dos contenedores Node con el mismo uso
-  que `app` (cota de `api` e `inventory-manager`): 1066 + 2 × 67,2 = **1200 MiB, el 30,7 %** de la
-  RAM total. Está muy por debajo del umbral del 80 % (3132 MiB): **la decisión A se mantiene**.
-- **Margen:** aun si cada contenedor Node usara cinco veces lo medido en reposo (unos 340 MiB),
-  la estimación sería de unos 1740 MiB (44 %).
-- **Pendiente:** la toma con tráfico normal se registra aquí el domingo 2026-10-25, entre 08:00 y
-  15:00, antes del merge del PR de REQ-F-036 en `epic/arquitectura`. Si cambia la conclusión
-  (estimación por encima del 80 %), la decisión A se revisa con el usuario antes del paso 3.
+- **Perfil de la carga simulada** (2026-10-25, de 20:27 a 21:04, contra `https://birriaelmuneco.com`,
+  aprobada por el usuario): reposo de 5 min, rampa de 2 min, 15 min de promedio con 2 visitas por
+  minuto, 10 min de pico con 10 visitas por minuto (× 5) y 5 min de enfriamiento. Cada visita es un
+  navegador nuevo (HTML de la landing y sus CSS, JS e imágenes). A la vez, 10 sesiones de
+  `/admin` de solo lectura (una cuenta de editor temporal) a 8 peticiones por minuto en total. En
+  total: 148 visitas, 2315 peticiones de landing y 217 lecturas de `/admin`, todas con 200; los 10
+  accesos y los 10 cierres de sesión, con 303. Sin 5xx, sin 429 y sin errores de red; p95 máximo
+  de 709 ms en las landings y de 770 ms en `/admin`. La tabla resume las 95 muestras (cada 15 s)
+  de la rampa, el promedio y el pico. Por fase (media / pico de la memoria usada en el host y de
+  `app`): reposo 1101,2 / 1123 y 79,0 / 79,0; promedio 1106,3 / 1128 y 79,0 / 80,8; pico
+  1102,9 / 1113 y 82,1 / 84,1; enfriamiento 1107,9 / 1117 y 81,3 / 81,3. MySQL se mantuvo en
+  515,3 todo el tiempo. Memoria disponible mínima en el host: 2772 MiB.
+- **Estimación con tres contenedores:** con el pico de la carga simulada, el uso del host más dos
+  contenedores Node con el pico de `app` (cota de `api` e `inventory-manager`): 1142 + 2 × 84,1 =
+  **1310,2 MiB, el 33,5 %** de la RAM total. Con la toma en reposo del 2026-10-24 daba
+  1066 + 2 × 67,2 = 1200 MiB (30,7 %). Las dos están muy por debajo del umbral del 80 %
+  (3132 MiB): **la decisión A se mantiene**.
+- **Margen:** aun si cada contenedor Node usara cinco veces lo medido en el pico (unos 420 MiB),
+  la estimación sería de unos 1980 MiB (51 %).
+- **Por qué es simulada:** el tráfico real del domingo 2026-10-25 entre 08:00 y 15:00 fue casi nulo
+  (2 visitas a las landings; el resto, el healthcheck), y el log del sábado 2026-10-24 se perdió
+  porque el contenedor se reinició ese día a las 22:25. El perfil simulado supera con creces ese
+  tráfico real (148 visitas en 27 minutos frente a 2 en 7 horas). El VPS ejecuta todavía la imagen
+  de `main`, anterior al monorepo, con código equivalente. Dos intentos previos esa misma noche se
+  cortaron sin generar carga porque el primer acceso a `/admin` respondió 401 (credenciales de la
+  cuenta temporal); el tercero se completó sin cortes.
+- **Pendiente:** la toma pasiva con tráfico real, el sábado 2026-10-31 entre 08:00 y 15:00
+  (horario de servicio de la birria). Si cambia la conclusión (estimación por encima del 80 %), la
+  decisión A se revisa con el usuario antes del paso 3.
 - El Traefik es el del VPS y también sirve otros sitios: su uso no depende de este proyecto.

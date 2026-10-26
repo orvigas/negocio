@@ -212,12 +212,13 @@ if [[ "$DRILL" == true ]]; then
     -v "$ID-data:$DATA_PATH" --entrypoint sh "$APP_IMAGE" -c 'tar -C "$1" -xf -' sh "$DATA_PATH" \
     <"$WORK/parts/app-data.tar" || fail 'no se pudo cargar app-data en el volumen'
   # Sin el .env de producción: número de WhatsApp ficticio y sin bot (no envía nada).
+  # API_INTERNAL_URL es obligatoria desde REQ-F-038; sin api en esta red, la app sirve la semilla.
   DATABASE_URL="mysql://restaurante_app:$RESTAURANTE_DB_APP_PASSWORD@mysql:3306/restaurante"
   export DATABASE_URL
   docker run -d --name "$ID-app" --network "$ID" \
     -e NODE_ENV=production -e HOST=0.0.0.0 -e PORT=3000 -e TRUST_PROXY=true -e DATA_DIR="$DATA_PATH" \
     -e BUSINESS_TIMEZONE=America/Mexico_City -e DATABASE_URL \
-    -e WHATSAPP_MOLOTES=5210000000000 -e WHATSAPP_BIRRIA=5210000000000 \
+    -e WHATSAPP_MOLOTES=5210000000000 -e WHATSAPP_BIRRIA=5210000000000 -e API_INTERNAL_URL=http://api:3001 \
     -v "$ID-data:$DATA_PATH" --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
     "$APP_IMAGE" >/dev/null || fail 'no se pudo arrancar la app'
   deadline=$((SECONDS + HEALTH_TIMEOUT))

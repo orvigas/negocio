@@ -26,6 +26,7 @@ Decisiones técnicas y aprobación del Technical Action Plan (2026-10-26, citas 
 - P-1: "Prohibir lo que lee datos (Recomendado)" (opción A). El código de las landings no puede importar `db`, Prisma, `mariadb`, `core/identity`, `core/bot-control`, las piezas de persistencia de `core/catalog` ni el repositorio de productos; puede importar `contracts`, `core/shared`, `core/schedule` y las funciones puras de `core/catalog`. Desviación registrada en §4 de `arquitectura.md`.
 - P-2: "Valor por defecto para api (Recomendado)" (opción A). `ops/` no cambia; la restauración en un VPS nuevo queda en el runbook.
 - P-3: "Solo servicios en ejecución (Recomendado)" (opción A). CA-8 se refiere a los servicios en ejecución (`migrate` es puntual).
+- Excepción a P-2 (2026-10-26, T4): "Añadir la variable en ops/ (Recomendado)". `ops/backup/verify-backup.sh` (simulacro `--drill`) pasa `API_INTERNAL_URL=http://api:3001` a la app del respaldo, porque sin ella la app no arranca (CA-15). El resto de `ops/` no cambia.
 - Plan: "Sí, aprobar e implementar". Technical Action Plan aprobado con estas respuestas.
 
 ## Objetivo
@@ -1494,3 +1495,22 @@ El plan asume la opción recomendada (A) en las tres.
 ### Q2 — Ronda 2 de QA
 
 2026-10-26 (senior-qa): correcciones T3 aprobadas por el usuario ("si"). DEF-001, DEF-002 y DEF-003 revalidados y corregidos (incluido `smoke.sh` completo en local con el caso DEF-001). Regresión en verde: `typecheck`, `lint`, `test` (2098 + 33), CA-1 E2E 21 de 21, CA-4 a CA-7, CA-12 y CA-15. Quedan pendientes del CI CA-11, CA-16 y el smoke de respaldos. Estado `QA_APPROVED`.
+
+### T4 — Commit, PR y CI (en curso)
+
+2026-10-26 (senior-fullstack): commit `0d6c282` y PR #92 (https://github.com/orvigas/negocio/pull/92) hacia `epic/arquitectura`.
+
+- **Primer CI:** `despliegue` falló en `shellcheck` por un aviso SC2015 en el código nuevo de `deploy.sh` (`running_image`), que el shellcheck local no detectaba. Se corrigió en el commit `950ddca`; la suma de `deploy/` pasa a `619893815e17853fcec531fefed85d39ba4fdffe06b099afcb554686b63ba792`.
+- **Segundo CI (run 40412768789):**
+
+  | Job | Resultado |
+  | --- | --- |
+  | `calidad` | Verde |
+  | `docker` | Verde: amd64, contenido de las imágenes, api healthy y app con `source: api` (CA-11) |
+  | `auditoria` | Verde |
+  | `despliegue` | Rojo |
+
+  Dentro de `despliegue`, `shellcheck`, `resumen-test.sh` y `smoke.sh` pasan completos, incluidos el código 15 y DEF-001. Lo que falla es el smoke de respaldos (`ops/backup/ci/smoke.sh`), en el caso "prueba mensual con --drill": `ops/backup/verify-backup.sh` arranca la imagen de la app del respaldo con su propia lista de variables, sin `API_INTERNAL_URL`, y la app termina con `API_INTERNAL_URL es obligatoria`.
+- **Corrección propuesta:** añadir `-e API_INTERNAL_URL=http://api:3001` a ese `docker run`. Sin api en la red del simulacro, la app serviría la semilla, y las imágenes anteriores ignoran la variable. Toca `ops/`, que la decisión P-2 dejaba sin cambios, así que queda pendiente de la decisión del usuario.
+- **Decisión del usuario (2026-10-26):** "Añadir la variable en ops/ (Recomendado)", una excepción a P-2. Se añadió `-e API_INTERNAL_URL=http://api:3001` al `docker run` de la app en `ops/backup/verify-backup.sh`, con un comentario. `shellcheck -x` de los scripts de `ops/backup` sale sin avisos.
+- **Instalación en el VPS:** según `docs/despliegue.md` §11.5, el VPS solo instala `lib.sh`, `backup.sh`, `env-backup.sh` y `restore.sh`. `verify-backup.sh` se ejecuta en el Mac desde el repositorio (§11.8), así que **no hace falta reinstalar `ops/` en el VPS** por este cambio.

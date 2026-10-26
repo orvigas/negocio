@@ -6,6 +6,11 @@ Twilio). Los detalles de cada tema están en el [README](../README.md); esta gu�
 enlaza.
 
 Todos los comandos se ejecutan desde la carpeta `restaurante/` salvo que se indique otra cosa.
+`restaurante/` es la raíz de los npm workspaces (REQ-F-036): sus scripts delegan en el workspace
+`landing-pages/`, donde está la app. Las rutas de archivos de la app que cita esta guía (`src/`,
+`public/`, `prisma/`, `.env`, `data/`, `.env.example`) son relativas a `landing-pages/` (ver
+[Monorepo](../README.md#monorepo)). Si vienes de una copia anterior al monorepo, mueve tu `.env` y
+tu `data/` a `landing-pages/`.
 
 ## 1. Requisitos
 
@@ -25,14 +30,14 @@ git clone git@github.com:orvigas/negocio.git
 cd negocio/restaurante
 nvm install && nvm use                # o asegúrate de tener Node >= 24.22.1
 npm ci --strict-allow-scripts         # mismas dependencias que el lockfile, igual que CI y Docker
-npm run db:generate                   # cliente de Prisma en src/generated/prisma (no se versiona)
+npm run db:generate                   # cliente de Prisma en landing-pages/src/generated/prisma (no se versiona)
 npm run db:up                         # MySQL 8.4 local (ver el paso 4)
 ```
 
 - `npm ci` instala exactamente lo que dice `package-lock.json`. Usa `npm install` solo cuando
   vayas a agregar o actualizar una dependencia (y justifícala según
   `.claude/rules/dependencias.md`).
-- Solo se ejecutan los scripts de instalación aprobados en `allowScripts` de `package.json`. Si una
+- Solo se ejecutan los scripts de instalación aprobados en `allowScripts` del `package.json` de la raíz. Si una
   dependencia nueva trae uno, `--strict-allow-scripts` falla hasta revisarlo (ver
   [Puesta en marcha](../README.md#puesta-en-marcha)).
 - Repite `npm run db:generate` después de cambiar `prisma/schema.prisma` o de actualizar
@@ -41,10 +46,10 @@ npm run db:up                         # MySQL 8.4 local (ver el paso 4)
 ## 3. Configurar `.env`
 
 ```sh
-cp .env.example .env
+cp landing-pages/.env.example landing-pages/.env
 ```
 
-`.env` no se versiona (está en `.gitignore` y en `.dockerignore`). Cada variable está explicada
+`landing-pages/.env` no se versiona (está en `.gitignore` y en `.dockerignore`). Cada variable está explicada
 en `.env.example` y en [Configuración](../README.md#configuración). Para empezar basta con:
 
 ```sh
@@ -93,7 +98,7 @@ npm run db:down      # lo detiene (los datos quedan en el volumen mysql-dev-data
   `collation-server=utf8mb4_es_0900_as_cs` y modo estricto, y los mismos usuarios que crea
   `docker/mysql/initdb/01-usuarios.sh`.
 
-`DATA_DIR` vacío usa la carpeta `data/` del proyecto (ignorada por git). Ahí se guardan los JSON
+`DATA_DIR` vacío usa la carpeta `landing-pages/data/` (ignorada por git). Ahí se guardan los JSON
 de página de cada negocio y `changes.jsonl`. Estructura y reglas en
 [Archivos de datos](../README.md#archivos-de-datos-data_dir) y
 [Base de datos](../README.md#base-de-datos).
@@ -110,7 +115,7 @@ de página de cada negocio y `changes.jsonl`. Estructura y reglas en
 ## 5. Compilar el CSS y arrancar
 
 ```sh
-npm run build:css   # genera public/css/{molotes,birria,admin}/main.css (no se versiona)
+npm run build:css   # genera landing-pages/public/css/{molotes,birria,admin}/main.css (no se versiona)
 npm run dev         # servidor con recarga en http://127.0.0.1:3000
 ```
 

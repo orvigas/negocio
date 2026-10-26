@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 
 import { createConnection } from 'mariadb';
 
@@ -14,6 +16,19 @@ import { databaseUrl, testDatabaseConfigs, withDatabase } from './test-database-
  */
 
 export type Statement = string | { sql: string; values: unknown[] };
+
+/**
+ * Punto de entrada del CLI de Prisma, resuelto como lo resuelve Node desde el workspace (REQ-F-036):
+ * con npm workspaces, `node_modules` (y su `.bin`) suele estar en la raíz del monorepo, no en
+ * PROJECT_DIR. Se ejecuta con el mismo Node de las pruebas.
+ */
+const PRISMA_PACKAGE_JSON = createRequire(join(PROJECT_DIR, 'package.json')).resolve('prisma/package.json');
+const prismaBin = (JSON.parse(readFileSync(PRISMA_PACKAGE_JSON, 'utf8')) as { bin: { prisma: string } }).bin.prisma;
+export const PRISMA_CLI = join(dirname(PRISMA_PACKAGE_JSON), prismaBin);
+
+/** Lanza `prisma <args>` en PROJECT_DIR (su prisma.config.ts), con el entorno dado. */
+export const spawnPrisma = (args: string[], env: NodeJS.ProcessEnv) =>
+  spawn(process.execPath, [PRISMA_CLI, ...args], { cwd: PROJECT_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] });
 
 /**
  * Ejecuta sentencias con el usuario admin de pruebas, sobre `database` (siempre de pruebas) o sin
@@ -51,16 +66,12 @@ export async function dropDatabase(name: string): Promise<void> {
 export function runMigrateDeploy(name: string): Promise<{ code: number | null; output: string }> {
   const url = adminDatabaseUrl(name);
   return new Promise((resolve, reject) => {
-    const child = spawn(join(PROJECT_DIR, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], {
-      cwd: PROJECT_DIR,
-      env: {
-        PATH: process.env.PATH ?? '',
-        HOME: process.env.HOME ?? '',
-        MIGRATION_DATABASE_URL: url,
-        CHECKPOINT_DISABLE: '1',
-        PRISMA_HIDE_UPDATE_MESSAGE: '1',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
+    const child = spawnPrisma(['migrate', 'deploy'], {
+      PATH: process.env.PATH ?? '',
+      HOME: process.env.HOME ?? '',
+      MIGRATION_DATABASE_URL: url,
+      CHECKPOINT_DISABLE: '1',
+      PRISMA_HIDE_UPDATE_MESSAGE: '1',
     });
     let output = '';
     child.stdout.setEncoding('utf8').on('data', (chunk: string) => (output += chunk));

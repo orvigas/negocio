@@ -21,7 +21,8 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE_DIR = ROOT.parent / "_stich_source_"
+# ROOT es landing-pages/; el diseño fuente está en la raíz del repositorio (REQ-F-036).
+SOURCE_DIR = ROOT.parent.parent / "_stich_source_"
 
 # Fuente de alta resolución, recorte de la mascota (x0, y0, x1, y1 en píxeles de la fuente)
 # y color de fondo de la landing (debe coincidir con `icons.themeColor` del contenido).

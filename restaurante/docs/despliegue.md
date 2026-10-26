@@ -13,7 +13,11 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
 - **Servicios** (`deploy/compose.prod.yaml`, proyecto `restaurante`):
   - `app`: la imagen `production` (Koa). Sirve las dos landings, `/admin`, la API `/admin/api` y
     el webhook del bot. Una sola réplica, sin puertos publicados, en la red interna `db` y en
-    `traefik-public`.
+    `traefik-public`. Se construye desde el workspace `restaurante/landing-pages/` del monorepo
+    (REQ-F-036), con el contexto de build en `restaurante/`. Dentro de la imagen, la app está en
+    `/app/landing-pages`, que es su directorio de trabajo: los comandos relativos de esta guía
+    (`node scripts/admin-recover.ts`) valen para las imágenes de antes y de después del monorepo,
+    así que la vuelta atrás no cambia.
   - `mysql`: MySQL 8.4 (utf8mb4, `utf8mb4_es_0900_as_cs`), solo en la red interna `db`, con sus
     datos en el volumen `restaurante_mysql-data`.
   - `migrate`: proceso puntual que aplica las migraciones con un usuario con DDL.
@@ -253,7 +257,7 @@ sudo -u deploy -H nano /opt/restaurante/.env
 - **Contraseñas de MySQL:** cada una con `openssl rand -hex 32`. Son obligatorias y deben ser
   hexadecimales. Solo se aplican al crear el volumen de MySQL: cambiarlas después exige también
   `ALTER USER` en MySQL.
-- **App:** las mismas variables que describe [`.env.example`](../.env.example) (WhatsApp, bot de
+- **App:** las mismas variables que describe [`landing-pages/.env.example`](../landing-pages/.env.example) (WhatsApp, bot de
   Meta, `SITE_URL=https://birriaelmuneco.com`, primer administrador).
   - El compose fija `NODE_ENV`, `HOST`, `PORT`, `TRUST_PROXY`, `DATA_DIR` y `DATABASE_URL`: no
     las pongas.

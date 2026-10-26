@@ -1,0 +1,21 @@
+# Workspace landing-pages (REQ-F-036). Lo común (node_modules, .env, logs, editores) está en
+# ../.gitignore; las rutas de aquí son relativas a landing-pages/.
+
+# Build de CSS (generado por Tailwind desde src/styles/)
+public/css/*
+!public/css/.gitkeep
+
+# Datos editables de la administración en desarrollo (DATA_DIR por defecto; REQ-F-001)
+data/
+
+# Cliente de Prisma generado (`npm run db:generate`; REQ-F-007)
+src/generated/
+
+# Restos locales de la antigua base SQLite (antes de REQ-F-014): nunca en el repositorio
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Salida local de Vitest (p. ej. reporter JSON de una corrida manual)
+.vitest/

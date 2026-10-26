@@ -163,8 +163,10 @@ mkdir -p "$WORK/newer/29990101000000_smoke_compatible"
 # shellcheck disable=SC2016 # Comillas invertidas de SQL, no de shell.
 printf '%s\n' 'CREATE TABLE `smoke_extra` (`id` INTEGER NOT NULL, PRIMARY KEY (`id`)) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_es_0900_as_cs;' \
   >"$WORK/newer/29990101000000_smoke_compatible/migration.sql"
+# Destino relativo al WORKDIR de la imagen migrate (/app/landing-pages desde el monorepo, REQ-F-036;
+# /app antes): ahí lee prisma.config.ts sus migraciones.
 derive smoke/migrate-newer "$WORK/newer" <<<"FROM $MIGRATE_SRC
-COPY 29990101000000_smoke_compatible /app/prisma/migrations/29990101000000_smoke_compatible"
+COPY 29990101000000_smoke_compatible prisma/migrations/29990101000000_smoke_compatible"
 APP1=$(push "$APP_SRC" restaurante v1)
 APP2=$(push smoke/app-v2 restaurante v2)
 APP_BAD=$(push smoke/app-bad restaurante bad)

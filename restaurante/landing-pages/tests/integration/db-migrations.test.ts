@@ -1,12 +1,8 @@
-import { spawn } from 'node:child_process';
-import { join } from 'node:path';
-
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { PROJECT_DIR } from '../../src/config/env.ts';
 import { createPrismaClient } from '../../src/db/client.ts';
 import { probeOf, queryOf, verifyDatabase } from '../../src/db/verify.ts';
-import { adminDatabaseUrl, adminSql, makeScratchDatabase, runMigrateDeploy } from '../support/database.ts';
+import { adminDatabaseUrl, adminSql, makeScratchDatabase, runMigrateDeploy, spawnPrisma } from '../support/database.ts';
 import { projectMigrationChecksums } from '../support/migrations.ts';
 
 /**
@@ -22,11 +18,7 @@ afterEach(async () => {
 
 function prismaCli(args: string[], url: string): Promise<{ code: number | null; output: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(join(PROJECT_DIR, 'node_modules', '.bin', 'prisma'), args, {
-      cwd: PROJECT_DIR,
-      env: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '', MIGRATION_DATABASE_URL: url, CHECKPOINT_DISABLE: '1', PRISMA_HIDE_UPDATE_MESSAGE: '1' },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const child = spawnPrisma(args, { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '', MIGRATION_DATABASE_URL: url, CHECKPOINT_DISABLE: '1', PRISMA_HIDE_UPDATE_MESSAGE: '1' });
     let output = '';
     child.stdout.setEncoding('utf8').on('data', (chunk: string) => (output += chunk));
     child.stderr.setEncoding('utf8').on('data', (chunk: string) => (output += chunk));

@@ -27,7 +27,7 @@ No introduzcas complejidad arquitectónica sin una razón técnica clara. Este p
 
 ## Stack del proyecto
 
-La fuente de verdad es `restaurante/package.json`. No agregues dependencias sin justificarlas según `.claude/rules/dependencias.md`.
+La fuente de verdad es `restaurante/landing-pages/package.json` (dependencias de la app; `restaurante/package.json` es la raíz de los npm workspaces, con `allowScripts` y los scripts que delegan en el workspace). No agregues dependencias sin justificarlas según `.claude/rules/dependencias.md`.
 
 ### Backend
 
@@ -37,7 +37,7 @@ La fuente de verdad es `restaurante/package.json`. No agregues dependencias sin 
 - Recarga en desarrollo con `node --watch` (sin Nodemon).
 - Plantillas HTML con el renderizador propio `src/views/render.ts` (`{{ clave }}` escapa; `{{{ clave }}}` solo para la salida de otro render). Sin EJS ni Pug.
 - Base de datos: MySQL 8.4 LTS con Prisma 7 (`@prisma/client` + `@prisma/adapter-mariadb` + `mariadb`, versiones exactas; REQ-F-007 y REQ-F-014), en utf8mb4 con la colación `utf8mb4_es_0900_as_cs` en la base, las tablas y las columnas. Esquema en `prisma/schema.prisma`, con cada texto en `@db.VarChar(n)` o `@db.MediumText` explícito. Migraciones en `prisma/migrations/`: cada `CREATE TABLE` generado se revisa a mano para fijar `DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_es_0900_as_cs`, porque Prisma escribe `utf8mb4_unicode_ci` (`tests/unit/migrations-collation.test.ts` lo impide). El cliente se genera en `src/generated/prisma` con `npm run db:generate` (no se versiona; ESLint lo ignora). La app nunca modifica el esquema. Las migraciones las aplica el proceso aparte `migrate` (`prisma migrate deploy` con `MIGRATION_DATABASE_URL` y un usuario con DDL; imagen `migrate` del Dockerfile, o `npm run db:migrate` en local). La app, con `DATABASE_URL` y un usuario solo DML, solo verifica al arrancar (`src/db/verify.ts`: conexión con reintentos hasta 60 s, credenciales, utf8mb4 y colación, modo estricto y estado de `_prisma_migrations`). Si algo falla, termina con código 1 y `database_init_failed`. El CLI de Prisma solo existe en desarrollo, en el CI y en las etapas `build`, `test` y `migrate` de Docker.
-- Scripts de instalación de dependencias: solo los aprobados en `allowScripts` de `package.json` (`npm ci --strict-allow-scripts` en CI y Docker). Una dependencia nueva con script de instalación exige revisarlo y aprobarlo o denegarlo.
+- Scripts de instalación de dependencias: solo los aprobados en `allowScripts` del `package.json` de la raíz, `restaurante/package.json` (`npm ci --strict-allow-scripts` en CI y Docker). Una dependencia nueva con script de instalación exige revisarlo y aprobarlo o denegarlo.
 
 ### Frontend
 
@@ -97,36 +97,42 @@ Si un requisito necesita persistencia nueva (tablas o modelos nuevos, otra base 
 ## Estructura del proyecto
 
 ```text
-restaurante/
-├── src/                     # Backend en TypeScript (.ts)
-│   ├── app.ts / server.ts   # App Koa (testeable) y arranque del servidor
-│   ├── config/              # env.ts (validación de variables, tipo Config), businesses.ts
-│   ├── content/             # Contenido por negocio (molotes/, birria/, common/), semillas seed.json, icons.ts, seeds.ts
-│   ├── controllers/         # landing.ts (elige negocio y renderiza), icons.ts, admin.ts, admin-users.ts, admin-account.ts, admin-access.ts, whatsapp-webhook.ts
-│   ├── db/                  # client.ts (Prisma + adaptador MariaDB/MySQL), verify.ts (verificación al arrancar), errors.ts
-│   ├── generated/prisma/    # Cliente de Prisma generado (`npm run db:generate`; no se versiona ni se edita)
-│   ├── middleware/          # error-handler.ts, request-logger.ts, admin-guard.ts
-│   ├── repositories/        # Menús (contrato y reglas, archivos y memoria) y usuarios (user-repository.ts, Prisma)
-│   ├── routes/              # Rutas (@koa/router): index.ts (landings, iconos), admin.ts (/admin)
-│   ├── services/            # business-schedule, whatsapp, menu-schema, visible-menu, price, admin-*, session-store, login-throttle, menu-diff, user-schema, authorization, whatsapp-bot/ (bot de WhatsApp)
-│   ├── styles/              # Fuentes Tailwind: shared/, molotes/, birria/, admin/, components/ (sin uso por ahora)
-│   ├── utils/               # logger.ts (JSON estructurado), datetime.ts, form-body.ts, errors.ts
-│   └── views/               # render.ts + layouts/, pages/, partials/ (.html), landings/ (.ts), admin/ (.ts y .html)
-├── public/                  # Frontend en Vanilla JS (sin TypeScript)
-│   ├── css/{molotes,birria,admin}/ # CSS generado por `npm run build:css` (no editar a mano)
-│   ├── js/modules/          # Módulos ES reutilizables
-│   ├── js/{molotes,birria}/ # Punto de entrada por landing
-│   └── img/{common,molotes,birria}/
-├── prisma/                  # schema.prisma y migrations/ (SQL de MySQL versionado)
-├── prisma.config.ts         # Configuración del CLI de Prisma (solo desarrollo, CI y build)
-├── scripts/                 # hash-password.ts, admin-recover.ts (`npm run admin:recover`), bot-chat.ts (`npm run bot:chat`, solo desarrollo), support/, generate-icons.py
-├── tests/                   # unit/, integration/, support/, snapshots/, helpers.ts
-├── tsconfig.json            # Solo verificación de tipos (`npm run typecheck`)
-├── vitest.config.ts
-├── eslint.config.ts         # Lint (`npm run lint`): typescript-eslint con tipos y JS de navegador
-├── Dockerfile / compose.yaml
-├── .env.example             # Variables documentadas (el .env real no se versiona)
-└── package.json
+restaurante/                 # Raíz de los npm workspaces (REQ-F-036); los comandos se ejecutan aquí
+├── package.json             # Workspaces, allowScripts y scripts (delegan en landing-pages)
+├── package-lock.json        # Lockfile único
+├── landing-pages/           # Workspace de la app
+│   ├── src/                     # Backend en TypeScript (.ts)
+│   │   ├── app.ts / server.ts   # App Koa (testeable) y arranque del servidor
+│   │   ├── config/              # env.ts (validación de variables, tipo Config), businesses.ts
+│   │   ├── content/             # Contenido por negocio (molotes/, birria/, common/), semillas seed.json, icons.ts, seeds.ts
+│   │   ├── controllers/         # landing.ts (elige negocio y renderiza), icons.ts, admin.ts, admin-users.ts, admin-account.ts, admin-access.ts, whatsapp-webhook.ts
+│   │   ├── db/                  # client.ts (Prisma + adaptador MariaDB/MySQL), verify.ts (verificación al arrancar), errors.ts
+│   │   ├── generated/prisma/    # Cliente de Prisma generado (`npm run db:generate`; no se versiona ni se edita)
+│   │   ├── middleware/          # error-handler.ts, request-logger.ts, admin-guard.ts
+│   │   ├── repositories/        # Menús (contrato y reglas, archivos y memoria) y usuarios (user-repository.ts, Prisma)
+│   │   ├── routes/              # Rutas (@koa/router): index.ts (landings, iconos), admin.ts (/admin)
+│   │   ├── services/            # business-schedule, whatsapp, menu-schema, visible-menu, price, admin-*, session-store, login-throttle, menu-diff, user-schema, authorization, whatsapp-bot/ (bot de WhatsApp)
+│   │   ├── styles/              # Fuentes Tailwind: shared/, molotes/, birria/, admin/, components/ (sin uso por ahora)
+│   │   ├── utils/               # logger.ts (JSON estructurado), datetime.ts, form-body.ts, errors.ts
+│   │   └── views/               # render.ts + layouts/, pages/, partials/ (.html), landings/ (.ts), admin/ (.ts y .html)
+│   ├── public/                  # Frontend en Vanilla JS (sin TypeScript)
+│   │   ├── css/{molotes,birria,admin}/ # CSS generado por `npm run build:css` (no editar a mano)
+│   │   ├── js/modules/          # Módulos ES reutilizables
+│   │   ├── js/{molotes,birria}/ # Punto de entrada por landing
+│   │   └── img/{common,molotes,birria}/
+│   ├── prisma/                  # schema.prisma y migrations/ (SQL de MySQL versionado)
+│   ├── prisma.config.ts         # Configuración del CLI de Prisma (solo desarrollo, CI y build)
+│   ├── scripts/                 # hash-password.ts, admin-recover.ts (`npm run admin:recover`), bot-chat.ts (`npm run bot:chat`, solo desarrollo), support/, generate-icons.py
+│   ├── tests/                   # unit/, integration/, support/, snapshots/, helpers.ts
+│   ├── tsconfig.json            # Solo verificación de tipos (`npm run typecheck`)
+│   ├── vitest.config.ts
+│   ├── eslint.config.ts         # Lint (`npm run lint`): typescript-eslint con tipos y JS de navegador
+│   ├── .env.example             # Variables documentadas (el .env real no se versiona)
+│   ├── Dockerfile           # Contexto de build: restaurante/
+│   └── package.json         # Dependencias de la app
+├── compose.yaml / docker/   # MySQL local y servicio test
+├── deploy/ ops/ security/ docs/
+└── .nvmrc / .dockerignore
 ```
 
 El diseño de referencia está en `_stich_source_/` (raíz del repositorio). Revísalo **siempre** antes de tocar cualquier elemento visual.
@@ -139,7 +145,7 @@ Mantén esta estructura salvo que exista una razón técnica clara para cambiarl
 
 Regla obligatoria: `.claude/rules/codegraph.md`.
 
-Antes de leer o modificar código en `restaurante/src`, `restaurante/public/js` o `restaurante/tests`, usa `codegraph_explore` para entender relaciones, consumidores, dependencias, impacto de los cambios, componentes reutilizables y pruebas existentes.
+Antes de leer o modificar código en `restaurante/landing-pages/src`, `restaurante/landing-pages/public/js` o `restaurante/landing-pages/tests`, usa `codegraph_explore` para entender relaciones, consumidores, dependencias, impacto de los cambios, componentes reutilizables y pruebas existentes.
 
 Si la herramienta MCP no está disponible, usa el CLI por Bash, que devuelve la misma salida: `codegraph explore "<consulta>"` (para un símbolo o archivo concreto: `codegraph node <nombre>`). Si ambos fallan, **no reintentes**: indícalo una vez en tu resultado y continúa con Grep, Glob y Read.
 

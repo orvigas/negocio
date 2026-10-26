@@ -3,9 +3,10 @@
  *
  *   npm run audit:deps
  *
- * Ejecuta `npm audit --json` sobre package-lock.json en tres cortes (production, migrate y
- * desarrollo), aplica la política de scripts/support/audit-policy.ts con las excepciones de
- * security/audit-exceptions.json y escribe el resumen en la consola y, en el CI, en
+ * Ejecuta `npm audit --json` sobre el package-lock.json de la raíz del monorepo (restaurante/) en
+ * tres cortes (production, migrate y desarrollo), aplica la política de
+ * scripts/support/audit-policy.ts con las excepciones de security/audit-exceptions.json (también
+ * en la raíz) y escribe el resumen en la consola y, en el CI, en
  * $GITHUB_STEP_SUMMARY. Termina con 1 si algo bloquea o si la auditoría no se completó (fail
  * closed). No necesita node_modules ni ejecuta código de dependencias; nunca usa `npm audit fix`.
  */
@@ -18,7 +19,8 @@ import { promisify } from 'node:util';
 import { CUT_ARGS, CUTS, evaluate, renderSummary, type Cut, type CutOutput } from './support/audit-policy.ts';
 
 const run = promisify(execFile);
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+// Raíz del monorepo (REQ-F-036): ahí están el package-lock.json único y security/.
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const EXCEPTIONS_FILE = join(root, 'security', 'audit-exceptions.json');
 /** Tiempo máximo de cada `npm audit` (incluye los reintentos de red de npm). */
 const AUDIT_TIMEOUT_MS = 180_000;

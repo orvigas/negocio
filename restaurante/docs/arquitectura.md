@@ -256,9 +256,11 @@ y se registra aquí, con la fecha y lo que respondió el usuario. B y C siguen p
   mergea a `main`.
 - **Las landings pasan a depender de la API** (paso 3). Se mitiga con la caché y la última copia
   buena de la [sección 6](#6-cómo-se-consume-la-api).
-- **Memoria del VPS** con más contenedores (decisión A): se mide en el paso 1. Umbral: si la
-  estimación con tres contenedores supera el 80 % de la RAM total, la decisión A se revisa con el
-  usuario antes del paso 3. Ver [Medición de memoria](#medición-de-memoria-del-vps).
+- **Memoria del VPS** con más contenedores (decisión A): medida en el paso 1 (REQ-F-036, CA-13
+  cumplido el 2026-10-26 con la toma de tráfico simulado: 33,5 %). Umbral: si la estimación con
+  tres contenedores supera el 80 % de la RAM total, la decisión A se revisa con el usuario. La
+  revisión previa al paso 3 parte de esta medición y el paso 3 vuelve a comprobar el umbral del
+  80 % ([sección 9](#9-decisiones)). Ver [Medición de memoria](#medición-de-memoria-del-vps).
 - **Dos administraciones a la vez** durante el paso 4: el `/admin` actual se mantiene hasta que el
   nuevo tenga lo mismo, y se retira en un ticket propio.
 
@@ -298,7 +300,9 @@ Medida en el paso 1 (REQ-F-036) por SSH, solo con comandos de lectura (`free -m`
   de `main`, anterior al monorepo, con código equivalente. Dos intentos previos esa misma noche se
   cortaron sin generar carga porque el primer acceso a `/admin` respondió 401 (credenciales de la
   cuenta temporal); el tercero se completó sin cortes.
-- **Pendiente:** la toma pasiva con tráfico real, el sábado 2026-10-31 entre 08:00 y 15:00
-  (horario de servicio de la birria). Si cambia la conclusión (estimación por encima del 80 %), la
-  decisión A se revisa con el usuario antes del paso 3.
+- **Cierre (2026-10-26):** la medición queda cerrada con la toma de tráfico simulado. Por decisión
+  del usuario ("Cierra CA-13 y continua no puedo esperar hasta el sábado") se renunció a la toma
+  pasiva con tráfico real prevista para el sábado 2026-10-31 de 08:00 a 15:00. Es la base de la
+  revisión de memoria previa al paso 3, que vuelve a aplicar el umbral del 80 %: si la estimación lo
+  supera entonces, la decisión A se revisa con el usuario antes de seguir.
 - El Traefik es el del VPS y también sirve otros sitios: su uso no depende de este proyecto.

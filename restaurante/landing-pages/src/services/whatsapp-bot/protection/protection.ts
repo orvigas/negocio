@@ -1,7 +1,7 @@
 import { createHmac, randomBytes } from 'node:crypto';
 
-import type { BusinessId } from '../../../config/businesses.ts';
-import type { Logger } from '../../../utils/logger.ts';
+import type { BusinessId, Logger } from '@restaurante/core/shared';
+
 import type { BotControl } from '../../bot-control.ts';
 import type { UsageTicket } from '../../bot-usage.ts';
 import type { SendFailureKind } from '../chat-bot.ts';

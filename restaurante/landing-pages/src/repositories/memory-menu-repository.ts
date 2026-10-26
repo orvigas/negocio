@@ -1,4 +1,5 @@
-import type { BusinessId } from '../config/businesses.ts';
+import type { BusinessId } from '@restaurante/core/shared';
+
 import {
   createMenuRepository,
   type MenuRepository,

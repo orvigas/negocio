@@ -1,8 +1,9 @@
 # Dependabot (REQ-F-020, RF-7). Política en la sección "CI" de restaurante/README.md.
 #
-# Monorepo (REQ-F-036): npm desde restaurante/, la raíz de los workspaces con el package-lock.json
-# único (Dependabot actualiza también el package.json de cada workspace); la imagen base desde
-# restaurante/landing-pages/, donde está el Dockerfile.
+# Monorepo (REQ-F-036 y REQ-F-037): npm desde restaurante/, la raíz de los workspaces con el
+# package-lock.json único (Dependabot actualiza también el package.json de cada workspace:
+# landing-pages y los paquetes de packages/, donde están Prisma y mariadb desde REQ-F-037); la
+# imagen base desde restaurante/landing-pages/, donde está el Dockerfile.
 #
 # - Actualización rutinaria semanal y agrupada; las versiones mayores quedan fuera y se revisan a
 #   mano. Se excluyen con `allow` + `update-types`, que según la documentación de GitHub solo
@@ -15,9 +16,9 @@
 # - Las acciones siguen fijadas por SHA completo; Dependabot actualiza el SHA y el comentario.
 # - La imagen base del Dockerfile (`node:24.22.1-alpine`) va fijada a la versión exacta de Node.
 #   Dependabot solo propone menores y parches de la línea 24 (las mayores se revisan a mano). Un
-#   PR que suba la imagen también debe subir `.nvmrc` y `engines.node` de los dos package.json
-#   (restaurante/ y restaurante/landing-pages/) a la misma versión: Dependabot no los toca y el CI
-#   toma la versión de `.nvmrc`.
+#   PR que suba la imagen también debe subir `.nvmrc` y `engines.node` de los dos package.json que
+#   lo declaran (restaurante/ y restaurante/landing-pages/; los de packages/ no lo declaran) a la
+#   misma versión: Dependabot no los toca y el CI toma la versión de `.nvmrc`.
 # - Sin merge automático: cada merge a main despliega en producción.
 version: 2
 updates:

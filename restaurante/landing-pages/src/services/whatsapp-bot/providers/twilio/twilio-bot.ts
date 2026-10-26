@@ -1,5 +1,6 @@
+import type { Logger } from '@restaurante/core/shared';
+
 import type { TwilioBotConfig } from '../../../../config/env.ts';
-import type { Logger } from '../../../../utils/logger.ts';
 import type { ChatBot, DeliveryOutcome, SendResult, StaffNotice, VerifyOutcome } from '../../chat-bot.ts';
 import { chunkText } from '../../text.ts';
 import type { FetchLike } from '../http-send.ts';

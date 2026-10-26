@@ -6,11 +6,14 @@ Twilio). Los detalles de cada tema están en el [README](../README.md); esta gu�
 enlaza.
 
 Todos los comandos se ejecutan desde la carpeta `restaurante/` salvo que se indique otra cosa.
-`restaurante/` es la raíz de los npm workspaces (REQ-F-036): sus scripts delegan en el workspace
-`landing-pages/`, donde está la app. Las rutas de archivos de la app que cita esta guía (`src/`,
-`public/`, `prisma/`, `.env`, `data/`, `.env.example`) son relativas a `landing-pages/` (ver
-[Monorepo](../README.md#monorepo)). Si vienes de una copia anterior al monorepo, mueve tu `.env` y
-tu `data/` a `landing-pages/`.
+`restaurante/` es la raíz de los npm workspaces (REQ-F-036 y REQ-F-037): sus scripts delegan en el
+workspace `landing-pages/`, donde está la app, o en `packages/db/` (Prisma: `db:generate`,
+`db:migrate`, `db:migrate:dev`). El dominio está en `packages/core/` (ver
+[Monorepo](../README.md#monorepo)). Las rutas de archivos de la app que cita esta guía (`src/`,
+`public/`, `.env`, `data/`, `.env.example`) son relativas a `landing-pages/`, y `prisma/` está en
+`packages/db/`. Si vienes de una copia anterior al monorepo, mueve tu `.env` y tu `data/` a
+`landing-pages/`. Si vienes de una anterior a REQ-F-037, copia `MIGRATION_DATABASE_URL` y
+`SHADOW_DATABASE_URL` a `packages/db/.env` (paso 3).
 
 ## 1. Requisitos
 
@@ -30,7 +33,7 @@ git clone git@github.com:orvigas/negocio.git
 cd negocio/restaurante
 nvm install && nvm use                # o asegúrate de tener Node >= 24.22.1
 npm ci --strict-allow-scripts         # mismas dependencias que el lockfile, igual que CI y Docker
-npm run db:generate                   # cliente de Prisma en landing-pages/src/generated/prisma (no se versiona)
+npm run db:generate                   # cliente de Prisma en packages/db/src/generated/prisma (no se versiona)
 npm run db:up                         # MySQL 8.4 local (ver el paso 4)
 ```
 
@@ -40,28 +43,35 @@ npm run db:up                         # MySQL 8.4 local (ver el paso 4)
 - Solo se ejecutan los scripts de instalación aprobados en `allowScripts` del `package.json` de la raíz. Si una
   dependencia nueva trae uno, `--strict-allow-scripts` falla hasta revisarlo (ver
   [Puesta en marcha](../README.md#puesta-en-marcha)).
-- Repite `npm run db:generate` después de cambiar `prisma/schema.prisma` o de actualizar
+- Repite `npm run db:generate` después de cambiar `packages/db/prisma/schema.prisma` o de actualizar
   `@prisma/client`. Sin el cliente generado fallan `typecheck`, `lint`, `test` y `dev`.
 
 ## 3. Configurar `.env`
 
 ```sh
 cp landing-pages/.env.example landing-pages/.env
+cp packages/db/.env.example packages/db/.env
 ```
 
-`landing-pages/.env` no se versiona (está en `.gitignore` y en `.dockerignore`). Cada variable está explicada
-en `.env.example` y en [Configuración](../README.md#configuración). Para empezar basta con:
+Ninguno de los dos `.env` se versiona (están en `.gitignore` y en `.dockerignore`). Cada variable
+está explicada en su `.env.example` y en [Configuración](../README.md#configuración). Para empezar
+basta con, en `landing-pages/.env`:
 
 ```sh
 NODE_ENV=development
 WHATSAPP_MOLOTES=<número internacional, solo dígitos>
 WHATSAPP_BIRRIA=<número internacional, solo dígitos>
 DATABASE_URL=mysql://restaurante_app:app-dev@127.0.0.1:3307/restaurante
+```
+
+y, en `packages/db/.env` (solo las lee el CLI de Prisma; la app no las usa):
+
+```sh
 MIGRATION_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante
 SHADOW_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante_shadow
 ```
 
-- Las tres URL de la base ya vienen así en `.env.example` y apuntan al MySQL local del paso 4
+- Las tres URL de la base ya vienen así en los `.env.example` y apuntan al MySQL local del paso 4
   (credenciales de desarrollo, no secretas). `DATABASE_URL` es obligatoria: sin ella la app no
   arranca. Si cambias la contraseña, codifica los caracteres especiales (`@` -> `%40`).
 
@@ -81,7 +91,7 @@ La base de datos es MySQL 8.4 (usuarios de `/admin` y productos). `compose.yaml`
 
 ```sh
 npm run db:up        # levanta mysql-dev (Docker), solo en 127.0.0.1:3307, y espera a que esté listo
-npm run db:migrate   # aplica las migraciones (prisma migrate deploy con MIGRATION_DATABASE_URL)
+npm run db:migrate   # aplica las migraciones (prisma migrate deploy con MIGRATION_DATABASE_URL de packages/db/.env)
 npm run db:down      # lo detiene (los datos quedan en el volumen mysql-dev-data)
 ```
 
@@ -162,11 +172,11 @@ npm test            # suite completa (Vitest) contra MySQL 8.4
   [Pruebas](../README.md#pruebas)).
 - Las pruebas HTTP siguen la regla de [Pruebas HTTP](../README.md#pruebas-http-servidor-en-127001)
   (`listenLocal`, nunca `app.callback()`).
-- **Cambios en la base de datos:** edita `prisma/schema.prisma` (con la longitud de cada texto),
+- **Cambios en la base de datos:** edita `packages/db/prisma/schema.prisma` (con la longitud de cada texto),
   ejecuta `npm run db:migrate:dev -- --name <nombre>` contra el MySQL local, **revisa a mano** el
   `migration.sql` (cambia `utf8mb4_unicode_ci` por `utf8mb4_es_0900_as_cs` en cada
   `CREATE TABLE`), y después `npm run db:migrate` y `npm run db:generate`. Versiona la carpeta
-  nueva de `prisma/migrations/` y nunca edites una migración ya aplicada.
+  nueva de `packages/db/prisma/migrations/` y nunca edites una migración ya aplicada.
 
 ## 7. Bot de WhatsApp sin cuentas: `bot:chat`
 

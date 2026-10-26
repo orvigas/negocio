@@ -1,4 +1,5 @@
-import type { BusinessId } from '../../../config/businesses.ts';
+import type { BusinessId } from '@restaurante/core/shared';
+
 import { botVocabulary, getBotContent, getBotVocabulary } from '../../../content/bot.ts';
 import type { BotCatalog, CatalogProduct } from '../catalog.ts';
 import { canonical, normalizeWord, phraseCanons, phraseNorms, tokenize } from './tokens.ts';

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { BUSINESS_IDS, type BusinessId } from '../config/businesses.ts';
+import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
 
 /**
  * Semillas versionadas de los datos editables (REQ-F-001, RF-1.4): los datos originales del

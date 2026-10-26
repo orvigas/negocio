@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { BUSINESS_IDS, type BusinessId } from '../../src/config/businesses.ts';
+import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
 import {
   getMenuSchema,
   imageSrcError,
   validateMenuData,
   validateMenuDocument,
   type ValidationError,
-} from '../../src/services/menu-schema.ts';
+} from '@restaurante/core/catalog';
+
 import { seedData, seedDocuments, type CorruptibleData } from '../helpers.ts';
 
 const paths = (issues: ValidationError[]) => issues.map((issue) => issue.path);

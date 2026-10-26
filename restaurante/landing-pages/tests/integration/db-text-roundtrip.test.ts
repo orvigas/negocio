@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { UsernameTakenError, createUserRepository } from '../../src/repositories/user-repository.ts';
+import { UsernameTakenError } from '@restaurante/core/identity';
+import { createUserRepository } from '@restaurante/db/user-repository';
+
 import { ADMIN_PASSWORD, ADMIN_PASSWORD_HASH, ADMIN_USER, createUser, csrfFrom, formFields, login, loginAs, setupAdmin, textOf, type Browser } from '../support/admin.ts';
 import { adminSql, makeDatabase } from '../support/database.ts';
 import { IMAGE, VALID_INPUTS } from '../support/products.ts';

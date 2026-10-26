@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { BUSINESS_IDS, type BusinessId } from '../../src/config/businesses.ts';
-import { verifyPassword } from '../../src/services/admin-auth.ts';
+import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
+import { verifyPassword } from '@restaurante/core/identity';
+
 import { ADMIN_PASSWORD, ADMIN_USER, createUser, csrfFrom, loginAs, setupAdmin, type Browser, type FormFields } from '../support/admin.ts';
 
 /**

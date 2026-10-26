@@ -1,4 +1,5 @@
-import { BUSINESS, type BusinessId } from '../config/businesses.ts';
+import { BUSINESS, type BusinessId } from '@restaurante/core/shared';
+
 import { birriaBot } from './birria/bot.ts';
 import { botKeywords, botText, botVocabulary } from './common/bot.ts';
 import { getBankAccount, type BankAccount } from './common/payment.ts';

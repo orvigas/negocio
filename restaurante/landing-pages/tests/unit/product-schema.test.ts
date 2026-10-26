@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   fieldDefinitions,
   isValidKind,
+  slugify,
   toInput,
+  uniqueSlug,
   validateProductInput,
   type Product,
   type ProductKind,
-} from '../../src/services/product-schema.ts';
-import { slugify, uniqueSlug } from '../../src/services/slug.ts';
+} from '@restaurante/core/catalog';
+
 import { IMAGE, VALID_INPUTS } from '../support/products.ts';
 
 /** Reglas del modelo común de producto (REQ-F-008, RF-1, RF-7, D-13, D-14 y D-18). */

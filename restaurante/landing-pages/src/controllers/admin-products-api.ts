@@ -1,19 +1,19 @@
-import { allowedBusinesses } from '../services/authorization.ts';
-import { isProductCategory, pesos, toInput } from '../services/product-schema.ts';
+import { allowedBusinesses, type UserRepository } from '@restaurante/core/identity';
 import {
   ProductConflictError,
   ProductNotFoundError,
   ProductValidationError,
-  type ProductAuthor,
-  type ProductRepository,
-  type ProductView,
-} from '../repositories/product-repository.ts';
-import type { UserRepository } from '../repositories/user-repository.ts';
+  isProductCategory,
+  pesos,
+  toInput,
+} from '@restaurante/core/catalog';
+import type { Logger } from '@restaurante/core/shared';
+
+import type { ProductAuthor, ProductRepository, ProductView } from '../repositories/product-repository.ts';
 import type { SessionStore } from '../services/session-store.ts';
 import type { Config } from '../config/env.ts';
 import { toZonedIsoString } from '../utils/datetime.ts';
 import { readJsonBody } from '../utils/json-body.ts';
-import type { Logger } from '../utils/logger.ts';
 import { createAdminApiAccess, type ApiAuth, type ApiContext } from './admin-api-access.ts';
 
 /**

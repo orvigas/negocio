@@ -1,6 +1,5 @@
-import type { BusinessId } from '../config/businesses.ts';
-import { DatabaseUnavailableError } from '../db/errors.ts';
-import type { Product } from '../services/product-schema.ts';
+import { type BusinessId, DatabaseUnavailableError } from '../shared/index.ts';
+import type { Product } from './product-schema.ts';
 import {
   SlugTakenError,
   type ChangeEntry,
@@ -8,7 +7,7 @@ import {
   type ImportSourceName,
   type ProductStore,
   type ProductStoreTx,
-} from './product-repository.ts';
+} from './product-store.ts';
 
 /**
  * Store de productos en memoria (REQ-F-008, RF-9.1): mismas operaciones que el de Prisma, sin

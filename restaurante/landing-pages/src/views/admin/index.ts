@@ -1,9 +1,7 @@
-import type { BusinessId } from '../../config/businesses.ts';
-import { getIconLinks } from '../../content/icons.ts';
-import { getBusinessContent } from '../../content/index.ts';
-import type { ConflictInfo, DamagedInfo } from '../../repositories/menu-repository.ts';
-import { allowedBusinesses, isAdmin } from '../../services/authorization.ts';
+import type { BusinessId } from '@restaurante/core/shared';
+import { ROLE_LABELS, allowedBusinesses, isAdmin, type Role } from '@restaurante/core/identity';
 import {
+  centsToInput,
   childOf,
   getPageSchema,
   pickPageData,
@@ -13,9 +11,11 @@ import {
   type MenuDocument,
   type ObjectNode,
   type SchemaNode,
-} from '../../services/menu-schema.ts';
-import { centsToInput } from '../../services/price.ts';
-import { ROLE_LABELS, type Role } from '../../services/user-schema.ts';
+} from '@restaurante/core/catalog';
+
+import { getIconLinks } from '../../content/icons.ts';
+import { getBusinessContent } from '../../content/index.ts';
+import type { ConflictInfo, DamagedInfo } from '../../repositories/menu-repository.ts';
 import { formatDisplayDate } from '../../utils/datetime.ts';
 import type { Renderer, SafeHtml } from '../render.ts';
 

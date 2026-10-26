@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { BusinessId } from '../../src/config/businesses.ts';
+import type { BusinessId } from '@restaurante/core/shared';
+
 import { ADMIN_USER, createUser, login, loginAs, setupAdmin, type Browser } from '../support/admin.ts';
 import { VALID_INPUTS } from '../support/products.ts';
 

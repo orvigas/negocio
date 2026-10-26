@@ -1,4 +1,4 @@
-import { BUSINESS, type BusinessId } from '../config/businesses.ts';
+import { BUSINESS, type BusinessId } from '../shared/index.ts';
 import { isValidPriceCents } from './price.ts';
 
 /**

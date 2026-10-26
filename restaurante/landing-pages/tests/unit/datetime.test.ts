@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { diffMenuData } from '@restaurante/core/catalog';
+
 import { formatDisplayDate, toZonedIsoString } from '../../src/utils/datetime.ts';
-import { diffMenuData } from '../../src/services/menu-diff.ts';
 
 describe('toZonedIsoString', () => {
   it('usa la zona horaria del negocio con su desfase', () => {

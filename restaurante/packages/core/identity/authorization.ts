@@ -1,4 +1,4 @@
-import { BUSINESS_IDS, type BusinessId } from '../config/businesses.ts';
+import { BUSINESS_IDS, type BusinessId } from '../shared/index.ts';
 import type { Role } from './user-schema.ts';
 
 /**

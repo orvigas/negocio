@@ -1,10 +1,15 @@
-import { BUSINESS, isBusinessId, type BusinessId } from '../config/businesses.ts';
+import { BUSINESS, isBusinessId, type BusinessId } from '@restaurante/core/shared';
 import {
   ProductConflictError,
   ProductNotFoundError,
   ProductValidationError,
-  type ProductView,
-} from '../repositories/product-repository.ts';
+  isDetailsType,
+  isProductCategory,
+  isValidKind,
+  type ProductKind,
+} from '@restaurante/core/catalog';
+
+import type { ProductView } from '../repositories/product-repository.ts';
 import {
   emptyProductFormValues,
   formErrors,
@@ -12,7 +17,6 @@ import {
   productFormFieldNames,
   productFormValues,
 } from '../services/product-form.ts';
-import { isDetailsType, isProductCategory, isValidKind, type ProductKind } from '../services/product-schema.ts';
 import { adminPath, renderAdminBusiness } from '../views/admin/index.ts';
 import {
   renderProductDelete,

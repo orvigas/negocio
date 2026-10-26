@@ -1,19 +1,40 @@
-import { BUSINESS, BUSINESS_IDS, type BusinessId } from '../config/businesses.ts';
-import { diffMenuData, type FieldChange } from '../services/menu-diff.ts';
-import type { BirriaItem, MenuDataByBusiness, MolotesDrink, MolotesItem } from '../services/menu-schema.ts';
+import {
+  BUSINESS,
+  BUSINESS_IDS,
+  errorProp,
+  silentLogger,
+  type BusinessId,
+  type Logger,
+} from '@restaurante/core/shared';
 import {
   MAX_ACTIVE_PRODUCTS,
+  PRODUCT_ACTIONS,
+  ProductConflictError,
+  ProductNotFoundError,
+  ProductValidationError,
+  SlugTakenError,
   changeSnapshot,
+  diffMenuData,
   isValidKind,
+  uniqueSlug,
   validateProductInput,
+  type BirriaItem,
+  type ChangeEntry,
+  type ChangeSummary,
+  type FieldChange,
   type FieldErrors,
+  type ImportSourceName,
+  type MenuDataByBusiness,
+  type MolotesDrink,
+  type MolotesItem,
+  type NewProduct,
   type Product,
+  type ProductAction,
   type ProductCategory,
   type ProductFields,
-} from '../services/product-schema.ts';
-import { uniqueSlug } from '../services/slug.ts';
-import { errorProp } from '../utils/errors.ts';
-import { silentLogger, type Logger } from '../utils/logger.ts';
+  type ProductStore,
+  type ProductStoreTx,
+} from '@restaurante/core/catalog';
 
 /**
  * Repositorio de productos (REQ-F-008, RF-9).
@@ -32,17 +53,6 @@ import { silentLogger, type Logger } from '../utils/logger.ts';
  * - Orden de las comprobaciones (D-19): existencia (404) -> validación (422) -> versión (409).
  */
 
-export const PRODUCT_ACTIONS = Object.freeze({
-  CREATE: 'create',
-  UPDATE: 'update',
-  DELETE: 'delete',
-  RESTORE: 'restore',
-  REORDER: 'reorder',
-  OVERWRITE_AFTER_CONFLICT: 'overwrite_after_conflict',
-  IMPORT: 'import',
-});
-export type ProductAction = (typeof PRODUCT_ACTIONS)[keyof typeof PRODUCT_ACTIONS];
-
 /** Autor de los cambios importados (RF-3.3). */
 export const SYSTEM_AUTHOR_NAME = 'sistema';
 
@@ -51,29 +61,11 @@ export interface ProductAuthor {
   name: string;
 }
 
-export interface ChangeEntry {
-  at: Date;
-  business: BusinessId;
-  productId: number;
-  slug: string;
-  action: ProductAction;
-  actorId: number | null;
-  actorName: string;
-  changes: FieldChange[];
-}
-
-export interface ChangeSummary {
-  at: Date;
-  actorId: number | null;
-  actorName: string;
-}
-
 /** Producto con su último cambio (quién y cuándo). */
 export interface ProductView extends Product {
   updatedBy: ChangeSummary | null;
 }
 
-export type ImportSourceName = 'current' | 'previous' | 'seed';
 export interface ImportSource<Id extends BusinessId = BusinessId> {
   source: ImportSourceName;
   data: MenuDataByBusiness[Id];
@@ -83,78 +75,6 @@ export interface ImportSource<Id extends BusinessId = BusinessId> {
 export interface PublishedProducts {
   molotes: { menu: MolotesItem[]; drinks: MolotesDrink[] };
   birria: { menu: BirriaItem[] };
-}
-
-// --- Store ---------------------------------------------------------------------
-
-export type NewProduct = Omit<Product, 'id'>;
-
-export interface ProductStoreTx {
-  /** Todos los productos del negocio, eliminados incluidos (con variantes y chips en orden). */
-  listBusiness(business: BusinessId): Promise<Product[]>;
-  insert(product: NewProduct): Promise<Product>;
-  /** Reemplaza el producto completo si su versión vigente es `expectedVersion`; si no, false. */
-  replace(product: Product, expectedVersion: number): Promise<boolean>;
-  addChange(entry: ChangeEntry): Promise<void>;
-  isImported(business: BusinessId): Promise<boolean>;
-  markImported(business: BusinessId, record: { at: Date; source: ImportSourceName; count: number }): Promise<void>;
-}
-
-export interface ProductStore {
-  listBusiness(business: BusinessId): Promise<Product[]>;
-  /** Último cambio de cada producto del negocio. */
-  lastChanges(business: BusinessId): Promise<Map<number, ChangeSummary>>;
-  lastBusinessChange(business: BusinessId): Promise<ChangeSummary | null>;
-  /** Ejecuta `task` de forma atómica: si lanza, no queda nada escrito. */
-  transaction<T>(task: (tx: ProductStoreTx) => Promise<T>): Promise<T>;
-}
-
-// --- Errores de dominio ----------------------------------------------------------
-
-export class ProductError extends Error {}
-
-export class ProductNotFoundError extends ProductError {
-  constructor() {
-    super('Producto no encontrado');
-    this.name = 'ProductNotFoundError';
-  }
-}
-
-/** Errores por campo (422). La clave '' es un error general. */
-export class ProductValidationError extends ProductError {
-  readonly fields: FieldErrors;
-
-  constructor(fields: FieldErrors) {
-    super('Datos del producto inválidos');
-    this.name = 'ProductValidationError';
-    this.fields = fields;
-  }
-}
-
-export interface ProductConflictInfo {
-  productId: number;
-  version: number;
-  updatedAt: Date;
-  updatedBy: string | null;
-}
-
-/** La versión enviada ya no es la vigente (RF-8.2). */
-export class ProductConflictError extends ProductError {
-  readonly current: ProductConflictInfo;
-
-  constructor(current: ProductConflictInfo) {
-    super('El producto cambió mientras se editaba');
-    this.name = 'ProductConflictError';
-    this.current = current;
-  }
-}
-
-/** El slug ya existe (carrera con otro proceso): el repositorio reintenta una vez. */
-export class SlugTakenError extends ProductError {
-  constructor() {
-    super('El identificador ya existe');
-    this.name = 'SlugTakenError';
-  }
 }
 
 export const LIMIT_MESSAGE = `Ya hay ${MAX_ACTIVE_PRODUCTS} productos activos en este negocio (el máximo). Elimina uno antes.`;

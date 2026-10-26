@@ -1,15 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { Database } from '../../src/db/client.ts';
-import { DatabaseUnavailableError } from '../../src/db/errors.ts';
+import type { Database } from '@restaurante/db/client';
+import { DatabaseUnavailableError } from '@restaurante/core/shared';
 import {
   LastAdminError,
   UserNotFoundError,
   UsernameTakenError,
-  createUserRepository,
+  allowedBusinesses,
   type UserRepository,
-} from '../../src/repositories/user-repository.ts';
-import { allowedBusinesses } from '../../src/services/authorization.ts';
+} from '@restaurante/core/identity';
+import { createUserRepository } from '@restaurante/db/user-repository';
+
 import { ADMIN_PASSWORD_HASH } from '../support/admin.ts';
 import { adminSql, makeDatabase } from '../support/database.ts';
 

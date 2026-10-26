@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createPrismaClient, type Database } from '../../src/db/client.ts';
-import { DatabaseUnavailableError } from '../../src/db/errors.ts';
-import { LastAdminError, MAX_ATTEMPTS, createUserRepository, type UserRepository } from '../../src/repositories/user-repository.ts';
+import { createPrismaClient, type Database } from '@restaurante/db/client';
+import { DatabaseUnavailableError } from '@restaurante/core/shared';
+import { LastAdminError, type UserRepository } from '@restaurante/core/identity';
+import { MAX_ATTEMPTS, createUserRepository } from '@restaurante/db/user-repository';
+
 import { ADMIN_PASSWORD_HASH, ADMIN_USER, USER_PASSWORD, createUser, csrfFrom, loginAs, setupAdmin, type Browser } from '../support/admin.ts';
 import { appDatabaseUrl, makeDatabase } from '../support/database.ts';
 import { runNode } from '../support/process.ts';

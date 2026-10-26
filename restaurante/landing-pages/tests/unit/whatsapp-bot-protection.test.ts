@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { createMemoryBotControlStore } from '../../src/repositories/memory-bot-control-store.ts';
+import { createMemoryBotControlStore } from '@restaurante/core/bot-control';
+
 import { canonicalPhone } from '../../src/services/whatsapp-bot/phone.ts';
 import { MS } from '../../src/services/whatsapp-bot/protection/limits.ts';
 import { createBotProtection } from '../../src/services/whatsapp-bot/protection/protection.ts';

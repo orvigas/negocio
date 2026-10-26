@@ -5,15 +5,15 @@ import { join } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { BUSINESS_IDS, type BusinessId, type Logger } from '@restaurante/core/shared';
+import type { MenuDocument } from '@restaurante/core/catalog';
+
 import { createApp } from '../../src/app.ts';
-import { BUSINESS_IDS, type BusinessId } from '../../src/config/businesses.ts';
 import type { Config } from '../../src/config/env.ts';
 import { commonContent, getBusinessContent } from '../../src/content/index.ts';
 import { loadSeedDocument } from '../../src/content/seeds.ts';
 import { createFileMenuRepository } from '../../src/repositories/file-menu-repository.ts';
-import type { MenuDocument } from '../../src/services/menu-schema.ts';
 import { hoursAndLocation } from '../../src/services/whatsapp-bot/messages.ts';
-import type { Logger } from '../../src/utils/logger.ts';
 import { makeConfig, makeRepository, type CorruptibleData } from '../helpers.ts';
 import { listenLocal } from '../support/http.ts';
 import { makeProductRepository, makeProductsFor, seedSources } from '../support/products.ts';

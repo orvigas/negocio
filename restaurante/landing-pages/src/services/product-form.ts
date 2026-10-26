@@ -1,5 +1,3 @@
-import { CHECKBOX_VALUE } from './admin-form.ts';
-import type { LeafNode } from './menu-schema.ts';
 import {
   MAX_ROWS,
   fieldDefinitions,
@@ -7,9 +5,12 @@ import {
   type FieldErrors,
   type FieldRule,
   type InputField,
+  type LeafNode,
   type Product,
   type ProductKind,
-} from './product-schema.ts';
+} from '@restaurante/core/catalog';
+
+import { CHECKBOX_VALUE } from './admin-form.ts';
 
 /**
  * Formulario HTML de un producto (REQ-F-008, RF-6 y DT-12) <-> entrada de la API.

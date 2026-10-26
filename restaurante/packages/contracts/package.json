@@ -1,0 +1,13 @@
+{
+  "name": "@restaurante/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Esquemas y DTO de la API (REQ-F-037: esqueleto; los primeros esquemas, con Zod, llegan en el paso 3).",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

@@ -1,8 +1,9 @@
-import type { BusinessId } from '../config/businesses.ts';
+import type { BusinessId } from '@restaurante/core/shared';
+import { canEditBusiness } from '@restaurante/core/identity';
+
 import type { Config } from '../config/env.ts';
 import type { MenuRepository } from '../repositories/menu-repository.ts';
 import type { ProductRepository } from '../repositories/product-repository.ts';
-import { canEditBusiness } from '../services/authorization.ts';
 import { toZonedIsoString } from '../utils/datetime.ts';
 import { businessName, type AdminBusinessOptions, type LastChange } from '../views/admin/index.ts';
 import { renderProductsSection } from '../views/admin/products.ts';

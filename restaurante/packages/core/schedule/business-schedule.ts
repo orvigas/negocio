@@ -1,4 +1,4 @@
-import { BUSINESS, type BusinessId } from '../config/businesses.ts';
+import { BUSINESS, type BusinessId } from '../shared/index.ts';
 
 /**
  * Selección del negocio activo según el día de la semana en la zona horaria

@@ -1,0 +1,17 @@
+{
+  "name": "@restaurante/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dominio y casos de uso en TypeScript puro, sin Koa ni Prisma (REQ-F-037). Cada módulo se importa solo por su index.ts.",
+  "type": "module",
+  "exports": {
+    "./shared": "./shared/index.ts",
+    "./catalog": "./catalog/index.ts",
+    "./schedule": "./schedule/index.ts",
+    "./identity": "./identity/index.ts",
+    "./bot-control": "./bot-control/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

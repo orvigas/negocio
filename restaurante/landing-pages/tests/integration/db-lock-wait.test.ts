@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createPrismaClient } from '../../src/db/client.ts';
-import type { DatabaseConfig } from '../../src/config/env.ts';
+import { createPrismaClient } from '@restaurante/db/client';
+import type { DatabaseConfig } from '@restaurante/db/database-config';
+
 import { ADMIN_PASSWORD, ADMIN_USER, USER_PASSWORD, createUser, csrfFrom, login, loginAs, setupAdmin } from '../support/admin.ts';
 
 /**

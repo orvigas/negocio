@@ -1,4 +1,4 @@
-import type { Weekday } from '../../src/services/business-schedule.ts';
+import type { Weekday } from '@restaurante/core/schedule';
 
 /**
  * Intérprete mínimo de los textos de horario en español de las landings (REQ-F-010).

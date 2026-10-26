@@ -4,16 +4,21 @@
 # Contexto de build: restaurante/ (la raíz de los workspaces, con el package-lock.json único):
 #   docker build -f landing-pages/Dockerfile --target production .   (desde restaurante/)
 # Dentro de la imagen se conserva la forma del workspace: /app/package.json y package-lock.json de
-# la raíz, /app/node_modules (dependencias elevadas) y la app en /app/landing-pages, que es el
-# WORKDIR. Así, los comandos relativos (node src/server.ts, node scripts/admin-recover.ts,
-# prisma migrate deploy con su prisma.config.ts) son los mismos que antes del monorepo.
+# la raíz, /app/node_modules (dependencias elevadas), los paquetes en /app/packages (REQ-F-037:
+# core, contracts y db, enlazados por npm en /app/node_modules/@restaurante) y la app en
+# /app/landing-pages, que es el WORKDIR. Así, los comandos relativos (node src/server.ts,
+# node scripts/admin-recover.ts, prisma migrate deploy con su prisma.config.ts) son los mismos que
+# antes del monorepo. Node ejecuta los .ts de los paquetes por su ruta real (/app/packages/...,
+# fuera de node_modules), así que el type stripping funciona igual que con los de la app.
 # Etapas:
 #   base       -> Node 24.22.1 Alpine (versión exacta, igual que .nvmrc) y directorio de trabajo.
-#   deps       -> todas las dependencias (npm ci); solo depende de los package*.json. Los scripts
+#   deps       -> todas las dependencias (npm ci); solo depende de los package*.json (el de la raíz,
+#                 el de landing-pages y el de cada paquete de packages/). Los scripts
 #                 de instalación solo corren si están aprobados en `allowScripts` del
 #                 package.json de la raíz (--strict-allow-scripts; REQ-F-007).
-#   build      -> código, cliente de Prisma generado (npm run db:generate; REQ-F-007),
-#                 verificación de tipos (npm run typecheck; REQ-F-004) y CSS compilado con
+#   build      -> código, cliente de Prisma generado en packages/db (npm run db:generate; REQ-F-007),
+#                 verificación de tipos de todos los workspaces (npm run typecheck de la raíz;
+#                 REQ-F-004 y REQ-F-037) y CSS compilado con
 #                 Tailwind. Si hay errores de tipos, no se construye ninguna de las imágenes
 #                 siguientes.
 #   test       -> suite completa (npm test) contra MySQL. Uso: docker compose run --rm test
@@ -23,8 +28,11 @@
 #                 Incluye el README.md de la raíz: una prueba del bot lo compara.
 #   migrate    -> solo aplica las migraciones (prisma migrate deploy) con MIGRATION_DATABASE_URL
 #                 (usuario de MySQL con DDL; REQ-F-014, D-3). Proceso puntual: termina con 0 o 1.
-#   production -> dependencias de producción, código, CSS, migraciones (la app las lee para
-#                 verificar el estado de la base, no las aplica) y scripts de consola; usuario no
+#                 schema, migraciones y prisma.config.ts vienen de packages/db, pero se copian al
+#                 WORKDIR con la misma estructura de siempre (REQ-F-037; deploy/ci/smoke.sh la usa).
+#   production -> dependencias de producción, código (app y paquetes core y db), CSS, migraciones
+#                 (en /app/packages/db/prisma/migrations; la app las lee para verificar el estado
+#                 de la base, no las aplica) y scripts de consola; usuario no
 #                 root. Node 24 ejecuta los .ts directamente (type stripping), sin compilar y sin
 #                 TypeScript ni el CLI de Prisma instalados.
 # La configuración (DATABASE_URL, WHATSAPP_*, DATA_DIR, ADMIN_*, ...) se inyecta al ejecutar, nunca aquí.
@@ -38,13 +46,18 @@ ENV CHECKPOINT_DISABLE=1 \
 FROM base AS deps
 COPY package.json package-lock.json /app/
 COPY landing-pages/package.json ./
+COPY --parents packages/*/package.json /app/
 RUN cd /app && npm ci --strict-allow-scripts --no-audit --no-fund
 
 FROM deps AS build
 COPY landing-pages/ ./
+COPY packages/ /app/packages/
+# Configuración común de la raíz (REQ-F-037): tsconfig.base.json la extienden todos los workspaces;
+# eslint.config.ts lo revisan el typecheck de la raíz y dos pruebas del lint.
+COPY tsconfig.base.json tsconfig.json eslint.config.ts /app/
 COPY README.md /app/README.md
-RUN npm run db:generate
-RUN npm run typecheck
+RUN cd /app && npm run db:generate
+RUN cd /app && npm run typecheck
 RUN npm run build:css
 
 FROM build AS test
@@ -59,12 +72,13 @@ FROM base AS migrate
 ENV NODE_ENV=production
 COPY package.json package-lock.json /app/
 COPY landing-pages/package.json ./
+COPY --parents packages/*/package.json /app/
 # Sin --omit=optional: npm instala el CLI de Prisma (par opcional de @prisma/client) y su schema
 # engine, sin las herramientas de desarrollo (vitest, eslint, tailwind...).
 RUN cd /app && npm ci --omit=dev --strict-allow-scripts --no-audit --no-fund && npm cache clean --force
-COPY landing-pages/prisma/schema.prisma ./prisma/schema.prisma
-COPY landing-pages/prisma/migrations ./prisma/migrations
-COPY landing-pages/prisma.config.ts ./
+COPY packages/db/prisma/schema.prisma ./prisma/schema.prisma
+COPY packages/db/prisma/migrations ./prisma/migrations
+COPY packages/db/prisma.config.ts ./
 USER node
 # CLI elevado a la raíz de los workspaces; se ejecuta en el WORKDIR (lee su prisma.config.ts).
 ENTRYPOINT ["/app/node_modules/.bin/prisma", "migrate", "deploy"]
@@ -78,13 +92,18 @@ ENV NODE_ENV=production \
     PORT=3000
 COPY package.json package-lock.json /app/
 COPY landing-pages/package.json ./
+COPY --parents packages/*/package.json /app/
 # --omit=optional: @prisma/client declara el CLI de Prisma y TypeScript como peerDependencies
 # (devOptional en el lockfile); sin él, npm los instalaría igualmente (+~275 MB).
 RUN cd /app && npm ci --omit=dev --omit=optional --strict-allow-scripts --no-audit --no-fund && npm cache clean --force
-# src incluye el cliente de Prisma generado en build (src/generated/prisma).
 COPY --from=build /app/landing-pages/src ./src
 COPY --from=build /app/landing-pages/public ./public
-COPY --from=build /app/landing-pages/prisma/migrations ./prisma/migrations
+# Paquetes del workspace (REQ-F-037): core entero; de db, el código (con el cliente de Prisma
+# generado en build, src/generated/prisma) y las migraciones, que verify.ts lee junto al paquete.
+# contracts no tiene código en ejecución: basta su package.json, copiado arriba.
+COPY --from=build /app/packages/core /app/packages/core
+COPY --from=build /app/packages/db/src /app/packages/db/src
+COPY --from=build /app/packages/db/prisma/migrations /app/packages/db/prisma/migrations
 # Comandos de consola: admin:recover y admin:hash-password y su soporte. scripts/bot-chat.ts
 # (simulador del bot de WhatsApp, REQ-F-009) es solo de desarrollo: usa el doble de tests/.
 COPY --from=build /app/landing-pages/scripts/admin-recover.ts /app/landing-pages/scripts/hash-password.ts ./scripts/

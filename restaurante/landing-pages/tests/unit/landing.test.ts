@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { BUSINESS_IDS } from '@restaurante/core/shared';
+
 import { DEFAULT_VIEWS_DIR } from '../../src/app.ts';
-import { BUSINESS_IDS, BUSINESS_PATHS } from '../../src/config/businesses.ts';
+import { BUSINESS_PATHS } from '../../src/config/business-paths.ts';
 import { createLandingController } from '../../src/controllers/landing.ts';
 import { canonicalUrl, renderLandingPage } from '../../src/views/landings/index.ts';
 import { formatPesos } from '../../src/views/landings/shared.ts';

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { BUSINESS, BUSINESS_IDS, type BusinessId } from '../../src/config/businesses.ts';
+import { BUSINESS, BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
+
 import { botText, getBankAccount } from '../../src/content/bot.ts';
 import { buildCatalog, type BotCatalog, type CatalogProduct } from '../../src/services/whatsapp-bot/catalog.ts';
 import { createDeterministicInterpreter } from '../../src/services/whatsapp-bot/interpreter/deterministic.ts';

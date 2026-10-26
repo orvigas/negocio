@@ -1,4 +1,5 @@
-import type { BusinessId } from '../../../config/businesses.ts';
+import type { BusinessId } from '@restaurante/core/shared';
+
 import type { BotCatalog } from '../catalog.ts';
 import type { DeliveryMethod } from '../messages.ts';
 import type { PaymentMethod } from '../payment.ts';

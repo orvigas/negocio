@@ -3,7 +3,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_MIGRATIONS_DIR } from '../../src/db/verify.ts';
+import { DEFAULT_MIGRATIONS_DIR } from '@restaurante/db/verify';
+
 import { projectMigrationFiles } from '../support/migrations.ts';
 
 /**

@@ -1,8 +1,8 @@
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import type { PoolConfig } from 'mariadb';
 
-import type { DatabaseConfig } from '../config/env.ts';
-import { PrismaClient } from '../generated/prisma/client.ts';
+import type { DatabaseConfig } from './database-config.ts';
+import { PrismaClient } from './generated/prisma/client.ts';
 
 /**
  * Cliente de Prisma sobre MySQL 8.4 (REQ-F-014) con el adaptador oficial @prisma/adapter-mariadb.

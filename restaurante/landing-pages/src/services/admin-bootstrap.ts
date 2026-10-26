@@ -1,6 +1,7 @@
+import type { UserRepository } from '@restaurante/core/identity';
+import type { Logger } from '@restaurante/core/shared';
+
 import type { AdminBootstrapConfig } from '../config/env.ts';
-import type { UserRepository } from '../repositories/user-repository.ts';
-import type { Logger } from '../utils/logger.ts';
 
 /**
  * Primer administrador al arrancar (REQ-F-007, D-4, D-13, R-4 y DT-11).

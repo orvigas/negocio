@@ -1,5 +1,6 @@
-import { BUSINESS, type BusinessId } from '../config/businesses.ts';
-import type { Weekday } from '../services/business-schedule.ts';
+import { BUSINESS, type BusinessId } from '@restaurante/core/shared';
+import type { Weekday } from '@restaurante/core/schedule';
+
 import { birriaHours } from './birria/hours.ts';
 import { molotesHours } from './molotes/hours.ts';
 

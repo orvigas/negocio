@@ -15,9 +15,3 @@ export function isBusinessId(value: unknown): value is BusinessId {
   // Se amplía el tipo de la lista para poder buscar un string cualquiera.
   return typeof value === 'string' && (BUSINESS_IDS as readonly string[]).includes(value);
 }
-
-/** Ruta dedicada (y URL canónica) de cada landing. */
-export const BUSINESS_PATHS: Readonly<Record<BusinessId, string>> = Object.freeze({
-  [BUSINESS.MOLOTES]: '/molotes',
-  [BUSINESS.BIRRIA]: '/birria',
-});

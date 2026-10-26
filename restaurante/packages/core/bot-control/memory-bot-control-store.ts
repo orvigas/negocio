@@ -1,4 +1,4 @@
-import { DatabaseUnavailableError } from '../db/errors.ts';
+import { DatabaseUnavailableError } from '../shared/index.ts';
 import {
   AUTOMATIC_ORIGINS,
   NOT_PAUSED,

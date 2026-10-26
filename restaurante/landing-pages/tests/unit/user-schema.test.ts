@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { BUSINESS_IDS } from '../../src/config/businesses.ts';
-import { Business, Role } from '../../src/generated/prisma/enums.ts';
+import { BUSINESS_IDS } from '@restaurante/core/shared';
+import { Business, Role } from '@restaurante/db/generated/enums.ts';
 import {
   ROLES,
   businessField,
@@ -10,7 +10,7 @@ import {
   usernameKey,
   validatePasswordPair,
   validateUserData,
-} from '../../src/services/user-schema.ts';
+} from '@restaurante/core/identity';
 
 /** Datos de usuario (REQ-F-007, D-10, DT-15 y CA-9). */
 

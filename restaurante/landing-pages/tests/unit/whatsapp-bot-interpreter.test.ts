@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { BUSINESS, type BusinessId } from '../../src/config/businesses.ts';
+import { BUSINESS, type BusinessId } from '@restaurante/core/shared';
+import { toInput } from '@restaurante/core/catalog';
+
 import { botVocabulary, getBotVocabulary } from '../../src/content/bot.ts';
 import type { ProductRepository } from '../../src/repositories/product-repository.ts';
-import { toInput } from '../../src/services/product-schema.ts';
 import { buildCatalog } from '../../src/services/whatsapp-bot/catalog.ts';
 import { createDeterministicInterpreter } from '../../src/services/whatsapp-bot/interpreter/deterministic.ts';
 import { allowedEdits, boundedDistance } from '../../src/services/whatsapp-bot/interpreter/fuzzy.ts';

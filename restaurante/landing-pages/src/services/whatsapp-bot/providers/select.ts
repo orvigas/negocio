@@ -1,5 +1,6 @@
+import type { Logger } from '@restaurante/core/shared';
+
 import type { MetaBotConfig, TwilioBotConfig } from '../../../config/env.ts';
-import type { Logger } from '../../../utils/logger.ts';
 import type { ChatBot } from '../chat-bot.ts';
 import type { FetchLike } from './http-send.ts';
 import { WhatsAppBot } from './meta/whatsapp-bot.ts';

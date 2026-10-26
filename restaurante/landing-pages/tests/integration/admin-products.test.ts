@@ -1,7 +1,8 @@
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
-import type { ProductStore } from '../../src/repositories/product-repository.ts';
+import type { ProductStore } from '@restaurante/core/catalog';
+
 import { SESSION_IDLE_MS } from '../../src/services/session-store.ts';
 import { seedData } from '../helpers.ts';
 import { createUser, formFields, login, loginAs, openForm, setupAdmin, submitForm, textOf, type Browser, type FormFields } from '../support/admin.ts';
@@ -425,7 +426,7 @@ describe('permisos y sesión (CA-15, casos límite)', () => {
       ...store,
       listBusiness: async (business) => {
         if (failing) {
-          const { DatabaseUnavailableError } = await import('../../src/db/errors.ts');
+          const { DatabaseUnavailableError } = await import('@restaurante/core/shared');
           throw new DatabaseUnavailableError({ name: 'PrismaClientKnownRequestError', code: 'P2039', originalCode: '1205' });
         }
         return store.listBusiness(business);

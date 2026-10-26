@@ -27,20 +27,20 @@ import { stdin, stdout } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
 
+import { createMemoryBotControlStore } from '@restaurante/core/bot-control';
+import { createMemoryProductStore, type MenuDocument } from '@restaurante/core/catalog';
+import { createLogger } from '@restaurante/core/shared';
+
 import { createApp } from '../src/app.ts';
 import { DEFAULTS, isValidTimeZone, loadConfig } from '../src/config/env.ts';
 import { loadSeedDocument } from '../src/content/seeds.ts';
-import { createMemoryBotControlStore } from '../src/repositories/memory-bot-control-store.ts';
 import { createMemoryMenuRepository } from '../src/repositories/memory-menu-repository.ts';
-import { createMemoryProductStore } from '../src/repositories/memory-product-store.ts';
 import { createProductRepository, type ImportSource } from '../src/repositories/product-repository.ts';
 import { createBotControl } from '../src/services/bot-control.ts';
-import type { MenuDocument } from '../src/services/menu-schema.ts';
 import { createBotOrchestrator } from '../src/services/whatsapp-bot/orchestrator.ts';
 import { createBotProtection } from '../src/services/whatsapp-bot/protection/protection.ts';
 import { createChatBot } from '../src/services/whatsapp-bot/providers/select.ts';
 import { toZonedIsoString } from '../src/utils/datetime.ts';
-import { createLogger } from '../src/utils/logger.ts';
 import { createCloudApiDouble } from '../tests/support/cloud-api-double.ts';
 import { createTwilioApiDouble } from '../tests/support/twilio-api-double.ts';
 

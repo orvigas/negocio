@@ -5,9 +5,10 @@ import { dirname, join } from 'node:path';
 
 import { createConnection } from 'mariadb';
 
-import { PROJECT_DIR } from '../../src/config/env.ts';
-import { poolConfig } from '../../src/db/client.ts';
-import { PRISMA_MIGRATIONS_TABLE } from '../../src/db/verify.ts';
+import { poolConfig } from '@restaurante/db/client';
+import { DB_PACKAGE_DIR } from '@restaurante/db/paths';
+import { PRISMA_MIGRATIONS_TABLE } from '@restaurante/db/verify';
+
 import { databaseUrl, testDatabaseConfigs, withDatabase } from './test-database-config.ts';
 
 /**
@@ -18,17 +19,17 @@ import { databaseUrl, testDatabaseConfigs, withDatabase } from './test-database-
 export type Statement = string | { sql: string; values: unknown[] };
 
 /**
- * Punto de entrada del CLI de Prisma, resuelto como lo resuelve Node desde el workspace (REQ-F-036):
- * con npm workspaces, `node_modules` (y su `.bin`) suele estar en la raíz del monorepo, no en
- * PROJECT_DIR. Se ejecuta con el mismo Node de las pruebas.
+ * Punto de entrada del CLI de Prisma, resuelto como lo resuelve Node desde el paquete db (REQ-F-036 y
+ * REQ-F-037): con npm workspaces, `node_modules` (y su `.bin`) suele estar en la raíz del monorepo, no
+ * en DB_PACKAGE_DIR. Se ejecuta con el mismo Node de las pruebas.
  */
-const PRISMA_PACKAGE_JSON = createRequire(join(PROJECT_DIR, 'package.json')).resolve('prisma/package.json');
+const PRISMA_PACKAGE_JSON = createRequire(join(DB_PACKAGE_DIR, 'package.json')).resolve('prisma/package.json');
 const prismaBin = (JSON.parse(readFileSync(PRISMA_PACKAGE_JSON, 'utf8')) as { bin: { prisma: string } }).bin.prisma;
 export const PRISMA_CLI = join(dirname(PRISMA_PACKAGE_JSON), prismaBin);
 
-/** Lanza `prisma <args>` en PROJECT_DIR (su prisma.config.ts), con el entorno dado. */
+/** Lanza `prisma <args>` en DB_PACKAGE_DIR (su prisma.config.ts), con el entorno dado. */
 export const spawnPrisma = (args: string[], env: NodeJS.ProcessEnv) =>
-  spawn(process.execPath, [PRISMA_CLI, ...args], { cwd: PROJECT_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  spawn(process.execPath, [PRISMA_CLI, ...args], { cwd: DB_PACKAGE_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] });
 
 /**
  * Ejecuta sentencias con el usuario admin de pruebas, sobre `database` (siempre de pruebas) o sin

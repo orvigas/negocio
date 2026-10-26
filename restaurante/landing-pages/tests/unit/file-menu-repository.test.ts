@@ -5,7 +5,9 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { BusinessId } from '../../src/config/businesses.ts';
+import type { BusinessId } from '@restaurante/core/shared';
+import { pickPageData } from '@restaurante/core/catalog';
+
 import { CHANGE_LOG_FILE, createFileMenuRepository, type FileSystem } from '../../src/repositories/file-menu-repository.ts';
 import {
   MenuConflictError,
@@ -14,7 +16,6 @@ import {
   SeedRestoreNotAllowedError,
   versionOf,
 } from '../../src/repositories/menu-repository.ts';
-import { pickPageData } from '../../src/services/menu-schema.ts';
 import { makeRecordingLogger, seedData, seedDocuments, seedPage, type CorruptibleData, type RecordingLogger } from '../helpers.ts';
 import { makeClock, type Clock } from '../support/admin.ts';
 

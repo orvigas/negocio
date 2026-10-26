@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { createMemoryBotControlStore, type MemoryBotControlStore } from '@restaurante/core/bot-control';
+
 import type { BotKeys } from '../../src/config/env.ts';
-import { createMemoryBotControlStore, type MemoryBotControlStore } from '../../src/repositories/memory-bot-control-store.ts';
 import { createBotControl, validateReason } from '../../src/services/bot-control.ts';
 import { DEFAULT_BOT_LIMITS, MS } from '../../src/services/whatsapp-bot/protection/limits.ts';
 import { canonicalPhone } from '../../src/services/whatsapp-bot/phone.ts';

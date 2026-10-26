@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createPrismaClient } from '../../src/db/client.ts';
-import { DATABASE_INIT_CODES, DatabaseInitError, probeOf, queryOf, verifyDatabase } from '../../src/db/verify.ts';
+import { createPrismaClient } from '@restaurante/db/client';
+import {
+  DATABASE_INIT_CODES,
+  DatabaseInitError,
+  probeOf,
+  queryOf,
+  verifyDatabase,
+} from '@restaurante/db/verify';
+
 import { adminSql, makeScratchDatabase } from '../support/database.ts';
 
 /**

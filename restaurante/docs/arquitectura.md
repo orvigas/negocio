@@ -8,7 +8,7 @@ necesita desviarse de este documento, lo actualiza en el mismo PR.
 
 | | |
 | --- | --- |
-| Estado | **Aceptada** (estrategia general). Decisión A tomada el 2026-10-24; quedan abiertas B y C ([sección 9](#9-decisiones)). Paso 1 aplicado en REQ-F-036 |
+| Estado | **Aceptada** (estrategia general). Decisiones A (2026-10-24) y C (2026-10-26) tomadas; queda abierta B ([sección 9](#9-decisiones)). Paso 1 aplicado en REQ-F-036 y paso 2 en REQ-F-037 |
 | Fecha | 2026-10-24 |
 | Alcance | Estructura del código, regla de dependencias, contratos, consumo de la API y orden de la migración. No cambia el stack de `.claude/CLAUDE.md` §2 |
 
@@ -100,12 +100,14 @@ restaurante/
 ├── docs/                    ← guías (desarrollo, despliegue y este documento)
 ├── packages/
 │   ├── core/                ← dominio y casos de uso. TS puro: sin Koa, sin Prisma, sin HTML
+│   │   ├── shared/          (ids de negocio, logger, errores comunes; desde el paso 2)
 │   │   ├── catalog/         (productos y menú visible)
 │   │   ├── schedule/        (horarios y aviso del día)
 │   │   ├── inventory/       (existencias, movimientos y mermas)   ← nuevo
 │   │   ├── sales/           (pedidos, ventas y cobros)            ← nuevo
 │   │   ├── customers/       (CRM: clientes e historial)           ← nuevo
-│   │   └── identity/        (usuarios, roles y permisos por negocio)
+│   │   ├── identity/        (usuarios, roles y permisos por negocio)
+│   │   └── bot-control/     (bloqueos, pausa y uso del bot de WhatsApp; desde el paso 2)
 │   ├── contracts/           ← esquemas y DTO de la API + cliente HTTP tipado
 │   └── db/                  ← implementaciones Prisma de los repositorios, schema y migraciones
 ├── api/                     ← Koa: la única app que habla con MySQL
@@ -139,12 +141,22 @@ packages/core/inventory/
   `ops/`, `security/`, `docs/`, `compose.yaml` y `docker/` no pertenecen a ninguna app. `deploy/`
   conserva su ubicación porque la suma de `compose.prod.yaml`, `deploy.sh` y
   `mysql/initdb/01-usuarios.sh` debe coincidir con la instalada en el VPS.
-- **En el paso 1 no hay `tsconfig.base.json` ni lint común:** con un solo workspace, `tsconfig.json`
-  y `eslint.config.ts` siguen en `landing-pages/` y los scripts de la raíz delegan en él. Se
-  extraen a la raíz en el paso 2, cuando haya paquetes.
-- **La regla la aplica el lint**, no la memoria: `npm run lint` rechaza un import que la rompa
-  (con `no-restricted-imports` o una regla de rutas en `eslint.config.ts`), igual que hoy rechaza los
-  imports `./x.js` fuera de `public/js`.
+- **La regla la aplica el lint**, no la memoria: `npm run lint` rechaza un import que la rompa,
+  igual que rechaza los imports `./x.js` fuera de `public/js`. Desde el paso 2 (REQ-F-037) hay un
+  único `eslint.config.ts` en la raíz, con un bloque de `no-restricted-imports` por paquete (sin
+  plugins adicionales), y la prueba `landing-pages/tests/unit/dependency-rule.test.ts` comprueba
+  cada caso. Además, el `exports` del `package.json` de cada paquete solo publica los `index.ts`
+  de los módulos de `core` (y los archivos de `db`), así que `tsc` y Node rechazan también un
+  import a un archivo interno. Los módulos de `core` y `packages/db/src` son planos (sin
+  subcarpetas): los patrones de "sale del paquete" cuentan con ello.
+- **Paquetes:** `@restaurante/core` (sin dependencias), `@restaurante/db` (Prisma, `mariadb` y
+  `core`) y `@restaurante/contracts` (esqueleto sin dependencias hasta el paso 3). Todos los
+  `tsconfig.json` extienden `tsconfig.base.json`, en la raíz.
+- **Regla de transición** (desviación registrada en el paso 2, REQ-F-037): mientras `landing-pages`
+  siga conteniendo `/admin` y el bot, **puede importar `core`, `db` y `contracts`**. El lint lo
+  permite con un comentario que lo marca como temporal. La restricción de la tabla
+  (`landing-pages` solo importa `contracts`) se activa en el paso 3 para las landings, cuando
+  consuman la API, y en el paso 4 para `/admin`, cuando pase a `inventory-manager`.
 
 ## 5. Contratos compartidos (`packages/contracts`)
 
@@ -200,7 +212,7 @@ intermedia" del CI en `restaurante/README.md`).
 | Paso | Qué hace | Cambia el comportamiento |
 | --- | --- | --- |
 | 1 | **Monorepo sin cambios funcionales** (REQ-F-036). Workspaces en `restaurante/` y la app actual pasa tal cual a `landing-pages/`. Se ajustan el CI (`.github/workflows/ci.yml`, Dependabot), el `Dockerfile`, `compose.yaml` y la documentación. De `deploy/` no se toca ningún archivo de la suma (`compose.prod.yaml`, `deploy.sh`, `mysql/initdb/01-usuarios.sh`): las imágenes y sus nombres no cambian | No |
-| 2 | **Extraer `core`, `contracts` y `db`** del `src/` actual. Se mueven los archivos y se ajustan los imports, sin reescribir la lógica | No |
+| 2 | **Extraer `core`, `contracts` y `db`** del `src/` actual (REQ-F-037). Se mueven los archivos y se ajustan los imports, sin reescribir la lógica (detalle abajo) | No |
 | 3 | **Crear `api/`** con los endpoints públicos. Las landings pasan a consumirlos y dejan de acceder a la base | No (mismo HTML) |
 | 4 | **Llevar `/admin`** (productos, usuarios y control del bot) a `/api/v1/admin` y al nuevo `inventory-manager`. El `/admin` actual se retira cuando el nuevo tenga lo mismo | Sí: nueva interfaz de administración |
 | 5 | **Dominios nuevos, un ticket por módulo:** inventario → ventas (incluidos los pedidos del bot) → CRM | Sí |
@@ -223,16 +235,52 @@ intermedia" del CI en `restaurante/README.md`).
 
 Los nombres exactos de archivos y endpoints los fija el plan técnico de cada ticket.
 
+### Paso 2 aplicado (REQ-F-037)
+
+- **`packages/core`:**
+  - `catalog/`: `product-schema`, `menu-schema`, `visible-menu`, `price`, `slug` y `menu-diff`, más
+    `product-store.ts` (acciones del registro, contrato del store y errores de dominio, extraídos
+    de `product-repository.ts`) y `memory-product-store.ts`.
+  - `schedule/`: `business-schedule`.
+  - `identity/`: `authorization`, `user-schema`, `admin-auth` y `user-repository.ts` (tipos,
+    acciones de auditoría, errores y la interfaz, extraídos de la implementación Prisma).
+  - `bot-control/`: la interfaz del store del control del bot y su versión en memoria.
+  - `shared/`, las piezas que esos módulos necesitan: los ids de negocio (`BUSINESS`,
+    `BUSINESS_IDS`, `isBusinessId`), `DatabaseUnavailableError` y su `DatabaseErrorDetails`, el
+    logger (con `silentLogger`) y `errorProp`.
+- **`packages/db`:** `prisma/` (schema y migraciones, idénticos), `prisma.config.ts`, el cliente
+  generado (`src/generated/prisma`), `client.ts`, `errors.ts`, `verify.ts`, la implementación
+  Prisma de usuarios, `prisma-product-store.ts` y `prisma-bot-control-store.ts`. También
+  `database-config.ts` (el tipo `DatabaseConfig`, antes en `config/env.ts`) y `paths.ts` (la
+  carpeta del paquete, de la que `verify.ts` toma las migraciones). Sus variables del CLI
+  (`MIGRATION_DATABASE_URL`, `SHADOW_DATABASE_URL`) van en `packages/db/.env`.
+- **`packages/contracts`:** esqueleto, sin exportaciones ni dependencias. Su regla de lint ya está
+  activa.
+- **Se queda en `landing-pages/`:**
+  - el servicio de productos (`repositories/product-repository.ts`, que aplica las reglas sobre el
+    store de `core/catalog`);
+  - `menu-repository.ts`, `file-menu-repository.ts` y `memory-menu-repository.ts`
+    (`menu-repository.ts` depende de `content/seeds.ts`);
+  - `bot-control.ts`, `bot-usage.ts`, `session-store.ts`, `login-throttle.ts`, `admin-form.ts`,
+    `product-form.ts`, `admin-bootstrap.ts` y `whatsapp.ts`;
+  - `services/whatsapp-bot/`, `config/env.ts`, `config/business-paths.ts` (`BUSINESS_PATHS`, las
+    rutas de las landings) y el resto de `utils/`;
+  - las pruebas, que siguen en `landing-pages/tests` y solo cambiaron sus imports.
+- **Imágenes:** `production` incluye `/app/packages/core` y, de `packages/db`, el código, el cliente
+  generado y las migraciones. Los mismos nombre, directorio de trabajo, comando, usuario y
+  `HEALTHCHECK`. `migrate` conserva la misma estructura: `prisma/` y `prisma.config.ts` en
+  `/app/landing-pages`.
+
 ## 9. Decisiones
 
 | | Decisión | Recomendación | Alternativa |
 | --- | --- | --- | --- |
 | **A** | **Despliegue** (**tomada**, ver abajo) | Tres contenedores (`api`, `landing-pages` e `inventory-manager`) detrás del Traefik del VPS: el dominio actual para las landings y un subdominio de administración, con la API en `admin.<dominio>/api`. El admin y la API comparten origen, así que la cookie funciona sin CORS | Un solo contenedor con las tres apps: menos memoria en el VPS, pero se despliegan juntas |
 | **B** | **Tecnología del inventory manager** | Vanilla JS con Web Components y Tailwind, respetando `.claude/CLAUDE.md` §2 | Cambiar la regla de §2 solo para el admin, para permitir un framework |
-| **C** | **Validación de esquemas en `contracts`** | Una librería de esquemas (por ejemplo Zod o Valibot) que da tipos y validación desde una sola definición, justificada según `.claude/rules/dependencias.md` | Seguir con validadores propios, como `product-schema.ts` hoy |
+| **C** | **Validación de esquemas en `contracts`** (**tomada**, ver abajo) | Una librería de esquemas (por ejemplo Zod o Valibot) que da tipos y validación desde una sola definición, justificada según `.claude/rules/dependencias.md` | Seguir con validadores propios, como `product-schema.ts` hoy |
 
 Cada decisión se toma antes del paso que la necesita (A en el paso 1, C en el paso 2 y B en el paso 4)
-y se registra aquí, con la fecha y lo que respondió el usuario. B y C siguen pendientes.
+y se registra aquí, con la fecha y lo que respondió el usuario. B sigue pendiente.
 
 ### Decisión A: tomada
 
@@ -248,6 +296,16 @@ y se registra aquí, con la fecha y lo que respondió el usuario. B y C siguen p
 | 1 (REQ-F-036) | La imagen y el contenedor actuales salen del workspace `landing-pages/`, con los mismos nombres (`ghcr.io/orvigas/restaurante`, `restaurante-migrate`, servicio `app` y routers `restaurante*`), el mismo dominio y las mismas rutas. Se mide la memoria del VPS ([sección 10](#10-riesgos)) |
 | 3 | Contenedor e imagen de `api`. Antes se revisa la memoria con el umbral del 80 % |
 | 4 | Contenedor `inventory-manager`, `admin.<dominio>`, DNS y certificado. `/admin` pasa al subdominio y el `/admin` actual se retira en un ticket propio |
+
+### Decisión C: tomada
+
+- **Fecha:** 2026-10-26 (REQ-F-037).
+- **Respuesta del usuario:** "Zod (Recomendado)".
+- **Opción elegida:** Zod, una librería de esquemas que da tipos y validación desde una sola
+  definición. Se justificará según `.claude/rules/dependencias.md` en el ticket que la instale.
+- **Cuándo se aplica:** desde el paso 3. En el paso 2 no se instala Zod ni se migra ningún
+  validador: `packages/contracts` es un esqueleto vacío y los validadores propios (por ejemplo
+  `product-schema.ts`) siguen como están.
 
 ## 10. Riesgos
 

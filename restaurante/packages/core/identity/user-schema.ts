@@ -1,4 +1,4 @@
-import { BUSINESS_IDS, type BusinessId } from '../config/businesses.ts';
+import { BUSINESS_IDS, type BusinessId } from '../shared/index.ts';
 
 /**
  * Datos de un usuario de /admin (REQ-F-007, D-10 y DT-15): reglas y normalización compartidas

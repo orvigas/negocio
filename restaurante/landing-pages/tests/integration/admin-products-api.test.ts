@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import type { ProductStore } from '@restaurante/core/catalog';
+
 import { createApp } from '../../src/app.ts';
-import type { ProductStore } from '../../src/repositories/product-repository.ts';
 import { makeConfig, makeRepository } from '../helpers.ts';
 import { createUser, login, loginAs, setupAdmin, type Browser } from '../support/admin.ts';
 import { listenLocal } from '../support/http.ts';
@@ -420,7 +421,7 @@ describe('disponibilidad (CA-23, CA-24, M-1, M-6)', () => {
       ...store,
       listBusiness: async (business) => {
         if (failing) {
-          const { DatabaseUnavailableError } = await import('../../src/db/errors.ts');
+          const { DatabaseUnavailableError } = await import('@restaurante/core/shared');
           throw new DatabaseUnavailableError({ name: 'PrismaClientKnownRequestError', code: 'P2039', originalCode: '1205' });
         }
         return store.listBusiness(business);

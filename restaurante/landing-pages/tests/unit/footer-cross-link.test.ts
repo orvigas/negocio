@@ -1,9 +1,10 @@
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
+import type { BusinessId } from '@restaurante/core/shared';
+import type { NoticeByBusiness } from '@restaurante/core/schedule';
+
 import { DEFAULT_VIEWS_DIR } from '../../src/app.ts';
-import type { BusinessId } from '../../src/config/businesses.ts';
-import type { NoticeByBusiness } from '../../src/services/business-schedule.ts';
 import { renderLandingPage } from '../../src/views/landings/index.ts';
 import { createRenderer } from '../../src/views/render.ts';
 import { makeConfig, seedData } from '../helpers.ts';

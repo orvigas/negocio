@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { BusinessId } from '../../src/config/businesses.ts';
+import type { BusinessId } from '@restaurante/core/shared';
+
 import { csrfFrom, createUser, formFields, loginAs, setupAdmin, submitForm, textOf } from '../support/admin.ts';
 
 /**

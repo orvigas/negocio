@@ -1,9 +1,10 @@
-import type { BusinessId } from '../../config/businesses.ts';
+import type { BusinessId } from '@restaurante/core/shared';
+import { getActiveBusinessId } from '@restaurante/core/schedule';
+import { formatPesos } from '@restaurante/core/catalog';
+
 import { botKeywords, botText, botVocabulary, getBotContent, getBotVocabulary } from '../../content/bot.ts';
-import { getActiveBusinessId } from '../business-schedule.ts';
 import { findOption, type BotCatalog, type CatalogProduct } from './catalog.ts';
 import type { ClarifyBlock, CustomerDataInterpretation, InterpretScope, InterpretedLine, OrderInterpretation, OrderInterpreter } from './interpreter/types.ts';
-import { formatPesos } from '../price.ts';
 import {
   addedLineBlock,
   cartView,

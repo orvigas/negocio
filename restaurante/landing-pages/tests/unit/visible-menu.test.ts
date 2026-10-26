@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import type { BirriaItem, BirriaVariantsItem } from '../../src/services/menu-schema.ts';
-import { buildVisibleMenu, type VisibleBirriaItem } from '../../src/services/visible-menu.ts';
+import {
+  buildVisibleMenu,
+  type BirriaItem,
+  type BirriaVariantsItem,
+  type VisibleBirriaItem,
+} from '@restaurante/core/catalog';
+
 import { seedData } from '../helpers.ts';
 
 type VariantsItem = BirriaVariantsItem & { priceCents?: number; description?: string };

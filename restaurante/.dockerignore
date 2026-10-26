@@ -1,6 +1,6 @@
-# Contexto de build de Docker (REQ-F-003): restaurante/, la raíz de los workspaces (REQ-F-036;
-# el Dockerfile está en landing-pages/). Nada de secretos, datos editables ni artefactos
-# locales: la imagen instala sus dependencias y compila su CSS.
+# Contexto de build de Docker (REQ-F-003): restaurante/, la raíz de los workspaces (REQ-F-036 y
+# REQ-F-037: landing-pages/, con el Dockerfile, y packages/). Nada de secretos, datos editables ni
+# artefactos locales: la imagen instala sus dependencias y compila su CSS.
 
 # Dependencias (se instalan con npm ci dentro de la imagen)
 node_modules
@@ -17,8 +17,8 @@ node_modules
 data
 landing-pages/data
 
-# Cliente de Prisma generado localmente (la etapa build lo genera)
-landing-pages/src/generated
+# Cliente de Prisma generado localmente (la etapa build lo genera; REQ-F-037)
+packages/db/src/generated
 
 # CSS generado localmente (la etapa build lo compila); se conserva public/css/.gitkeep
 landing-pages/public/css/*/

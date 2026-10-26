@@ -1,19 +1,19 @@
 import { once } from 'node:events';
 
+import { createPrismaClient } from '@restaurante/db/client';
+import { probeOf, queryOf, verifyDatabase } from '@restaurante/db/verify';
+import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
+import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
+import { createUserRepository } from '@restaurante/db/user-repository';
+import { createLogger, errorProp, serializeError } from '@restaurante/core/shared';
+
 import { DEFAULT_PUBLIC_DIR, createApp } from './app.ts';
 import { ConfigError, loadConfig } from './config/env.ts';
-import { createPrismaClient } from './db/client.ts';
-import { probeOf, queryOf, verifyDatabase } from './db/verify.ts';
-import { createPrismaBotControlStore } from './repositories/prisma-bot-control-store.ts';
-import { createPrismaProductStore } from './repositories/prisma-product-store.ts';
 import { createProductRepository } from './repositories/product-repository.ts';
-import { createUserRepository } from './repositories/user-repository.ts';
 import { createImageChecker } from './services/admin-form.ts';
 import { bootstrapAdmin } from './services/admin-bootstrap.ts';
 import { createBotControl } from './services/bot-control.ts';
 import { createFileMenuRepository } from './repositories/file-menu-repository.ts';
-import { errorProp } from './utils/errors.ts';
-import { createLogger, serializeError } from './utils/logger.ts';
 
 const logger = createLogger();
 

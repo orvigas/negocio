@@ -1,9 +1,14 @@
-import type { BusinessId } from '../src/config/businesses.ts';
+import type { BusinessId, LogFields, LogLevel, Logger } from '@restaurante/core/shared';
+import {
+  pickPageData,
+  type MenuDataByBusiness,
+  type MenuDocument,
+  type PageDataByBusiness,
+} from '@restaurante/core/catalog';
+
 import { loadConfig, type Config, type Env } from '../src/config/env.ts';
 import { loadSeedDocument } from '../src/content/seeds.ts';
 import { createMemoryMenuRepository } from '../src/repositories/memory-menu-repository.ts';
-import { pickPageData, type MenuDataByBusiness, type MenuDocument, type PageDataByBusiness } from '../src/services/menu-schema.ts';
-import type { LogFields, Logger, LogLevel } from '../src/utils/logger.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- any justificado: las pruebas corrompen los datos a propósito (tipos, campos y estructura inválidos).
 export type CorruptibleData = any;

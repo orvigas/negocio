@@ -4,7 +4,7 @@
 
 DONE
 
-Pull Request: https://github.com/orvigas/negocio/pull/84 (base `epic/arquitectura`), mergeado el 2026-10-25 (merge `8a595e1`). El merge a la épica no publica ni despliega. Pendientes fuera de este cierre: la toma de memoria con tráfico normal de CA-13 (no se registró en `arquitectura.md` §10; la toma en reposo da el 30,7 %) y CA-9 y CA-10, que se verifican cuando `epic/arquitectura` llegue a `main`.
+Pull Request: https://github.com/orvigas/negocio/pull/84 (base `epic/arquitectura`), mergeado el 2026-10-25 (merge `8a595e1`). El merge a la épica no publica ni despliega. Pendientes fuera de este cierre: CA-13 sigue abierto hasta la toma pasiva con tráfico real del sábado 2026-10-31, de 08:00 a 15:00 (la toma con tráfico simulado del 2026-10-25 está registrada en `arquitectura.md` §10: estimación del 33,5 %, por debajo del 80 %), y CA-9 y CA-10, que se verifican cuando `epic/arquitectura` llegue a `main`.
 
 ## Aprobación
 
@@ -440,7 +440,7 @@ En ejecución no cambia nada. El primer CI tarda más porque las cachés de Acti
 | CA-9, CA-10 | Pendiente (tras el merge) | Se verifican con `curl` y con lecturas por SSH según el plan |
 | CA-11 | Cumple | `/restaurante/package-lock.json`, `/restaurante/landing-pages/Dockerfile` y `/` existen. La política no cambia |
 | CA-12 | Cumple | §9 registra A con la fecha 2026-10-24, la cita "tres contenedores", la opción elegida y la división entre los pasos 1, 3 y 4. El encabezado ya no cuenta A como pendiente |
-| CA-13 | **Parcial** | Registrada la toma en reposo del 2026-10-24 a las 19:57 (America/Mexico_City, sábado, fuera de horario): RAM total de 3915 MiB y 1066 MiB usados en el host; `app` 67,2, MySQL 509,9 y Traefik 118,4 MiB. Con dos contenedores Node más, la estimación es de 1200 MiB, el **30,7 %**, por debajo del 80 %. **Falta la toma con tráfico normal**: requiere el horario de servicio (sábado o domingo de 08:00 a 15:00) y no se generó carga artificial. Queda indicado como pendiente en §10 |
+| CA-13 | **Parcial** | Registrada la toma en reposo del 2026-10-24 a las 19:57 (America/Mexico_City, sábado, fuera de horario): RAM total de 3915 MiB y 1066 MiB usados en el host; `app` 67,2, MySQL 509,9 y Traefik 118,4 MiB. Con dos contenedores Node más, la estimación es de 1200 MiB, el **30,7 %**, por debajo del 80 %. **Falta la toma con tráfico normal**: requiere el horario de servicio (sábado o domingo de 08:00 a 15:00) y no se generó carga artificial. Queda indicado como pendiente en §10. **Actualización (2026-10-25): sigue Parcial.** Registrada en §10 la toma con tráfico simulado (20:32 a 20:59, domingo, fuera de horario; 148 visitas, 10 sesiones admin de solo lectura, sin 5xx ni 429): pico del host de 1142 MiB y de `app` de 84,1 MiB; estimación 1142 + 2 × 84,1 = 1310,2 MiB, el **33,5 %**, por debajo del 80 %. Falta la toma pasiva con tráfico real del sábado 2026-10-31, de 08:00 a 15:00 |
 | CA-14 | Cumple | `npm ci` y `db:up`; `npm run dev` desde la raíz (200 en `/`, `/molotes` y `/birria`, y 303 en `/admin`); `npm test`; `docker compose run --rm test` (93 archivos; 1979 superadas, 1 *expected fail* y 1 omitida por root, igual que antes); argumentos con `--` (`npm test -- <archivo>`, `bot:chat -- --ahora`). Todas las rutas citadas en `.claude/` existen |
 
 ### Validaciones ejecutadas
@@ -483,7 +483,7 @@ En ejecución no cambia nada. El primer CI tarda más porque las cachés de Acti
 
 ### Riesgos o pendientes
 
-- **CA-13:** falta la toma con tráfico normal, en horario de birria. La conclusión con la toma en reposo (30,7 %) tiene mucho margen.
+- **CA-13:** falta la toma con tráfico normal, en horario de birria. La conclusión con la toma en reposo (30,7 %) tiene mucho margen. Actualización del 2026-10-25: registrada la toma con tráfico simulado (33,5 %); queda la toma pasiva del sábado 2026-10-31.
 - **CA-4 y CA-5:** se confirman en el PR. CA-9 y CA-10, tras el merge.
 - **Comprobación de systemd:** `systemd-analyze` solo corre en el runner.
 - **Arquitectura:** los builds locales son arm64 y el CI construye amd64.
@@ -867,3 +867,9 @@ Commit `01de22e` rebasado sobre `epic/arquitectura` y PR #84 hacia `epic/arquite
 ### Cierre (2026-10-25)
 
 El usuario mergeó el PR #84 (https://github.com/orvigas/negocio/pull/84; merge `8a595e1`, 2026-10-26T01:19:47Z, 19:19 del 2026-10-25 en America/Mexico_City) hacia `epic/arquitectura` ("pr 84 mergeado"). El merge a la épica no publica ni despliega. Se mergeó sin registrar la toma de memoria con tráfico de CA-13, que era la condición de merge: queda pendiente en `arquitectura.md` §10 y debe completarse (o revisarse la decisión A) antes del paso 3 de la épica. CA-9 y CA-10 se verifican cuando `epic/arquitectura` llegue a `main`. Ticket movido a `done/`; ramas `feature/REQ-F-036-monorepo-workspaces-landing-pages` local y remota borradas. Estado `DONE`.
+
+### Toma de memoria con tráfico simulado (2026-10-25)
+
+Con la aprobación del usuario ("Sí, simulada y además pasiva el sábado"), `senior-fullstack` genera carga simulada contra producción el domingo 2026-10-25 de 20:27 a 21:04 (America/Mexico_City, fuera del horario de servicio) y mide la memoria por SSH, solo con lecturas (`free -m` y `docker stats` cada 15 s). Perfil: reposo de 5 min, rampa de 2, promedio de 15 con 2 visitas por minuto, pico de 10 con 10 visitas por minuto y enfriamiento de 5, más 10 sesiones de `/admin` de solo lectura (editor temporal `carga-ca13`) a 8 peticiones por minuto. Resultado: 148 visitas, 2315 peticiones de landing y 217 lecturas de `/admin`, sin 5xx, 429 ni errores de red (p95 máximo de 770 ms). Picos con carga: host 1142 MiB, `app` 84,1, MySQL 515,3 y Traefik 127,1. Estimación con tres contenedores: 1310,2 MiB, el 33,5 % (umbral del 80 %, 3132 MiB): la decisión A se mantiene. Los dos primeros intentos de esa noche se cortaron solos sin generar carga porque el acceso de la cuenta temporal respondió 401; el tercero, con la contraseña restablecida, se completó sin cortes.
+
+Contexto: el tráfico real del domingo de 08:00 a 15:00 fue casi nulo (2 visitas a las landings; el resto, el healthcheck) y el perfil simulado lo supera con creces; el log del sábado se perdió porque el contenedor se reinició ese día a las 22:25; el VPS ejecuta la imagen de `main`, anterior al monorepo, con código equivalente. Registro en `arquitectura.md` §10 (la fila "Con tráfico normal" pasa a "Con tráfico simulado"). **CA-13: parcial**, abierto hasta la toma pasiva con tráfico real del sábado 2026-10-31, de 08:00 a 15:00. El ticket sigue en `done/`.

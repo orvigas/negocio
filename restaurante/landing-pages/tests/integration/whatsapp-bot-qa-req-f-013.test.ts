@@ -8,6 +8,7 @@ import { PROVIDER_DRIVERS, type ProviderDriver } from '../support/chat-bot-drive
 import { listenLocal } from '../support/http.ts';
 import { makeProductRepository } from '../support/products.ts';
 import { CUSTOMER, STAFF, WEEK, mx } from '../support/whatsapp.ts';
+import { landingProductsFrom } from '../support/landing-products.ts';
 
 /**
  * QA de REQ-F-013 (ronda 1, senior-qa), con Meta y con Twilio, por HTTP firmado, con la misma app
@@ -35,7 +36,7 @@ async function start(driver: ProviderDriver, at: Date) {
     now: () => clock.now,
     newCode: (prefix) => `${prefix}-T${String((codes += 1)).padStart(3, '0')}`,
   });
-  const server = await listenLocal(createApp({ config, repository: await makeRepository(), products, logger, now: () => clock.now, bot }));
+  const server = await listenLocal(createApp({ config, repository: await makeRepository(), products, landingProducts: landingProductsFrom(products), logger, now: () => clock.now, bot }));
 
   async function post(delivery: { body: string; headers: Readonly<Record<string, string>> }): Promise<void> {
     expect((await server.request().post(PATH).set(delivery.headers).send(delivery.body)).status).toBe(200);

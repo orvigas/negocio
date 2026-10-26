@@ -11,6 +11,7 @@ import { createLandingController } from '../controllers/landing.ts';
 import { WEBHOOK_PATH, createWhatsAppWebhook, type WebhookBot } from '../controllers/whatsapp-webhook.ts';
 import type { MenuRepository } from '../repositories/menu-repository.ts';
 import type { ProductRepository } from '../repositories/product-repository.ts';
+import type { LandingProducts } from '../services/landing-products.ts';
 import type { Renderer } from '../views/render.ts';
 import { createAdminRouter } from './admin.ts';
 
@@ -36,6 +37,7 @@ export function createRouter({
   publicDir,
   bot,
   logger,
+  landingProducts,
   ...deps
 }: {
   config: Config;
@@ -43,6 +45,8 @@ export function createRouter({
   now: () => Date;
   repository: MenuRepository;
   products: ProductRepository;
+  /** Productos de las landings, de la API (REQ-F-038). /admin y el bot usan `products`. */
+  landingProducts: LandingProducts;
   publicDir: string;
   admin?: AdminRouteDeps | undefined;
   bot?: WebhookBot | undefined;
@@ -50,9 +54,9 @@ export function createRouter({
 }): Router {
   const router = new Router();
   const icons = createIconsController({ publicDir });
-  router.get('/', createLandingController(deps));
+  router.get('/', createLandingController({ ...deps, landingProducts }));
   for (const businessId of BUSINESS_IDS) {
-    router.get(BUSINESS_PATHS[businessId], createLandingController({ ...deps, businessId }));
+    router.get(BUSINESS_PATHS[businessId], createLandingController({ ...deps, landingProducts, businessId }));
     router.get(manifestPath(businessId), icons.manifest(businessId));
   }
   router.get('/favicon.ico', icons.favicon);

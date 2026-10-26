@@ -13,14 +13,16 @@ import { DEFAULT_PUBLIC_DIR, createApp } from '../../src/app.ts';
 import type { BotKeys, Env } from '../../src/config/env.ts';
 import type { MenuRepository } from '../../src/repositories/menu-repository.ts';
 import type { createMemoryMenuRepository } from '../../src/repositories/memory-menu-repository.ts';
-import { createProductRepository } from '../../src/repositories/product-repository.ts';
+import { createProductRepository, type ProductRepository } from '../../src/repositories/product-repository.ts';
 import { createImageChecker } from '../../src/services/admin-form.ts';
 import { bootstrapAdmin } from '../../src/services/admin-bootstrap.ts';
 import { createBotControl } from '../../src/services/bot-control.ts';
 import type { BotLimits } from '../../src/services/whatsapp-bot/protection/limits.ts';
+import type { LandingProducts } from '../../src/services/landing-products.ts';
 import type { FetchLike } from '../../src/services/whatsapp-bot/providers/select.ts';
 import { makeDatabase, type MakeDatabaseOptions } from './database.ts';
 import { listenLocal, type Browser } from './http.ts';
+import { landingProductsFrom } from './landing-products.ts';
 import { sourcesFrom } from './products.ts';
 
 export type MemoryRepository = ReturnType<typeof createMemoryMenuRepository>;
@@ -45,6 +47,11 @@ export interface SetupOptions<R extends MenuRepository> {
   wrapBotStore?: (store: BotControlStore) => BotControlStore;
   /** `fetch` del proveedor cuando el bot se crea desde la configuración (un doble). */
   providerFetch?: FetchLike;
+  /**
+   * Productos de las landings (REQ-F-038). Por defecto, el adaptador en memoria sobre `products`;
+   * las pruebas de la API pasan la caché real contra el doble HTTP sobre el mismo store.
+   */
+  landingProducts?: (deps: { products: ProductRepository; store: ProductStore }) => LandingProducts | Promise<LandingProducts>;
 }
 
 /** Clave de prueba para la lista negra sin bot (REQ-F-025). */
@@ -103,6 +110,7 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
   botLimits,
   wrapBotStore = (store) => store,
   providerFetch,
+  landingProducts = ({ products }) => landingProductsFrom(products),
 }: SetupOptions<R> = {}) {
   // Sin repositorio propio se usa el de memoria, que es el tipo por defecto de R.
   const repo = (repository ?? (await makeRepository({ now: clock.now }))) as R;
@@ -135,6 +143,7 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
     config: botLimits ? { ...config, botLimits } : config,
     repository: repo,
     products,
+    landingProducts: await landingProducts({ products, store: productStore }),
     users,
     hashParams: TEST_HASH_PARAMS,
     logger,

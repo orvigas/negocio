@@ -93,6 +93,9 @@ export const SUCCESS_MESSAGES = Object.freeze({
   save: 'Cambios guardados. La landing ya muestra los datos nuevos.',
   product_created: 'Producto creado. Está al final y no disponible: edítalo y marca "Disponible" para mostrarlo en la landing.',
   product_saved: 'Producto guardado. La landing ya muestra los datos nuevos.',
+  // REQ-F-038 (DEF-003): la API de productos no respondió al guardar; la landing sigue con su última copia.
+  product_saved_pending:
+    'Producto guardado. La landing lo mostrará en cuanto la API de productos vuelva a responder; mientras tanto sigue mostrando los datos anteriores.',
   product_overwritten: 'Tus cambios del producto se guardaron sobre la versión más reciente.',
   product_deleted: 'Producto eliminado. Puedes recuperarlo desde "Productos eliminados".',
   product_restored: 'Producto recuperado. Quedó al final y no disponible.',

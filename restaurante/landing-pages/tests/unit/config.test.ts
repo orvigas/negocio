@@ -97,7 +97,13 @@ describe('loadConfig', () => {
   });
 
   it('aplica valores por defecto para HOST, PORT y BUSINESS_TIMEZONE', () => {
-    const config = loadConfig({ NODE_ENV: 'development', WHATSAPP_MOLOTES: '5210000000001', WHATSAPP_BIRRIA: '5210000000002', DATABASE_URL: VALID_ENV.DATABASE_URL });
+    const config = loadConfig({
+      NODE_ENV: 'development',
+      WHATSAPP_MOLOTES: '5210000000001',
+      WHATSAPP_BIRRIA: '5210000000002',
+      DATABASE_URL: VALID_ENV.DATABASE_URL,
+      API_INTERNAL_URL: VALID_ENV.API_INTERNAL_URL,
+    });
     expect(config).toMatchObject({ nodeEnv: 'development', host: '127.0.0.1', port: 3000, timezone: 'America/Mexico_City' });
   });
 
@@ -139,8 +145,9 @@ describe('loadConfig', () => {
 
   it('exige URL o número para cada negocio y reporta todos los problemas juntos', () => {
     const issues = issuesFor({ NODE_ENV: 'test', PORT: 'x' });
-    expect(issues).toHaveLength(4);
+    expect(issues).toHaveLength(5);
     expect(issues.join('\n')).toMatch(/DATABASE_URL es obligatoria/);
+    expect(issues.join('\n')).toMatch(/API_INTERNAL_URL es obligatoria/);
     expect(issues.join('\n')).toMatch(/PORT/);
     expect(issues.join('\n')).toMatch(/WHATSAPP_MOLOTES_URL o WHATSAPP_MOLOTES/);
     expect(issues.join('\n')).toMatch(/WHATSAPP_BIRRIA_URL o WHATSAPP_BIRRIA/);
@@ -149,6 +156,30 @@ describe('loadConfig', () => {
   it('no incluye los valores recibidos en los mensajes de error', () => {
     const issues = issuesFor({ ...VALID_ENV, WHATSAPP_MOLOTES_URL: 'http://secret-token.example' });
     expect(issues.join('\n')).not.toContain('secret-token');
+  });
+
+  describe('API_INTERNAL_URL (REQ-F-038, CA-15)', () => {
+    it.each([
+      ['http://127.0.0.1:3001', 'http://127.0.0.1:3001'],
+      ['http://api:3001/', 'http://api:3001'],
+      ['https://api.interna:8443/base/', 'https://api.interna:8443/base'],
+    ])('acepta %s y lo normaliza sin barra final', (value, expected) => {
+      expect(loadConfig({ ...VALID_ENV, API_INTERNAL_URL: value }).apiInternalUrl).toBe(expected);
+    });
+
+    it.each([undefined, '', '   '])('ausente (%j) impide arrancar', (value) => {
+      expect(issuesFor({ ...VALID_ENV, API_INTERNAL_URL: value })).toEqual([expect.stringContaining('API_INTERNAL_URL es obligatoria')]);
+    });
+
+    it.each(['ftp://interno:3001', 'interno:3001', 'http://usuario:clave-secreta@api:3001', 'http://api:3001/?token=secreto', 'http://api:3001/#secreto', 'no es una url'])(
+      'inválida (%s) impide arrancar sin repetir el valor',
+      (value) => {
+        const issues = issuesFor({ ...VALID_ENV, API_INTERNAL_URL: value });
+        expect(issues).toEqual([expect.stringContaining('API_INTERNAL_URL no es válida')]);
+        expect(issues.join('\n')).not.toContain(value);
+        expect(issues.join('\n')).not.toMatch(/secret|clave/);
+      },
+    );
   });
 
   it('SITE_URL es opcional y se normaliza sin "/" final', () => {

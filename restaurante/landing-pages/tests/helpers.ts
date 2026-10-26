@@ -24,6 +24,9 @@ export const VALID_ENV = Object.freeze({
   WHATSAPP_BIRRIA_MESSAGE: 'Hola, quiero hacer un pedido de birria',
   // Obligatoria (REQ-F-014). makeConfig no conecta: las pruebas usan la base de tests/support/database.ts.
   DATABASE_URL: 'mysql://restaurante_test_app:test-dev@127.0.0.1:3307/restaurante_test',
+  // Obligatoria (REQ-F-038). Un puerto cerrado: un servidor de prueba arranca sin API (sirve la
+  // semilla) y nunca habla con una API local del desarrollador; las pruebas de la API usan el doble.
+  API_INTERNAL_URL: 'http://127.0.0.1:9',
 });
 
 /**

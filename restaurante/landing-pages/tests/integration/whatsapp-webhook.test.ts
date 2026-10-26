@@ -10,6 +10,7 @@ import { listenLocal } from '../support/http.ts';
 import { makeProductRepository } from '../support/products.ts';
 import { startServer } from '../support/process.ts';
 import { CUSTOMER, STAFF, WEEK, inboundPayload, loadFixture, makeBotHarness, mx, sign, type BotHarness } from '../support/whatsapp.ts';
+import { landingProductsFrom } from '../support/landing-products.ts';
 
 /**
  * Webhook del bot de WhatsApp por HTTP (REQ-F-009, RF-1, RF-2, RF-8, RF-9; CA-1 a CA-4, CA-14,
@@ -21,10 +22,12 @@ const SECRETS = [BOT_ENV.WHATSAPP_BOT_ACCESS_TOKEN, BOT_ENV.WHATSAPP_BOT_APP_SEC
 
 async function start({ at = mx(`${WEEK.tue}T10:00`) } = {}) {
   const h = await makeBotHarness({ at });
+  const products = (await makeProductRepository()).repository;
   const app = createApp({
     config: makeConfig(BOT_ENV),
     repository: await makeRepository(),
-    products: (await makeProductRepository()).repository,
+    products,
+    landingProducts: landingProductsFrom(products),
     logger: h.logger,
     now: () => h.clock.now,
     bot: h.bot,
@@ -226,7 +229,7 @@ describe('bot deshabilitado y fallos de Meta (RF-2.2, RF-8, CA-4)', () => {
   it('CA-4: sin configuración del bot, el webhook responde 503 y las landings 200', async () => {
     const products = (await makeProductRepository()).repository;
     const logger = makeRecordingLogger();
-    const server = await listenLocal(createApp({ config: makeConfig(), repository: await makeRepository(), products, logger }));
+    const server = await listenLocal(createApp({ config: makeConfig(), repository: await makeRepository(), products, landingProducts: landingProductsFrom(products), logger }));
     const verify = await server.request().get(`${PATH}?hub.mode=subscribe&hub.challenge=1&hub.verify_token=x`);
     expect(verify.status).toBe(503);
     expect(verify.body.error.code).toBe('BOT_DISABLED');

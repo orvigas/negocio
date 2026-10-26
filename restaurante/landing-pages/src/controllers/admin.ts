@@ -36,6 +36,7 @@ import {
   renderAdminHome,
   renderAdminLogin,
 } from '../views/admin/index.ts';
+import type { LandingProducts } from '../services/landing-products.ts';
 import type { Renderer } from '../views/render.ts';
 import { createAdminAccess, type AdminRouterContext } from './admin-access.ts';
 import { authorOf, businessPermission, createBusinessView } from './admin-business-view.ts';
@@ -62,6 +63,8 @@ export interface AdminDeps {
   repository: MenuRepository;
   /** Productos (REQ-F-008). */
   products: ProductRepository;
+  /** Caché de las landings (REQ-F-038): confirma si la landing ya tiene los datos guardados. */
+  landingProducts: Pick<LandingProducts, 'confirmFresh'>;
   sessions: SessionStore;
   throttle: LoginThrottle;
   users: UserRepository;

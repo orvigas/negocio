@@ -10,6 +10,7 @@ import { makeProductRepository } from '../support/products.ts';
 import { TWILIO_AUTH_TOKEN, TWILIO_SENDER, TWILIO_WEBHOOK_URL, formBody, signTwilio, twilioInbound, twilioStatus } from '../support/twilio.ts';
 import { createTwilioApiDouble, twilioError } from '../support/twilio-api-double.ts';
 import { CUSTOMER, STAFF, WEEK, mx } from '../support/whatsapp.ts';
+import { landingProductsFrom } from '../support/landing-products.ts';
 
 /**
  * Webhook del bot con Twilio por HTTP (REQ-F-012, RF-3 a RF-5; CA-2 a CA-7b, CA-12, CA-13). La
@@ -36,7 +37,7 @@ async function start({ env = {} }: { env?: Record<string, string> } = {}) {
     now: () => clock.now,
     newCode: (prefix) => `${prefix}-T${String((codes += 1)).padStart(3, '0')}`,
   });
-  const server = await listenLocal(createApp({ config, repository: await makeRepository(), products, logger, now: () => clock.now, bot }));
+  const server = await listenLocal(createApp({ config, repository: await makeRepository(), products, landingProducts: landingProductsFrom(products), logger, now: () => clock.now, bot }));
 
   const post = (params: Record<string, string>, signature: string | null = signTwilio(params)) => {
     const request = server.request().post(PATH).set('Content-Type', 'application/x-www-form-urlencoded');
@@ -221,7 +222,7 @@ describe('Twilio deshabilitado (CA-12)', () => {
     const env = { ...VALID_ENV, WHATSAPP_BOT_PROVIDER: 'twilio', WHATSAPP_BOT_ACCOUNT_ID: '', WHATSAPP_BOT_ACCESS_TOKEN: '', WHATSAPP_BOT_WEBHOOK_URL: '' };
     const logger = makeRecordingLogger();
     const products = (await makeProductRepository()).repository;
-    const server = await listenLocal(createApp({ config: makeConfig(env), repository: await makeRepository(), products, logger }));
+    const server = await listenLocal(createApp({ config: makeConfig(env), repository: await makeRepository(), products, landingProducts: landingProductsFrom(products), logger }));
     const params = twilioInbound('text');
     for (const res of [
       await server.request().post(PATH).set('X-Twilio-Signature', signTwilio(params)).send(formBody(params)),

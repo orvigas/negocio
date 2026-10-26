@@ -4,12 +4,13 @@
 # del workflow (authorized_keys: restrict,command="/opt/restaurante/deploy/deploy.sh"). Los
 # argumentos llegan en SSH_ORIGINAL_COMMAND (o en $@ si se ejecuta a mano):
 #
-#   deploy <sha del commit> <digest app> <digest migrate> <suma de deploy/>
+#   deploy <sha del commit> <digest app> <digest migrate> <digest api> <suma de deploy/>
 #
 # Secuencia: precondiciones -> pull -> MySQL en marcha -> volcado (retención 7) -> migración ->
-# app con el digest nuevo -> salud (healthy + Traefik) -> registro. Si falla antes del cambio de la
-# app, no la toca. Si falla la salud, vuelve al digest anterior con DATABASE_ALLOW_NEWER_SCHEMA=true
-# (D-1) y termina con error. Nunca imprime secretos (sin set -x; no muestra el .env ni la
+# api con el digest nuevo (REQ-F-038; healthy) -> app con el digest nuevo -> salud (healthy +
+# Traefik) -> registro. Si falla antes del cambio de la app, no la toca (si la api nueva no queda
+# healthy, vuelve a la api anterior y termina con 15). Si falla la salud de la app, vuelve a los
+# digests anteriores de app y api con DATABASE_ALLOW_NEWER_SCHEMA=true (D-1) y termina con error. Nunca imprime secretos (sin set -x; no muestra el .env ni la
 # configuración resuelta del compose).
 set -euo pipefail
 umask 077
@@ -60,14 +61,16 @@ if [[ -n "${SSH_ORIGINAL_COMMAND:-}" ]]; then
 else
   ARGS=("$@")
 fi
-[[ ${#ARGS[@]} -eq 5 && "${ARGS[0]}" == deploy ]] || fail 2 'uso: deploy <sha> <digest app> <digest migrate> <suma de deploy/>'
+[[ ${#ARGS[@]} -eq 6 && "${ARGS[0]}" == deploy ]] || fail 2 'uso: deploy <sha> <digest app> <digest migrate> <digest api> <suma de deploy/>'
 SHA=${ARGS[1]}
 APP_DIGEST=${ARGS[2]}
 MIGRATE_DIGEST=${ARGS[3]}
-EXPECTED_SUM=${ARGS[4]}
+API_DIGEST=${ARGS[4]}
+EXPECTED_SUM=${ARGS[5]}
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || fail 2 'sha del commit inválido'
 [[ "$APP_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || fail 2 'digest de la app inválido'
 [[ "$MIGRATE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || fail 2 'digest de migrate inválido'
+[[ "$API_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || fail 2 'digest de la api inválido'
 [[ "$EXPECTED_SUM" =~ ^[0-9a-f]{64}$ ]] || fail 2 'suma de deploy/ inválida'
 
 # --- Precondiciones ------------------------------------------------------------------------------
@@ -90,6 +93,7 @@ PROBE_ADDRESS=${PROBE_ADDRESS:-127.0.0.1}
 
 APP_IMAGE="$REGISTRY/restaurante@$APP_DIGEST"
 MIGRATE_IMAGE="$REGISTRY/restaurante-migrate@$MIGRATE_DIGEST"
+API_IMAGE="$REGISTRY/restaurante-api@$API_DIGEST"
 
 mkdir -p -- "$STATE_DIR" "$BACKUP_DIR"
 chmod 700 -- "$STATE_DIR" "$BACKUP_DIR"
@@ -103,41 +107,77 @@ fi
 # Nunca hereda la bandera de la vuelta atrás del entorno.
 unset DATABASE_ALLOW_NEWER_SCHEMA
 
-# Imagen de la app desplegada antes de este despliegue (vacía en el primero).
+# Imágenes desplegadas antes de este despliegue (vacías en el primero; la de la api, también en el
+# primer despliegue con api, REQ-F-038).
 PREVIOUS_APP_IMAGE=''
 PREVIOUS_MIGRATE_IMAGE=''
+PREVIOUS_API_IMAGE=''
 if [[ -f "$STATE_DIR/release.env" ]]; then
   PREVIOUS_APP_IMAGE=$(sed -n 's/^RESTAURANTE_APP_IMAGE=//p' "$STATE_DIR/release.env")
   PREVIOUS_MIGRATE_IMAGE=$(sed -n 's/^RESTAURANTE_MIGRATE_IMAGE=//p' "$STATE_DIR/release.env")
+  PREVIOUS_API_IMAGE=$(sed -n 's/^RESTAURANTE_API_IMAGE=//p' "$STATE_DIR/release.env")
 fi
 
 # docker compose con las imágenes indicadas (el entorno gana al .env).
 compose() {
-  local app_image=$1 migrate_image=$2
-  shift 2
-  RESTAURANTE_APP_IMAGE="$app_image" RESTAURANTE_MIGRATE_IMAGE="$migrate_image" \
+  local app_image=$1 migrate_image=$2 api_image=$3
+  shift 3
+  RESTAURANTE_APP_IMAGE="$app_image" RESTAURANTE_MIGRATE_IMAGE="$migrate_image" RESTAURANTE_API_IMAGE="$api_image" \
     docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"
 }
 
-record() {
-  printf '%s %s app=%s migrate=%s result=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SHA" "$APP_DIGEST" "$MIGRATE_DIGEST" "$1" >>"$STATE_DIR/releases.log"
+# Con las imágenes de este despliegue.
+compose_new() { compose "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" "$@"; }
+
+# Imagen de un contenedor del proyecto (vacía si no existe). DEF-002 de REQ-F-038: tras una
+# restauración (ops/backup/restore.sh), state/release.env ya no tiene RESTAURANTE_API_IMAGE; la api
+# anterior es entonces la del contenedor en marcha.
+running_image() { # running_image <servicio>
+  local id
+  id=$(compose_new ps -aq "$1" 2>/dev/null | head -n 1)
+  [[ -n "$id" ]] && docker inspect -f '{{.Config.Image}}' "$id" 2>/dev/null || true
+}
+if [[ -z "$PREVIOUS_API_IMAGE" ]]; then
+  PREVIOUS_API_IMAGE=$(running_image api)
+  # La imagen por defecto del compose (sin-desplegar) no es una api anterior.
+  [[ "$PREVIOUS_API_IMAGE" =~ @sha256:[0-9a-f]{64}$ ]] || PREVIOUS_API_IMAGE=''
+fi
+
+# Migraciones terminadas en la base ("<n>:<última>"; vacío si la tabla aún no existe). Con el usuario
+# de respaldo (solo lectura), por un archivo de opciones temporal: la contraseña nunca va en argv.
+# shellcheck disable=SC2016 # Las variables se expanden dentro del contenedor.
+applied_migrations() {
+  compose_new exec -T mysql sh -c '
+    set -eu
+    umask 077
+    f=$(mktemp)
+    trap "rm -f \"$f\"" EXIT
+    printf "[client]\nuser=restaurante_backup\npassword=%s\n" "$RESTAURANTE_DB_BACKUP_PASSWORD" >"$f"
+    mysql --defaults-extra-file="$f" -N -B restaurante \
+      -e "SELECT CONCAT(COUNT(*), \":\", COALESCE(MAX(migration_name), \"\")) FROM _prisma_migrations WHERE finished_at IS NOT NULL"
+  ' 2>/dev/null || true
 }
 
-log "inicio: commit $SHA, app $APP_DIGEST, migrate $MIGRATE_DIGEST"
+record() {
+  printf '%s %s app=%s migrate=%s api=%s result=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SHA" "$APP_DIGEST" "$MIGRATE_DIGEST" "$API_DIGEST" "$1" >>"$STATE_DIR/releases.log"
+}
+
+log "inicio: commit $SHA, app $APP_DIGEST, migrate $MIGRATE_DIGEST, api $API_DIGEST"
 
 # --- 1. Imágenes ---------------------------------------------------------------------------------
 docker pull --quiet "$APP_IMAGE" >/dev/null || { record pull_failed; fail 10 'no se pudo descargar la imagen de la app (¿token de GHCR caducado?)'; }
 docker pull --quiet "$MIGRATE_IMAGE" >/dev/null || { record pull_failed; fail 10 'no se pudo descargar la imagen migrate'; }
+docker pull --quiet "$API_IMAGE" >/dev/null || { record pull_failed; fail 10 'no se pudo descargar la imagen de la api'; }
 log 'imágenes descargadas'
 
 # --- 2. MySQL en marcha (idempotente; en el primer despliegue crea la base y los usuarios) --------
-compose "$APP_IMAGE" "$MIGRATE_IMAGE" up -d --wait --wait-timeout 240 mysql || { record mysql_failed; fail 11 'MySQL no quedó healthy'; }
+compose_new up -d --wait --wait-timeout 240 mysql || { record mysql_failed; fail 11 'MySQL no quedó healthy'; }
 
 # --- 3. Volcado previo (RF-5.3) ------------------------------------------------------------------
 DUMP="$BACKUP_DIR/$(date -u +%Y%m%dT%H%M%SZ)-${SHA:0:12}.sql.gz"
 # Credenciales en un archivo de opciones temporal dentro del contenedor: nunca en argv.
 # shellcheck disable=SC2016 # Las variables se expanden dentro del contenedor.
-if ! compose "$APP_IMAGE" "$MIGRATE_IMAGE" exec -T mysql sh -c '
+if ! compose_new exec -T mysql sh -c '
   set -eu
   umask 077
   f=$(mktemp)
@@ -162,20 +202,26 @@ find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.sql.gz' -printf '%T@ %p\n' | sor
 log "volcado: $(basename -- "$DUMP")"
 
 # --- 4. Migración --------------------------------------------------------------------------------
-if ! compose "$APP_IMAGE" "$MIGRATE_IMAGE" run --rm --no-deps migrate; then
+MIGRATIONS_BEFORE=$(applied_migrations)
+if ! compose_new run --rm --no-deps migrate; then
   record migrate_failed
   fail 13 "falló la migración; la app no se tocó. Si quedó a medias, restaura $(basename -- "$DUMP") (docs/despliegue.md)"
 fi
 log 'migraciones aplicadas'
+MIGRATIONS_AFTER=$(applied_migrations)
 
-# --- 5 y 6. App con el digest nuevo y comprobación de salud ---------------------------------------
+# --- 5 y 6. API y app con el digest nuevo y comprobación de salud ---------------------------------
 # -a: también un contenedor que se está reiniciando o que se paró.
-app_container() { compose "$1" "$2" ps -aq app; }
+# service_container <servicio> <imagen app> <imagen migrate> <imagen api>
+service_container() { compose "$2" "$3" "$4" ps -aq "$1"; }
+app_container() { service_container app "$@"; }
 
+# wait_healthy <servicio> <imagen app> <imagen migrate> <imagen api>
 wait_healthy() {
-  local id status restarts deadline=$((SECONDS + HEALTH_TIMEOUT))
+  local service=$1 id status restarts deadline=$((SECONDS + HEALTH_TIMEOUT))
+  shift
   while ((SECONDS < deadline)); do
-    id=$(app_container "$1" "$2")
+    id=$(service_container "$service" "$@")
     if [[ -n "$id" ]]; then
       status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$id")
       restarts=$(docker inspect -f '{{.RestartCount}}' "$id")
@@ -199,10 +245,47 @@ probe_traefik() {
   return 1
 }
 
-compose "$APP_IMAGE" "$MIGRATE_IMAGE" up -d --no-deps app
-if wait_healthy "$APP_IMAGE" "$MIGRATE_IMAGE" && probe_traefik; then
+# 5a. API (REQ-F-038). Las landings toleran que no esté (sirven su última copia o la semilla), pero
+# no se cambia la app si la api nueva no queda healthy.
+compose_new up -d --no-deps api
+if ! wait_healthy api "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE"; then
+  log 'la api nueva no pasó la comprobación de salud'
+  docker logs --tail 50 "$(service_container api "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE")" 2>&1 | sed 's/^/  api: /' >&2 || true
+  if [[ -n "$PREVIOUS_API_IMAGE" ]]; then
+    log "volviendo a la api $PREVIOUS_API_IMAGE"
+    # La api anterior no conoce las migraciones que se acaban de aplicar: las tolera (D-1). El script
+    # termina justo después, así que la variable no llega a nada más.
+    export DATABASE_ALLOW_NEWER_SCHEMA=true
+    compose "$APP_IMAGE" "$MIGRATE_IMAGE" "$PREVIOUS_API_IMAGE" up -d --no-deps api || true
+  fi
+  # DEF-001 (REQ-F-038): si este despliegue aplicó migraciones, la app en marcha (creada sin
+  # DATABASE_ALLOW_NEWER_SCHEMA) no podría volver a arrancar sobre la base migrada si se reinicia
+  # (DATABASE_NEWER_THAN_CODE). Se recrea con su misma imagen y la bandera, como en la vuelta atrás
+  # (D-1): un corte de unos segundos ahora en lugar de una caída total en el próximo reinicio. Sin
+  # migraciones nuevas (o sin app en marcha), la app no se toca.
+  RUNNING_APP_IMAGE=$(running_image app)
+  if [[ -n "$RUNNING_APP_IMAGE" && ( -z "$MIGRATIONS_AFTER" || "$MIGRATIONS_AFTER" != "$MIGRATIONS_BEFORE" ) ]]; then
+    log "hubo migraciones nuevas: la app en marcha ($RUNNING_APP_IMAGE) se recrea con DATABASE_ALLOW_NEWER_SCHEMA=true"
+    export DATABASE_ALLOW_NEWER_SCHEMA=true
+    CURRENT_API_IMAGE=${PREVIOUS_API_IMAGE:-$API_IMAGE}
+    compose "$RUNNING_APP_IMAGE" "$MIGRATE_IMAGE" "$CURRENT_API_IMAGE" up -d --no-deps app
+    if ! wait_healthy app "$RUNNING_APP_IMAGE" "$MIGRATE_IMAGE" "$CURRENT_API_IMAGE" || ! probe_traefik; then
+      record api_failed_app_unhealthy
+      fail 22 "la api nueva no quedó healthy y la app recreada tampoco: restaura la base desde $(basename -- "$DUMP") (docs/despliegue.md)"
+    fi
+    record api_failed
+    fail 15 'la api nueva no quedó healthy; la app sigue con su versión, recreada con DATABASE_ALLOW_NEWER_SCHEMA=true por las migraciones nuevas'
+  fi
+  record api_failed
+  fail 15 'la api nueva no quedó healthy; la app no se tocó'
+fi
+log 'api healthy'
+
+# 5b. App.
+compose_new up -d --no-deps app
+if wait_healthy app "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" && probe_traefik; then
   if [[ -f "$STATE_DIR/release.env" ]]; then mv -f -- "$STATE_DIR/release.env" "$STATE_DIR/release.env.previous"; fi
-  printf 'RESTAURANTE_APP_IMAGE=%s\nRESTAURANTE_MIGRATE_IMAGE=%s\nRESTAURANTE_COMMIT=%s\n' "$APP_IMAGE" "$MIGRATE_IMAGE" "$SHA" >"$STATE_DIR/release.env.tmp"
+  printf 'RESTAURANTE_APP_IMAGE=%s\nRESTAURANTE_MIGRATE_IMAGE=%s\nRESTAURANTE_API_IMAGE=%s\nRESTAURANTE_COMMIT=%s\n' "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" "$SHA" >"$STATE_DIR/release.env.tmp"
   chmod 644 -- "$STATE_DIR/release.env.tmp"
   mv -f -- "$STATE_DIR/release.env.tmp" "$STATE_DIR/release.env"
   record ok
@@ -212,7 +295,7 @@ fi
 
 # --- Vuelta atrás (RF-6) -------------------------------------------------------------------------
 log 'la versión nueva no pasó la comprobación de salud'
-docker logs --tail 50 "$(app_container "$APP_IMAGE" "$MIGRATE_IMAGE")" 2>&1 | sed 's/^/  app: /' >&2 || true
+docker logs --tail 50 "$(app_container "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE")" 2>&1 | sed 's/^/  app: /' >&2 || true
 if [[ -z "$PREVIOUS_APP_IMAGE" ]]; then
   record health_failed_no_previous
   fail 20 'primer despliegue: no hay versión anterior a la que volver'
@@ -220,8 +303,14 @@ fi
 log "volviendo a $PREVIOUS_APP_IMAGE"
 # La versión anterior no conoce las migraciones que se acaban de aplicar: las tolera (D-1).
 export DATABASE_ALLOW_NEWER_SCHEMA=true
-compose "$PREVIOUS_APP_IMAGE" "${PREVIOUS_MIGRATE_IMAGE:-$MIGRATE_IMAGE}" up -d --no-deps app
-if wait_healthy "$PREVIOUS_APP_IMAGE" "${PREVIOUS_MIGRATE_IMAGE:-$MIGRATE_IMAGE}" && probe_traefik; then
+# La api vuelve también a la anterior si la hay; si no (primer despliegue con api), se queda la nueva.
+ROLLBACK_API_IMAGE=${PREVIOUS_API_IMAGE:-$API_IMAGE}
+if [[ -n "$PREVIOUS_API_IMAGE" ]]; then
+  log "volviendo a la api $PREVIOUS_API_IMAGE"
+  compose "$PREVIOUS_APP_IMAGE" "${PREVIOUS_MIGRATE_IMAGE:-$MIGRATE_IMAGE}" "$ROLLBACK_API_IMAGE" up -d --no-deps api || true
+fi
+compose "$PREVIOUS_APP_IMAGE" "${PREVIOUS_MIGRATE_IMAGE:-$MIGRATE_IMAGE}" "$ROLLBACK_API_IMAGE" up -d --no-deps app
+if wait_healthy app "$PREVIOUS_APP_IMAGE" "${PREVIOUS_MIGRATE_IMAGE:-$MIGRATE_IMAGE}" "$ROLLBACK_API_IMAGE" && probe_traefik; then
   record health_failed_rolled_back
   fail 21 "versión anterior restaurada ($PREVIOUS_APP_IMAGE); el despliegue falló"
 fi

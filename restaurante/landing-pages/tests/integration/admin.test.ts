@@ -26,6 +26,7 @@ import {
 } from '../support/admin.ts';
 import { listenLocal } from '../support/http.ts';
 import { makeProductsFor } from '../support/products.ts';
+import { landingProductsFrom } from '../support/landing-products.ts';
 
 const ADMIN_PAGES = ['/admin/molotes', '/admin/birria'];
 
@@ -301,7 +302,8 @@ describe('acceso protegido (RF-5)', () => {
 
   it('CA-24: sin credenciales configuradas la administración responde "no disponible" y las landings funcionan', async () => {
     const repository = await makeRepository();
-    const app = createApp({ config: makeConfig(), repository, products: await makeProductsFor(repository) });
+    const products = await makeProductsFor(repository);
+    const app = createApp({ config: makeConfig(), repository, products, landingProducts: landingProductsFrom(products) });
     const client = (await listenLocal(app)).request();
     for (const path of ['/admin', '/admin/login', ...ADMIN_PAGES]) {
       const res = await client.get(path);

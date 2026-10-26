@@ -51,9 +51,10 @@ npm run db:up                         # MySQL 8.4 local (ver el paso 4)
 ```sh
 cp landing-pages/.env.example landing-pages/.env
 cp packages/db/.env.example packages/db/.env
+cp api/.env.example api/.env
 ```
 
-Ninguno de los dos `.env` se versiona (están en `.gitignore` y en `.dockerignore`). Cada variable
+Ninguno de los tres `.env` se versiona (están en `.gitignore` y en `.dockerignore`). Cada variable
 está explicada en su `.env.example` y en [Configuración](../README.md#configuración). Para empezar
 basta con, en `landing-pages/.env`:
 
@@ -62,7 +63,13 @@ NODE_ENV=development
 WHATSAPP_MOLOTES=<número internacional, solo dígitos>
 WHATSAPP_BIRRIA=<número internacional, solo dígitos>
 DATABASE_URL=mysql://restaurante_app:app-dev@127.0.0.1:3307/restaurante
+API_INTERNAL_URL=http://127.0.0.1:3001
 ```
+
+`api/.env` (la API propia de REQ-F-038) ya viene lista en su `.env.example`: `NODE_ENV`, `HOST`,
+`PORT=3001` y el mismo `DATABASE_URL`. `API_INTERNAL_URL` es obligatoria en `landing-pages`: sin
+ella (o con un valor que no sea una URL `http(s)` sin credenciales, parámetros ni fragmento) la app
+no arranca.
 
 y, en `packages/db/.env` (solo las lee el CLI de Prisma; la app no las usa):
 
@@ -126,8 +133,15 @@ de página de cada negocio y `changes.jsonl`. Estructura y reglas en
 
 ```sh
 npm run build:css   # genera landing-pages/public/css/{molotes,birria,admin}/main.css (no se versiona)
-npm run dev         # servidor con recarga en http://127.0.0.1:3000
+npm run dev         # api (127.0.0.1:3001) y landings con recarga en http://127.0.0.1:3000
 ```
+
+`npm run dev` levanta dos procesos (REQ-F-038): la API (`npm run dev:api`, en
+`http://127.0.0.1:3001`) y `landing-pages` (`npm run dev:landing`). Puedes levantarlos por separado
+en dos terminales. Las landings leen los productos de la API: si no está en marcha, muestran la
+semilla de `content/seeds.ts` y registran `landing_products_fallback`; al levantarla, pasan a sus
+datos sin reiniciar (`landing_products_recovered`). Un cambio de producto en `/admin` se ve al
+recargar la landing.
 
 | URL | Qué muestra |
 | --- | ----------- |

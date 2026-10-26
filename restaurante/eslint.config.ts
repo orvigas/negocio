@@ -60,6 +60,42 @@ const DB_RESTRICTED_PATTERNS = [
   { regex: '^@restaurante/core/[^/]+/', message: `De core solo se importa el index.ts de cada módulo (@restaurante/core/<módulo>). ${DEPENDENCY_HINT}` },
   { regex: String.raw`^\.\./\.\./`, message: `Un import relativo no sale de packages/db. ${DEPENDENCY_HINT}` },
 ];
+// O-2 (REQ-F-038): ningún archivo de una app importa por ruta relativa un archivo de packages/; los
+// paquetes se importan por su nombre (@restaurante/<paquete>), y de core solo el index.ts de cada módulo.
+const PACKAGE_INTERNAL_PATTERNS = [
+  { regex: String.raw`^\.{1,2}/(?:.*/)?packages/`, message: `Los paquetes se importan por su nombre (@restaurante/<paquete>), nunca por ruta relativa (O-2). ${DEPENDENCY_HINT}` },
+  { regex: '^@restaurante/core/[^/]+/', message: `De core solo se importa el index.ts de cada módulo (@restaurante/core/<módulo>). ${DEPENDENCY_HINT}` },
+];
+const LANDING_APP_PATTERNS = [...RELATIVE_JS_IMPORT_PATTERNS, ...PACKAGE_INTERNAL_PATTERNS];
+
+// Código de las landings (REQ-F-038, RF-8; decisión P-1 A): obtiene los productos solo de la API
+// (cliente de contracts). Nunca la base de datos, la identidad, el control del bot ni el repositorio
+// de productos; sí los módulos puros de core (shared, schedule y las funciones de catalog), hasta que
+// el aviso y los horarios sean endpoints (desviación registrada en restaurante/docs/arquitectura.md §4).
+const LANDING_CODE_FILES = [
+  'landing-pages/src/controllers/landing.ts',
+  'landing-pages/src/views/landings/**/*.ts',
+  'landing-pages/src/services/landing-products.ts',
+];
+const LANDING_CODE_HINT = `El código de las landings solo obtiene los productos del cliente de la API (@restaurante/contracts; REQ-F-038). ${DEPENDENCY_HINT}`;
+const LANDING_CODE_PATTERNS = [
+  ...LANDING_APP_PATTERNS,
+  { regex: '^@restaurante/db(?:/|$)', message: `Las landings no leen la base de datos. ${LANDING_CODE_HINT}` },
+  { regex: '^(?:(?:prisma|mariadb)(?:/|$)|@prisma/)', message: `Las landings no leen la base de datos. ${LANDING_CODE_HINT}` },
+  { regex: '^@restaurante/core/(?:identity|bot-control)(?:/|$)', message: `Las landings no usan la identidad ni el control del bot. ${LANDING_CODE_HINT}` },
+  { regex: String.raw`(?:^|/)repositories/product-repository\.ts$`, message: `Las landings no leen el repositorio de productos. ${LANDING_CODE_HINT}` },
+];
+const LANDING_CODE_PATHS = [
+  {
+    name: '@restaurante/core/catalog',
+    importNames: ['createMemoryProductStore', 'MemoryProductStore', 'ProductStore', 'ProductStoreTx', 'toPublished'],
+    message: `Persistencia de productos: fuera del código de las landings. ${LANDING_CODE_HINT}`,
+  },
+];
+
+// api (REQ-F-038): core (por el index.ts de cada módulo), db, contracts y Koa; nunca una app.
+const API_RESTRICTED_PATTERNS = [...RELATIVE_JS_IMPORT_PATTERNS, ...LANDING_PATTERNS, ...PACKAGE_INTERNAL_PATTERNS];
+
 // no-restricted-imports no revisa import(): en los paquetes solo se permite con node:* o relativo.
 const PACKAGE_DYNAMIC_IMPORT = {
   selector: String.raw`ImportExpression > Literal.source:not([value=/^(?:node:|\.\/)/])`,
@@ -133,7 +169,7 @@ export default defineConfig([
   // (res.body de Supertest, JSON.parse de los archivos que escriben y CorruptibleData) y sus
   // aserciones comprueban la forma. no-explicit-any sigue activa: un `any` nuevo exige justificación.
   {
-    files: ['landing-pages/tests/**/*.ts'],
+    files: ['landing-pages/tests/**/*.ts', 'api/tests/**/*.ts'],
     rules: {
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
@@ -143,12 +179,20 @@ export default defineConfig([
     },
   },
 
+  // O-2 (REQ-F-038): en todo landing-pages, sin imports relativos a archivos de packages/.
+  {
+    files: ['landing-pages/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: LANDING_APP_PATTERNS }],
+    },
+  },
+
   // Servidores de prueba en 127.0.0.1 (REQ-F-011, RF-7). La prueba de este control está en
   // landing-pages/tests/unit/http-test-convention.test.ts.
   {
     files: ['landing-pages/tests/**/*.ts'],
     rules: {
-      'no-restricted-imports': ['error', { paths: TEST_HTTP_RESTRICTED_IMPORTS, patterns: RELATIVE_JS_IMPORT_PATTERNS }],
+      'no-restricted-imports': ['error', { paths: TEST_HTTP_RESTRICTED_IMPORTS, patterns: LANDING_APP_PATTERNS }],
       'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...TEST_HTTP_RESTRICTED_SYNTAX],
     },
   },
@@ -156,7 +200,7 @@ export default defineConfig([
   {
     files: ['landing-pages/tests/support/http.ts'],
     rules: {
-      'no-restricted-imports': ['error', { patterns: RELATIVE_JS_IMPORT_PATTERNS }],
+      'no-restricted-imports': ['error', { patterns: LANDING_APP_PATTERNS }],
     },
   },
 
@@ -183,10 +227,32 @@ export default defineConfig([
       'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, PACKAGE_DYNAMIC_IMPORT],
     },
   },
-  // REGLA DE TRANSICIÓN — TEMPORAL (REQ-F-037): landing-pages puede importar core, db y contracts
-  // (desviación registrada en restaurante/docs/arquitectura.md §4). La restricción de la tabla de §4
-  // (landing-pages solo importa contracts) se activa en el paso 3 para las landings y en el paso 4
-  // para /admin; hasta entonces landing-pages solo tiene las reglas de arriba.
+  // Código de las landings (REQ-F-038, RF-8): sin base de datos ni repositorio de productos.
+  {
+    files: LANDING_CODE_FILES,
+    rules: {
+      'no-restricted-imports': ['error', { paths: LANDING_CODE_PATHS, patterns: LANDING_CODE_PATTERNS }],
+    },
+  },
+  // api (REQ-F-038): nunca importa una app ni archivos internos de los paquetes.
+  {
+    files: ['api/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: API_RESTRICTED_PATTERNS }],
+    },
+  },
+  // Servidores de prueba de la API: solo en 127.0.0.1 (REQ-F-011), como los de landing-pages.
+  {
+    files: ['api/tests/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...TEST_HTTP_RESTRICTED_SYNTAX],
+    },
+  },
+  // REGLA DE TRANSICIÓN — TEMPORAL (REQ-F-037, limitada en REQ-F-038): /admin y el bot de WhatsApp,
+  // que siguen en landing-pages hasta el paso 4, pueden importar core, db y contracts (desviación
+  // registrada en restaurante/docs/arquitectura.md §4). El código de las landings ya tiene su
+  // restricción (bloque de arriba); la de /admin se activa en el paso 4, cuando pase a
+  // inventory-manager.
 
   // Frontend en JavaScript Vanilla (módulos ES del navegador), sin información de tipos.
   {

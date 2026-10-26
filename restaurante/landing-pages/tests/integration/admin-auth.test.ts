@@ -6,6 +6,7 @@ import { createApp } from '../../src/app.ts';
 import { makeConfig, makeRecordingLogger } from '../helpers.ts';
 import { ADMIN_PASSWORD, ADMIN_USER, TEST_HASH_PARAMS, login, setupAdmin } from '../support/admin.ts';
 import { listenLocal } from '../support/http.ts';
+import { landingProductsFrom } from '../support/landing-products.ts';
 
 /** Acceso con cuentas personales (REQ-F-007, R-4, R-6, D-4, D-8, D-13 y DT-7 a DT-11). */
 
@@ -37,7 +38,7 @@ describe('credenciales del entorno con usuarios existentes (CA-2)', () => {
     const { bootstrapAdmin } = await import('../../src/services/admin-bootstrap.ts');
     const config = makeConfig({ ADMIN_USER: 'intruso', ADMIN_PASSWORD_HASH: otherHash });
     await bootstrapAdmin({ users: first.users, bootstrap: config.adminBootstrap, logger });
-    const app = createApp({ config, repository: first.repository, products: first.products, users: first.users, hashParams: TEST_HASH_PARAMS, logger });
+    const app = createApp({ config, repository: first.repository, products: first.products, landingProducts: landingProductsFrom(first.products), users: first.users, hashParams: TEST_HASH_PARAMS, logger });
 
     expect(await first.prisma.user.findMany()).toEqual(before);
     const res = await login((await listenLocal(app)).browser(), { username: 'intruso', password: otherPassword });

@@ -13,20 +13,20 @@ import {
   ProductNotFoundError,
   ProductValidationError,
   SlugTakenError,
+  activeOf,
+  byPosition,
   changeSnapshot,
   diffMenuData,
   isValidKind,
+  toPublished,
   uniqueSlug,
   validateProductInput,
-  type BirriaItem,
   type ChangeEntry,
   type ChangeSummary,
   type FieldChange,
   type FieldErrors,
   type ImportSourceName,
   type MenuDataByBusiness,
-  type MolotesDrink,
-  type MolotesItem,
   type NewProduct,
   type Product,
   type ProductAction,
@@ -34,7 +34,11 @@ import {
   type ProductFields,
   type ProductStore,
   type ProductStoreTx,
+  type PublishedProducts,
 } from '@restaurante/core/catalog';
+
+// Movidos a core/catalog/published.ts (REQ-F-038): se reexportan para sus consumidores actuales.
+export { toPublished, type PublishedProducts };
 
 /**
  * Repositorio de productos (REQ-F-008, RF-9).
@@ -69,12 +73,6 @@ export interface ProductView extends Product {
 export interface ImportSource<Id extends BusinessId = BusinessId> {
   source: ImportSourceName;
   data: MenuDataByBusiness[Id];
-}
-
-/** Listas con la forma de los datos de REQ-F-001 que pintan las landings. */
-export interface PublishedProducts {
-  molotes: { menu: MolotesItem[]; drinks: MolotesDrink[] };
-  birria: { menu: BirriaItem[] };
 }
 
 export const LIMIT_MESSAGE = `Ya hay ${MAX_ACTIVE_PRODUCTS} productos activos en este negocio (el máximo). Elimina uno antes.`;
@@ -113,7 +111,14 @@ export interface ProductRepository {
   /** Sube o baja un producto una posición (administración HTML). */
   move(business: BusinessId, id: number, direction: 'up' | 'down', expectedVersion: unknown, author: ProductAuthor): Promise<ProductView[]>;
   getLastChange(business: BusinessId): Promise<ChangeSummary | null>;
+  /**
+   * Avisa de cada escritura confirmada de un negocio (REQ-F-038, RF-6): la caché de la API de las
+   * landings se invalida con él. Devuelve la función que cancela la suscripción.
+   */
+  onChange(listener: ProductChangeListener): () => void;
 }
+
+export type ProductChangeListener = (business: BusinessId) => void;
 
 export interface ProductRepositoryOptions {
   store: ProductStore;
@@ -124,12 +129,6 @@ export interface ProductRepositoryOptions {
 }
 
 const isActive = (product: Product): boolean => !product.deleted;
-const byPosition = (a: Product, b: Product): number => a.position - b.position || a.id - b.id;
-
-/** Productos activos de una categoría, en orden. */
-const activeOf = (products: Product[], category: ProductCategory): Product[] =>
-  products.filter((product) => isActive(product) && product.category === category).sort(byPosition);
-
 function versionOf(value: unknown): number | null {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 ? value : null;
 }
@@ -147,82 +146,6 @@ function normalizeAuthor(author: ProductAuthor): ProductAuthor {
 }
 
 // --- Conversión entre productos y las listas de REQ-F-001 ------------------------------
-
-function molotesItem(product: Product): MolotesItem {
-  // Platillo de Molotes validado: los campos de su combinación siempre tienen valor.
-  return {
-    id: product.slug,
-    name: product.name,
-    description: product.description ?? '',
-    badge: product.label ?? '',
-    tone: product.tone ?? '',
-    unitPriceCents: product.priceCents ?? 0,
-    orderPriceCents: product.orderPriceCents ?? 0,
-    orderQuantity: product.orderQuantity ?? 0,
-    available: product.available,
-    image: product.image ?? { src: '', alt: '', width: 0, height: 0 },
-  };
-}
-
-function molotesDrink(product: Product): MolotesDrink {
-  return {
-    id: product.slug,
-    name: product.name,
-    description: product.description ?? '',
-    icon: product.icon ?? '',
-    tone: product.tone ?? '',
-    priceCents: product.priceCents ?? 0,
-    available: product.available,
-  };
-}
-
-function birriaItem(product: Product): BirriaItem {
-  const base = {
-    slug: product.slug,
-    name: product.name,
-    tag: product.label ?? '',
-    available: product.available,
-    image: product.image ?? { src: '', alt: '', width: 0, height: 0 },
-    detailsLabel: product.detailsLabel ?? '',
-  };
-  if (product.detailsType === 'variants') {
-    return { ...base, detailsType: 'variants', variants: product.variants.map((variant) => ({ ...variant })) };
-  }
-  const own = { description: product.description ?? '', priceCents: product.priceCents ?? 0, priceUnit: product.priceUnit ?? '' };
-  if (product.detailsType === 'chips') return { ...base, ...own, detailsType: 'chips', chips: product.chips.map((chip) => ({ ...chip })) };
-  return { ...base, ...own, detailsType: 'portion', portion: product.portion ?? '', portionExtra: product.portionExtra ?? '' };
-}
-
-/** Productos guardados -> listas que pinta la landing (sin los eliminados, por posición). */
-export function toPublished<Id extends BusinessId>(business: Id, products: Product[]): PublishedProducts[Id] {
-  if (business === BUSINESS.MOLOTES) {
-    const molotes: PublishedProducts['molotes'] = {
-      menu: activeOf(products, 'platillo').map(molotesItem),
-      drinks: activeOf(products, 'bebida').map(molotesDrink),
-    };
-    // El negocio es Molotes: su forma es la de PublishedProducts['molotes'].
-    return molotes as PublishedProducts[Id];
-  }
-  const birria: PublishedProducts['birria'] = { menu: activeOf(products, 'platillo').map(birriaItem) };
-  return birria as PublishedProducts[Id];
-}
-
-/**
- * Datos de la landing: hero, destacado y promociones del JSON (REQ-F-001) con las listas de
- * productos de la base de datos (Q-3 A: las listas del JSON ya no se usan).
- */
-export function withProducts<Id extends BusinessId>(business: Id, data: MenuDataByBusiness[Id], products: PublishedProducts[Id]): MenuDataByBusiness[Id] {
-  if (business === BUSINESS.MOLOTES) {
-    // Negocio Molotes: datos y listas tienen la forma de Molotes.
-    const molotes = data as MenuDataByBusiness['molotes'];
-    const lists = products as PublishedProducts['molotes'];
-    const merged: MenuDataByBusiness['molotes'] = { ...molotes, menu: { ...molotes.menu, items: lists.menu }, drinks: { ...molotes.drinks, items: lists.drinks } };
-    return merged as MenuDataByBusiness[Id];
-  }
-  const birria = data as MenuDataByBusiness['birria'];
-  const merged: MenuDataByBusiness['birria'] = { ...birria, menu: { ...birria.menu, items: (products as PublishedProducts['birria']).menu } };
-  return merged as MenuDataByBusiness[Id];
-}
 
 const emptyFields = (): Omit<ProductFields, 'name'> => ({
   description: null,
@@ -308,6 +231,7 @@ export function createProductRepository({ store, imageExists, now = () => new Da
 
   const published = new Map<BusinessId, PublishedProducts[BusinessId]>();
   const stale = new Set<BusinessId>();
+  const listeners = new Set<ProductChangeListener>();
   let lock: Promise<unknown> = Promise.resolve();
   let initialized = false;
 
@@ -378,12 +302,25 @@ export function createProductRepository({ store, imageExists, now = () => new Da
 
   const diff = (before: Product | null, after: Product): FieldChange[] => diffMenuData(before ? changeSnapshot(before) : {}, changeSnapshot(after));
 
-  /** Escritura: transacción del store, caché y log. */
+  /** Tras el commit: un suscriptor que falla se registra y nunca afecta a la escritura. */
+  function notify(business: BusinessId): void {
+    for (const listener of listeners) {
+      try {
+        listener(business);
+      } catch (err) {
+        logger.error('products_change_listener_failed', { business, name: errorProp(err, 'name') });
+      }
+    }
+  }
+
+  /** Escritura: transacción del store, caché, aviso a los suscriptores y log. */
   async function write<T>(business: BusinessId, action: ProductAction, task: (tx: ProductStoreTx) => Promise<T>): Promise<T> {
     ensureReady();
     return exclusive(async () => {
       const result = await store.transaction(task);
       await refresh(business);
+      // Confirmada la transacción (aunque la recarga de esta caché falle): RF-6 de REQ-F-038.
+      notify(business);
       logger.info('product_saved', { business, action });
       return result;
     });
@@ -456,6 +393,14 @@ export function createProductRepository({ store, imageExists, now = () => new Da
     },
 
     list,
+
+    onChange(listener) {
+      if (typeof listener !== 'function') throw new TypeError('onChange requiere una función');
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
 
     async get(business, id) {
       ensureReady();

@@ -3,8 +3,9 @@
 # (red externa traefik-public). Ningún servicio publica puertos en el host (CA-3).
 #
 # Variables (interpolación): /opt/restaurante/.env (permisos 600; plantilla en
-# env.production.example). Las imágenes (RESTAURANTE_APP_IMAGE y RESTAURANTE_MIGRATE_IMAGE, por
-# digest) las pone deploy.sh en el entorno y quedan registradas en /opt/restaurante/state/release.env.
+# env.production.example). Las imágenes (RESTAURANTE_APP_IMAGE, RESTAURANTE_MIGRATE_IMAGE y
+# RESTAURANTE_API_IMAGE, por digest) las pone deploy.sh en el entorno y quedan registradas en
+# /opt/restaurante/state/release.env.
 # Para consultar a mano (como deploy, desde /opt/restaurante):
 #   docker compose -f deploy/compose.prod.yaml --env-file .env --env-file state/release.env ps
 #
@@ -66,6 +67,8 @@ services:
       DATABASE_ALLOW_NEWER_SCHEMA: ${DATABASE_ALLOW_NEWER_SCHEMA:-false}
       BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-America/Mexico_City}
       SITE_URL: ${SITE_URL:-}
+      # API propia por la red interna db (REQ-F-038): las landings leen de ella los productos.
+      API_INTERNAL_URL: http://api:3001
       WHATSAPP_MOLOTES_URL: ${WHATSAPP_MOLOTES_URL:-}
       WHATSAPP_MOLOTES: ${WHATSAPP_MOLOTES:-}
       WHATSAPP_MOLOTES_MESSAGE: ${WHATSAPP_MOLOTES_MESSAGE:-}
@@ -176,6 +179,44 @@ services:
       - "traefik.http.middlewares.restaurante-canonical.redirectregex.replacement=https://${RESTAURANTE_DOMAIN}$${1}"
       - "traefik.http.middlewares.restaurante-canonical.redirectregex.permanent=true"
 
+  # API propia (REQ-F-038): solo lectura y solo en la red interna db (sin ports ni labels de Traefik:
+  # nada fuera de Docker la alcanza). La usa app (API_INTERNAL_URL). Usuario solo DML de la app.
+  # Valor por defecto de la imagen (decisión P-2 A): los respaldos de ops/backup/ leen este archivo
+  # sin conocer la API; ningún flujo arranca esa imagen (deploy.sh siempre pasa el digest real).
+  api:
+    image: ${RESTAURANTE_API_IMAGE:-ghcr.io/orvigas/restaurante-api:sin-desplegar}
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3001"
+      DATABASE_URL: mysql://restaurante_app:${RESTAURANTE_DB_APP_PASSWORD:?Falta RESTAURANTE_DB_APP_PASSWORD en .env}@mysql:3306/restaurante
+      # Solo la pone deploy.sh al volver a la versión anterior (D-1); nunca en .env.
+      DATABASE_ALLOW_NEWER_SCHEMA: ${DATABASE_ALLOW_NEWER_SCHEMA:-false}
+    networks:
+      - db
+    depends_on:
+      mysql:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 15s
+    restart: unless-stopped
+    # Sobrescribe el HEALTHCHECK de la imagen: cada 2 s mientras arranca (la conexión a la base puede
+    # tardar hasta 60 s) y cada 30 s después.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3001/api/v1/public/birria/productos || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+      start_interval: 2s
+    logging: *logging
+
   migrate:
     image: ${RESTAURANTE_MIGRATE_IMAGE:?Falta RESTAURANTE_MIGRATE_IMAGE (la pone deploy.sh)}
     # Proceso puntual: solo con `docker compose run --rm migrate` (deploy.sh).
@@ -192,7 +233,7 @@ services:
     logging: *logging
 
 networks:
-  # Solo app, migrate y MySQL; sin salida a internet.
+  # Solo app, api, migrate y MySQL; sin salida a internet.
   db:
     internal: true
   traefik:

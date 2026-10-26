@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { BUSINESS, BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
 import { normalizeUsername, parsePasswordHash, usernameError } from '@restaurante/core/identity';
-import { type DatabaseConfig } from '@restaurante/db/database-config';
+import { parseDatabaseUrl, type DatabaseConfig } from '@restaurante/db/database-config';
 
 import { BOT_PROVIDERS, type BotProvider } from '../services/whatsapp-bot/chat-bot.ts';
 import { DEFAULT_BOT_LIMITS, MS, type BotLimits } from '../services/whatsapp-bot/protection/limits.ts';
@@ -99,6 +99,8 @@ export interface Config {
   readonly port: number;
   readonly timezone: string;
   readonly siteUrl: string | undefined;
+  /** API_INTERNAL_URL (REQ-F-038): base de la API propia, de la que las landings leen los productos. */
+  readonly apiInternalUrl: string;
   readonly whatsapp: Readonly<Record<BusinessId, WhatsAppConfig>>;
   readonly dataDir: string;
   readonly database: DatabaseConfig;
@@ -206,6 +208,30 @@ function parseSiteUrl(raw: string | undefined, issues: string[]): string | undef
     url.hash !== ''
   ) {
     issues.push('SITE_URL debe ser una URL http(s) sin credenciales, query ni fragmento');
+    return undefined;
+  }
+  return `${url.origin}${url.pathname}`.replace(/\/+$/, '');
+}
+
+const API_URL_FORMAT = 'URL http(s) sin usuario, contraseña, parámetros ni fragmento, p. ej. http://127.0.0.1:3001 en desarrollo o http://api:3001 en Docker';
+
+/**
+ * Base de la API propia (REQ-F-038, RF-3 y CA-15): obligatoria en todos los entornos. Se devuelve
+ * sin barra final. Los mensajes nunca repiten el valor.
+ */
+function parseApiInternalUrl(raw: string | undefined, issues: string[]): string | undefined {
+  if (raw === undefined) {
+    issues.push(`API_INTERNAL_URL es obligatoria (${API_URL_FORMAT})`);
+    return undefined;
+  }
+  let url: URL | undefined;
+  try {
+    url = new URL(raw);
+  } catch {
+    url = undefined;
+  }
+  if (!url || !['http:', 'https:'].includes(url.protocol) || url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '' || raw.includes('?') || raw.includes('#')) {
+    issues.push(`API_INTERNAL_URL no es válida (${API_URL_FORMAT})`);
     return undefined;
   }
   return `${url.origin}${url.pathname}`.replace(/\/+$/, '');
@@ -582,47 +608,6 @@ function parseWhatsApp(env: Env, businessId: BusinessId, issues: string[]): What
   return Object.freeze({ url, phone, message, href: buildWhatsAppLink({ url, phone, message }) });
 }
 
-const DATABASE_NAME = /^[A-Za-z0-9_]{1,64}$/;
-const DATABASE_URL_FORMAT = 'mysql://usuario:contraseña@host:puerto/base, sin parámetros; los caracteres especiales de la contraseña van codificados (%40 para @)';
-
-/**
- * URL de MySQL (REQ-F-014, RF-5): `mysql://usuario:contraseña@host[:puerto]/base`, sin parámetros
- * (las opciones de conexión las fija src/db/client.ts). Los mensajes nunca incluyen el valor.
- * Exportada para el soporte de pruebas, que valida sus propias URL con las mismas reglas.
- */
-export function parseDatabaseUrl(raw: string | undefined, name: string, issues: string[]): DatabaseConfig | undefined {
-  if (raw === undefined) {
-    issues.push(`${name} es obligatoria (${DATABASE_URL_FORMAT})`);
-    return undefined;
-  }
-  const invalid = (): undefined => {
-    issues.push(`${name} no es válida (${DATABASE_URL_FORMAT})`);
-    return undefined;
-  };
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    return invalid();
-  }
-  if (url.protocol !== 'mysql:' || url.hostname === '' || url.username === '' || url.search !== '' || url.hash !== '') return invalid();
-  const port = url.port === '' ? 3306 : Number(url.port);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) return invalid();
-  const database = url.pathname.replace(/^\//, '');
-  if (!DATABASE_NAME.test(database)) return invalid();
-  let user: string;
-  let password: string;
-  try {
-    user = decodeURIComponent(url.username);
-    password = decodeURIComponent(url.password);
-  } catch {
-    return invalid();
-  }
-  // IPv6 entre corchetes en la URL ([::1]); el driver espera la dirección sin ellos.
-  const host = url.hostname.replace(/^\[(.*)\]$/, '$1');
-  return Object.freeze({ host, port, user, password, database });
-}
-
 /**
  * Solo la conexión a la base de datos (REQ-F-014, RF-11): la usa el comando de recuperación, que
  * no necesita el resto de la configuración (WhatsApp, etc.).
@@ -656,6 +641,7 @@ export function loadConfig(env: Env = process.env): Config {
   }
 
   const siteUrl = parseSiteUrl(readVar(env, 'SITE_URL'), issues);
+  const apiInternalUrl = parseApiInternalUrl(readVar(env, 'API_INTERNAL_URL'), issues);
 
   const whatsapp: Partial<Record<BusinessId, WhatsAppConfig>> = {};
   for (const businessId of BUSINESS_IDS) {
@@ -686,6 +672,7 @@ export function loadConfig(env: Env = process.env): Config {
     !isNodeEnv(nodeEnv) ||
     host === undefined ||
     port === undefined ||
+    apiInternalUrl === undefined ||
     dataDir === undefined ||
     database === undefined ||
     allowNewerSchema === undefined ||
@@ -706,6 +693,7 @@ export function loadConfig(env: Env = process.env): Config {
     port,
     timezone,
     siteUrl,
+    apiInternalUrl,
     whatsapp: Object.freeze(whatsapp),
     dataDir,
     database,

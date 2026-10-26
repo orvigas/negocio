@@ -2,7 +2,9 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
+
+Pull Request: https://github.com/orvigas/negocio/pull/88 (base `epic/arquitectura`), mergeado el 2026-10-26 (merge `a389494`). Fecha de cierre: 2026-10-26. El merge a la épica no publica ni despliega. Las observaciones O-1 a O-3 quedan como pendientes del paso 3 (sección "Pendientes para el paso 3").
 
 ## Aprobación
 
@@ -942,3 +944,7 @@ senior-qa (Q2): QA Action Plan ejecutado. Todos los CA verificables en local pas
 ### Pull Request (2026-10-26)
 
 senior-fullstack (T4): commit `a276215` y PR #88 contra `epic/arquitectura`, con el CI en verde (`cambios`, `calidad`, `docker`, `despliegue`, `auditoria`). CA-5, CA-12 y CA-14 cumplidos. Observaciones O-1 a O-3 registradas como pendientes del paso 3. Estado: READY_FOR_MERGE.
+
+### Cierre (2026-10-26)
+
+El usuario mergeó el PR #88 (https://github.com/orvigas/negocio/pull/88; merge `a389494`, 2026-10-26T13:56:05Z, 07:56 del 2026-10-26 en America/Mexico_City) hacia `epic/arquitectura` ("todos los pr mergeados"). El merge a la épica no publica ni despliega. Las observaciones O-1 a O-3 siguen como pendientes del paso 3. Cada desarrollador debe crear `packages/db/.env` (a partir de `packages/db/.env.example`) con `MIGRATION_DATABASE_URL` y `SHADOW_DATABASE_URL`. Ticket movido a `done/`; ramas `feature/REQ-F-037-extraer-core-contracts-db` local y remota borradas. Estado `DONE`.

@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
 ## Aprobación
 
@@ -867,6 +867,27 @@ senior-fullstack debe confirmarlos antes de `READY_FOR_MERGE`:
 
 QA_APPROVED
 
+## Pull Request
+
+- **PR:** #88, https://github.com/orvigas/negocio/pull/88 (base `epic/arquitectura`, rama `feature/REQ-F-037-extraer-core-contracts-db`).
+- **Commit de la implementación:** `a276215`.
+- **CI del PR** (ejecución 40321346398), todo en verde:
+  - `cambios`: pass.
+  - `calidad`: pass (install, `db:generate`, typecheck, lint, `build:css`, divergencia desde `packages/db` y `npm test`).
+  - `docker`: pass. Build de `production` y `migrate`, contenido de las imágenes (CA-12), `migrate` sobre una base vacía y `production` *healthy* en 0.0.0.0.
+  - `despliegue`: pass. Incluye `shellcheck` (deploy) y `shellcheck respaldos`, la prueba del resumen, systemd de respaldos, `prueba de humo` (`deploy/ci/smoke.sh`) y `prueba de humo de respaldos` (`ops/backup/ci/smoke.sh`), lo que cierra CA-5.
+  - `auditoria`: pass.
+  - GitGuardian: pass.
+  - `publish`, `deploy`, `vigente` y `validado`: omitidos, como corresponde a un PR contra `epic/arquitectura`.
+  - `shellcheck` no es un job aparte: es un paso del job `despliegue`, y pasó.
+- **CA pendientes de T4:** CA-5 (`smoke.sh` de deploy y de respaldos), CA-12 (job `docker`) y CA-14 (PR contra `epic/arquitectura` con el CI en verde) quedan **cumplidos**.
+
+## Pendientes para el paso 3 (observaciones de QA)
+
+- **O-1:** con dos contenedores `production` arrancando a la vez contra una base recién migrada, uno sale con `products_init_failed` (`SlugTakenError`) en la importación semilla. El fallo ya existía. Es relevante si `api` y `landing-pages` comparten la importación inicial.
+- **O-2:** un import relativo desde `landing-pages` a un archivo interno de un paquete pasa el lint durante la regla de transición. Hay que cerrarlo al retirarla (pasos 3 y 4).
+- **O-3:** la imagen `production` solo lleva el `package.json` de `contracts`. Cuando `contracts` tenga código (paso 3), hay que copiarlo en el `Dockerfile`.
+
 ## Trazabilidad
 
 | Origen | Requisito | Criterios | Action Plan |
@@ -917,3 +938,7 @@ El usuario aprueba el QA Action Plan ("Lo apruebo"). senior-qa inicia Q2.
 ### QA, ronda 1 (2026-10-26)
 
 senior-qa (Q2): QA Action Plan ejecutado. Todos los CA verificables en local pasan (CA-5 y CA-12 en su parte local; CA-14, pendiente del CI del PR). Sin defectos. Observaciones O-1 (condición de carrera en la importación semilla, que ya existía), O-2 y O-3. Pendientes: `smoke.sh` y el CI completo en T4, y la revisión manual a 375 y 1440. Estado: QA_APPROVED.
+
+### Pull Request (2026-10-26)
+
+senior-fullstack (T4): commit `a276215` y PR #88 contra `epic/arquitectura`, con el CI en verde (`cambios`, `calidad`, `docker`, `despliegue`, `auditoria`). CA-5, CA-12 y CA-14 cumplidos. Observaciones O-1 a O-3 registradas como pendientes del paso 3. Estado: READY_FOR_MERGE.

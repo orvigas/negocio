@@ -2,9 +2,10 @@ import { isIP } from 'node:net';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { BUSINESS, BUSINESS_IDS, type BusinessId } from './businesses.ts';
-import { parsePasswordHash } from '../services/admin-auth.ts';
-import { normalizeUsername, usernameError } from '../services/user-schema.ts';
+import { BUSINESS, BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
+import { normalizeUsername, parsePasswordHash, usernameError } from '@restaurante/core/identity';
+import { type DatabaseConfig } from '@restaurante/db/database-config';
+
 import { BOT_PROVIDERS, type BotProvider } from '../services/whatsapp-bot/chat-bot.ts';
 import { DEFAULT_BOT_LIMITS, MS, type BotLimits } from '../services/whatsapp-bot/protection/limits.ts';
 import {
@@ -79,18 +80,6 @@ export interface TwilioBotConfig extends BotConfigBase {
  * registra ni se muestra.
  */
 export type ChatBotConfig = MetaBotConfig | TwilioBotConfig | null;
-
-/**
- * Conexión a MySQL (REQ-F-014, RF-5), a partir de DATABASE_URL. Contiene la contraseña: nunca se
- * registra ni se incluye en errores o respuestas.
- */
-export interface DatabaseConfig {
-  readonly host: string;
-  readonly port: number;
-  readonly user: string;
-  readonly password: string;
-  readonly database: string;
-}
 
 /**
  * Claves del identificador seudonimizado de la lista negra (REQ-F-025, D-T1). Secretas: nunca se

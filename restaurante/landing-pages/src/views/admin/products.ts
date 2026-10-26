@@ -1,7 +1,15 @@
-import type { BusinessId } from '../../config/businesses.ts';
-import type { ProductConflictInfo, ProductView } from '../../repositories/product-repository.ts';
+import type { BusinessId } from '@restaurante/core/shared';
+import {
+  categoriesOf,
+  type DetailsType,
+  type FieldErrors,
+  type ProductCategory,
+  type ProductConflictInfo,
+  type ProductKind,
+} from '@restaurante/core/catalog';
+
+import type { ProductView } from '../../repositories/product-repository.ts';
 import { productFormLeaves, type FormLeaf } from '../../services/product-form.ts';
-import { categoriesOf, type DetailsType, type FieldErrors, type ProductCategory, type ProductKind } from '../../services/product-schema.ts';
 import { formatDisplayDate, toZonedIsoString } from '../../utils/datetime.ts';
 import { formatPesos } from '../landings/shared.ts';
 import type { Renderer, SafeHtml } from '../render.ts';

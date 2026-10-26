@@ -1,12 +1,12 @@
-import type { BusinessId } from '../../src/config/businesses.ts';
-import type { MenuRepository } from '../../src/repositories/menu-repository.ts';
-import { createMemoryProductStore, type MemoryProductStore } from '../../src/repositories/memory-product-store.ts';
+import type { BusinessId } from '@restaurante/core/shared';
 import {
-  createProductRepository,
-  type ImportSource,
-  type ProductRepositoryOptions,
+  createMemoryProductStore,
+  type MemoryProductStore,
   type ProductStore,
-} from '../../src/repositories/product-repository.ts';
+} from '@restaurante/core/catalog';
+
+import type { MenuRepository } from '../../src/repositories/menu-repository.ts';
+import { createProductRepository, type ImportSource, type ProductRepositoryOptions } from '../../src/repositories/product-repository.ts';
 import { seedData } from '../helpers.ts';
 
 /** Datos y repositorios de productos para las pruebas (REQ-F-008). */

@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { BusinessId } from '../../src/config/businesses.ts';
+import type { BusinessId } from '@restaurante/core/shared';
+
 import { buildCatalog } from '../../src/services/whatsapp-bot/catalog.ts';
 import { handleTurn, type Conversation, type TurnContext, type TurnResult } from '../../src/services/whatsapp-bot/conversation.ts';
 import { createDeterministicInterpreter } from '../../src/services/whatsapp-bot/interpreter/deterministic.ts';

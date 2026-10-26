@@ -1,4 +1,6 @@
-import { BUSINESS_IDS, BUSINESS_PATHS, type BusinessId } from '../config/businesses.ts';
+import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
+
+import { BUSINESS_PATHS } from '../config/business-paths.ts';
 import { commonContent } from './common/index.ts';
 import { getBusinessContent } from './index.ts';
 

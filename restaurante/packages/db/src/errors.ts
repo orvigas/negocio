@@ -1,4 +1,4 @@
-import { errorProp } from '../utils/errors.ts';
+import { DatabaseUnavailableError, errorProp, type DatabaseErrorDetails } from '@restaurante/core/shared';
 
 /**
  * Errores de la base de datos con el servidor en marcha (REQ-F-007, DT-9 y R-3).
@@ -6,25 +6,6 @@ import { errorProp } from '../utils/errors.ts';
  * Los mensajes de Prisma incluyen la invocación y rutas de archivo: nunca se registran ni se
  * muestran. Solo se conservan el nombre y los códigos (P2xxx y el errno original de MySQL).
  */
-
-/** La base de datos no responde: /admin responde 503. */
-export class DatabaseUnavailableError extends Error {
-  readonly status = 503;
-  readonly expose = false;
-  readonly details: DatabaseErrorDetails;
-
-  constructor(details: DatabaseErrorDetails) {
-    super('Base de datos no disponible');
-    this.name = 'DatabaseUnavailableError';
-    this.details = details;
-  }
-}
-
-export interface DatabaseErrorDetails {
-  name: string | undefined;
-  code: string | undefined;
-  originalCode: string | undefined;
-}
 
 const asString = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
 

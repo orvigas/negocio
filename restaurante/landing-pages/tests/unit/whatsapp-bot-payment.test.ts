@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { BUSINESS_IDS, type BusinessId } from '../../src/config/businesses.ts';
+import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
+
 import { botText, getBankAccount, type BankAccount } from '../../src/content/bot.ts';
 import { buildWhatsAppLink } from '../../src/services/whatsapp.ts';
 import { buildCatalog, type BotCatalog } from '../../src/services/whatsapp-bot/catalog.ts';

@@ -1,4 +1,5 @@
-import { BUSINESS } from '../../config/businesses.ts';
+import { BUSINESS } from '@restaurante/core/shared';
+
 import { image } from '../images.ts';
 
 /**

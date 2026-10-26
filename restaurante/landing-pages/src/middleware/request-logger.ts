@@ -9,7 +9,7 @@
  */
 import type { Middleware } from 'koa';
 
-import type { Logger } from '../utils/logger.ts';
+import type { Logger } from '@restaurante/core/shared';
 
 export function createRequestLogger({ logger }: { logger: Logger }): Middleware {
   return async function requestLogger(ctx, next) {

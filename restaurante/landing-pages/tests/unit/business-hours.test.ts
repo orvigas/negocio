@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
+import type { Weekday } from '@restaurante/core/schedule';
+import type { MenuDocument } from '@restaurante/core/catalog';
+
 import { DEFAULT_VIEWS_DIR } from '../../src/app.ts';
-import { BUSINESS_IDS, type BusinessId } from '../../src/config/businesses.ts';
 import { BUSINESS_HOURS, getBusinessHours, type BusinessHours } from '../../src/content/hours.ts';
 import { getBusinessContent } from '../../src/content/index.ts';
 import { loadSeedDocument } from '../../src/content/seeds.ts';
-import type { Weekday } from '../../src/services/business-schedule.ts';
-import type { MenuDocument } from '../../src/services/menu-schema.ts';
 import { renderLandingPage } from '../../src/views/landings/index.ts';
 import { createRenderer } from '../../src/views/render.ts';
 import { makeConfig } from '../helpers.ts';

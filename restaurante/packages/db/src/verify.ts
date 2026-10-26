@@ -5,12 +5,13 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { createConnection } from 'mariadb';
 
-import { PROJECT_DIR, type DatabaseConfig } from '../config/env.ts';
-import { Prisma } from '../generated/prisma/client.ts';
-import { errorProp } from '../utils/errors.ts';
-import type { Logger } from '../utils/logger.ts';
+import { errorProp, type Logger } from '@restaurante/core/shared';
+
+import type { DatabaseConfig } from './database-config.ts';
+import { Prisma } from './generated/prisma/client.ts';
 import { poolConfig, type Database } from './client.ts';
 import { databaseErrorDetails } from './errors.ts';
+import { DB_PACKAGE_DIR } from './paths.ts';
 
 /**
  * Verificación de la base de datos al arrancar (REQ-F-014, RF-6). La app nunca modifica el esquema
@@ -34,7 +35,7 @@ import { databaseErrorDetails } from './errors.ts';
  * Los errores son DatabaseInitError con un código estable; nunca llevan SQL, la URL ni credenciales.
  */
 
-export const DEFAULT_MIGRATIONS_DIR = join(PROJECT_DIR, 'prisma', 'migrations');
+export const DEFAULT_MIGRATIONS_DIR = join(DB_PACKAGE_DIR, 'prisma', 'migrations');
 export const EXPECTED_CHARSET = 'utf8mb4';
 export const EXPECTED_COLLATION = 'utf8mb4_es_0900_as_cs';
 export const PRISMA_MIGRATIONS_TABLE = '_prisma_migrations';

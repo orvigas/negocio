@@ -1,5 +1,4 @@
-import { BUSINESS_IDS, type BusinessId } from '../../config/businesses.ts';
-import type { UserRecord } from '../../repositories/user-repository.ts';
+import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
 import {
   DISPLAY_NAME_MAX_LENGTH,
   PASSWORD_MAX_LENGTH,
@@ -10,7 +9,9 @@ import {
   businessField,
   type UserFormErrors,
   type UserFormValues,
-} from '../../services/user-schema.ts';
+  type UserRecord,
+} from '@restaurante/core/identity';
+
 import { formatDisplayDate } from '../../utils/datetime.ts';
 import type { Renderer, SafeHtml } from '../render.ts';
 import {

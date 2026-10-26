@@ -3,7 +3,7 @@
 # Dependencias (npm workspaces: se instalan en la raíz y, si hace falta, en cada workspace)
 node_modules/
 
-# Variables de entorno (usar landing-pages/.env.example como plantilla)
+# Variables de entorno (plantillas: landing-pages/.env.example y packages/db/.env.example)
 .env
 .env.*
 !.env.example

@@ -1,4 +1,5 @@
-import type { BusinessId } from '../config/businesses.ts';
+import type { BusinessId } from '@restaurante/core/shared';
+
 import { birriaContent } from './birria/index.ts';
 import { commonContent } from './common/index.ts';
 import { molotesContent } from './molotes/index.ts';

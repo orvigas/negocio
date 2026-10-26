@@ -7,7 +7,8 @@ import {
   parsePasswordHash,
   safeEqualStrings,
   verifyPassword,
-} from '../../src/services/admin-auth.ts';
+} from '@restaurante/core/identity';
+
 import { ADMIN_PASSWORD, ADMIN_PASSWORD_HASH, ADMIN_USER } from '../support/admin.ts';
 
 describe('hash de contraseña (DT-2)', () => {

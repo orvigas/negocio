@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Prisma } from '../../src/generated/prisma/client.ts';
+import type { Prisma } from '@restaurante/db/generated/client.ts';
 import {
   ATTEMPT_MAX_MS,
   DATABASE_INIT_CODES,
@@ -8,7 +8,8 @@ import {
   STARTUP_WINDOW_MS,
   verifyDatabase,
   type RawQuery,
-} from '../../src/db/verify.ts';
+} from '@restaurante/db/verify';
+
 import { projectMigrationChecksums } from '../support/migrations.ts';
 
 /**

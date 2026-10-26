@@ -1,17 +1,19 @@
 import { JSDOM } from 'jsdom';
 import { afterEach } from 'vitest';
-
 import type { Test } from 'supertest';
+
+import type { BotControlStore } from '@restaurante/core/bot-control';
+import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
+import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
+import type { ProductStore } from '@restaurante/core/catalog';
+import { createUserRepository } from '@restaurante/db/user-repository';
+import { SCRYPT_DEFAULTS, hashPassword, type UserRepository } from '@restaurante/core/identity';
 
 import { DEFAULT_PUBLIC_DIR, createApp } from '../../src/app.ts';
 import type { BotKeys, Env } from '../../src/config/env.ts';
-import type { BotControlStore } from '../../src/repositories/bot-control-store.ts';
-import { createPrismaBotControlStore } from '../../src/repositories/prisma-bot-control-store.ts';
 import type { MenuRepository } from '../../src/repositories/menu-repository.ts';
 import type { createMemoryMenuRepository } from '../../src/repositories/memory-menu-repository.ts';
-import { createPrismaProductStore } from '../../src/repositories/prisma-product-store.ts';
-import { createProductRepository, type ProductStore } from '../../src/repositories/product-repository.ts';
-import { createUserRepository, type UserRepository } from '../../src/repositories/user-repository.ts';
+import { createProductRepository } from '../../src/repositories/product-repository.ts';
 import { createImageChecker } from '../../src/services/admin-form.ts';
 import { bootstrapAdmin } from '../../src/services/admin-bootstrap.ts';
 import { createBotControl } from '../../src/services/bot-control.ts';
@@ -47,7 +49,6 @@ export interface SetupOptions<R extends MenuRepository> {
 
 /** Clave de prueba para la lista negra sin bot (REQ-F-025). */
 export const TEST_BOT_KEYS: BotKeys = Object.freeze({ current: Buffer.alloc(32, 7), previous: undefined });
-import { SCRYPT_DEFAULTS, hashPassword } from '../../src/services/admin-auth.ts';
 import { makeConfig, makeRecordingLogger, makeRepository, type RecordingLogger } from '../helpers.ts';
 
 export type { Browser };

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { validateProductInput, type Product, type ProductKind } from '@restaurante/core/catalog';
+
 import {
   emptyProductFormValues,
   formErrors,
@@ -7,7 +9,6 @@ import {
   productFormFieldNames,
   productFormValues,
 } from '../../src/services/product-form.ts';
-import { validateProductInput, type Product, type ProductKind } from '../../src/services/product-schema.ts';
 import { IMAGE } from '../support/products.ts';
 
 /** Formulario HTML de producto (REQ-F-008, DT-12): filas fijas, posición y "Quitar". */

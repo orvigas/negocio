@@ -3,7 +3,8 @@ import { randomBytes } from 'node:crypto';
 import { createConnection } from 'mariadb';
 import type { TestProject } from 'vitest/node';
 
-import { poolConfig } from '../../src/db/client.ts';
+import { poolConfig } from '@restaurante/db/client';
+
 import { createDatabase, migrate } from '../support/database-admin.ts';
 import { HOW_TO_START, TEST_DATABASE_PREFIX, testDatabaseConfigs } from '../support/test-database-config.ts';
 

@@ -4,8 +4,9 @@ import { join } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
+import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
+
 import { DEFAULT_PUBLIC_DIR, createApp } from '../../src/app.ts';
-import { BUSINESS_IDS, type BusinessId } from '../../src/config/businesses.ts';
 import type { Config } from '../../src/config/env.ts';
 import { iconFilePath, type IconKey } from '../../src/content/icons.ts';
 import { getBusinessContent } from '../../src/content/index.ts';

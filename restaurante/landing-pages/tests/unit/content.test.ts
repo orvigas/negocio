@@ -3,17 +3,18 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_PUBLIC_DIR } from '../../src/app.ts';
-import { BUSINESS_IDS, type BusinessId } from '../../src/config/businesses.ts';
-import type { ImageDescriptor } from '../../src/content/images.ts';
-import { commonContent, getBusinessContent } from '../../src/content/index.ts';
-import { loadSeedDocument } from '../../src/content/seeds.ts';
+import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
 import {
   validateMenuDocument,
   type BirriaChip,
   type BirriaVariant,
   type MenuDocument,
-} from '../../src/services/menu-schema.ts';
+} from '@restaurante/core/catalog';
+
+import { DEFAULT_PUBLIC_DIR } from '../../src/app.ts';
+import type { ImageDescriptor } from '../../src/content/images.ts';
+import { commonContent, getBusinessContent } from '../../src/content/index.ts';
+import { loadSeedDocument } from '../../src/content/seeds.ts';
 import { isHttpsUrl } from '../../src/services/whatsapp.ts';
 
 // Diseño fuente en la raíz del repositorio (landing-pages/tests/unit → cuatro niveles; REQ-F-036).

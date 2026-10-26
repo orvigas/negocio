@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { BusinessId } from '../../src/config/businesses.ts';
+import type { BusinessId } from '@restaurante/core/shared';
+import { toInput } from '@restaurante/core/catalog';
+
 import { botText } from '../../src/content/bot.ts';
-import { toInput } from '../../src/services/product-schema.ts';
 import { createDeterministicInterpreter } from '../../src/services/whatsapp-bot/interpreter/deterministic.ts';
 import type { OrderInterpreter } from '../../src/services/whatsapp-bot/interpreter/types.ts';
 import { MAX_TEMPLATE_BODY_CHARS, buildStaffTemplate, hydrateStaffTemplate, type CartLine, type OrderDetails } from '../../src/services/whatsapp-bot/messages.ts';

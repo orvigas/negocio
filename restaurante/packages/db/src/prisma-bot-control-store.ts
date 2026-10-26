@@ -1,6 +1,3 @@
-import type { Database } from '../db/client.ts';
-import { isTransactionConflict, toUnavailable } from '../db/errors.ts';
-import type { Prisma } from '../generated/prisma/client.ts';
 import {
   AUTOMATIC_ORIGINS,
   NOT_PAUSED,
@@ -11,7 +8,11 @@ import {
   type ControlState,
   type UsageCap,
   type UsageRecord,
-} from './bot-control-store.ts';
+} from '@restaurante/core/bot-control';
+
+import type { Database } from './client.ts';
+import { isTransactionConflict, toUnavailable } from './errors.ts';
+import type { Prisma } from './generated/prisma/client.ts';
 
 /**
  * Store de la protección del bot sobre Prisma/MySQL (REQ-F-025; REQ-F-014).

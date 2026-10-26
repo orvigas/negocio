@@ -1,7 +1,8 @@
-import type { BusinessId } from '../../config/businesses.ts';
+import type { BusinessId } from '@restaurante/core/shared';
+import { getWeekday, type Weekday } from '@restaurante/core/schedule';
+
 import { getBusinessHours, type BusinessHours, type ClockTime } from '../../content/hours.ts';
 import { getLocalMinutes } from '../../utils/datetime.ts';
-import { getWeekday, type Weekday } from '../business-schedule.ts';
 
 /**
  * Horario del bot (REQ-F-009, RF-6 y D-16) sobre la fuente única de REQ-F-010

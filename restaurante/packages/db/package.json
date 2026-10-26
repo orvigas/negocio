@@ -1,0 +1,33 @@
+{
+  "name": "@restaurante/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Persistencia con Prisma 7 sobre MySQL 8.4: schema, migraciones, cliente e implementaciones de los repositorios de core (REQ-F-037).",
+  "type": "module",
+  "exports": {
+    "./client": "./src/client.ts",
+    "./database-config": "./src/database-config.ts",
+    "./errors": "./src/errors.ts",
+    "./paths": "./src/paths.ts",
+    "./prisma-bot-control-store": "./src/prisma-bot-control-store.ts",
+    "./prisma-product-store": "./src/prisma-product-store.ts",
+    "./user-repository": "./src/user-repository.ts",
+    "./verify": "./src/verify.ts",
+    "./generated/*": "./src/generated/prisma/*"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@prisma/adapter-mariadb": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "@restaurante/core": "0.1.0",
+    "mariadb": "3.5.4"
+  },
+  "devDependencies": {
+    "prisma": "7.10.1"
+  }
+}

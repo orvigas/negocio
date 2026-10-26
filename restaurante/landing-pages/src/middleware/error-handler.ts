@@ -2,8 +2,7 @@ import { STATUS_CODES } from 'node:http';
 
 import type { Middleware } from 'koa';
 
-import { errorProp } from '../utils/errors.ts';
-import { serializeError, type Logger } from '../utils/logger.ts';
+import { errorProp, serializeError, type Logger } from '@restaurante/core/shared';
 
 /**
  * Manejo centralizado de errores y de respuestas de error sin cuerpo (404, 405, 501).

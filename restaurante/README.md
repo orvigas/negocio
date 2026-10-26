@@ -35,24 +35,40 @@ pedido y lo envía al personal (ver [Bot de WhatsApp](#bot-de-whatsapp)).
 
 ## Monorepo
 
-`restaurante/` es la raíz de un monorepo con **npm workspaces** (REQ-F-036). Por ahora tiene un
-solo workspace, `landing-pages/`: la app Koa descrita en este README (las landings, `/admin`,
-`/admin/api` y el bot de WhatsApp). La estrategia y los pasos siguientes están en
-[Arquitectura](docs/arquitectura.md).
+`restaurante/` es la raíz de un monorepo con **npm workspaces** (REQ-F-036 y REQ-F-037). La
+estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md).
+
+| Workspace | Contenido |
+| --- | --- |
+| `landing-pages/` | La app Koa descrita en este README (las landings, `/admin`, `/admin/api` y el bot de WhatsApp) |
+| `packages/core/` (`@restaurante/core`) | Dominio en TypeScript puro, sin Koa ni Prisma: módulos `catalog`, `schedule`, `identity`, `bot-control` y `shared`. Cada módulo se importa solo por su `index.ts` (`@restaurante/core/catalog`) |
+| `packages/db/` (`@restaurante/db`) | Persistencia: `prisma/` (schema y migraciones), `prisma.config.ts`, el cliente de Prisma generado (`src/generated/prisma`), la conexión, la verificación al arrancar y las implementaciones Prisma de los repositorios de `core` |
+| `packages/contracts/` (`@restaurante/contracts`) | Contratos de la API. Por ahora es un esqueleto vacío: los primeros esquemas (con Zod) llegan con la API |
 
 | En la raíz (`restaurante/`) | En `landing-pages/` |
 | --- | --- |
-| `package.json` (workspaces, `allowScripts` y los scripts), `package-lock.json` (único), `.nvmrc`, `compose.yaml` y `docker/` (MySQL local), `.dockerignore`, `deploy/`, `ops/`, `security/`, `docs/` y este README | `src/`, `public/`, `tests/`, `scripts/`, `prisma/`, `prisma.config.ts`, `tsconfig.json`, `vitest.config.ts`, `eslint.config.ts`, `.env.example` (y el `.env` local), `data/` (`DATA_DIR` por defecto) y el `Dockerfile` |
+| `package.json` (workspaces, `allowScripts`, los scripts y las herramientas comunes: TypeScript y ESLint), `package-lock.json` (único), `tsconfig.base.json` (opciones estrictas que extienden todos los workspaces), `tsconfig.json` y `eslint.config.ts` (lint de todo el monorepo), `.nvmrc`, `compose.yaml` y `docker/` (MySQL local), `.dockerignore`, `deploy/`, `ops/`, `security/`, `docs/` y este README | `src/`, `public/`, `tests/`, `scripts/`, `tsconfig.json`, `vitest.config.ts`, `.env.example` (y el `.env` local), `data/` (`DATA_DIR` por defecto) y el `Dockerfile` |
 
 - **Comandos:** todos los `npm run ...` de este README se ejecutan desde `restaurante/`. Cada
-  script de la raíz delega en el workspace (`npm run <script> -w landing-pages --`), así que los
-  argumentos se pasan igual que antes (`npm run admin:recover -- --usuario <nombre>`). También
-  funcionan desde `landing-pages/`. `npm ci` (o `npm install`) se ejecuta siempre en la raíz:
-  instala las dependencias en `restaurante/node_modules`.
+  script de la raíz delega en su workspace (`npm run <script> -w landing-pages --`, o
+  `-w @restaurante/db` para `db:generate`, `db:migrate` y `db:migrate:dev`), así que los
+  argumentos se pasan igual que antes (`npm run admin:recover -- --usuario <nombre>`).
+  `typecheck` y `lint` cubren todos los workspaces desde la raíz. `npm ci` (o `npm install`) se
+  ejecuta siempre en la raíz: instala las dependencias en `restaurante/node_modules` y enlaza los
+  paquetes en `node_modules/@restaurante/`.
+- **Regla de dependencias:** `core` no importa nada del proyecto (solo `node:*`), `db` solo
+  importa `core` y `contracts` no importa nada del proyecto. `npm run lint` lo impone (ver
+  [Arquitectura §4](docs/arquitectura.md#4-estructura-monorepo-con-npm-workspaces)). Por ahora
+  `landing-pages` puede importar los tres paquetes (regla de transición de REQ-F-037).
 - **Rutas:** salvo que se indique otra cosa, las rutas de archivos de la app que cita este README
-  (`src/...`, `public/...`, `tests/...`, `scripts/...`, `prisma/...`, `.env`, `data/`) son
-  relativas a `landing-pages/`. `deploy/`, `ops/`, `security/`, `docs/` y `compose.yaml` son
-  relativas a `restaurante/`.
+  (`src/...`, `public/...`, `tests/...`, `scripts/...`, `.env`, `data/`) son relativas a
+  `landing-pages/`, y las de `core/...` y `db/...` a `packages/`. `prisma/...` y
+  `prisma.config.ts` están en `packages/db/`. `deploy/`, `ops/`, `security/`, `docs/` y
+  `compose.yaml` son relativas a `restaurante/`.
+- **Copia anterior a REQ-F-037:** copia `MIGRATION_DATABASE_URL` y `SHADOW_DATABASE_URL` de tu
+  `landing-pages/.env` a `packages/db/.env` (plantilla: `packages/db/.env.example`). El CLI de
+  Prisma lee el `.env` de su paquete y la app no usa esas variables. Después ejecuta
+  `npm install` y `npm run db:generate` desde la raíz.
 - **Copia de antes del monorepo:** mueve tu `.env` y tu carpeta `data/` locales (no versionados)
   de `restaurante/` a `restaurante/landing-pages/` y vuelve a instalar desde la raíz:
 
@@ -90,11 +106,12 @@ Desde `restaurante/` (la raíz de los workspaces):
 
 ```sh
 nvm use
-npm install            # en la raíz: instala el workspace landing-pages
-npm run db:generate    # genera el cliente de Prisma (landing-pages/src/generated/prisma; no se versiona)
+npm install            # en la raíz: instala todos los workspaces
+npm run db:generate    # genera el cliente de Prisma (packages/db/src/generated/prisma; no se versiona)
 cp landing-pages/.env.example landing-pages/.env   # completa al menos WHATSAPP_MOLOTES(_URL) y WHATSAPP_BIRRIA(_URL); trae DATABASE_URL local
+cp packages/db/.env.example packages/db/.env       # MIGRATION_DATABASE_URL y SHADOW_DATABASE_URL (CLI de Prisma)
 npm run db:up          # MySQL 8.4 local (Docker), solo en 127.0.0.1:3307
-npm run db:migrate     # aplica las migraciones (MIGRATION_DATABASE_URL del .env)
+npm run db:migrate     # aplica las migraciones (MIGRATION_DATABASE_URL de packages/db/.env)
 npm run admin:hash-password   # opcional: genera ADMIN_PASSWORD_HASH para crear el primer administrador
 npm run build:css
 npm run dev            # http://127.0.0.1:3000 (administración: http://127.0.0.1:3000/admin)
@@ -122,14 +139,14 @@ apruebe con `npm install-scripts approve <paquete>`.
 | `npm run admin:hash-password` | Pide la contraseña de administración (sin mostrarla) e imprime el valor de `ADMIN_PASSWORD_HASH` |
 | `npm run admin:recover -- --usuario <nombre>` | Recupera el acceso de administración por consola (ver [Recuperar el acceso](#recuperar-el-acceso)) |
 | `npm run bot:chat [-- --ahora AAAA-MM-DDTHH:MM]` | Conversación con el bot de WhatsApp en la terminal contra el simulador de la Cloud API, sin Meta (ver [Probar el bot en local](#probar-el-bot-en-local)) |
-| `npm run db:generate` | Genera el cliente de Prisma en `src/generated/prisma` (necesario antes de `typecheck`, `lint`, `test` y `dev`) |
+| `npm run db:generate` | Genera el cliente de Prisma en `packages/db/src/generated/prisma` (necesario antes de `typecheck`, `lint`, `test` y `dev`) |
 | `npm run db:up` / `npm run db:down` | Levanta / detiene el MySQL 8.4 local de `compose.yaml` (solo en `127.0.0.1:3307`; datos en el volumen `mysql-dev-data`) |
-| `npm run db:migrate` | Aplica las migraciones pendientes (`prisma migrate deploy`) con `MIGRATION_DATABASE_URL` |
-| `npm run db:migrate:dev -- --name <nombre>` | Crea una migración nueva a partir de `prisma/schema.prisma` (solo desarrollo, contra el MySQL local con `MIGRATION_DATABASE_URL` y `SHADOW_DATABASE_URL`). Revisa a mano la colación de cada `CREATE TABLE` (ver [Base de datos](#base-de-datos)) |
+| `npm run db:migrate` | Aplica las migraciones pendientes (`prisma migrate deploy`, en `packages/db`) con `MIGRATION_DATABASE_URL` de `packages/db/.env` |
+| `npm run db:migrate:dev -- --name <nombre>` | Crea una migración nueva a partir de `packages/db/prisma/schema.prisma` (solo desarrollo, contra el MySQL local con `MIGRATION_DATABASE_URL` y `SHADOW_DATABASE_URL`). Revisa a mano la colación de cada `CREATE TABLE` (ver [Base de datos](#base-de-datos)) |
 | `npm test`           | Tests unitarios e integración (Vitest + Supertest) contra MySQL 8.4 real (requiere `npm run db:up`; ver [Pruebas](#pruebas-con-base-de-datos)) |
-| `npm run typecheck`  | Verificación de tipos con `tsc` (`tsconfig.json`, sin generar archivos); termina con código distinto de 0 si hay errores. No forma parte de `npm test` |
+| `npm run typecheck`  | Verificación de tipos con `tsc` en cada workspace (su `tsconfig.json`, que extiende `tsconfig.base.json`) y en la raíz, sin generar archivos; termina con código distinto de 0 si hay errores. No forma parte de `npm test` |
 | `npm run test:watch` | Vitest en modo observación                                  |
-| `npm run lint`       | ESLint (`eslint.config.ts`): backend en TypeScript con información de tipos (typescript-eslint) y `public/js` con las reglas de JavaScript para navegador. No modifica archivos; termina con código distinto de 0 si hay errores o avisos. No forma parte de `npm test` ni del Dockerfile, pero sí del [CI](#ci) |
+| `npm run lint`       | ESLint (`eslint.config.ts` de la raíz) sobre todos los workspaces: TypeScript con información de tipos (typescript-eslint), la regla de dependencias entre paquetes y `public/js` con las reglas de JavaScript para navegador. No modifica archivos; termina con código distinto de 0 si hay errores o avisos. No forma parte de `npm test` ni del Dockerfile, pero sí del [CI](#ci) |
 | `npm run lint:fix`   | Igual que `lint`, pero aplica las correcciones automáticas |
 | `npm run audit:deps` | Auditoría de dependencias por imagen (production, migrate y desarrollo) con la política del CI y las excepciones de `security/audit-exceptions.json` (ver [Auditoría de dependencias](#auditoría-de-dependencias)). Necesita red |
 
@@ -189,9 +206,12 @@ Archivos: `landing-pages/Dockerfile` y, en `restaurante/`, `.dockerignore`, `com
 MySQL local). El **contexto de build es `restaurante/`**, la raíz de los workspaces, porque ahí
 está el `package-lock.json` único: los comandos de esta sección se ejecutan desde `restaurante/`
 con `-f landing-pages/Dockerfile`. Dentro de la imagen se conserva la forma del workspace:
-`/app/package.json` y `/app/package-lock.json`, las dependencias en `/app/node_modules` y la app
-en `/app/landing-pages`, que es el directorio de trabajo (los comandos relativos, como
-`node src/server.ts` o `node scripts/admin-recover.ts`, no cambian).
+`/app/package.json` y `/app/package-lock.json`, las dependencias en `/app/node_modules`, los
+paquetes en `/app/packages` (REQ-F-037; npm los enlaza en `/app/node_modules/@restaurante`) y la
+app en `/app/landing-pages`, que es el directorio de trabajo (los comandos relativos, como
+`node src/server.ts` o `node scripts/admin-recover.ts`, no cambian). Node ejecuta los `.ts` de los
+paquetes por su ruta real (`/app/packages/...`, fuera de `node_modules`), así que el type stripping
+funciona igual que con los de la app.
 
 El `Dockerfile` es multi-stage y todas las etapas parten de `node:24.22.1-alpine`: la versión
 exacta de Node, la misma de `.nvmrc`, para que una caché o un mirror nunca construyan la imagen
@@ -202,11 +222,11 @@ explícito en tres sitios a la vez: `.nvmrc`, `engines.node` de los dos `package
 | Etapa        | Contenido                                                                      |
 | ------------ | ------------------------------------------------------------------------------ |
 | `base`       | Imagen base y directorio de trabajo (`/app/landing-pages`)                     |
-| `deps`       | `npm ci` en `/app` con solo los dos `package.json` y `package-lock.json` (caché de dependencias) |
-| `build`      | Código de `landing-pages/` (y el `README.md` de la raíz, que lee una prueba) + `npm run typecheck` + `npm run build:css` (si hay errores de tipos o Tailwind falla, el build de la imagen falla) |
+| `deps`       | `npm ci` en `/app` con solo los `package.json` (raíz, `landing-pages/` y cada paquete de `packages/`) y `package-lock.json` (caché de dependencias) |
+| `build`      | Código de `landing-pages/` y `packages/`, la configuración común de la raíz (`tsconfig*.json`, `eslint.config.ts`) y el `README.md` de la raíz, que lee una prueba + `npm run db:generate` y `npm run typecheck` de la raíz (todos los workspaces) + `npm run build:css` (si hay errores de tipos o Tailwind falla, el build de la imagen falla) |
 | `test`       | `build` + diseño fuente; comando por defecto `npm test`                        |
-| `migrate`    | Dependencias de producción + CLI de Prisma, `prisma/` y `prisma.config.ts`; usuario `node`; ejecuta `prisma migrate deploy` con `MIGRATION_DATABASE_URL` y termina |
-| `production` | Dependencias de producción (sin `typescript` ni `@types/*`), `src/` (`.ts`) y `public/` con el CSS compilado; usuario `node`; arranca con `node src/server.ts` |
+| `migrate`    | Dependencias de producción + CLI de Prisma, `prisma/` y `prisma.config.ts` (de `packages/db`, copiados al directorio de trabajo `/app/landing-pages` como siempre); usuario `node`; ejecuta `prisma migrate deploy` con `MIGRATION_DATABASE_URL` y termina |
+| `production` | Dependencias de producción (sin `typescript` ni `@types/*`), `src/` (`.ts`) y `public/` con el CSS compilado, `packages/core` y, de `packages/db`, `src/` (con el cliente generado) y las migraciones; usuario `node`; arranca con `node src/server.ts` |
 
 El `.dockerignore` (en `restaurante/`, la raíz del contexto) deja fuera `node_modules/`, `.env*`
 (salvo `.env.example`), `data/`, el CSS generado localmente, logs, cobertura, `.git`, `deploy/`,
@@ -278,7 +298,7 @@ atrás) está en `deploy/` y se describe en [docs/despliegue.md](docs/despliegue
 - Al arrancar, la app **verifica** la base de `DATABASE_URL` (no migra; ver
   [Base de datos](#base-de-datos)); si no está lista, el contenedor termina con código 1 y el log
   `database_init_failed`. La imagen no incluye el CLI de Prisma ni SQLite: lleva el cliente
-  generado, las migraciones (`prisma/migrations`, solo para comprobar su estado) y los comandos
+  generado, las migraciones (`/app/packages/db/prisma/migrations`, solo para comprobar su estado) y los comandos
   de consola (`scripts/`). Pesa unos 250 MB.
 - La imagen `migrate` (target `migrate`) solo ejecuta `prisma migrate deploy` con
   `MIGRATION_DATABASE_URL` (usuario con DDL) y termina: 0 si todo se aplicó, 1 si no.
@@ -430,7 +450,7 @@ Desde esta carpeta (`restaurante/`):
 
 ```sh
 npm ci --strict-allow-scripts && npm run db:generate && npm run typecheck && npm run lint && npm run build:css && npm run db:up && npm test   # calidad
-(cd landing-pages && SHADOW_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante_shadow ../node_modules/.bin/prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code)   # divergencia
+(cd packages/db && SHADOW_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante_shadow ../../node_modules/.bin/prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code)   # divergencia
 docker buildx build --platform linux/amd64 -f landing-pages/Dockerfile --target production .   # docker
 docker buildx build --platform linux/amd64 -f landing-pages/Dockerfile --target migrate .
 npm run audit:deps                                                            # auditoria
@@ -624,8 +644,8 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `WHATSAPP_BIRRIA`          | Esta o la URL           | Igual que arriba, para Birria                                      |
 | `WHATSAPP_BIRRIA_MESSAGE`  | No                      | Igual que arriba, para Birria                                      |
 | `DATABASE_URL`             | Sí                      | Conexión a MySQL de la app: `mysql://usuario:contraseña@host[:puerto]/base`, sin parámetros; usuario solo DML. Los caracteres especiales van codificados (`@` -> `%40`, `:` -> `%3A`, `/` -> `%2F`, `%` -> `%25`). Secreta: nunca aparece en logs ni errores. Ver [Base de datos](#base-de-datos) |
-| `MIGRATION_DATABASE_URL`   | Solo para migrar        | Conexión con DDL para `npm run db:migrate`, `db:migrate:dev` y la imagen `migrate`. La app no la lee |
-| `SHADOW_DATABASE_URL`      | Solo `db:migrate:dev`   | Base sombra de Prisma para crear migraciones (desarrollo y CI) |
+| `MIGRATION_DATABASE_URL`   | Solo para migrar        | Conexión con DDL para `npm run db:migrate`, `db:migrate:dev` y la imagen `migrate`. La app no la lee: en local va en `packages/db/.env` (plantilla `packages/db/.env.example`), que carga el CLI de Prisma |
+| `SHADOW_DATABASE_URL`      | Solo `db:migrate:dev`   | Base sombra de Prisma para crear migraciones (desarrollo y CI). En local, en `packages/db/.env` |
 | `DATA_DIR`                 | Solo en producción (ruta absoluta) | Carpeta de los datos editables: JSON de página y `changes.jsonl` (por defecto `data/` del proyecto fuera de producción). No puede estar dentro de `src/` ni de `public/` |
 | `ADMIN_USER`               | No                      | Usuario del **primer administrador** (1-60 caracteres). Solo se usa si la base de datos no tiene usuarios; después se ignora (aviso `admin_bootstrap_ignored` en el log, sin valores). Sin usuarios ni estas variables, `/admin` responde 503 "no disponible"; con solo una de las dos o un hash inválido, la app no arranca |
 | `ADMIN_PASSWORD_HASH`      | No                      | Hash scrypt de la contraseña del primer administrador (`npm run admin:hash-password`). Nunca la contraseña en claro |
@@ -649,7 +669,7 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 
 Las tres rutas HTML usan el mismo controlador (`src/controllers/landing.ts`): con un
 `businessId` fijo renderiza ese negocio y sin él (`/`) renderiza Birria con el aviso del día;
-`/molotes` lleva el suyo (tabla de `getMolotesNotice` en `src/services/business-schedule.ts`).
+`/molotes` lleva el suyo (tabla de `getMolotesNotice` en `core/schedule/business-schedule.ts`).
 Responden con `Cache-Control: no-cache`, así que cada carga de `/` y de `/molotes` trae el aviso
 del día. La
 `<link rel="canonical">` siempre apunta a la ruta dedicada (`/` apunta a `/birria`), así que no
@@ -1152,7 +1172,7 @@ Los datos editables de cada landing están en dos sitios (REQ-F-008):
 | **Productos**: platillos y bebidas de Molotes, platillos de Birria (con sus variantes o chips) | Base de datos MySQL (tablas `product`, `product_variant`, `product_chip`) | Las listas de `src/content/<negocio>/seed.json` (solo para la importación inicial) |
 | **Página**: showcase del hero, texto destacado del menú ("8 Sabores de Barrio") y promoción | JSON por negocio (`DATA_DIR/<negocio>/current.json`) | `src/content/<negocio>/seed.json` |
 
-- **Modelo común de producto** (`src/services/product-schema.ts`): negocio, categoría
+- **Modelo común de producto** (`core/catalog/product-schema.ts`): negocio, categoría
   (`platillo` o `bebida`; Birria solo tiene platillos), slug, nombre, descripción, etiqueta
   (badge en Molotes, tag en Birria), precio y unidad, disponible, posición, imagen, versión y
   fechas. Según la combinación: tono, precio y cantidad por orden (Molotes platillo); icono y
@@ -1168,9 +1188,9 @@ Los datos editables de cada landing están en dos sitios (REQ-F-008):
 - **Eliminar** es lógico: el producto deja de verse y se puede recuperar.
 - Las semillas tienen los datos originales del diseño fuente; `tests/unit/content.test.ts`
   comprueba que coincidan con `../_stich_source_/` y que sus fotos existan.
-- El esquema del JSON de página está en `src/services/menu-schema.ts`. El formato de los precios
+- El esquema del JSON de página está en `core/catalog/menu-schema.ts`. El formato de los precios
   (`$45 c/u`, `$155 MXN`, `$45.50`) se aplica en `src/views/landings/`.
-- Disponibilidad: lo no disponible se oculta (`src/services/visible-menu.ts`). En Birria, la
+- Disponibilidad: lo no disponible se oculta (`core/catalog/visible-menu.ts`). En Birria, la
   variante activa es la primera disponible y de ella salen el precio y la descripción de la
   tarjeta; un platillo sin variantes disponibles se oculta. Si una sección se queda sin
   productos, conserva su encabezado y muestra un aviso con el CTA de WhatsApp.
@@ -1393,7 +1413,7 @@ DATA_DIR/
   `UPDATE`, `DELETE`) y **nunca migra**. Las migraciones las aplica un proceso aparte con un
   usuario con DDL (`MIGRATION_DATABASE_URL`): `npm run db:migrate` en local o la imagen `migrate`
   (`prisma migrate deploy`).
-- **Verificación al arrancar** (`src/db/verify.ts`): conexión (reintenta hasta 60 s si MySQL aún
+- **Verificación al arrancar** (`db/src/verify.ts`): conexión (reintenta hasta 60 s si MySQL aún
   arranca), credenciales, modo estricto (`STRICT_TRANS_TABLES`), utf8mb4 y colación de la base,
   las tablas y las columnas, y estado de las migraciones. Si algo falla, el servidor termina con
   código 1 y el log `database_init_failed` con un código estable, sin SQL, URL, credenciales ni
@@ -1401,12 +1421,12 @@ DATA_DIR/
   `DATABASE_NOT_STRICT`, `DATABASE_CHARSET_INVALID` (con la tabla o columna), `MIGRATIONS_PENDING`,
   `MIGRATION_INCOMPLETE`, `MIGRATION_MODIFIED`, `DATABASE_NEWER_THAN_CODE`,
   `MIGRATIONS_UNREADABLE` o `DATABASE_ERROR`. Mientras espera registra `database_waiting`.
-- **Migraciones nuevas (desarrollo):** cambia `prisma/schema.prisma`, ejecuta
+- **Migraciones nuevas (desarrollo):** cambia `packages/db/prisma/schema.prisma`, ejecuta
   `npm run db:migrate:dev -- --name <nombre>` (contra el MySQL local) y **revisa a mano** el
   `migration.sql`: Prisma escribe `COLLATE utf8mb4_unicode_ci` en cada `CREATE TABLE` y hay que
   cambiarlo por `utf8mb4_es_0900_as_cs` (`tests/unit/migrations-collation.test.ts` falla hasta
   hacerlo). Después `npm run db:migrate` y `npm run db:generate`. Versiona la carpeta nueva de
-  `prisma/migrations/`; nunca edites una migración ya aplicada (`MIGRATION_MODIFIED`). En MySQL el
+  `packages/db/prisma/migrations/`; nunca edites una migración ya aplicada (`MIGRATION_MODIFIED`). En MySQL el
   DDL no es transaccional: una migración que falla a mitad queda incompleta
   (`MIGRATION_INCOMPLETE`) y la salida es restaurar el respaldo. Prefiere migraciones pequeñas.
 - **Último administrador con concurrencia:** las escrituras de usuarios son transacciones
@@ -1444,30 +1464,44 @@ Si `current.json` no es JSON válido o no cumple el esquema (por ejemplo, un pre
 ## Estructura
 
 ```text
-restaurante/                  # Raíz de los npm workspaces (REQ-F-036)
-├── package.json              # Workspaces (`landing-pages`), `allowScripts` y los scripts, que delegan en el workspace
+restaurante/                  # Raíz de los npm workspaces (REQ-F-036 y REQ-F-037)
+├── package.json              # Workspaces, `allowScripts`, scripts (delegan en cada workspace) y herramientas comunes (TypeScript, ESLint)
 ├── package-lock.json         # Lockfile único del monorepo
+├── tsconfig.base.json        # Opciones estrictas de TypeScript que extienden todos los workspaces
+├── tsconfig.json             # Solo para eslint.config.ts (raíz)
+├── eslint.config.ts          # ESLint de todo el monorepo (`npm run lint`), con la regla de dependencias entre paquetes
 ├── .nvmrc                    # Versión de Node (la toman el CI y nvm)
+├── packages/
+│   ├── core/                 # @restaurante/core: dominio en TS puro (sin Koa ni Prisma); cada módulo se importa por su index.ts
+│   │   ├── shared/           # businesses.ts (ids de negocio), logger.ts (JSON estructurado), errors.ts (errorProp), database-errors.ts (DatabaseUnavailableError)
+│   │   ├── catalog/          # product-schema, menu-schema, visible-menu, price, slug, menu-diff, product-store (contrato del store y errores) y memory-product-store
+│   │   ├── schedule/         # business-schedule (negocio activo y avisos del día)
+│   │   ├── identity/         # authorization, user-schema, admin-auth (scrypt) y user-repository (contrato del repositorio de usuarios)
+│   │   └── bot-control/      # bot-control-store (contrato: bloqueos, pausa y uso) y memory-bot-control-store
+│   ├── db/                   # @restaurante/db: persistencia con Prisma sobre MySQL
+│   │   ├── prisma/           # schema.prisma y migrations/ (SQL de MySQL versionado; las aplica el proceso migrate, nunca la app)
+│   │   ├── prisma.config.ts  # Configuración del CLI de Prisma (solo desarrollo, CI y las etapas build/test/migrate)
+│   │   ├── .env.example      # MIGRATION_DATABASE_URL y SHADOW_DATABASE_URL (el `.env` local va junto a él; ignorado por git)
+│   │   └── src/              # client.ts, verify.ts (verificación al arrancar), errors.ts, database-config.ts, paths.ts, user-repository.ts,
+│   │                         # prisma-product-store.ts, prisma-bot-control-store.ts y generated/prisma/ (cliente generado; ignorado por git)
+│   └── contracts/            # @restaurante/contracts: contratos de la API (esqueleto vacío por ahora)
 ├── landing-pages/            # Workspace de la app Koa: landings, /admin, /admin/api y el bot de WhatsApp
 │   ├── src/
 │   │   ├── server.ts             # Entrada del proceso: valida config, prepara DATA_DIR y la base de datos, primer administrador, importación de productos, escucha en PORT, cierre ordenado
 │   │   ├── app.ts                # createApp(): app Koa testeable (config, repositorio, logger y `now` inyectables)
-│   │   ├── config/               # env.ts (carga/validación y tipo Config), businesses.ts (ids de negocio)
+│   │   ├── config/               # env.ts (carga/validación y tipo Config), business-paths.ts (ruta de cada landing)
 │   │   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests), whatsapp-webhook.ts (webhook del bot),
 │   │   │                         # admin.ts (acceso, inicio y menús), admin-products.ts (productos en HTML), admin-products-api.ts y
 │   │   │                         # admin-api-access.ts (API JSON), admin-business-view.ts, admin-users.ts, admin-account.ts, admin-access.ts
-│   │   ├── db/                   # client.ts (Prisma + adaptador MariaDB/MySQL), verify.ts (verificación al arrancar), errors.ts
-│   │   ├── generated/prisma/     # Cliente de Prisma generado por `npm run db:generate` (ignorado por git)
 │   │   ├── routes/               # Router (@koa/router): index.ts (landings), admin.ts (/admin), admin-api.ts (/admin/api)
 │   │   ├── middleware/           # Manejo centralizado de errores, log de requests, protección de /admin
-│   │   ├── repositories/         # Menús (contrato y reglas, archivos y memoria), productos (reglas + store Prisma y memoria) y usuarios (Prisma)
-│   │   ├── services/             # business-schedule, whatsapp, menu-schema, price, visible-menu, admin-form,
-│   │   │                         # menu-diff, admin-auth, session-store, login-throttle, user-schema,
-│   │   │                         # authorization, admin-bootstrap, product-schema, product-form, slug,
+│   │   ├── repositories/         # Menús (contrato y reglas, archivos y memoria) y productos (reglas sobre el store de core/catalog)
+│   │   ├── services/             # whatsapp, admin-form, session-store, login-throttle, admin-bootstrap,
+│   │   │                         # product-form, bot-control, bot-usage,
 │   │   │                         # whatsapp-bot/ (bot de WhatsApp: chat-bot (interfaz ChatBot), orchestrator, conversation, catalog,
 │   │   │                         #   schedule, messages, store, text; providers/: select, http-send, meta/ (WhatsAppBot), twilio/ (TwilioBot))
 │   │   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), textos del bot (bot.ts), horarios (hours.ts), semillas seed.json e icons.ts
-│   │   ├── utils/                # logger.ts (JSON estructurado), datetime.ts (zona del negocio), form-body.ts, json-body.ts, errors.ts
+│   │   ├── utils/                # datetime.ts (zona del negocio), form-body.ts, json-body.ts
 │   │   ├── views/                # render.ts + plantillas HTML
 │   │   │   ├── layouts/base.html # <head> común (SEO, fuentes, CSS/JS por negocio) y skip link
 │   │   │   ├── pages/            # molotes.html, birria.html: header, secciones y footer del diseño
@@ -1490,10 +1524,6 @@ restaurante/                  # Raíz de los npm workspaces (REQ-F-036)
 │   │       ├── common/           # Imágenes usadas por ambas landings
 │   │       ├── molotes/          # icons/: favicons e iconos de pantalla de inicio (generados)
 │   │       └── birria/           # icons/: ídem
-│   ├── prisma/
-│   │   ├── schema.prisma         # Esquema de la base de datos (usuarios, negocios asignados, auditoría y productos)
-│   │   └── migrations/           # Migraciones SQL de MySQL versionadas (las aplica el proceso migrate, nunca la app)
-│   ├── prisma.config.ts          # Configuración del CLI de Prisma (solo desarrollo, CI y las etapas build/test/migrate)
 │   ├── scripts/
 │   │   ├── hash-password.ts      # `npm run admin:hash-password`
 │   │   ├── admin-recover.ts      # `npm run admin:recover`
@@ -1521,9 +1551,8 @@ restaurante/                  # Raíz de los npm workspaces (REQ-F-036)
 │   │   ├── snapshots/            # HTML de referencia de las landings (regresión visual con la semilla)
 │   │   ├── unit/                 # config, esquema, precios, formulario, repositorio de archivos, sesión, landings, contenido vs. diseño, JS sobre el HTML real
 │   │   └── integration/          # Landings (fecha, SEO, CTA, datos editables, datos dañados), administración, estáticos, errores
-│   ├── tsconfig.json             # TypeScript estricto solo para verificar tipos (`npm run typecheck`; sin emitir archivos)
+│   ├── tsconfig.json             # Extiende tsconfig.base.json (+ DOM); solo verifica tipos (`npm run typecheck`; sin emitir archivos)
 │   ├── vitest.config.ts          # Configuración de Vitest
-│   ├── eslint.config.ts          # Configuración de ESLint (`npm run lint`)
 │   ├── .env.example              # Variables documentadas; el `.env` local va junto a él (ignorado por git)
 │   └── Dockerfile                # Imagen multi-stage (base, deps, build, test, migrate, production; contexto de build: restaurante/); ver [Docker](#docker)
 ├── deploy/                   # Producción: compose.prod.yaml, deploy.sh, mysql/initdb y ci/ (pruebas de humo); ver [Despliegue](docs/despliegue.md)
@@ -1562,7 +1591,7 @@ El horario real de cada negocio tiene una sola fuente estructurada: `src/content
 (días de servicio, apertura y cierre en `HH:MM` de 24 h), validada y expuesta por
 `src/content/hours.ts` (`BUSINESS_HOURS`, `getBusinessHours(id)`). Las horas son locales en
 `BUSINESS_TIMEZONE`; la fuente no guarda la zona. Esta fuente no decide qué landing se muestra
-(eso sigue en `src/services/business-schedule.ts`) y la usará el bot de WhatsApp.
+(eso sigue en `core/schedule/business-schedule.ts`) y la usará el bot de WhatsApp.
 
 Los textos de horario de las landings son literales en `src/content/<negocio>/index.ts`, porque
 cada lugar tiene su propio estilo. `tests/unit/business-hours.test.ts` comprueba que coinciden con

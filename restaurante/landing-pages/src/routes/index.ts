@@ -1,6 +1,8 @@
 import Router from '@koa/router';
 
-import { BUSINESS_IDS, BUSINESS_PATHS } from '../config/businesses.ts';
+import { BUSINESS_IDS, type Logger } from '@restaurante/core/shared';
+
+import { BUSINESS_PATHS } from '../config/business-paths.ts';
 import type { Config } from '../config/env.ts';
 import { manifestPath } from '../content/icons.ts';
 import type { AdminDeps } from '../controllers/admin.ts';
@@ -9,7 +11,6 @@ import { createLandingController } from '../controllers/landing.ts';
 import { WEBHOOK_PATH, createWhatsAppWebhook, type WebhookBot } from '../controllers/whatsapp-webhook.ts';
 import type { MenuRepository } from '../repositories/menu-repository.ts';
 import type { ProductRepository } from '../repositories/product-repository.ts';
-import type { Logger } from '../utils/logger.ts';
 import type { Renderer } from '../views/render.ts';
 import { createAdminRouter } from './admin.ts';
 

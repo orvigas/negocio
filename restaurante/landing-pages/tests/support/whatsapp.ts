@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { createMemoryBotControlStore, type MemoryBotControlStore } from '@restaurante/core/bot-control';
+
 import type { MetaBotConfig } from '../../src/config/env.ts';
-import { createMemoryBotControlStore, type MemoryBotControlStore } from '../../src/repositories/memory-bot-control-store.ts';
 import type { ProductRepository } from '../../src/repositories/product-repository.ts';
 import { createBotControl, type BotControl } from '../../src/services/bot-control.ts';
 import { DEFAULT_BOT_LIMITS, type BotLimits } from '../../src/services/whatsapp-bot/protection/limits.ts';

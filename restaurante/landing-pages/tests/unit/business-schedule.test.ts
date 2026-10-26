@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { getActiveBusinessId, getHomeNotice, getMolotesNotice, getWeekday, parseForcedDay } from '../../src/services/business-schedule.ts';
+import {
+  getActiveBusinessId,
+  getHomeNotice,
+  getMolotesNotice,
+  getWeekday,
+  parseForcedDay,
+} from '@restaurante/core/schedule';
 
 const MX = 'America/Mexico_City';
 

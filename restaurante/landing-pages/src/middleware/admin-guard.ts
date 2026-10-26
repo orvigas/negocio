@@ -1,11 +1,10 @@
 import type { Context, Middleware, Next, ParameterizedContext } from 'koa';
 
+import { DatabaseUnavailableError, type Logger } from '@restaurante/core/shared';
+import { safeEqualStrings, type UserRecord, type UserRepository } from '@restaurante/core/identity';
+
 import type { Config } from '../config/env.ts';
-import { DatabaseUnavailableError } from '../db/errors.ts';
-import type { UserRecord, UserRepository } from '../repositories/user-repository.ts';
-import { safeEqualStrings } from '../services/admin-auth.ts';
 import type { SessionInfo, SessionStore } from '../services/session-store.ts';
-import type { Logger } from '../utils/logger.ts';
 
 /** Estado de Koa en las rutas de administración. */
 export interface AdminState {

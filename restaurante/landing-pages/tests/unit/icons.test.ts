@@ -3,8 +3,9 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
+
 import { DEFAULT_PUBLIC_DIR } from '../../src/app.ts';
-import { BUSINESS_IDS, type BusinessId } from '../../src/config/businesses.ts';
 import { ICON_FILES, ICO_SIZES, buildManifest, getIconLinks, iconFilePath, type IconKey } from '../../src/content/icons.ts';
 import { getBusinessContent } from '../../src/content/index.ts';
 import { hexToRgb, readIcoSizes, readPng } from '../support/png.ts';

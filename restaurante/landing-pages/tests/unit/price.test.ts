@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_PRICE_CENTS, PRICE_ERRORS, centsToInput, isValidPriceCents, parsePesosInput } from '../../src/services/price.ts';
+import {
+  MAX_PRICE_CENTS,
+  PRICE_ERRORS,
+  centsToInput,
+  isValidPriceCents,
+  parsePesosInput,
+} from '@restaurante/core/catalog';
 
 describe('parsePesosInput (RN-1)', () => {
   it.each([

@@ -1,7 +1,8 @@
-import { BUSINESS, type BusinessId } from '../../config/businesses.ts';
+import { BUSINESS, type BusinessId } from '@restaurante/core/shared';
+import { availableOnly, visibleBirriaItems } from '@restaurante/core/catalog';
+
 import { botText } from '../../content/common/bot.ts';
 import type { PublishedProducts } from '../../repositories/product-repository.ts';
-import { availableOnly, visibleBirriaItems } from '../visible-menu.ts';
 import { fill } from './text.ts';
 
 /**

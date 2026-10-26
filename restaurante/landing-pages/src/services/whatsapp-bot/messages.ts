@@ -1,8 +1,9 @@
-import { BUSINESS_IDS, type BusinessId } from '../../config/businesses.ts';
+import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
+import { formatPesos } from '@restaurante/core/catalog';
+
 import { commonContent } from '../../content/index.ts';
 import { botText, getBankAccount, getBotContent, getBotVocabulary, type BankAccount } from '../../content/bot.ts';
 import { getBusinessHours } from '../../content/hours.ts';
-import { formatPesos } from '../price.ts';
 import type { BotCatalog, CatalogOption } from './catalog.ts';
 import { PAYMENT_OPTIONS, type PaymentMethod } from './payment.ts';
 import { acceptsOrders, describeHours, describeOpening, isOpen, nextOpening } from './schedule.ts';

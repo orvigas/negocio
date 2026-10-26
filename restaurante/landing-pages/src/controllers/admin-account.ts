@@ -1,6 +1,6 @@
+import { hashPassword, validatePasswordPair, verifyPassword } from '@restaurante/core/identity';
+
 import { SESSION_COOKIE, sessionCookieOptions } from '../middleware/admin-guard.ts';
-import { hashPassword, verifyPassword } from '../services/admin-auth.ts';
-import { validatePasswordPair } from '../services/user-schema.ts';
 import { ACCOUNT_PATH } from '../views/admin/index.ts';
 import { ACCOUNT_SUCCESS_MESSAGES, renderAccount, type FieldErrors } from '../views/admin/users.ts';
 import { createAdminAccess, type AdminRouterContext } from './admin-access.ts';

@@ -14,7 +14,8 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
   - `app`: la imagen `production` (Koa). Sirve las dos landings, `/admin`, la API `/admin/api` y
     el webhook del bot. Una sola réplica, sin puertos publicados, en la red interna `db` y en
     `traefik-public`. Se construye desde el workspace `restaurante/landing-pages/` del monorepo
-    (REQ-F-036), con el contexto de build en `restaurante/`. Dentro de la imagen, la app está en
+    (REQ-F-036), que incluye los paquetes `restaurante/packages/core` y `packages/db` (REQ-F-037),
+    con el contexto de build en `restaurante/`. Dentro de la imagen, la app está en
     `/app/landing-pages`, que es su directorio de trabajo: los comandos relativos de esta guía
     (`node scripts/admin-recover.ts`) valen para las imágenes de antes y de después del monorepo,
     así que la vuelta atrás no cambia.

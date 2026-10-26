@@ -8,9 +8,6 @@ public/css/*
 # Datos editables de la administración en desarrollo (DATA_DIR por defecto; REQ-F-001)
 data/
 
-# Cliente de Prisma generado (`npm run db:generate`; REQ-F-007)
-src/generated/
-
 # Restos locales de la antigua base SQLite (antes de REQ-F-014): nunca en el repositorio
 *.db
 *.db-wal

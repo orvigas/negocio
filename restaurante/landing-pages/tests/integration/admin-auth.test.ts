@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { hashPassword } from '@restaurante/core/identity';
+
 import { createApp } from '../../src/app.ts';
-import { hashPassword } from '../../src/services/admin-auth.ts';
 import { makeConfig, makeRecordingLogger } from '../helpers.ts';
 import { ADMIN_PASSWORD, ADMIN_USER, TEST_HASH_PARAMS, login, setupAdmin } from '../support/admin.ts';
 import { listenLocal } from '../support/http.ts';

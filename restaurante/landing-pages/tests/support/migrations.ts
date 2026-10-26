@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { DEFAULT_MIGRATIONS_DIR } from '../../src/db/verify.ts';
+import { DEFAULT_MIGRATIONS_DIR } from '@restaurante/db/verify';
 
 /** Migraciones reales del proyecto (REQ-F-014): nombre, SQL y checksum (el mismo que calcula Prisma). */
 export async function projectMigrationFiles(): Promise<{ name: string; sql: string; checksum: string }[]> {

@@ -8,8 +8,8 @@
  */
 import { stdin, stdout, stderr } from 'node:process';
 
-import { hashPassword } from '../src/services/admin-auth.ts';
-import { PASSWORD_MIN_LENGTH as MIN_LENGTH } from '../src/services/user-schema.ts';
+import { PASSWORD_MIN_LENGTH as MIN_LENGTH, hashPassword } from '@restaurante/core/identity';
+
 import { readHidden } from './support/read-hidden.ts';
 
 const password = await readHidden('Contraseña de administración: ');

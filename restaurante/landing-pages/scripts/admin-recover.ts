@@ -15,12 +15,13 @@
 import { stderr, stdin, stdout } from 'node:process';
 import { parseArgs } from 'node:util';
 
-import { ConfigError, loadDatabaseConfig, type DatabaseConfig } from '../src/config/env.ts';
-import { createPrismaClient } from '../src/db/client.ts';
-import { DatabaseInitError, probeOf, queryOf, verifyDatabase } from '../src/db/verify.ts';
-import { createUserRepository } from '../src/repositories/user-repository.ts';
-import { hashPassword } from '../src/services/admin-auth.ts';
-import { normalizeUsername, passwordError, usernameError } from '../src/services/user-schema.ts';
+import type { DatabaseConfig } from '@restaurante/db/database-config';
+import { createPrismaClient } from '@restaurante/db/client';
+import { DatabaseInitError, probeOf, queryOf, verifyDatabase } from '@restaurante/db/verify';
+import { createUserRepository } from '@restaurante/db/user-repository';
+import { hashPassword, normalizeUsername, passwordError, usernameError } from '@restaurante/core/identity';
+
+import { ConfigError, loadDatabaseConfig } from '../src/config/env.ts';
 import { readHidden } from './support/read-hidden.ts';
 
 function fail(message: string): never {

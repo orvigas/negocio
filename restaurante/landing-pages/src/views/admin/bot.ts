@@ -1,4 +1,5 @@
-import type { BlockOrigin } from '../../repositories/bot-control-store.ts';
+import type { BlockOrigin } from '@restaurante/core/bot-control';
+
 import { DEFAULT_MANUAL_DURATION, MANUAL_DURATIONS, REASON_MAX_LENGTH, type BotControlSnapshot, type ManualDuration, type ReachedCap } from '../../services/bot-control.ts';
 import type { UsageBlock } from '../../services/bot-usage.ts';
 import type { BotProvider } from '../../services/whatsapp-bot/chat-bot.ts';

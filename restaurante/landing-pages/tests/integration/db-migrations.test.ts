@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createPrismaClient } from '../../src/db/client.ts';
-import { probeOf, queryOf, verifyDatabase } from '../../src/db/verify.ts';
+import { createPrismaClient } from '@restaurante/db/client';
+import { probeOf, queryOf, verifyDatabase } from '@restaurante/db/verify';
+
 import { adminDatabaseUrl, adminSql, makeScratchDatabase, runMigrateDeploy, spawnPrisma } from '../support/database.ts';
 import { projectMigrationChecksums } from '../support/migrations.ts';
 

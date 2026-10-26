@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { Database } from '../../src/db/client.ts';
-import { createUserRepository, type UserRepository } from '../../src/repositories/user-repository.ts';
+import type { Database } from '@restaurante/db/client';
+import { createUserRepository } from '@restaurante/db/user-repository';
+import type { UserRepository } from '@restaurante/core/identity';
+
 import { bootstrapAdmin } from '../../src/services/admin-bootstrap.ts';
 import { makeRecordingLogger } from '../helpers.ts';
 import { ADMIN_PASSWORD_HASH, ADMIN_USER } from '../support/admin.ts';

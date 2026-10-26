@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import type { BusinessId } from '@restaurante/core/shared';
+
 import { createApp } from '../../src/app.ts';
-import type { BusinessId } from '../../src/config/businesses.ts';
 import type { MenuRepository } from '../../src/repositories/menu-repository.ts';
 import { LOCK_MS } from '../../src/services/login-throttle.ts';
 import { SESSION_IDLE_MS } from '../../src/services/session-store.ts';

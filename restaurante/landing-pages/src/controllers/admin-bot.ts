@@ -1,5 +1,6 @@
-import { maskedFromLast4 } from '../repositories/bot-control-store.ts';
-import { isAdmin } from '../services/authorization.ts';
+import { maskedFromLast4 } from '@restaurante/core/bot-control';
+import { isAdmin } from '@restaurante/core/identity';
+
 import { DEFAULT_MANUAL_DURATION, isManualDuration, validateReason, type BotControl } from '../services/bot-control.ts';
 import { parsePhoneInput } from '../services/whatsapp-bot/phone.ts';
 import { renderAdminUnavailable } from '../views/admin/index.ts';

@@ -1,4 +1,4 @@
-import { BUSINESS, isBusinessId, type BusinessId } from '../config/businesses.ts';
+import { BUSINESS, isBusinessId, type BusinessId } from '../shared/index.ts';
 import {
   DRINK_TONES,
   ICON_PATTERN,

@@ -4,7 +4,8 @@ import { join } from 'node:path';
 
 import type { Context, Middleware } from 'koa';
 
-import { BUSINESS, BUSINESS_IDS, isBusinessId, type BusinessId } from '../config/businesses.ts';
+import { BUSINESS, BUSINESS_IDS, isBusinessId, type BusinessId } from '@restaurante/core/shared';
+
 import { ICON_FILES, buildManifest, iconFilePath, type IconKey } from '../content/icons.ts';
 
 interface CachedAsset {

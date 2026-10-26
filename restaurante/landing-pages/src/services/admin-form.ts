@@ -1,19 +1,19 @@
 import { stat } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
-import type { BusinessId } from '../config/businesses.ts';
+import type { BusinessId } from '@restaurante/core/shared';
 import {
   ICON_PATTERN,
   childOf,
   getPageSchema,
   imageSrcError,
+  parsePesosInput,
   resolveUnion,
   textError,
   type JsonObject,
   type LeafNode,
   type SchemaNode,
-} from './menu-schema.ts';
-import { parsePesosInput } from './price.ts';
+} from '@restaurante/core/catalog';
 
 /**
  * Formulario de administración -> datos de página (REQ-F-001, RF-3 y CA-18/CA-19; desde

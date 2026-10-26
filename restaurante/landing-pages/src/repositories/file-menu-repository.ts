@@ -3,8 +3,8 @@ import { constants as fsConstants } from 'node:fs';
 import * as nodeFs from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 
-import { BUSINESS_IDS, type BusinessId } from '../config/businesses.ts';
-import { errorProp } from '../utils/errors.ts';
+import { BUSINESS_IDS, errorProp, type BusinessId } from '@restaurante/core/shared';
+
 import {
   createMenuRepository,
   type MenuRepository,

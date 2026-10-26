@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { BUSINESS_IDS } from '@restaurante/core/shared';
+import type { MenuDocument } from '@restaurante/core/catalog';
+
 import { DEFAULT_VIEWS_DIR } from '../../src/app.ts';
-import { BUSINESS_IDS } from '../../src/config/businesses.ts';
 import { loadSeedDocument } from '../../src/content/seeds.ts';
-import type { MenuDocument } from '../../src/services/menu-schema.ts';
 import { renderLandingPage } from '../../src/views/landings/index.ts';
 import { createRenderer } from '../../src/views/render.ts';
 import { makeConfig } from '../helpers.ts';

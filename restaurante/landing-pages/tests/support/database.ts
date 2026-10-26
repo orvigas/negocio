@@ -4,9 +4,10 @@ import { join } from 'node:path';
 
 import { inject } from 'vitest';
 
-import type { DatabaseConfig } from '../../src/config/env.ts';
-import { createPrismaClient, type Database } from '../../src/db/client.ts';
-import { DEFAULT_MIGRATIONS_DIR } from '../../src/db/verify.ts';
+import type { DatabaseConfig } from '@restaurante/db/database-config';
+import { createPrismaClient, type Database } from '@restaurante/db/client';
+import { DEFAULT_MIGRATIONS_DIR } from '@restaurante/db/verify';
+
 import { createDatabase, dropDatabase, migrate, schemaFingerprint, truncateAll } from './database-admin.ts';
 import { TEST_DATABASE_PREFIX, databaseUrl, testDatabaseConfigs, withDatabase } from './test-database-config.ts';
 

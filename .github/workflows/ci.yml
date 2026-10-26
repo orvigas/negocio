@@ -2,7 +2,9 @@
 # migraciones, y build de las imágenes production y migrate en cada PR hacia main o hacia la rama
 # intermedia epic/arquitectura (ver "Rama intermedia" más abajo). restaurante/ es la raíz de los
 # npm workspaces (REQ-F-036): ahí están .nvmrc, el package-lock.json único y los scripts, que
-# delegan en el workspace landing-pages (la app y su Dockerfile). MySQL es el servicio mysql-dev
+# delegan en el workspace landing-pages (la app y su Dockerfile) o en los paquetes de packages/
+# (REQ-F-037: core, contracts y db; db:generate y las migraciones van a packages/db). typecheck y
+# lint cubren todos los workspaces desde la raíz. MySQL es el servicio mysql-dev
 # de restaurante/compose.yaml (solo en 127.0.0.1, credenciales de desarrollo): el mismo que en
 # local, porque un `services:` de GitHub no permite fijar la colación del servidor.
 #
@@ -68,7 +70,8 @@ jobs:
   # restaurante/docs/**.md y cualquier *.md fuera de restaurante/. Cualquier otro archivo (también
   # un borrado o el origen de un renombrado) cuenta como código. Los *.md de restaurante/ fuera de
   # docs/ cuentan como código: landing-pages/tests/unit/whatsapp-bot-free-text.test.ts lee el
-  # README.md de la raíz y landing-pages/tests/fixtures/ forma parte de las pruebas. En un PR
+  # README.md de la raíz y landing-pages/tests/fixtures/ forma parte de las pruebas. packages/**
+  # (REQ-F-037) cuenta como código como cualquier otro archivo que no sea documentación. En un PR
   # compara el commit de merge que prueba GitHub (refs/pull/N/merge) con su primer padre, la punta
   # de su rama base (main o epic/arquitectura): lo que el PR agrega a su base, y deja el tree de
   # ese commit de merge en una anotación `arbol-validado` (la lee `validado` en el push a main). En
@@ -227,7 +230,8 @@ jobs:
       # Solo corren los scripts de instalación aprobados en `allowScripts` (package.json).
       - name: install
         run: npm ci --strict-allow-scripts --no-audit --no-fund
-      # Cliente de Prisma (src/generated/prisma, no versionado): lo necesitan typecheck, lint y test.
+      # Cliente de Prisma (packages/db/src/generated/prisma, no versionado; REQ-F-037): lo necesitan
+      # typecheck, lint y test.
       - name: db:generate
         run: npm run db:generate
       - name: typecheck
@@ -241,12 +245,12 @@ jobs:
       - name: db:up
         run: npm run db:up
       # El esquema y las migraciones no divergen (base sombra del MySQL local).
-      # En el workspace (su prisma.config.ts y prisma/), con el CLI elevado a la raíz.
+      # En el paquete db (su prisma.config.ts y prisma/; REQ-F-037), con el CLI elevado a la raíz.
       - name: migraciones sin divergencia
-        working-directory: restaurante/landing-pages
+        working-directory: restaurante/packages/db
         env:
           SHADOW_DATABASE_URL: mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante_shadow
-        run: ../node_modules/.bin/prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
+        run: ../../node_modules/.bin/prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
       # Usa las URL de prueba por defecto (TEST_DATABASE_URL/TEST_ADMIN_DATABASE_URL hacia 127.0.0.1:3307).
       - name: test
         run: npm test
@@ -323,12 +327,15 @@ jobs:
           cache-to: type=gha,scope=migrate,mode=max
           load: true
           tags: restaurante:migrate
-      # CA-13: production sin el CLI de Prisma ni SQLite; migrate sin SQLite. Rutas absolutas en los
-      # dos niveles de node_modules del workspace (REQ-F-036): /app (elevadas) y /app/landing-pages.
+      # CA-13: production sin el CLI de Prisma ni SQLite; migrate sin SQLite. Rutas absolutas en todos
+      # los niveles de node_modules del workspace (REQ-F-036 y REQ-F-037): /app (elevadas),
+      # /app/landing-pages y los paquetes de /app/packages. REQ-F-037 (CA-12): production lleva el
+      # cliente generado y las migraciones en /app/packages/db; migrate conserva prisma.config.ts,
+      # schema y migraciones en su WORKDIR (/app/landing-pages), como espera deploy/ci/smoke.sh.
       - name: contenido de las imágenes
         run: |
-          docker run --rm --entrypoint sh restaurante:production -c 'for d in /app/node_modules /app/landing-pages/node_modules; do test ! -e "$d/prisma" && test ! -e "$d/better-sqlite3" && test ! -e "$d/@prisma/adapter-better-sqlite3" || exit 1; done; test -e /app/node_modules/@prisma/adapter-mariadb'
-          docker run --rm --entrypoint sh restaurante:migrate -c 'test -e /app/node_modules/prisma && for d in /app/node_modules /app/landing-pages/node_modules; do test ! -e "$d/better-sqlite3" || exit 1; done'
+          docker run --rm --entrypoint sh restaurante:production -c 'for d in /app/node_modules /app/landing-pages/node_modules /app/packages/core/node_modules /app/packages/db/node_modules; do test ! -e "$d/prisma" && test ! -e "$d/better-sqlite3" && test ! -e "$d/@prisma/adapter-better-sqlite3" || exit 1; done; test -e /app/node_modules/@prisma/adapter-mariadb && test -d /app/packages/db/prisma/migrations && test -e /app/packages/db/src/generated/prisma/client.ts'
+          docker run --rm --entrypoint sh restaurante:migrate -c 'test -e /app/node_modules/prisma && for d in /app/node_modules /app/landing-pages/node_modules /app/packages/db/node_modules; do test ! -e "$d/better-sqlite3" || exit 1; done; test "$(pwd)" = /app/landing-pages && test -e prisma.config.ts && test -e prisma/schema.prisma && test -d prisma/migrations'
       # CA-13: la imagen migrate aplica el esquema sobre una base vacía con código 0.
       - name: migrate sobre una base vacía
         working-directory: restaurante

@@ -1,10 +1,16 @@
 import type { Middleware } from 'koa';
 
-import { BUSINESS, isBusinessId, type BusinessId } from '../config/businesses.ts';
+import { BUSINESS, isBusinessId, type BusinessId } from '@restaurante/core/shared';
+import {
+  getHomeNotice,
+  getMolotesNotice,
+  parseForcedDay,
+  type NoticeByBusiness,
+} from '@restaurante/core/schedule';
+
 import type { Config } from '../config/env.ts';
 import type { MenuRepository } from '../repositories/menu-repository.ts';
 import { withProducts, type ProductRepository } from '../repositories/product-repository.ts';
-import { getHomeNotice, getMolotesNotice, parseForcedDay, type NoticeByBusiness } from '../services/business-schedule.ts';
 import { renderLandingPage } from '../views/landings/index.ts';
 import type { Renderer } from '../views/render.ts';
 

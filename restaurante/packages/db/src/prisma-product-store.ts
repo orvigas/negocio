@@ -1,16 +1,17 @@
-import type { BusinessId } from '../config/businesses.ts';
-import type { Database } from '../db/client.ts';
-import { isUniqueViolation, toUnavailable } from '../db/errors.ts';
-import type { Prisma } from '../generated/prisma/client.ts';
-import type { Product } from '../services/product-schema.ts';
+import type { BusinessId } from '@restaurante/core/shared';
 import {
   ProductError,
   SlugTakenError,
   type ChangeSummary,
   type NewProduct,
+  type Product,
   type ProductStore,
   type ProductStoreTx,
-} from './product-repository.ts';
+} from '@restaurante/core/catalog';
+
+import type { Database } from './client.ts';
+import { isUniqueViolation, toUnavailable } from './errors.ts';
+import type { Prisma } from './generated/prisma/client.ts';
 
 /**
  * Store de productos sobre Prisma/MySQL (REQ-F-008 y REQ-F-014).

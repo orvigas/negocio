@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { createUserRepository, type UserRepository } from '../../src/repositories/user-repository.ts';
+import { createUserRepository } from '@restaurante/db/user-repository';
+import type { UserRepository } from '@restaurante/core/identity';
+
 import {
   ADMIN_PASSWORD,
   ADMIN_PASSWORD_HASH,

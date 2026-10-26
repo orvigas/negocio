@@ -2,7 +2,9 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE
+
+Pull Request: https://github.com/orvigas/negocio/pull/84 (base `epic/arquitectura`), mergeado el 2026-10-25 (merge `8a595e1`). El merge a la épica no publica ni despliega. Pendientes fuera de este cierre: la toma de memoria con tráfico normal de CA-13 (no se registró en `arquitectura.md` §10; la toma en reposo da el 30,7 %) y CA-9 y CA-10, que se verifican cuando `epic/arquitectura` llegue a `main`.
 
 ## Aprobación
 
@@ -861,3 +863,7 @@ Quedan pendientes CA-4 y CA-5 (CI del PR), CA-13 (toma del domingo) y CA-9 y CA-
 ### Pull Request (2026-10-24)
 
 Commit `01de22e` rebasado sobre `epic/arquitectura` y PR #84 hacia `epic/arquitectura`. El CI está en verde (`cambios`, `calidad`, `auditoria`, `docker` y `despliegue`). DEF-001 corregido. El merge queda condicionado a la toma de memoria con tráfico del domingo (CA-13). Estado: `READY_FOR_MERGE`.
+
+### Cierre (2026-10-25)
+
+El usuario mergeó el PR #84 (https://github.com/orvigas/negocio/pull/84; merge `8a595e1`, 2026-10-26T01:19:47Z, 19:19 del 2026-10-25 en America/Mexico_City) hacia `epic/arquitectura` ("pr 84 mergeado"). El merge a la épica no publica ni despliega. Se mergeó sin registrar la toma de memoria con tráfico de CA-13, que era la condición de merge: queda pendiente en `arquitectura.md` §10 y debe completarse (o revisarse la decisión A) antes del paso 3 de la épica. CA-9 y CA-10 se verifican cuando `epic/arquitectura` llegue a `main`. Ticket movido a `done/`; ramas `feature/REQ-F-036-monorepo-workspaces-landing-pages` local y remota borradas. Estado `DONE`.

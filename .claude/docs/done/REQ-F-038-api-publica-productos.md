@@ -2,7 +2,16 @@
 
 ## Estado
 
-QA_APPROVED
+DONE
+
+Cerrado el 2026-10-26. PR #92 (https://github.com/orvigas/negocio/pull/92) mergeado en `epic/arquitectura` el 2026-10-27T02:56:43Z (2026-10-26, 20:56 en Ciudad de México), con el commit de merge `33285d2`.
+
+**Pendientes para cuando la épica llegue a `main`:**
+
+- Reinstalar `deploy/` en el VPS antes del primer despliegue (`docs/despliegue.md` §1.3). Suma nueva: `619893815e17853fcec531fefed85d39ba4fdffe06b099afcb554686b63ba792`.
+- `ops/` **no** se reinstala. El único cambio es `verify-backup.sh`, que según §11.5 y §11.8 no se instala en el VPS: se ejecuta en el Mac desde el repositorio.
+- Dar al token de GHCR del VPS (§1.4) acceso de lectura a `ghcr.io/orvigas/restaurante-api`.
+- Añadir `API_INTERNAL_URL=http://127.0.0.1:3001` a los `landing-pages/.env` locales y crear `api/.env` a partir de `api/.env.example`.
 
 ## Aprobación
 
@@ -1496,7 +1505,7 @@ El plan asume la opción recomendada (A) en las tres.
 
 2026-10-26 (senior-qa): correcciones T3 aprobadas por el usuario ("si"). DEF-001, DEF-002 y DEF-003 revalidados y corregidos (incluido `smoke.sh` completo en local con el caso DEF-001). Regresión en verde: `typecheck`, `lint`, `test` (2098 + 33), CA-1 E2E 21 de 21, CA-4 a CA-7, CA-12 y CA-15. Quedan pendientes del CI CA-11, CA-16 y el smoke de respaldos. Estado `QA_APPROVED`.
 
-### T4 — Commit, PR y CI (en curso)
+### T4 — Commit, PR y CI
 
 2026-10-26 (senior-fullstack): commit `0d6c282` y PR #92 (https://github.com/orvigas/negocio/pull/92) hacia `epic/arquitectura`.
 
@@ -1514,3 +1523,23 @@ El plan asume la opción recomendada (A) en las tres.
 - **Corrección propuesta:** añadir `-e API_INTERNAL_URL=http://api:3001` a ese `docker run`. Sin api en la red del simulacro, la app serviría la semilla, y las imágenes anteriores ignoran la variable. Toca `ops/`, que la decisión P-2 dejaba sin cambios, así que queda pendiente de la decisión del usuario.
 - **Decisión del usuario (2026-10-26):** "Añadir la variable en ops/ (Recomendado)", una excepción a P-2. Se añadió `-e API_INTERNAL_URL=http://api:3001` al `docker run` de la app en `ops/backup/verify-backup.sh`, con un comentario. `shellcheck -x` de los scripts de `ops/backup` sale sin avisos.
 - **Instalación en el VPS:** según `docs/despliegue.md` §11.5, el VPS solo instala `lib.sh`, `backup.sh`, `env-backup.sh` y `restore.sh`. `verify-backup.sh` se ejecuta en el Mac desde el repositorio (§11.8), así que **no hace falta reinstalar `ops/` en el VPS** por este cambio.
+- **Tercer CI (run 40414390886, commit `f11f119`), todo en verde:**
+
+  | Job | Resultado |
+  | --- | --- |
+  | `cambios` | Verde |
+  | `calidad` | Verde (CA-16) |
+  | `docker` | Verde (CA-11) |
+  | `despliegue` | Verde: `shellcheck`, `resumen-test.sh`, `smoke.sh` con el código 15 y DEF-001, y el smoke de respaldos con `verify-backup.sh --drill` |
+  | `auditoria` | Verde |
+
+  `publish`, `vigente` y `deploy` quedan omitidos, como corresponde en un PR. Con esto, CA-11 y CA-16 quedan confirmados en el CI.
+
+### T5 — Cierre
+
+2026-10-26 (senior-fullstack):
+
+- El usuario confirmó el merge: "Pr mergeado".
+- PR #92 mergeado en `epic/arquitectura` (commit de merge `33285d2`, 2026-10-27T02:56:43Z) con el CI final en verde.
+- Incluye la excepción a P-2 (opción A, "Añadir la variable en ops/ (Recomendado)").
+- El ticket pasa a `done/` con estado `DONE`. Los pendientes para `main` están en la sección Estado.

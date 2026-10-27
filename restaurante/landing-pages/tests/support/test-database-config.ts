@@ -1,6 +1,4 @@
-import type { DatabaseConfig } from '@restaurante/db/database-config';
-
-import { parseDatabaseUrl } from '../../src/config/env.ts';
+import { parseDatabaseUrl, type DatabaseConfig } from '@restaurante/db/database-config';
 
 /**
  * URL de las bases de pruebas (REQ-F-014, RF-13) y su salvaguarda.

@@ -15,6 +15,7 @@ import { login, makeClock, setupAdmin } from '../support/admin.ts';
 import { listenLocal } from '../support/http.ts';
 import { makeProductsFor } from '../support/products.ts';
 import { readIcoSizes, readPng } from '../support/png.ts';
+import { landingProductsFrom } from '../support/landing-products.ts';
 
 // CDMX es UTC-6 todo el año.
 const FRIDAY_NOON_MX = new Date('2026-10-09T18:00:00Z');
@@ -33,7 +34,7 @@ const products = await makeProductsFor(repository);
 
 async function agent({ now = FRIDAY_NOON_MX, config = makeConfig() }: { now?: Date | (() => Date); config?: Config } = {}) {
   const clock = typeof now === 'function' ? now : () => now;
-  return (await listenLocal(createApp({ config, repository, products, now: clock }))).request();
+  return (await listenLocal(createApp({ config, repository, products, landingProducts: landingProductsFrom(products), now: clock }))).request();
 }
 
 const iconFile = (businessId: BusinessId, key: IconKey) => readFileSync(join(DEFAULT_PUBLIC_DIR, iconFilePath(businessId, key)));

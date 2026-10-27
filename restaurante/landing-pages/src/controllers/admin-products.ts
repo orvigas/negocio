@@ -60,7 +60,7 @@ const PROBLEMS = Object.freeze({
 });
 
 export function createAdminProductsController(deps: AdminDeps): AdminProductsController {
-  const { config, renderer, now, repository, products, sessions, users, logger } = deps;
+  const { config, renderer, now, repository, products, landingProducts, sessions, users, logger } = deps;
   const access = createAdminAccess({ config, sessions, users, renderer, now, logger });
   const businessView = createBusinessView({ config, renderer, repository, products, access });
   const { sendHtml, seeOther } = access;
@@ -240,7 +240,10 @@ export function createAdminProductsController(deps: AdminDeps): AdminProductsCon
         }
         throw err;
       }
-      return seeOther(ctx, `${adminPath(businessId)}?ok=${action === 'update' ? 'product_saved' : 'product_overwritten'}`);
+      if (action !== 'update') return seeOther(ctx, `${adminPath(businessId)}?ok=product_overwritten`);
+      // DEF-003 (REQ-F-038): solo se afirma que la landing ya muestra el cambio si su caché lo cargó.
+      const fresh = await landingProducts.confirmFresh(businessId);
+      return seeOther(ctx, `${adminPath(businessId)}?ok=${fresh ? 'product_saved' : 'product_saved_pending'}`);
     },
 
     async deletePage(ctx: AdminRouterContext) {

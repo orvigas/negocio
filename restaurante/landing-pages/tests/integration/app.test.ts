@@ -17,6 +17,7 @@ import { hoursAndLocation } from '../../src/services/whatsapp-bot/messages.ts';
 import { makeConfig, makeRepository, type CorruptibleData } from '../helpers.ts';
 import { listenLocal } from '../support/http.ts';
 import { makeProductRepository, makeProductsFor, seedSources } from '../support/products.ts';
+import { landingProductsFrom } from '../support/landing-products.ts';
 
 const FRIDAY_NOON_MX = new Date('2026-10-09T18:00:00Z');
 const SATURDAY_NOON_MX = new Date('2026-10-10T18:00:00Z');
@@ -33,7 +34,7 @@ async function agent({
   config = makeConfig(),
   logger = makeLogger(),
 }: { now?: Date | (() => Date); config?: Config; logger?: Logger } = {}) {
-  const app = createApp({ config, repository, products, logger, now: typeof now === 'function' ? now : () => now });
+  const app = createApp({ config, repository, products, landingProducts: landingProductsFrom(products), logger, now: typeof now === 'function' ? now : () => now });
   return (await listenLocal(app)).request();
 }
 
@@ -959,7 +960,7 @@ describe('landings con productos guardados (REQ-F-001 y REQ-F-008)', () => {
     const sources = seedSources();
     mutate.change(sources[mutate.businessId].data);
     const { repository: productRepo } = await makeProductRepository({ sources });
-    const app = createApp({ config: makeConfig(), repository: repo, products: productRepo, now: () => FRIDAY_NOON_MX });
+    const app = createApp({ config: makeConfig(), repository: repo, products: productRepo, landingProducts: landingProductsFrom(productRepo), now: () => FRIDAY_NOON_MX });
     return (await listenLocal(app)).request();
   }
 
@@ -1026,7 +1027,7 @@ describe('archivo dañado al arrancar con el repositorio de archivos (CA-34, CA-
     const repo = createFileMenuRepository({ dataDir, timezone: 'America/Mexico_City' });
     await repo.init();
     const productRepo = await makeProductsFor(repo);
-    return (await listenLocal(createApp({ config: makeConfig(), repository: repo, products: productRepo, now: () => FRIDAY_NOON_MX }))).request();
+    return (await listenLocal(createApp({ config: makeConfig(), repository: repo, products: productRepo, landingProducts: landingProductsFrom(productRepo), now: () => FRIDAY_NOON_MX }))).request();
   }
 
   it('CA-34: con JSON inválido y una versión anterior válida, /molotes responde 200 con la versión anterior', async () => {

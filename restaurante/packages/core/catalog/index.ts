@@ -6,5 +6,6 @@ export * from './memory-product-store.ts';
 export * from './price.ts';
 export * from './product-schema.ts';
 export * from './product-store.ts';
+export * from './published.ts';
 export * from './slug.ts';
 export * from './visible-menu.ts';

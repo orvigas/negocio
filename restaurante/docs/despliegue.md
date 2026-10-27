@@ -19,6 +19,12 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
     `/app/landing-pages`, que es su directorio de trabajo: los comandos relativos de esta guía
     (`node scripts/admin-recover.ts`) valen para las imágenes de antes y de después del monorepo,
     así que la vuelta atrás no cambia.
+  - `api` (REQ-F-038): la imagen `api`, la API propia de solo lectura
+    (`GET /api/v1/public/{molotes|birria}/productos`), de la que las landings de `app` leen los
+    productos (`API_INTERNAL_URL=http://api:3001`). Solo en la red interna `db`: sin puertos
+    publicados ni router de Traefik, así que nada fuera de Docker la alcanza. Usa el mismo usuario
+    solo DML que la app, nunca migra ni importa semillas. Si se cae, las landings siguen
+    respondiendo con su última copia buena (o la semilla, si `app` arrancó sin ella).
   - `mysql`: MySQL 8.4 (utf8mb4, `utf8mb4_es_0900_as_cs`), solo en la red interna `db`, con sus
     datos en el volumen `restaurante_mysql-data`.
   - `migrate`: proceso puntual que aplica las migraciones con un usuario con DDL.
@@ -51,16 +57,18 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
    validaciones corren en el push y, si alguna falla, no se publica ni se despliega. Así, un PR
    desactualizado respecto a `main` ya no llega a producción sin validar ([Árbol ya
    validado](../README.md#árbol-ya-validado)).
-3. `publish` publica en GHCR (privado) dos imágenes, con la etiqueta `sha-<commit>`:
+3. `publish` publica en GHCR (privado) tres imágenes, con la etiqueta `sha-<commit>`:
    - `ghcr.io/orvigas/restaurante`;
-   - `ghcr.io/orvigas/restaurante-migrate`.
+   - `ghcr.io/orvigas/restaurante-migrate`;
+   - `ghcr.io/orvigas/restaurante-api` (REQ-F-038).
 4. `vigente` comprueba que el commit siga siendo la punta de `main`. Si mientras tanto llegó otro
    commit, este no se despliega (lo hará el siguiente): su resumen dice **Omitido** y `deploy`
    queda omitido, sin registro en Deployments.
 5. `deploy` se ejecuta en el environment `production`.
    - Solo hay un despliegue a la vez. Justo antes del SSH vuelve a comprobar la punta de `main`:
      si avanzó mientras esperaba, el job falla sin tocar el VPS (resumen **Omitido**).
-   - Se conecta por SSH como `deploy` y ejecuta `deploy.sh` con el commit, los dos digests y la
+   - Se conecta por SSH como `deploy` y ejecuta `deploy.sh` con el commit, los tres digests (app,
+     migrate y api) y la
      suma SHA-256 de `restaurante/deploy/`. La llave **solo** puede ejecutar ese script
      (comando forzado).
 6. `deploy.sh` en el VPS:
@@ -71,13 +79,23 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
    4. Hace un **volcado** en `/opt/restaurante/backups/` (gzip, permisos 600) y conserva los
       7 más recientes.
    5. **Migra.**
-   6. Cambia la app al digest nuevo y espera `healthy`, más una respuesta 200 a través de
+   6. Cambia la `api` al digest nuevo y espera `healthy` (REQ-F-038). Si no lo queda, vuelve a la
+      `api` anterior (si la hay; si `state/release.env` no la registra, por ejemplo tras una
+      restauración, toma la del contenedor `api` en marcha) y termina con el código 15:
+      - si este despliegue **no** aplicó migraciones, la app no se toca;
+      - si **sí** las aplicó, la app en marcha se recrea con su misma imagen y
+        `DATABASE_ALLOW_NEWER_SCHEMA=true` (unos segundos sin servicio), como en la vuelta atrás.
+        Sin la bandera, la app no podría volver a arrancar sobre la base migrada si se reiniciara
+        (`DATABASE_NEWER_THAN_CODE`) antes del siguiente despliegue correcto. Si la app recreada no
+        queda sana, termina con 22.
+   7. Cambia la app al digest nuevo y espera `healthy`, más una respuesta 200 a través de
       Traefik.
-   7. Registra el resultado en `state/release.env` y `state/releases.log`.
+   8. Registra el resultado (las tres imágenes) en `state/release.env` y `state/releases.log`.
 7. Ante un fallo:
    - si fallan la descarga, el volcado o la migración, la app en marcha no se toca y el workflow
      queda en rojo;
-   - si la versión nueva no queda sana, `deploy.sh` vuelve al digest anterior con
+   - si la versión nueva no queda sana, `deploy.sh` vuelve a los digests anteriores de la app y
+     de la `api` (si había una api anterior; en el primer despliegue con api se queda la nueva) con
      `DATABASE_ALLOW_NEWER_SCHEMA=true` y el workflow queda en rojo. La base **no** se restaura
      sola ([Restaurar la base](#9-restaurar-la-base-desde-un-volcado)).
 8. `deploy` escribe siempre un resumen en la ejecución (REQ-F-030): **Desplegado**,
@@ -163,6 +181,14 @@ rm -rf /tmp/restaurante-deploy
 
 La última suma debe coincidir con la misma orden ejecutada en `restaurante/deploy/` de tu copia
 local.
+
+**Al llegar a `main` la épica de arquitectura (REQ-F-038):** `compose.prod.yaml` (servicio `api` y
+`API_INTERNAL_URL` de la app) y `deploy.sh` (tres digests) cambian, así que su suma cambia.
+Reinstala `deploy/` con este paso **antes** del primer despliegue de ese commit: con el `deploy/`
+anterior, `deploy.sh` recibe 6 argumentos en lugar de 5 y termina con el código 2 sin tocar nada,
+y con el nuevo instalado pero el workflow anterior también (rechaza la forma de 2 digests). El
+token de GHCR del paso 1.4 debe poder leer también `ghcr.io/orvigas/restaurante-api` (con
+`read:packages` basta si el paquete pertenece a la misma cuenta).
 
 ### 1.4 Acceso a GHCR (solo lectura)
 
@@ -354,8 +380,24 @@ motivo:
      DATABASE_ALLOW_NEWER_SCHEMA=true RESTAURANTE_APP_IMAGE=ghcr.io/orvigas/restaurante@sha256:<digest> $C up -d --no-deps app
      ```
 
-     `$C` incluye `state/release.env`, pero las variables del entorno tienen prioridad.
+     `$C` incluye `state/release.env`, pero las variables del entorno tienen prioridad. Para la
+     `api` (REQ-F-038), igual con `RESTAURANTE_API_IMAGE=ghcr.io/orvigas/restaurante-api@sha256:<digest>`
+     y `up -d --no-deps api`. Nombra siempre el servicio (`up -d --no-deps app` o `api`): sin
+     `RESTAURANTE_API_IMAGE`, el compose resuelve la `api` a la imagen
+     `…/restaurante-api:sin-desplegar`, que no existe.
   3. El siguiente despliegue desde `main` deja todo como indica el CI.
+
+**Imagen de la `api` (REQ-F-038).** Está en `state/release.env` (`RESTAURANTE_API_IMAGE`) después
+de cada despliegue correcto. `ops/backup/restore.sh` reescribe ese archivo solo con la app y
+migrate, así que **tras una restauración** la línea ya no está. Búscala, por orden, en:
+
+1. el contenedor en marcha: `docker inspect -f '{{.Config.Image}}' "$($C ps -q api)"`;
+2. `state/release.env.previous` (`restore.sh` guarda ahí el `release.env` anterior);
+3. la última línea `api=sha256:<digest>` de `state/releases.log` (imagen
+   `ghcr.io/orvigas/restaurante-api@sha256:<digest>`).
+
+`deploy.sh` hace lo mismo con la primera opción: si `release.env` no tiene la api, toma la del
+contenedor en marcha como api anterior para su vuelta atrás.
 
 ## 7. Registrar el webhook en Meta
 
@@ -439,6 +481,8 @@ el log del paso `desplegar`.
 | Código 11 `MySQL no quedó healthy` | MySQL no arrancó (memoria, disco, volumen dañado) o el initdb falló en el primer arranque (contraseñas no hexadecimales) | `$C logs mysql`; la app no se tocó |
 | Código 12 (volcado) | MySQL caído, disco lleno o usuario `restaurante_backup` | `$C logs mysql`, `df -h` |
 | Código 13 (migración) | La migración falló; la app sigue con la versión anterior | Lee el error de Prisma en el log. Si quedó a medias, [restaura](#9-restaurar-la-base-desde-un-volcado) |
+| Código 15 (REQ-F-038) | La `api` nueva no quedó `healthy`; se volvió a la anterior si la había. La app no se tocó o, si hubo migraciones nuevas, se recreó con su misma imagen y `DATABASE_ALLOW_NEWER_SCHEMA=true` (el log del paso lo dice) | `$C logs api`: suele ser la base (`database_init_failed`) o la imagen. Las landings siguen con su última copia buena. Corrige y vuelve a desplegar: el siguiente despliegue correcto deja la app sin la bandera |
+| Las landings registran `landing_products_fallback` | La `api` no responde, tarda más de 1,5 s o devuelve algo fuera del contrato | `$C ps api` y `$C logs api`. Las landings sirven su última copia buena (o la semilla tras reiniciar `app`) y vuelven solas cuando la api responde (`landing_products_recovered`) |
 | Código 20 | Primer despliegue sin versión anterior y la app no arranca | `$C logs app`: suele ser el `.env` (`ConfigError` lista los problemas) |
 | Código 21 | La versión nueva no arrancó; se volvió a la anterior | Corrige y vuelve a desplegar. La app anterior corre con `DATABASE_ALLOW_NEWER_SCHEMA=true` si hubo migración |
 | Código 22 | Tampoco arrancó la versión anterior | [Restaura la base](#9-restaurar-la-base-desde-un-volcado) y arranca la versión del volcado |
@@ -683,7 +727,16 @@ Después, haz las comprobaciones del [paso 8](#8-comprobaciones-después-de-cada
   3. Copia el `.env` a `/opt/restaurante/.env` (`deploy`, `600`).
   4. Haz `docker login ghcr.io` como `deploy` (paso 1.4) y ejecuta `restore.sh latest`. Crea
      MySQL, la base y los usuarios, y después restaura.
-  5. Activa el timer.
+  5. `restore.sh` no conoce la `api` (REQ-F-038; decisión P-2: `ops/` no cambia): solo arranca la
+     app. En un VPS nuevo la `api` no está en marcha y las landings sirven la semilla de
+     `content/seeds.ts` (sin errores 5xx) hasta que la levantes. Vuelve a desplegar la punta de
+     `main` ([Redesplegar](#redesplegar-la-punta-de-main)), o arráncala a mano con
+     `RESTAURANTE_API_IMAGE=<imagen> $C up -d --no-deps api`. La `<imagen>` sale de
+     `state/release.env.previous` o de `state/releases.log` ([Imagen de la `api`](#6-volver-a-una-versión-anterior-a-mano));
+     `state/release.env` ya no la tiene, porque `restore.sh` lo reescribe sin ella. En el mismo VPS,
+     la `api` sigue en marcha durante la restauración y no hace falta nada: si alguna vez necesitas
+     su imagen, sácala del contenedor (`docker inspect`), como explica esa sección.
+  6. Activa el timer.
 
 ### 11.8 Prueba mensual y simulacro (en tu Mac)
 

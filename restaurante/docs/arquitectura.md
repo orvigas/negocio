@@ -150,13 +150,27 @@ packages/core/inventory/
   import a un archivo interno. Los módulos de `core` y `packages/db/src` son planos (sin
   subcarpetas): los patrones de "sale del paquete" cuentan con ello.
 - **Paquetes:** `@restaurante/core` (sin dependencias), `@restaurante/db` (Prisma, `mariadb` y
-  `core`) y `@restaurante/contracts` (esqueleto sin dependencias hasta el paso 3). Todos los
-  `tsconfig.json` extienden `tsconfig.base.json`, en la raíz.
-- **Regla de transición** (desviación registrada en el paso 2, REQ-F-037): mientras `landing-pages`
-  siga conteniendo `/admin` y el bot, **puede importar `core`, `db` y `contracts`**. El lint lo
-  permite con un comentario que lo marca como temporal. La restricción de la tabla
-  (`landing-pages` solo importa `contracts`) se activa en el paso 3 para las landings, cuando
-  consuman la API, y en el paso 4 para `/admin`, cuando pase a `inventory-manager`.
+  `core`) y `@restaurante/contracts` (Zod desde el paso 3, REQ-F-038). La app `api` (paso 3)
+  importa `core`, `db` y `contracts`. Todos los `tsconfig.json` extienden `tsconfig.base.json`,
+  en la raíz.
+- **Código de las landings** (paso 3, REQ-F-038; desviación registrada por la decisión P-1 del
+  usuario, "Prohibir lo que lee datos"): `landing-pages/src/controllers/landing.ts`,
+  `src/views/landings/` y `src/services/landing-products.ts` **no pueden importar** `db`, Prisma,
+  `mariadb`, `core/identity`, `core/bot-control`, la persistencia de `core/catalog`
+  (`createMemoryProductStore`, `ProductStore`, `ProductStoreTx`, `toPublished`) ni el repositorio
+  de productos: los productos solo les llegan del cliente de `contracts`. **Sí pueden importar**
+  los módulos puros de `core` (`shared`, `schedule` y las funciones sin E/S de `catalog`), porque
+  el aviso del día y el hero, el destacado y las promociones siguen decidiéndose en las landings.
+  La desviación respecto de la tabla (`landing-pages` solo importa `contracts`) dura hasta que los
+  horarios y el aviso sean endpoints públicos (§6).
+- **O-2 (REQ-F-038):** en todo `landing-pages` (y en `api`), los paquetes solo se importan por su
+  nombre: un import relativo a un archivo de `packages/` o a un archivo interno de un módulo de
+  `core` falla en el lint.
+- **Regla de transición** (desviación registrada en el paso 2, REQ-F-037; limitada en el paso 3):
+  mientras `landing-pages` siga conteniendo `/admin` y el bot, **ese código** puede importar
+  `core`, `db` y `contracts`. El lint lo permite con un comentario que lo marca como temporal. La
+  restricción se activa en el paso 4 para `/admin`, cuando pase a `inventory-manager`, y para el
+  bot, cuando pase a `api`.
 
 ## 5. Contratos compartidos (`packages/contracts`)
 
@@ -178,6 +192,23 @@ packages/core/inventory/
 | Renderizado | **Sigue en SSR** con Koa: el SEO y la regla de que el servidor decide el aviso no cambian | Ver la [decisión B](#9-decisiones) |
 | Resiliencia | Caché corta con `stale-while-revalidate` y la última copia buena como respaldo: una caída de la API no tira las landings | Muestra el error de la API (503 o 409) y no pierde lo que se estaba editando |
 | Seguridad | **Sin credenciales de la base** (mínimo privilegio) | Sesión con cookie `SameSite=Strict` y token CSRF, como hoy en `/admin` |
+
+**Paso 3 aplicado (REQ-F-038):** las landings consumen solo `GET /api/v1/public/{negocio}/productos`
+(decisión "Solo productos": el aviso del día, los horarios y el hero, el destacado y las promociones
+siguen en `landing-pages`). La resiliencia es la de la tabla, concretada así:
+
+- caché en memoria por negocio, fresca 60 s y refrescada en segundo plano al vencer
+  (*stale-while-revalidate*);
+- cada escritura de productos de `/admin` (mismo proceso, `ProductRepository.onChange`) invalida
+  la caché de ese negocio y la siguiente visita espera los datos nuevos (como mucho 1,5 s): la
+  frescura sigue siendo "al instante";
+- un vuelo por negocio (las visitas simultáneas comparten la petición) y, durante una caída, un
+  reintento de fondo cada 5 s como mucho;
+- si la API falla (caída, más de 1,5 s, 5xx o un cuerpo que no cumple el contrato), la última copia
+  buena sin límite de tiempo y, si no la hubo (arranque sin API), la semilla de
+  `content/seeds.ts`; ninguna landing responde 5xx por la API;
+- las landings no tienen credenciales de la base **en su código**, pero el contenedor
+  `landing-pages` las conserva hasta el paso 4 porque `/admin` y el bot siguen en él.
 
 **El bot de WhatsApp es un cliente más de `core`.** Vive dentro de `api` (su webhook es otra entrada
 HTTP) y, cuando exista `sales`, sus pedidos confirmados se guardan como ventas en lugar de solo
@@ -213,7 +244,7 @@ intermedia" del CI en `restaurante/README.md`).
 | --- | --- | --- |
 | 1 | **Monorepo sin cambios funcionales** (REQ-F-036). Workspaces en `restaurante/` y la app actual pasa tal cual a `landing-pages/`. Se ajustan el CI (`.github/workflows/ci.yml`, Dependabot), el `Dockerfile`, `compose.yaml` y la documentación. De `deploy/` no se toca ningún archivo de la suma (`compose.prod.yaml`, `deploy.sh`, `mysql/initdb/01-usuarios.sh`): las imágenes y sus nombres no cambian | No |
 | 2 | **Extraer `core`, `contracts` y `db`** del `src/` actual (REQ-F-037). Se mueven los archivos y se ajustan los imports, sin reescribir la lógica (detalle abajo) | No |
-| 3 | **Crear `api/`** con los endpoints públicos. Las landings pasan a consumirlos y dejan de acceder a la base | No (mismo HTML) |
+| 3 | **Crear `api/`** con los endpoints públicos. Las landings pasan a consumirlos y dejan de acceder a la base (REQ-F-038, detalle abajo) | No (mismo HTML) |
 | 4 | **Llevar `/admin`** (productos, usuarios y control del bot) a `/api/v1/admin` y al nuevo `inventory-manager`. El `/admin` actual se retira cuando el nuevo tenga lo mismo | Sí: nueva interfaz de administración |
 | 5 | **Dominios nuevos, un ticket por módulo:** inventario → ventas (incluidos los pedidos del bot) → CRM | Sí |
 
@@ -234,6 +265,33 @@ intermedia" del CI en `restaurante/README.md`).
 | `src/config/env.ts` | Cada app valida solo sus variables; lo común va en un módulo compartido |
 
 Los nombres exactos de archivos y endpoints los fija el plan técnico de cada ticket.
+
+### Paso 3 aplicado (REQ-F-038)
+
+- **`api/`** (workspace nuevo, Koa): `GET|HEAD /api/v1/public/{molotes|birria}/productos` con
+  `200 { data }` validado por `contracts`; 404, 405 (con `Allow`), 503 (`DATABASE_UNAVAILABLE`) y
+  500 con el formato `{ error: { code, message } }`. Lee la base en cada petición
+  (`createPrismaProductStore` y `toPublished`), sin caché propia. Al arrancar solo verifica la base
+  (`verifyDatabase`): nunca migra, nunca importa semillas ni escribe (O-1 de REQ-F-037 cerrado: la
+  importación sigue solo en `landing-pages`). Usa el usuario solo DML de la app.
+- **`packages/contracts`:** `products.ts` (ids públicos de negocio, esquemas Zod de los productos
+  publicados y de la respuesta, `publicProductsPath`, error común) y `public-client.ts`
+  (`createPublicApiClient`: nunca lanza; límite de tiempo, sin redirecciones, cuerpo de 1 MiB como
+  máximo y validación con el contrato). Zod 4.6.7, solo aquí.
+- **`packages/core/catalog/published.ts`:** `PublishedProducts` y `toPublished`, movidos sin
+  cambios desde `landing-pages` porque los usa la API. Una prueba de tipos de `api/` comprueba que
+  el contrato y `PublishedProducts` son equivalentes. `parseDatabaseUrl` pasó a
+  `packages/db/src/database-config.ts` (la usan las dos apps).
+- **`landing-pages`:** `services/landing-products.ts` (caché de la API, ver §6),
+  `API_INTERNAL_URL` obligatoria, y el repositorio de productos avisa de cada escritura
+  confirmada (`onChange`), que `createApp` conecta con la invalidación.
+- **Imágenes y despliegue:** etapa `api` en `landing-pages/Dockerfile`
+  (`ghcr.io/orvigas/restaurante-api`, `/app/api`, puerto 3001, `HEALTHCHECK` contra su propio
+  endpoint); `production` incluye ahora `packages/contracts` (O-3 de REQ-F-037 cerrado). En
+  `deploy/compose.prod.yaml`, el servicio `api` solo en la red interna `db`, sin puertos ni labels;
+  `deploy.sh` recibe tres digests y levanta la `api` antes de la app (código 15 si no queda sana).
+  Los respaldos de `ops/` no cambian (decisión P-2): su runbook explica qué hacer con la `api` tras
+  restaurar en un VPS nuevo.
 
 ### Paso 2 aplicado (REQ-F-037)
 
@@ -294,7 +352,7 @@ y se registra aquí, con la fecha y lo que respondió el usuario. B sigue pendie
 | Paso | Qué se hace |
 | --- | --- |
 | 1 (REQ-F-036) | La imagen y el contenedor actuales salen del workspace `landing-pages/`, con los mismos nombres (`ghcr.io/orvigas/restaurante`, `restaurante-migrate`, servicio `app` y routers `restaurante*`), el mismo dominio y las mismas rutas. Se mide la memoria del VPS ([sección 10](#10-riesgos)) |
-| 3 | Contenedor e imagen de `api`. Antes se revisa la memoria con el umbral del 80 % |
+| 3 | Contenedor e imagen de `api` (**aplicado en REQ-F-038**): solo en la red interna, sin router de Traefik (decisión "Solo red interna"); el subdominio `admin.<dominio>` queda para el paso 4. La revisión de memoria se basó en la estimación del 33,5 % ([sección 10](#10-riesgos)) |
 | 4 | Contenedor `inventory-manager`, `admin.<dominio>`, DNS y certificado. `/admin` pasa al subdominio y el `/admin` actual se retira en un ticket propio |
 
 ### Decisión C: tomada
@@ -306,19 +364,36 @@ y se registra aquí, con la fecha y lo que respondió el usuario. B sigue pendie
 - **Cuándo se aplica:** desde el paso 3. En el paso 2 no se instala Zod ni se migra ningún
   validador: `packages/contracts` es un esqueleto vacío y los validadores propios (por ejemplo
   `product-schema.ts`) siguen como están.
+- **Aplicada en el paso 3 (REQ-F-038):** Zod 4.6.7 (versión exacta), solo en
+  `packages/contracts` y solo para los esquemas públicos nuevos (decisión "Zod solo en
+  contracts"); ningún validador existente se migró. Justificación según
+  `.claude/rules/dependencias.md`: Node no valida esquemas y los validadores propios no dan tipos
+  desde una sola definición; Zod es MIT, sin dependencias en ejecución ni scripts de instalación
+  (no cambia `allowScripts`) y queda cubierto por `audit:deps`. Se eligió la última versión con al
+  menos dos semanas de antigüedad al instalarla (2026-10-26, 17:13 UTC). La 4.6.5 se descartó: tiene
+  el aviso GHSA-mrhx-c7xc-m3w5 (high, corregido en 4.6.6) que detectó `audit:deps`.
 
 ## 10. Riesgos
 
 - **El paso 1 toca el pipeline de producción.** Se valida con el CI completo (incluido el
   `smoke.sh`) en el PR hacia `epic/arquitectura`; el despliegue real llega cuando la épica se
   mergea a `main`.
-- **Las landings pasan a depender de la API** (paso 3). Se mitiga con la caché y la última copia
-  buena de la [sección 6](#6-cómo-se-consume-la-api).
+- **Las landings pasan a depender de la API** (paso 3, aplicado en REQ-F-038). Se mitiga con la
+  caché, la última copia buena y la semilla de la [sección 6](#6-cómo-se-consume-la-api). Riesgo
+  aceptado: si `landing-pages` se reinicia con la API caída, muestra la semilla (que puede estar
+  desfasada respecto de la base) hasta que la API vuelva. Las cachés del bot (de la base) y de las
+  landings (de la API) pueden divergir un momento si falla un refresco; las dos se invalidan con
+  cada escritura.
 - **Memoria del VPS** con más contenedores (decisión A): medida en el paso 1 (REQ-F-036, CA-13
   cumplido el 2026-10-26 con la toma de tráfico simulado: 33,5 %). Umbral: si la estimación con
   tres contenedores supera el 80 % de la RAM total, la decisión A se revisa con el usuario. La
   revisión previa al paso 3 parte de esta medición y el paso 3 vuelve a comprobar el umbral del
   80 % ([sección 9](#9-decisiones)). Ver [Medición de memoria](#medición-de-memoria-del-vps).
+- **Revisión de memoria del paso 3** (REQ-F-038): por decisión del usuario ("Memoria: basta el
+  33,5 %"), se basa en la estimación del paso 1 **sin una medición nueva**. El contenedor `api` es
+  uno de los dos contenedores Node de esa estimación (1310,2 MiB, el 33,5 % de la RAM total, muy
+  por debajo del umbral del 80 %): **la decisión A se mantiene**. La medición real con `api` en
+  marcha queda para cuando la épica llegue a `main`.
 - **Dos administraciones a la vez** durante el paso 4: el `/admin` actual se mantiene hasta que el
   nuevo tenga lo mismo, y se retira en un ticket propio.
 

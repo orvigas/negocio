@@ -5,6 +5,7 @@ import { probeOf, queryOf, verifyDatabase } from '@restaurante/db/verify';
 import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
 import { createUserRepository } from '@restaurante/db/user-repository';
+import { createPublicApiClient } from '@restaurante/contracts';
 import { createLogger, errorProp, serializeError } from '@restaurante/core/shared';
 
 import { DEFAULT_PUBLIC_DIR, createApp } from './app.ts';
@@ -13,6 +14,7 @@ import { createProductRepository } from './repositories/product-repository.ts';
 import { createImageChecker } from './services/admin-form.ts';
 import { bootstrapAdmin } from './services/admin-bootstrap.ts';
 import { createBotControl } from './services/bot-control.ts';
+import { LANDING_PRODUCTS_DEFAULTS, createLandingProducts, loadSeedProducts } from './services/landing-products.ts';
 import { createFileMenuRepository } from './repositories/file-menu-repository.ts';
 
 const logger = createLogger();
@@ -112,7 +114,17 @@ const BOT_MAINTENANCE_MS = 60 * 60 * 1000;
 const maintenanceTimer = setInterval(() => void botControl.maintenance(), BOT_MAINTENANCE_MS);
 maintenanceTimer.unref();
 
-const app = createApp({ config, repository, products, users, logger, botControl });
+// Productos de las landings (REQ-F-038): de la API propia (API_INTERNAL_URL), con caché en memoria,
+// última copia buena y, sin ninguna, la semilla de content/seeds.ts. La primera carga nunca impide
+// arrancar: sin API, las landings sirven la semilla y lo registran (CA-6).
+const landingProducts = createLandingProducts({
+  client: createPublicApiClient({ baseUrl: config.apiInternalUrl, timeoutMs: LANDING_PRODUCTS_DEFAULTS.timeoutMs }),
+  seeds: loadSeedProducts(),
+  logger,
+});
+await landingProducts.warmUp();
+
+const app = createApp({ config, repository, products, landingProducts, users, logger, botControl });
 // Escucha solo en HOST (REQ-F-015; 127.0.0.1 por defecto). Si la dirección no existe en la máquina
 // o el puerto está ocupado, termina con 1 y un mensaje claro, sin repetir los valores.
 const server = app.listen(config.port, config.host);

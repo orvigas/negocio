@@ -327,6 +327,20 @@ jobs:
           cache-to: type=gha,scope=migrate,mode=max
           load: true
           tags: restaurante:migrate
+      # Imagen de la API propia (REQ-F-038): solo lectura, red interna.
+      - name: build api
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: restaurante
+          file: restaurante/landing-pages/Dockerfile
+          target: api
+          platforms: linux/amd64
+          push: false
+          provenance: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+          load: true
+          tags: restaurante:api
       # CA-13: production sin el CLI de Prisma ni SQLite; migrate sin SQLite. Rutas absolutas en todos
       # los niveles de node_modules del workspace (REQ-F-036 y REQ-F-037): /app (elevadas),
       # /app/landing-pages y los paquetes de /app/packages. REQ-F-037 (CA-12): production lleva el
@@ -336,6 +350,10 @@ jobs:
         run: |
           docker run --rm --entrypoint sh restaurante:production -c 'for d in /app/node_modules /app/landing-pages/node_modules /app/packages/core/node_modules /app/packages/db/node_modules; do test ! -e "$d/prisma" && test ! -e "$d/better-sqlite3" && test ! -e "$d/@prisma/adapter-better-sqlite3" || exit 1; done; test -e /app/node_modules/@prisma/adapter-mariadb && test -d /app/packages/db/prisma/migrations && test -e /app/packages/db/src/generated/prisma/client.ts'
           docker run --rm --entrypoint sh restaurante:migrate -c 'test -e /app/node_modules/prisma && for d in /app/node_modules /app/landing-pages/node_modules /app/packages/db/node_modules; do test ! -e "$d/better-sqlite3" || exit 1; done; test "$(pwd)" = /app/landing-pages && test -e prisma.config.ts && test -e prisma/schema.prisma && test -d prisma/migrations'
+          # REQ-F-038 (CA-11, O-3): production y api llevan el código de contracts y Zod resoluble;
+          # api, sin el CLI de Prisma, con el cliente generado, las migraciones y su WORKDIR /app/api.
+          docker run --rm --entrypoint sh restaurante:production -c 'test -e /app/packages/contracts/index.ts && node -e "import(\"@restaurante/contracts\").then((m) => process.exit(typeof m.createPublicApiClient === \"function\" ? 0 : 1))"'
+          docker run --rm --entrypoint sh restaurante:api -c 'test "$(pwd)" = /app/api && test -e src/server.ts && test -e /app/packages/contracts/index.ts && test -e /app/packages/core/catalog/index.ts && test -e /app/packages/db/src/generated/prisma/client.ts && test -d /app/packages/db/prisma/migrations && for d in /app/node_modules /app/api/node_modules /app/packages/db/node_modules; do test ! -e "$d/prisma" || exit 1; done && node -e "import(\"zod\").then(() => process.exit(0))"'
       # CA-13: la imagen migrate aplica el esquema sobre una base vacía con código 0.
       - name: migrate sobre una base vacía
         working-directory: restaurante
@@ -353,11 +371,29 @@ jobs:
       - name: imagen production escucha en 0.0.0.0 y queda healthy
         working-directory: restaurante
         run: |
+          # REQ-F-038 (CA-11): la API en la red interna db-test, healthy y sin puertos publicados.
+          docker run -d --name api-ca11 --network restaurante_db-test \
+            -e DATABASE_URL=mysql://restaurante_test_app:test-dev@mysql-dev:3306/restaurante_test_ci \
+            restaurante:api
+          api_health=starting
+          for _ in $(seq 1 60); do
+            api_health=$(docker inspect -f '{{.State.Health.Status}}' api-ca11)
+            [ "$api_health" = healthy ] && break
+            [ "$(docker inspect -f '{{.State.Running}}' api-ca11)" = true ] || break
+            sleep 2
+          done
+          if [ "$api_health" != healthy ]; then
+            echo "La api no quedó healthy (estado: $api_health)"
+            docker logs api-ca11
+            exit 1
+          fi
+          docker logs api-ca11 | grep '"msg":"server_started"' | grep -q '"service":"api"' || { docker logs api-ca11; exit 1; }
           docker create --name app-ca9 -p 127.0.0.1:3000:3000 \
             -e DATABASE_URL=mysql://restaurante_test_app:test-dev@mysql-dev:3306/restaurante_test_ci \
             -e DATA_DIR=/var/lib/restaurante \
             -e WHATSAPP_MOLOTES=5210000000001 \
             -e WHATSAPP_BIRRIA=5210000000002 \
+            -e API_INTERNAL_URL=http://api-ca11:3001 \
             restaurante:production
           docker network connect restaurante_db-test app-ca9
           docker start app-ca9
@@ -375,7 +411,9 @@ jobs:
           fi
           docker logs app-ca9 | grep '"msg":"server_started"' | grep -q '"host":"0.0.0.0"' || { docker logs app-ca9; exit 1; }
           curl -fsS -o /dev/null http://127.0.0.1:3000/molotes
-          docker rm -f app-ca9
+          # Las landings cargaron los productos de la API (no de la semilla).
+          docker logs app-ca9 | grep '"msg":"landing_products_loaded"' | grep -q '"source":"api"' || { docker logs app-ca9; exit 1; }
+          docker rm -f app-ca9 api-ca11
 
   # Prueba de humo del despliegue (REQ-F-016): deploy/deploy.sh contra el compose de producción, un
   # Traefik v3 y un registro local (CA-2, CA-3, CA-4, CA-5, CA-7, CA-8, CA-9 y D-1). Sin secretos.
@@ -434,8 +472,20 @@ jobs:
           cache-from: type=gha,scope=migrate
           load: true
           tags: restaurante:migrate
+      - name: build api
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: restaurante
+          file: restaurante/landing-pages/Dockerfile
+          target: api
+          platforms: linux/amd64
+          push: false
+          provenance: false
+          cache-from: type=gha,scope=api
+          load: true
+          tags: restaurante:api
       - name: prueba de humo
-        run: bash restaurante/deploy/ci/smoke.sh restaurante:production restaurante:migrate
+        run: bash restaurante/deploy/ci/smoke.sh restaurante:production restaurante:migrate restaurante:api
       - name: age
         run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends age
       - name: prueba de humo de respaldos
@@ -464,6 +514,7 @@ jobs:
     outputs:
       app-digest: ${{ steps.app.outputs.digest }}
       migrate-digest: ${{ steps.migrate.outputs.digest }}
+      api-digest: ${{ steps.api.outputs.digest }}
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -504,6 +555,22 @@ jobs:
           provenance: false
           cache-from: type=gha,scope=migrate
           tags: ghcr.io/orvigas/restaurante-migrate:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      # API propia (REQ-F-038).
+      - name: publish api
+        id: api
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: restaurante
+          file: restaurante/landing-pages/Dockerfile
+          target: api
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          cache-from: type=gha,scope=api
+          tags: ghcr.io/orvigas/restaurante-api:sha-${{ github.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -554,7 +621,7 @@ jobs:
 
   # Despliegue en el VPS (REQ-F-016, RF-4 a RF-6). La llave SSH solo puede ejecutar
   # /opt/restaurante/deploy/deploy.sh (comando forzado en authorized_keys): este job le pasa el SHA,
-  # los dos digests y la suma de restaurante/deploy, que debe coincidir con la instalada. Solo corre
+  # los tres digests (app, migrate y api; REQ-F-038) y la suma de restaurante/deploy, que debe coincidir con la instalada. Solo corre
   # si `vigente` confirmó que el commit es la punta de main. Su resumen (REQ-F-030,
   # deploy/ci/resumen.sh) se escribe siempre: Desplegado, Revertido (código 21), Fallido, Omitido o
   # Cancelado o interrumpido; el job solo termina en éxito si quedó Desplegado.
@@ -614,6 +681,7 @@ jobs:
           VPS_SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
           APP_DIGEST: ${{ needs.publish.outputs.app-digest }}
           MIGRATE_DIGEST: ${{ needs.publish.outputs.migrate-digest }}
+          API_DIGEST: ${{ needs.publish.outputs.api-digest }}
         run: |
           set -eu
           umask 077
@@ -628,7 +696,7 @@ jobs:
           ssh -i "$dir/key" -p "${VPS_SSH_PORT:-22}" \
             -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$dir/known_hosts" -o ServerAliveInterval=30 -o ConnectTimeout=20 \
-            "$VPS_SSH_USER@$VPS_HOST" "deploy $GITHUB_SHA $APP_DIGEST $MIGRATE_DIGEST $sum" || rc=$?
+            "$VPS_SSH_USER@$VPS_HOST" "deploy $GITHUB_SHA $APP_DIGEST $MIGRATE_DIGEST $API_DIGEST $sum" || rc=$?
           echo "codigo=$rc" >> "$GITHUB_OUTPUT"
           exit "$rc"
       # Siempre, sin secretos. Solo informa: el estado del job lo decide `desplegar`.
@@ -642,6 +710,7 @@ jobs:
           JOB_STATUS: ${{ job.status }}
           APP_DIGEST: ${{ needs.publish.outputs.app-digest }}
           MIGRATE_DIGEST: ${{ needs.publish.outputs.migrate-digest }}
+          API_DIGEST: ${{ needs.publish.outputs.api-digest }}
         run: |
           if [ -f restaurante/deploy/ci/resumen.sh ]; then
             bash restaurante/deploy/ci/resumen.sh deploy >> "$GITHUB_STEP_SUMMARY"

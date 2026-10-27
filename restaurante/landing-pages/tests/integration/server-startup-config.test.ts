@@ -169,6 +169,18 @@ describe('REQ-F-015: NODE_ENV obligatorio al arrancar', () => {
   }, 60_000);
 });
 
+describe('REQ-F-038 (CA-15): API_INTERNAL_URL obligatoria al arrancar', () => {
+  it('ausente -> código 1 con un mensaje claro, sin puerto ni MySQL', async () => {
+    await expectConfigFailure({ API_INTERNAL_URL: undefined }, ['API_INTERNAL_URL es obligatoria']);
+  });
+
+  it('inválida -> código 1 sin repetir el valor', async () => {
+    const output = await expectConfigFailure({ API_INTERNAL_URL: 'ftp://usuario:clave-secreta@interno:21' }, ['API_INTERNAL_URL no es válida']);
+    expect(output).not.toContain('clave-secreta');
+    expect(output).not.toContain('interno:21');
+  });
+});
+
 describe('REQ-F-015: HOST', () => {
   it.each([
     ['development', undefined],

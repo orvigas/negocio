@@ -14,6 +14,7 @@ import { makeProductRepository } from '../support/products.ts';
 import { newMessageSid, twilioConfig, twilioInbound, twilioStatus } from '../support/twilio.ts';
 import { createTwilioApiDouble, twilioError, twilioNetworkError, twilioTimeout } from '../support/twilio-api-double.ts';
 import { CUSTOMER, STAFF, WEEK, inboundPayload, mx, sign } from '../support/whatsapp.ts';
+import { landingProductsFrom } from '../support/landing-products.ts';
 
 /**
  * QA de REQ-F-012, ronda 1 (QA Action Plan: S-1 a S-7, L-1 a L-6, N-1 a N-5, F-4, P-2, I-5 y
@@ -56,7 +57,7 @@ async function start({ env = {}, fetch }: { env?: Record<string, string>; fetch?
     now: () => clock.now,
     newCode: (prefix) => `${prefix}-Q${String((codes += 1)).padStart(3, '0')}`,
   });
-  const server = await listenLocal(createApp({ config, repository: await makeRepository(), products, logger, now: () => clock.now, bot }));
+  const server = await listenLocal(createApp({ config, repository: await makeRepository(), products, landingProducts: landingProductsFrom(products), logger, now: () => clock.now, bot }));
 
   const postRaw = (body: string, signature: string | null, headers: Record<string, string> = {}) => {
     let request = server.request().post(PATH).set('Content-Type', 'application/x-www-form-urlencoded');
@@ -333,7 +334,7 @@ describe('QA intercambiabilidad sin bot inyectado (I-5, CA-20) y 503 con Meta (N
       const products = (await makeProductRepository()).repository;
       const config = makeConfig({ ...env });
       const botControl = await makeBotControl(config, { now: () => at });
-      const server = await listenLocal(createApp({ config, repository: await makeRepository(), products, logger, now: () => at, providerFetch, botControl }));
+      const server = await listenLocal(createApp({ config, repository: await makeRepository(), products, landingProducts: landingProductsFrom(products), logger, now: () => at, providerFetch, botControl }));
       expect(logger.lines.filter((l) => l.msg === 'bot_provider_selected')).toEqual([{ level: 'info', msg: 'bot_provider_selected', provider }]);
       if (provider === 'meta') {
         const body = JSON.stringify(inboundPayload('text', { text: 'Hola', at }));
@@ -351,7 +352,7 @@ describe('QA intercambiabilidad sin bot inyectado (I-5, CA-20) y 503 con Meta (N
 
   it('Meta deshabilitado: GET y POST 503', async () => {
     const products = (await makeProductRepository()).repository;
-    const server = await listenLocal(createApp({ config: makeConfig({ ...VALID_ENV, WHATSAPP_BOT_PROVIDER: 'meta' }), repository: await makeRepository(), products }));
+    const server = await listenLocal(createApp({ config: makeConfig({ ...VALID_ENV, WHATSAPP_BOT_PROVIDER: 'meta' }), repository: await makeRepository(), products, landingProducts: landingProductsFrom(products) }));
     expect((await server.request().get(PATH)).status).toBe(503);
     expect((await server.request().post(PATH).send('{}')).status).toBe(503);
   });

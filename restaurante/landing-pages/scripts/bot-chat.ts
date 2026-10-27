@@ -42,6 +42,7 @@ import { createBotProtection } from '../src/services/whatsapp-bot/protection/pro
 import { createChatBot } from '../src/services/whatsapp-bot/providers/select.ts';
 import { toZonedIsoString } from '../src/utils/datetime.ts';
 import { createCloudApiDouble } from '../tests/support/cloud-api-double.ts';
+import { landingProductsFrom } from '../tests/support/landing-products.ts';
 import { createTwilioApiDouble } from '../tests/support/twilio-api-double.ts';
 
 const CUSTOMER = '5215500000000';
@@ -114,6 +115,8 @@ const config = loadConfig({
   WHATSAPP_BOT_STAFF_BIRRIA: '5215522220002',
   // Obligatoria en la configuración (REQ-F-014), pero el simulador nunca conecta: usa el store en memoria.
   DATABASE_URL: 'mysql://simulador:simulador@127.0.0.1/simulador',
+  // Obligatoria (REQ-F-038); el simulador nunca la usa: sus landings leen el repositorio en memoria.
+  API_INTERNAL_URL: 'http://127.0.0.1:9',
   // Clave del seudónimo de la lista negra (REQ-F-025): aleatoria en cada ejecución (store en memoria).
   WHATSAPP_BOT_BLOCKLIST_KEY: randomBytes(32).toString('base64url'),
   ...providerEnv,
@@ -154,7 +157,7 @@ const bot = createBotOrchestrator({
   now,
   protection: createBotProtection({ control: botControl, limits: config.botLimits, timeZone, logger }),
 });
-const app = createApp({ config, repository, products, logger, now, bot, botControl });
+const app = createApp({ config, repository, products, landingProducts: landingProductsFrom(products), logger, now, bot, botControl });
 const server: Server = app.listen(0, '127.0.0.1');
 await new Promise<void>((resolve) => server.once('listening', resolve));
 const webhookUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/webhooks/whatsapp`;

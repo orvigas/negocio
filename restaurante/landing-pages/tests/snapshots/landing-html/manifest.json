@@ -1,0 +1,131 @@
+{
+  "generatedFrom": "769ad8b (epic/arquitectura, código previo a REQ-F-038)",
+  "entries": [
+    {
+      "route": "/",
+      "day": "lunes",
+      "file": "0196111ba39680476b4cf512939716d4e46787805867546c54d8b87d586167d3.html",
+      "sha256": "0196111ba39680476b4cf512939716d4e46787805867546c54d8b87d586167d3"
+    },
+    {
+      "route": "/",
+      "day": "martes",
+      "file": "8f2808c06261a14a5af2e0ee6f98308a14cd5e59d3efcaf8672ed906cccd55eb.html",
+      "sha256": "8f2808c06261a14a5af2e0ee6f98308a14cd5e59d3efcaf8672ed906cccd55eb"
+    },
+    {
+      "route": "/",
+      "day": "miercoles",
+      "file": "8f2808c06261a14a5af2e0ee6f98308a14cd5e59d3efcaf8672ed906cccd55eb.html",
+      "sha256": "8f2808c06261a14a5af2e0ee6f98308a14cd5e59d3efcaf8672ed906cccd55eb"
+    },
+    {
+      "route": "/",
+      "day": "jueves",
+      "file": "8f2808c06261a14a5af2e0ee6f98308a14cd5e59d3efcaf8672ed906cccd55eb.html",
+      "sha256": "8f2808c06261a14a5af2e0ee6f98308a14cd5e59d3efcaf8672ed906cccd55eb"
+    },
+    {
+      "route": "/",
+      "day": "viernes",
+      "file": "8f2808c06261a14a5af2e0ee6f98308a14cd5e59d3efcaf8672ed906cccd55eb.html",
+      "sha256": "8f2808c06261a14a5af2e0ee6f98308a14cd5e59d3efcaf8672ed906cccd55eb"
+    },
+    {
+      "route": "/",
+      "day": "sabado",
+      "file": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab.html",
+      "sha256": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab"
+    },
+    {
+      "route": "/",
+      "day": "domingo",
+      "file": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab.html",
+      "sha256": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab"
+    },
+    {
+      "route": "/molotes",
+      "day": "lunes",
+      "file": "a46e35f739df8b3020dcea1b7923c90eaa70e118c7f93c9fc341a7e7972197bc.html",
+      "sha256": "a46e35f739df8b3020dcea1b7923c90eaa70e118c7f93c9fc341a7e7972197bc"
+    },
+    {
+      "route": "/molotes",
+      "day": "martes",
+      "file": "daaf1f88bb86ff69ab0aacdc04c582b5cf563369aba9ba51cb20a9827491504b.html",
+      "sha256": "daaf1f88bb86ff69ab0aacdc04c582b5cf563369aba9ba51cb20a9827491504b"
+    },
+    {
+      "route": "/molotes",
+      "day": "miercoles",
+      "file": "daaf1f88bb86ff69ab0aacdc04c582b5cf563369aba9ba51cb20a9827491504b.html",
+      "sha256": "daaf1f88bb86ff69ab0aacdc04c582b5cf563369aba9ba51cb20a9827491504b"
+    },
+    {
+      "route": "/molotes",
+      "day": "jueves",
+      "file": "daaf1f88bb86ff69ab0aacdc04c582b5cf563369aba9ba51cb20a9827491504b.html",
+      "sha256": "daaf1f88bb86ff69ab0aacdc04c582b5cf563369aba9ba51cb20a9827491504b"
+    },
+    {
+      "route": "/molotes",
+      "day": "viernes",
+      "file": "daaf1f88bb86ff69ab0aacdc04c582b5cf563369aba9ba51cb20a9827491504b.html",
+      "sha256": "daaf1f88bb86ff69ab0aacdc04c582b5cf563369aba9ba51cb20a9827491504b"
+    },
+    {
+      "route": "/molotes",
+      "day": "sabado",
+      "file": "099f192b890cd3e1f3df6ed6c0001b9b3d069a13668ef02637696b2bffc46cef.html",
+      "sha256": "099f192b890cd3e1f3df6ed6c0001b9b3d069a13668ef02637696b2bffc46cef"
+    },
+    {
+      "route": "/molotes",
+      "day": "domingo",
+      "file": "099f192b890cd3e1f3df6ed6c0001b9b3d069a13668ef02637696b2bffc46cef.html",
+      "sha256": "099f192b890cd3e1f3df6ed6c0001b9b3d069a13668ef02637696b2bffc46cef"
+    },
+    {
+      "route": "/birria",
+      "day": "lunes",
+      "file": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab.html",
+      "sha256": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab"
+    },
+    {
+      "route": "/birria",
+      "day": "martes",
+      "file": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab.html",
+      "sha256": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab"
+    },
+    {
+      "route": "/birria",
+      "day": "miercoles",
+      "file": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab.html",
+      "sha256": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab"
+    },
+    {
+      "route": "/birria",
+      "day": "jueves",
+      "file": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab.html",
+      "sha256": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab"
+    },
+    {
+      "route": "/birria",
+      "day": "viernes",
+      "file": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab.html",
+      "sha256": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab"
+    },
+    {
+      "route": "/birria",
+      "day": "sabado",
+      "file": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab.html",
+      "sha256": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab"
+    },
+    {
+      "route": "/birria",
+      "day": "domingo",
+      "file": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab.html",
+      "sha256": "93d6dade77867f4686e42e91344ddfe9f2264ee2f681dc9d254f10fcf4174fab"
+    }
+  ]
+}

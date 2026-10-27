@@ -13,7 +13,7 @@
 #   SSH_OUTCOME     steps.ssh.outcome: success, failure, cancelled, skipped o vacío
 #   SSH_CODE        código de salida de deploy.sh por SSH (vacío si el paso no lo pudo escribir)
 #   JOB_STATUS      job.status: success, failure o cancelled
-#   APP_DIGEST, MIGRATE_DIGEST  digests publicados (sha256:<64 hex>)
+#   APP_DIGEST, MIGRATE_DIGEST, API_DIGEST  digests publicados (sha256:<64 hex>; API_DIGEST desde REQ-F-038)
 #
 # Toda entrada se valida antes de escribirla: un valor inesperado produce el resumen
 # "Fallido (entrada no válida)" y nunca aparece en el Markdown. Termina siempre con 0: el estado
@@ -33,6 +33,7 @@ CODE=${SSH_CODE:-}
 JOB=${JOB_STATUS:-}
 APP=${APP_DIGEST:-}
 MIGRATE=${MIGRATE_DIGEST:-}
+API=${API_DIGEST:-}
 
 es_sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
 es_digest() { [[ "$1" =~ ^sha256:[0-9a-f]{64}$ ]]; }
@@ -92,10 +93,11 @@ if [[ "$OMITIDO" == true ]]; then omitido true; fi
 
 case "$OUTCOME" in
   success)
-    if ! es_digest "$APP" || ! es_digest "$MIGRATE"; then invalida; fi
+    if ! es_digest "$APP" || ! es_digest "$MIGRATE" || ! es_digest "$API"; then invalida; fi
     cabecera Desplegado
     printf -- '- app: `ghcr.io/orvigas/restaurante@%s`\n' "$APP"
     printf -- '- migrate: `ghcr.io/orvigas/restaurante-migrate@%s`\n' "$MIGRATE"
+    printf -- '- api: `ghcr.io/orvigas/restaurante-api@%s`\n' "$API"
     exit 0
     ;;
   '' | skipped)
@@ -127,6 +129,9 @@ case "$CODE" in
     ;;
   13)
     fallido "La app no se tocó; la migración pudo quedar a medias: [restaurar la base]($DOC#9-restaurar-la-base-desde-un-volcado)."
+    ;;
+  15)
+    fallido "La api nueva no quedó sana: volvió a la anterior (si la había) y la app no se tocó, salvo que hubiera migraciones nuevas: entonces sigue con su versión, recreada con \`DATABASE_ALLOW_NEWER_SCHEMA=true\`. Causa y solución en [Diagnóstico]($DOC#10-diagnóstico)."
     ;;
   20 | 22)
     fallido "Producción pudo quedar sin servicio. Sigue [Diagnóstico]($DOC#10-diagnóstico)."

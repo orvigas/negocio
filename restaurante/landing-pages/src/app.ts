@@ -23,6 +23,7 @@ import type { ProductRepository } from './repositories/product-repository.ts';
 import { createRouter } from './routes/index.ts';
 import { createImageChecker } from './services/admin-form.ts';
 import type { BotControl } from './services/bot-control.ts';
+import type { LandingProducts } from './services/landing-products.ts';
 import { createLoginThrottle } from './services/login-throttle.ts';
 import { createSessionStore } from './services/session-store.ts';
 import { createBotOrchestrator, type BotOrchestrator } from './services/whatsapp-bot/orchestrator.ts';
@@ -39,8 +40,13 @@ export interface AppOptions {
   config: Config;
   /** Repositorio de menús ya inicializado (src/repositories/; REQ-F-001, RF-9). Se valida al crear la app. */
   repository: unknown;
-  /** Productos (REQ-F-008), ya inicializados: importación hecha y caché cargada. */
+  /** Productos (REQ-F-008), ya inicializados: importación hecha y caché cargada. Para /admin y el bot. */
   products: ProductRepository;
+  /**
+   * Productos de las landings, de la API propia (REQ-F-038). La app suscribe su invalidación a las
+   * escrituras de `products` (RF-6): cada cambio de /admin se ve en la siguiente visita.
+   */
+  landingProducts: LandingProducts;
   /**
    * Usuarios de /admin (REQ-F-007). Sin ellos, la administración no se monta y /admin responde
    * 503 (p. ej. en las pruebas de las landings).
@@ -71,6 +77,7 @@ export function createApp({
   config,
   repository,
   products,
+  landingProducts,
   users,
   hashParams = SCRYPT_DEFAULTS,
   logger = silentLogger,
@@ -84,6 +91,11 @@ export function createApp({
   if (!config) throw new TypeError('createApp requiere la configuración');
   const menuRepository = assertMenuRepository(repository);
   if (typeof products?.getPublished !== 'function') throw new TypeError('createApp requiere el repositorio de productos');
+  if (typeof landingProducts?.get !== 'function' || typeof landingProducts.invalidate !== 'function') {
+    throw new TypeError('createApp requiere los productos de las landings (landingProducts)');
+  }
+  // RF-6 (REQ-F-038): cada escritura confirmada de productos invalida la caché de las landings.
+  products.onChange((business) => landingProducts.invalidate(business));
 
   const app = new Koa();
   app.env = config.nodeEnv;
@@ -111,6 +123,7 @@ export function createApp({
         imageExists: createImageChecker(publicDir),
         botControl,
         botProvider: injectedBot?.chatBot.provider ?? config.whatsappBot?.provider,
+        landingProducts,
       }
     : undefined;
   const renderUnavailable = () =>
@@ -133,7 +146,7 @@ export function createApp({
       : undefined);
   // D-13 (REQ-F-012): solo el proveedor, ningún otro valor.
   if (bot) logger.info('bot_provider_selected', { provider: bot.chatBot.provider });
-  const router = createRouter({ config, renderer, now, repository: menuRepository, products, publicDir, admin, bot, logger });
+  const router = createRouter({ config, renderer, now, repository: menuRepository, products, landingProducts, publicDir, admin, bot, logger });
 
   app.use(createRequestLogger({ logger }));
   app.use(createErrorHandler({ logger, exposeStack: config.nodeEnv === 'development' }));

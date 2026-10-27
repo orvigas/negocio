@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 
-# Imagen de la app (REQ-F-003 y REQ-F-014), workspace landing-pages del monorepo (REQ-F-036).
+# Imágenes de la app (REQ-F-003 y REQ-F-014), workspace landing-pages del monorepo (REQ-F-036), y de
+# la API propia (REQ-F-038, workspace api/): mismo grafo de construcción y una etapa por imagen.
 # Contexto de build: restaurante/ (la raíz de los workspaces, con el package-lock.json único):
 #   docker build -f landing-pages/Dockerfile --target production .   (desde restaurante/)
 # Dentro de la imagen se conserva la forma del workspace: /app/package.json y package-lock.json de
@@ -30,7 +31,11 @@
 #                 (usuario de MySQL con DDL; REQ-F-014, D-3). Proceso puntual: termina con 0 o 1.
 #                 schema, migraciones y prisma.config.ts vienen de packages/db, pero se copian al
 #                 WORKDIR con la misma estructura de siempre (REQ-F-037; deploy/ci/smoke.sh la usa).
-#   production -> dependencias de producción, código (app y paquetes core y db), CSS, migraciones
+#   api        -> API propia (REQ-F-038): solo lectura, red interna. Dependencias de producción, código
+#                 de api/ y de los paquetes core, contracts y db (con el cliente generado y las
+#                 migraciones, que verify.ts lee), puerto 3001, usuario no root y HEALTHCHECK contra
+#                 su propio endpoint. Uso: docker build -f landing-pages/Dockerfile --target api .
+#   production -> dependencias de producción, código (app y paquetes core, contracts y db), CSS, migraciones
 #                 (en /app/packages/db/prisma/migrations; la app las lee para verificar el estado
 #                 de la base, no las aplica) y scripts de consola; usuario no
 #                 root. Node 24 ejecuta los .ts directamente (type stripping), sin compilar y sin
@@ -46,12 +51,14 @@ ENV CHECKPOINT_DISABLE=1 \
 FROM base AS deps
 COPY package.json package-lock.json /app/
 COPY landing-pages/package.json ./
+COPY api/package.json /app/api/
 COPY --parents packages/*/package.json /app/
 RUN cd /app && npm ci --strict-allow-scripts --no-audit --no-fund
 
 FROM deps AS build
 COPY landing-pages/ ./
 COPY packages/ /app/packages/
+COPY api/ /app/api/
 # Configuración común de la raíz (REQ-F-037): tsconfig.base.json la extienden todos los workspaces;
 # eslint.config.ts lo revisan el typecheck de la raíz y dos pruebas del lint.
 COPY tsconfig.base.json tsconfig.json eslint.config.ts /app/
@@ -66,12 +73,15 @@ COPY --from=design --parents */code.html /_stich_source_/
 # CI=true: Vitest no escribe snapshots ausentes (falla en su lugar).
 ENV NODE_ENV=test \
     CI=true
+# Desde la raíz de los workspaces (REQ-F-038): las suites de api y de landing-pages.
+WORKDIR /app
 CMD ["npm", "test"]
 
 FROM base AS migrate
 ENV NODE_ENV=production
 COPY package.json package-lock.json /app/
 COPY landing-pages/package.json ./
+COPY api/package.json /app/api/
 COPY --parents packages/*/package.json /app/
 # Sin --omit=optional: npm instala el CLI de Prisma (par opcional de @prisma/client) y su schema
 # engine, sin las herramientas de desarrollo (vitest, eslint, tailwind...).
@@ -92,6 +102,7 @@ ENV NODE_ENV=production \
     PORT=3000
 COPY package.json package-lock.json /app/
 COPY landing-pages/package.json ./
+COPY api/package.json /app/api/
 COPY --parents packages/*/package.json /app/
 # --omit=optional: @prisma/client declara el CLI de Prisma y TypeScript como peerDependencies
 # (devOptional en el lockfile); sin él, npm los instalaría igualmente (+~275 MB).
@@ -100,8 +111,9 @@ COPY --from=build /app/landing-pages/src ./src
 COPY --from=build /app/landing-pages/public ./public
 # Paquetes del workspace (REQ-F-037): core entero; de db, el código (con el cliente de Prisma
 # generado en build, src/generated/prisma) y las migraciones, que verify.ts lee junto al paquete.
-# contracts no tiene código en ejecución: basta su package.json, copiado arriba.
+# contracts (REQ-F-038, O-3): el cliente de la API con el que las landings leen los productos.
 COPY --from=build /app/packages/core /app/packages/core
+COPY --from=build /app/packages/contracts /app/packages/contracts
 COPY --from=build /app/packages/db/src /app/packages/db/src
 COPY --from=build /app/packages/db/prisma/migrations /app/packages/db/prisma/migrations
 # Comandos de consola: admin:recover y admin:hash-password y su soporte. scripts/bot-chat.ts
@@ -118,4 +130,28 @@ EXPOSE 3000
 # Comprueba que la app responde (wget de busybox; sin endpoints adicionales en la app).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -q -O /dev/null "http://127.0.0.1:${PORT:-3000}/" || exit 1
+CMD ["node", "src/server.ts"]
+
+FROM base AS api
+# API propia (REQ-F-038): solo lectura y solo en la red interna de Docker (sin puertos publicados ni
+# router de Traefik; deploy/compose.prod.yaml). Misma instalación de producción que `production`.
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=3001
+WORKDIR /app/api
+COPY package.json package-lock.json /app/
+COPY landing-pages/package.json /app/landing-pages/
+COPY api/package.json ./
+COPY --parents packages/*/package.json /app/
+RUN cd /app && npm ci --omit=dev --omit=optional --strict-allow-scripts --no-audit --no-fund && npm cache clean --force
+COPY --from=build /app/api/src ./src
+COPY --from=build /app/packages/core /app/packages/core
+COPY --from=build /app/packages/contracts /app/packages/contracts
+COPY --from=build /app/packages/db/src /app/packages/db/src
+COPY --from=build /app/packages/db/prisma/migrations /app/packages/db/prisma/migrations
+USER node
+EXPOSE 3001
+# Comprueba que la API responde con su propio endpoint (wget de busybox; sin rutas adicionales).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -q -O /dev/null "http://127.0.0.1:${PORT:-3001}/api/v1/public/birria/productos" || exit 1
 CMD ["node", "src/server.ts"]

@@ -9,6 +9,7 @@ import { makeBotControl } from '../support/bot-control.ts';
 import { listenLocal } from '../support/http.ts';
 import { makeProductRepository } from '../support/products.ts';
 import { CUSTOMER, STAFF, WEEK, mx } from '../support/whatsapp.ts';
+import { landingProductsFrom } from '../support/landing-products.ts';
 
 /**
  * Batería de contrato de `ChatBot` (REQ-F-012, CA-19 y CA-20): los mismos recorridos, por HTTP y
@@ -35,7 +36,7 @@ async function start(driver: ProviderDriver) {
     now: () => clock.now,
     newCode: (prefix) => `${prefix}-T${String((codes += 1)).padStart(3, '0')}`,
   });
-  const server = await listenLocal(createApp({ config, repository: await makeRepository(), products, logger, now: () => clock.now, bot }));
+  const server = await listenLocal(createApp({ config, repository: await makeRepository(), products, landingProducts: landingProductsFrom(products), logger, now: () => clock.now, bot }));
 
   async function post(delivery: SignedDelivery): Promise<number> {
     const res = await server.request().post(PATH).set(delivery.headers).send(delivery.body);
@@ -117,7 +118,7 @@ describe.each(PROVIDER_DRIVERS)('selección por configuración con $provider (CA
     const products = (await makeProductRepository()).repository;
     const config = makeConfig(driver.env);
     const botControl = await makeBotControl(config, { now: () => clock.now });
-    const app = createApp({ config, repository: await makeRepository(), products, logger, now: () => clock.now, providerFetch: double.fetch, botControl });
+    const app = createApp({ config, repository: await makeRepository(), products, landingProducts: landingProductsFrom(products), logger, now: () => clock.now, providerFetch: double.fetch, botControl });
     expect(logger.lines).toContainEqual({ level: 'info', msg: 'bot_provider_selected', provider: driver.provider });
 
     const server = await listenLocal(app);

@@ -7,6 +7,7 @@ import { makeConfig, makeRepository } from '../helpers.ts';
 import { createUser, login, loginAs, setupAdmin, type Browser } from '../support/admin.ts';
 import { listenLocal } from '../support/http.ts';
 import { IMAGE, VALID_INPUTS, makeProductsFor } from '../support/products.ts';
+import { landingProductsFrom } from '../support/landing-products.ts';
 
 /**
  * API JSON de productos (REQ-F-008, RF-5, RF-7, RF-8, D-18 y D-19): CA-13 a CA-31 por la API.
@@ -399,7 +400,8 @@ describe('eliminar, recuperar, ordenar y concurrencia (CA-25 a CA-31)', () => {
 describe('disponibilidad (CA-23, CA-24, M-1, M-6)', () => {
   it('CA-23: con la administración deshabilitada la API responde 503 y las landings funcionan', async () => {
     const repository = await makeRepository();
-    const client = (await listenLocal(createApp({ config: makeConfig(), repository, products: await makeProductsFor(repository) }))).request();
+    const productRepository = await makeProductsFor(repository);
+    const client = (await listenLocal(createApp({ config: makeConfig(), repository, products: productRepository, landingProducts: landingProductsFrom(productRepository) }))).request();
     for (const path of [`${API}/sesion`, products('molotes')]) {
       const res = await client.get(path);
       expect(res.status).toBe(503);

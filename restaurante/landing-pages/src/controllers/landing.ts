@@ -10,7 +10,7 @@ import {
 
 import type { Config } from '../config/env.ts';
 import type { MenuRepository } from '../repositories/menu-repository.ts';
-import { withProducts, type ProductRepository } from '../repositories/product-repository.ts';
+import { withProducts, type LandingProducts } from '../services/landing-products.ts';
 import { renderLandingPage } from '../views/landings/index.ts';
 import type { Renderer } from '../views/render.ts';
 
@@ -34,21 +34,22 @@ function noticeFor(fixedBusinessId: BusinessId | undefined, options: NoticeOptio
  * producción se ignora.
  *
  * `repository`: hero, texto destacado y promociones (JSON; REQ-F-001).
- * `products`: productos de la base de datos (REQ-F-008), leídos de su caché en memoria.
+ * `landingProducts`: productos publicados, de la API propia con su caché en memoria (REQ-F-038):
+ *   nunca de la base de datos ni del repositorio de productos.
  */
 export function createLandingController({
   config,
   renderer,
   now,
   repository,
-  products,
+  landingProducts,
   businessId: fixedBusinessId,
 }: {
   config: Pick<Config, 'timezone' | 'whatsapp' | 'siteUrl' | 'nodeEnv'>;
   renderer: Renderer;
   now: () => Date;
   repository: Pick<MenuRepository, 'getPublished'>;
-  products: Pick<ProductRepository, 'getPublished'>;
+  landingProducts: Pick<LandingProducts, 'get'>;
   businessId?: BusinessId | undefined;
 }): Middleware {
   if (fixedBusinessId !== undefined && !isBusinessId(fixedBusinessId)) {
@@ -56,16 +57,16 @@ export function createLandingController({
   }
 
   if (typeof repository?.getPublished !== 'function') throw new TypeError('createLandingController requiere el repositorio de menús');
-  if (typeof products?.getPublished !== 'function') throw new TypeError('createLandingController requiere el repositorio de productos');
+  if (typeof landingProducts?.get !== 'function') throw new TypeError('createLandingController requiere los productos de la API');
 
   return async function renderLanding(ctx) {
     const businessId = fixedBusinessId ?? BUSINESS.BIRRIA;
     const forcedDay = config.nodeEnv === 'development' ? parseForcedDay(ctx.query.dia) : undefined;
     const homeNotice = noticeFor(fixedBusinessId, { now: now(), timeZone: config.timezone, forcedDay });
-    // La landing usa siempre la última versión válida en memoria (RN-7): sin E/S por petición,
-    // tampoco a la base de datos (REQ-F-008, D-15).
+    // Productos de la API con su caché (REQ-F-038): sin E/S mientras están frescos, nunca la base de
+    // datos; si la API falla, la última copia buena o la semilla (nunca un 5xx por la API).
     const { data } = await repository.getPublished(businessId);
-    const menu = withProducts(businessId, data, products.getPublished(businessId));
+    const menu = withProducts(businessId, data, await landingProducts.get(businessId));
     const html = renderLandingPage({ renderer, config, businessId, menu, homeNotice });
 
     ctx.type = 'html';

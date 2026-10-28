@@ -1,5 +1,6 @@
 /**
- * Fechas en la zona horaria del negocio (no en la del servidor).
+ * Fechas en la zona horaria del negocio (no en la del servidor). En core/shared desde REQ-F-039: las
+ * usan landing-pages y la API (fechas de los productos en `/api/v1/admin`).
  */
 
 const PARTS_FORMATTERS = new Map<string, Intl.DateTimeFormat>();

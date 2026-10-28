@@ -3,10 +3,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { BUSINESS, type BusinessId } from '@restaurante/core/shared';
-import { toInput } from '@restaurante/core/catalog';
+import { toInput, type ProductRepository } from '@restaurante/core/catalog';
 
 import { botText } from '../../src/content/bot.ts';
-import type { ProductRepository } from '../../src/repositories/product-repository.ts';
 import { createBotOrchestrator } from '../../src/services/whatsapp-bot/orchestrator.ts';
 import type { OrderInterpreter } from '../../src/services/whatsapp-bot/interpreter/types.ts';
 import {

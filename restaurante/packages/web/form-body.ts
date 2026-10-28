@@ -10,7 +10,7 @@ import type { Context } from 'koa';
 
 const decoder = () => new TextDecoder('utf-8', { fatal: true });
 
-/** Cuerpo completo con límite de bytes (413). Compartido con src/utils/json-body.ts. */
+/** Cuerpo completo con límite de bytes (413). Compartido con json-body.ts. */
 export async function readRawBody(ctx: Context, limit: number, message = 'El formulario es demasiado grande.'): Promise<Buffer> {
   const declared = Number(ctx.get('Content-Length'));
   if (Number.isFinite(declared) && declared > limit) {

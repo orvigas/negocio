@@ -1,11 +1,14 @@
 import { BUSINESS_IDS, isBusinessId, type BusinessId, type Logger } from '@restaurante/core/shared';
 import type {
+  LoginThrottle,
   PasswordHashParams,
+  SessionStore,
   UserAuthenticator,
   UserRecord,
   UserRepository,
 } from '@restaurante/core/identity';
-import { pickPageData } from '@restaurante/core/catalog';
+import { pickPageData, type ImageExists, type ProductRepository } from '@restaurante/core/catalog';
+import { readFormBody, type Renderer } from '@restaurante/web';
 
 import type { Config } from '../config/env.ts';
 import { LOGIN_PATH, SESSION_COOKIE, assertSameOrigin, sessionCookieOptions } from '../middleware/admin-guard.ts';
@@ -17,13 +20,9 @@ import {
   SeedRestoreNotAllowedError,
   type MenuRepository,
 } from '../repositories/menu-repository.ts';
-import type { ProductRepository } from '../repositories/product-repository.ts';
-import { parseAdminForm, type ImageExists } from '../services/admin-form.ts';
+import { parseAdminForm } from '../services/admin-form.ts';
 import type { BotControl } from '../services/bot-control.ts';
-import type { LoginThrottle } from '../services/login-throttle.ts';
-import type { SessionStore } from '../services/session-store.ts';
 import type { BotProvider } from '../services/whatsapp-bot/chat-bot.ts';
-import { readFormBody } from '../utils/form-body.ts';
 import {
   ACCOUNT_PATH,
   BOT_ADMIN_PATH,
@@ -37,7 +36,6 @@ import {
   renderAdminLogin,
 } from '../views/admin/index.ts';
 import type { LandingProducts } from '../services/landing-products.ts';
-import type { Renderer } from '../views/render.ts';
 import { createAdminAccess, type AdminRouterContext } from './admin-access.ts';
 import { authorOf, businessPermission, createBusinessView } from './admin-business-view.ts';
 

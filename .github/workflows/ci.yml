@@ -354,6 +354,10 @@ jobs:
           # api, sin el CLI de Prisma, con el cliente generado, las migraciones y su WORKDIR /app/api.
           docker run --rm --entrypoint sh restaurante:production -c 'test -e /app/packages/contracts/index.ts && node -e "import(\"@restaurante/contracts\").then((m) => process.exit(typeof m.createPublicApiClient === \"function\" ? 0 : 1))"'
           docker run --rm --entrypoint sh restaurante:api -c 'test "$(pwd)" = /app/api && test -e src/server.ts && test -e /app/packages/contracts/index.ts && test -e /app/packages/core/catalog/index.ts && test -e /app/packages/db/src/generated/prisma/client.ts && test -d /app/packages/db/prisma/migrations && for d in /app/node_modules /app/api/node_modules /app/packages/db/node_modules; do test ! -e "$d/prisma" || exit 1; done && node -e "import(\"zod\").then(() => process.exit(0))"'
+          # REQ-F-039 (P-1 y RF-11): production y api llevan packages/web; api, la copia de las imágenes
+          # de las landings en la misma ruta relativa (PRODUCT_IMAGES_DIR por defecto).
+          docker run --rm --entrypoint sh restaurante:production -c 'node -e "import(\"@restaurante/web\").then((m) => process.exit(typeof m.createRenderer === \"function\" ? 0 : 1))"'
+          docker run --rm --entrypoint sh restaurante:api -c 'node -e "import(\"@restaurante/web\").then((m) => process.exit(typeof m.createLogger === \"function\" ? 0 : 1))" && ls /app/landing-pages/public/img/molotes/*.jpg >/dev/null'
       # CA-13: la imagen migrate aplica el esquema sobre una base vacía con código 0.
       - name: migrate sobre una base vacía
         working-directory: restaurante

@@ -1,5 +1,6 @@
+import type { Renderer, SafeHtml } from '@restaurante/web';
+
 import { getBusinessContent } from '../../content/index.ts';
-import type { Renderer, SafeHtml } from '../render.ts';
 import type { LandingView, LandingViewData } from './index.ts';
 import { formatPesos, priceMxn, renderListOrEmpty, requireOption, withNoticeHref } from './shared.ts';
 

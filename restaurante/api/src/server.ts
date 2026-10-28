@@ -1,18 +1,24 @@
 import { once } from 'node:events';
 
-import { createLogger, errorProp, serializeError } from '@restaurante/core/shared';
+import { createImageChecker, createProductRepository } from '@restaurante/core/catalog';
+import { errorProp } from '@restaurante/core/shared';
 import { createPrismaClient } from '@restaurante/db/client';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
+import { createUserRepository } from '@restaurante/db/user-repository';
 import { probeOf, queryOf, verifyDatabase } from '@restaurante/db/verify';
+import { createLogger, serializeError } from '@restaurante/web';
 
+import { createAdminRoutes } from './admin/index.ts';
 import { createApiApp } from './app.ts';
 import { ApiConfigError, loadApiConfig } from './config.ts';
+import { createLandingNotifier } from './notifier.ts';
 
 /**
- * Arranque de la API (REQ-F-038). Solo lee la base: verifica la conexión y el estado de las
- * migraciones (los mismos reintentos y códigos que landing-pages), pero nunca migra, nunca importa
- * semillas ni escribe (O-1: la importación es solo de landing-pages). En producción vive en la red
- * interna de Docker, sin puertos publicados ni router de Traefik.
+ * Arranque de la API (REQ-F-038 y REQ-F-039). Verifica la conexión y el estado de las migraciones
+ * (los mismos reintentos y códigos que landing-pages), pero nunca migra ni importa semillas (O-1: la
+ * importación es solo de landing-pages). Desde REQ-F-039 escribe los productos (/api/v1/admin, con el
+ * usuario solo DML) y avisa de cada escritura a landing-pages por la red interna. En producción vive
+ * en la red interna de Docker, sin puertos publicados ni router de Traefik.
  */
 
 const logger = createLogger();
@@ -40,7 +46,21 @@ try {
   process.exit(1);
 }
 
-const app = createApiApp({ store: createPrismaProductStore({ prisma }), logger });
+const store = createPrismaProductStore({ prisma });
+const products = createProductRepository({ store, imageExists: createImageChecker(config.productImagesDir), logger });
+try {
+  // Sin fuentes: solo carga la caché, sin importar semillas (REQ-F-039).
+  await products.init();
+} catch (err) {
+  logger.error('database_init_failed', { code: errorProp(err, 'code'), name: errorProp(err, 'name') });
+  process.stderr.write('No se pudieron leer los productos de la base de datos.\n');
+  await prisma.$disconnect();
+  process.exit(1);
+}
+if (!config.landingNotify) logger.warn('products_notify_disabled', { reason: 'LANDING_INTERNAL_URL sin configurar' });
+const notifier = createLandingNotifier({ url: config.landingNotify?.url, token: config.landingNotify?.token, logger });
+const admin = createAdminRoutes({ users: createUserRepository({ prisma }), products, notifier, timeZone: config.timezone, logger });
+const app = createApiApp({ store, admin, logger });
 const server = app.listen(config.port, config.host);
 try {
   await once(server, 'listening');

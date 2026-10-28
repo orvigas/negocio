@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProductStore } from '@restaurante/core/catalog';
 
-import { SESSION_IDLE_MS } from '../../src/services/session-store.ts';
+import { SESSION_IDLE_MS } from '@restaurante/core/identity';
 import { seedData } from '../helpers.ts';
 import { createUser, formFields, login, loginAs, openForm, setupAdmin, submitForm, textOf, type Browser, type FormFields } from '../support/admin.ts';
 

@@ -1,16 +1,17 @@
 import { afterAll, describe, expect, it } from 'vitest';
 
 import {
+  LIMIT_MESSAGE,
   ProductConflictError,
   ProductNotFoundError,
   ProductValidationError,
   createMemoryProductStore,
   type ChangeEntry,
+  type ProductRepository,
   type ProductStore,
 } from '@restaurante/core/catalog';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
 
-import { LIMIT_MESSAGE, type ProductRepository } from '../../src/repositories/product-repository.ts';
 import { seedData } from '../helpers.ts';
 import { makeDatabase } from '../support/database.ts';
 import { ANA, LUIS, VALID_INPUTS, makeProductRepository, seedSources } from '../support/products.ts';

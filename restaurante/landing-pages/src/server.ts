@@ -6,14 +6,17 @@ import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
 import { createUserRepository } from '@restaurante/db/user-repository';
 import { createPublicApiClient } from '@restaurante/contracts';
-import { createLogger, errorProp, serializeError } from '@restaurante/core/shared';
+import { errorProp } from '@restaurante/core/shared';
+import { createLogger, serializeError } from '@restaurante/web';
+
+import { createImageChecker, createProductRepository } from '@restaurante/core/catalog';
 
 import { DEFAULT_PUBLIC_DIR, createApp } from './app.ts';
 import { ConfigError, loadConfig } from './config/env.ts';
-import { createProductRepository } from './repositories/product-repository.ts';
-import { createImageChecker } from './services/admin-form.ts';
+import { createInternalApp } from './internal-app.ts';
 import { bootstrapAdmin } from './services/admin-bootstrap.ts';
 import { createBotControl } from './services/bot-control.ts';
+import { startCatalogReload } from './services/catalog-reload.ts';
 import { LANDING_PRODUCTS_DEFAULTS, createLandingProducts, loadSeedProducts } from './services/landing-products.ts';
 import { createFileMenuRepository } from './repositories/file-menu-repository.ts';
 
@@ -139,6 +142,24 @@ try {
   await prisma.$disconnect();
   process.exit(1);
 }
+// Aviso interno de la API (REQ-F-039, RF-13): solo con INTERNAL_NOTIFY_TOKEN (obligatoria en
+// producción), en su propio puerto, que Traefik no enruta. Escucha en la misma dirección que la app.
+let internalServer: ReturnType<typeof app.listen> | null = null;
+if (config.internalNotify) {
+  internalServer = createInternalApp({ token: config.internalNotify.token, products, landingProducts, logger }).listen(config.internalNotify.port, config.host);
+  try {
+    await once(internalServer, 'listening');
+  } catch (err) {
+    const code = errorProp(err, 'code');
+    logger.error('server_listen_failed', { code, server: 'internal' });
+    process.stderr.write(`No se pudo escuchar en el puerto interno (${String(code)}): revisa que INTERNAL_PORT esté libre.\n`);
+    await prisma.$disconnect();
+    process.exit(1);
+  }
+}
+// Red de seguridad del catálogo del bot (REQ-F-039, RF-13): recarga cada 60 s.
+const stopCatalogReload = startCatalogReload({ products });
+
 logger.info('server_started', {
   host: config.host,
   port: config.port,
@@ -148,11 +169,15 @@ logger.info('server_started', {
   whatsappBot: config.whatsappBot ? 'enabled' : 'disabled',
   trustProxy: config.trustProxy,
   allowNewerSchema: config.allowNewerSchema,
+  internalPort: config.internalNotify?.port ?? null,
+  productsReadOnly: config.adminNewUrl !== undefined,
 });
 
 function shutdown(signal: NodeJS.Signals): void {
   logger.info('server_stopping', { signal });
   clearInterval(maintenanceTimer);
+  stopCatalogReload();
+  internalServer?.close();
   server.close((err) => {
     // REQ-F-025: los contadores pendientes se guardan antes de cerrar la conexión.
     void botControl

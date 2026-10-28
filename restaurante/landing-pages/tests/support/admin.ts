@@ -5,7 +5,7 @@ import type { Test } from 'supertest';
 import type { BotControlStore } from '@restaurante/core/bot-control';
 import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
-import type { ProductStore } from '@restaurante/core/catalog';
+import { createImageChecker, createProductRepository, type ProductRepository, type ProductStore } from '@restaurante/core/catalog';
 import { createUserRepository } from '@restaurante/db/user-repository';
 import { SCRYPT_DEFAULTS, hashPassword, type UserRepository } from '@restaurante/core/identity';
 
@@ -13,8 +13,6 @@ import { DEFAULT_PUBLIC_DIR, createApp } from '../../src/app.ts';
 import type { BotKeys, Env } from '../../src/config/env.ts';
 import type { MenuRepository } from '../../src/repositories/menu-repository.ts';
 import type { createMemoryMenuRepository } from '../../src/repositories/memory-menu-repository.ts';
-import { createProductRepository, type ProductRepository } from '../../src/repositories/product-repository.ts';
-import { createImageChecker } from '../../src/services/admin-form.ts';
 import { bootstrapAdmin } from '../../src/services/admin-bootstrap.ts';
 import { createBotControl } from '../../src/services/bot-control.ts';
 import type { BotLimits } from '../../src/services/whatsapp-bot/protection/limits.ts';

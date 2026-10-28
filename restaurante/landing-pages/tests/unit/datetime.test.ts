@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { diffMenuData } from '@restaurante/core/catalog';
 
-import { formatDisplayDate, toZonedIsoString } from '../../src/utils/datetime.ts';
+import { formatDisplayDate, toZonedIsoString } from '@restaurante/core/shared';
 
 describe('toZonedIsoString', () => {
   it('usa la zona horaria del negocio con su desfase', () => {

@@ -1,7 +1,7 @@
 import { createPublicApiClient } from '@restaurante/contracts';
 import type { Logger } from '@restaurante/core/shared';
 
-import type { ProductRepository } from '../../src/repositories/product-repository.ts';
+import type { ProductRepository } from '@restaurante/core/catalog';
 import { createLandingProducts, loadSeedProducts, type LandingProducts, type LandingProductsOptions } from '../../src/services/landing-products.ts';
 
 /**

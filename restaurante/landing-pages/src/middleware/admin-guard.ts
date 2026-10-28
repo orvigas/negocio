@@ -1,10 +1,17 @@
 import type { Context, Middleware, Next, ParameterizedContext } from 'koa';
 
 import { DatabaseUnavailableError, type Logger } from '@restaurante/core/shared';
-import { safeEqualStrings, type UserRecord, type UserRepository } from '@restaurante/core/identity';
+import {
+  resolveSession as resolveUserSession,
+  safeEqualStrings,
+  type SessionInfo,
+  type SessionStore,
+  type UserRecord,
+  type UserRepository,
+} from '@restaurante/core/identity';
+import { assertSameOrigin, rejectCsrf } from '@restaurante/web';
 
 import type { Config } from '../config/env.ts';
-import type { SessionInfo, SessionStore } from '../services/session-store.ts';
 
 /** Estado de Koa en las rutas de administración. */
 export interface AdminState {
@@ -111,38 +118,9 @@ export function sessionCookieOptions(config: Pick<Config, 'isProduction'>) {
   };
 }
 
-function rejectCsrf(ctx: Context, logger: Logger, reason: string): never {
-  logger.warn('admin_csrf_rejected', { path: ctx.path, reason });
-  ctx.throw(403, 'La petición no es válida. Recarga la página e inténtalo de nuevo.', { code: 'CSRF_INVALID' });
-}
-
-/**
- * Primera capa contra CSRF: el navegador indica el origen de la petición.
- *
- * - `Sec-Fetch-Site` (cabecera que solo pone el navegador; otro sitio no la puede falsear):
- *   si llega, debe ser `same-origin`.
- * - `Origin`: si llega con un origen concreto, debe ser el de este sitio. `Origin: null` (lo que
- *   manda el navegador con `Referrer-Policy: no-referrer`, o desde contextos opacos) no prueba
- *   nada por sí solo: solo se acepta si el navegador confirma `Sec-Fetch-Site: same-origin`.
- * - Sin ninguna de las dos (clientes que no son navegador) decide el token CSRF.
- *
- * El control principal sigue siendo el token sincronizador (`assertCsrfToken`) y la cookie
- * `SameSite=Strict`.
- */
-export function assertSameOrigin(ctx: Context, logger: Logger): void {
-  const origin = ctx.get('Origin');
-  const site = ctx.get('Sec-Fetch-Site');
-  // Ojo: en Koa 3 `ctx.origin` devuelve la cabecera Origin; el origen propio se calcula aquí
-  // (con TRUST_PROXY, protocolo y host salen de X-Forwarded-Proto/Host de nginx).
-  const ownOrigin = `${ctx.protocol}://${ctx.host}`;
-
-  if (site && site !== 'same-origin') rejectCsrf(ctx, logger, 'fetch_site');
-  if (origin === 'null') {
-    if (site !== 'same-origin') rejectCsrf(ctx, logger, 'origin_null');
-  } else if (origin && origin !== ownOrigin) {
-    rejectCsrf(ctx, logger, 'origin');
-  }
-}
+// Primera capa contra CSRF (mismo origen): en @restaurante/web desde REQ-F-039 (P-1), compartida con
+// inventory-manager. Se reexporta para los controladores de /admin.
+export { assertSameOrigin };
 
 /** Segunda capa: token sincronizador de la sesión en el campo oculto `_csrf`. */
 export function assertCsrfToken(ctx: AdminContext, logger: Logger, fields: Map<string, string>): void {
@@ -167,16 +145,14 @@ export async function resolveSession(
   ctx: AdminContext,
   { sessions, config, users }: { sessions: SessionStore; config: Config; users: Pick<UserRepository, 'findById'> },
 ): Promise<{ session: SessionInfo; user: UserRecord } | null> {
-  const session = sessions.touch(ctx.cookies.get(SESSION_COOKIE));
-  const user = session ? await users.findById(session.userId) : null;
-  if (!session || !user || !user.active || user.sessionVersion !== session.sessionVersion) {
-    if (session) sessions.destroy(session.id);
+  const resolved = await resolveUserSession({ sessions, users }, ctx.cookies.get(SESSION_COOKIE));
+  if (!resolved) {
     ctx.cookies.set(SESSION_COOKIE, null, sessionCookieOptions(config));
     return null;
   }
-  ctx.state.adminSession = session;
-  ctx.state.adminUser = user;
-  return { session, user };
+  ctx.state.adminSession = resolved.session;
+  ctx.state.adminUser = resolved.user;
+  return resolved;
 }
 
 export type SessionGuard = (ctx: AdminContext, next: Next, options?: { returnTo?: string }) => Promise<unknown>;

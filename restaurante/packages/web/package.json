@@ -1,0 +1,19 @@
+{
+  "name": "@restaurante/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Utilidades HTTP y SSR sin dominio que comparten las apps Koa (REQ-F-039, decisión P-1): plantillas, lectura de formularios y JSON, mismo origen y logger. No importa nada del proyecto.",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "koa": "^3.2.1"
+  },
+  "devDependencies": {
+    "@types/koa": "^3.0.3"
+  }
+}

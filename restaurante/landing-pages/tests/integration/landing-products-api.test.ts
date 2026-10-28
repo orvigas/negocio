@@ -279,10 +279,14 @@ describe('CA-5 y CA-7: API caída en funcionamiento', () => {
 describe('CA-6 y CA-7: arranque sin API', () => {
   it('sirve la semilla, lo registra y pasa a los datos de la API al levantarla, sin reiniciar', async () => {
     const { api, get, rename, fallbacks } = await landingsWithApi({ startDown: true });
-    expect(fallbacks().map((line) => [line.business, line.source])).toEqual([
+    // warmUp carga los dos negocios en paralelo: el orden de los avisos no está garantizado (DEF-003 de
+    // REQ-F-039). Se exige exactamente un aviso por negocio, sin depender del orden.
+    const seen = fallbacks().map((line) => [line.business, line.source]);
+    expect(seen).toHaveLength(2);
+    expect(seen).toEqual(expect.arrayContaining([
       ['molotes', 'seed'],
       ['birria', 'seed'],
-    ]);
+    ]));
     await rename('Desde La API REQ038');
     for (const path of ['/', '/birria', '/molotes']) expect(await get(path)).not.toContain('Desde La API REQ038');
 

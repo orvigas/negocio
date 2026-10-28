@@ -112,8 +112,10 @@ COPY --from=build /app/landing-pages/public ./public
 # Paquetes del workspace (REQ-F-037): core entero; de db, el código (con el cliente de Prisma
 # generado en build, src/generated/prisma) y las migraciones, que verify.ts lee junto al paquete.
 # contracts (REQ-F-038, O-3): el cliente de la API con el que las landings leen los productos.
+# web (REQ-F-039, P-1): plantillas, lectura de formularios, mismo origen y logger.
 COPY --from=build /app/packages/core /app/packages/core
 COPY --from=build /app/packages/contracts /app/packages/contracts
+COPY --from=build /app/packages/web /app/packages/web
 COPY --from=build /app/packages/db/src /app/packages/db/src
 COPY --from=build /app/packages/db/prisma/migrations /app/packages/db/prisma/migrations
 # Comandos de consola: admin:recover y admin:hash-password y su soporte. scripts/bot-chat.ts
@@ -133,8 +135,9 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 CMD ["node", "src/server.ts"]
 
 FROM base AS api
-# API propia (REQ-F-038): solo lectura y solo en la red interna de Docker (sin puertos publicados ni
-# router de Traefik; deploy/compose.prod.yaml). Misma instalación de producción que `production`.
+# API propia (REQ-F-038; administración de productos desde REQ-F-039): solo en la red interna de Docker
+# (sin puertos publicados ni router de Traefik; deploy/compose.prod.yaml). Misma instalación de
+# producción que `production`.
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3001
@@ -147,6 +150,11 @@ RUN cd /app && npm ci --omit=dev --omit=optional --strict-allow-scripts --no-aud
 COPY --from=build /app/api/src ./src
 COPY --from=build /app/packages/core /app/packages/core
 COPY --from=build /app/packages/contracts /app/packages/contracts
+COPY --from=build /app/packages/web /app/packages/web
+# Copia de las imágenes publicadas de las landings (REQ-F-039, RF-11): la API comprueba que cada
+# `image.src` exista. Misma ruta relativa que en el repositorio (PRODUCT_IMAGES_DIR por defecto,
+# ../landing-pages/public) y misma etapa build que la imagen production: salen del mismo commit.
+COPY --from=build /app/landing-pages/public/img /app/landing-pages/public/img
 COPY --from=build /app/packages/db/src /app/packages/db/src
 COPY --from=build /app/packages/db/prisma/migrations /app/packages/db/prisma/migrations
 USER node

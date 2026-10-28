@@ -3,7 +3,7 @@ import type { Context } from 'koa';
 import { readRawBody } from './form-body.ts';
 
 /**
- * Lectura del cuerpo JSON de la API de productos (REQ-F-008, DT-11), sin dependencias:
+ * Lectura del cuerpo JSON de las APIs (REQ-F-008, DT-11; en packages/web desde REQ-F-039), sin dependencias:
  * solo `application/json` (415), como máximo `limit` bytes (413), UTF-8 y JSON válido (400).
  * Devuelve `unknown`: quien lo usa lo valida con una lista cerrada de campos.
  */

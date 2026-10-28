@@ -70,10 +70,12 @@ export interface StartOptions {
  */
 export async function startServer(env: Record<string, string | undefined>, timeoutMs = 30_000, { args = ['src/server.ts'] }: StartOptions = {}) {
   const port = await freePort();
+  // Puerto interno del aviso de la API (REQ-F-039): libre por proceso, para no chocar con otros.
+  const internalPort = await freePort();
   const database = env.DATABASE_URL === undefined && !('DATABASE_URL' in env) ? await makeDatabase() : null;
   const child = spawn(process.execPath, args, {
     cwd: PROJECT_DIR,
-    env: baseEnv(definedOnly({ ...VALID_ENV, PORT: String(port), ...(database ? { DATABASE_URL: appDatabaseUrl(database.name) } : {}), ...env })),
+    env: baseEnv(definedOnly({ ...VALID_ENV, PORT: String(port), INTERNAL_PORT: String(internalPort), ...(database ? { DATABASE_URL: appDatabaseUrl(database.name) } : {}), ...env })),
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: true,
   });
@@ -100,7 +102,9 @@ export async function startServer(env: Record<string, string | undefined>, timeo
   return {
     started,
     port,
+    internalPort,
     url: `http://127.0.0.1:${port}`,
+    internalUrl: `http://127.0.0.1:${internalPort}`,
     output: () => ({ stdout, stderr }),
     exited,
     async stop() {

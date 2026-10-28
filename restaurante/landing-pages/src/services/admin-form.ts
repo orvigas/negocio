@@ -1,6 +1,3 @@
-import { stat } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve } from 'node:path';
-
 import type { BusinessId } from '@restaurante/core/shared';
 import {
   ICON_PATTERN,
@@ -10,6 +7,7 @@ import {
   parsePesosInput,
   resolveUnion,
   textError,
+  type ImageExists,
   type JsonObject,
   type LeafNode,
   type SchemaNode,
@@ -32,23 +30,6 @@ export const FORM_META_FIELDS: readonly string[] = Object.freeze(['_csrf', 'expe
 export const CHECKBOX_VALUE = 'on';
 const INT_INPUT = /^\d{1,5}$/;
 const normalizeText = (value: string): string => value.replace(/\r\n?/g, '\n').trim();
-
-export type ImageExists = (src: string) => Promise<boolean>;
-
-/** Comprueba que una ruta de imagen corresponde a un archivo dentro de public/img (DT-6). */
-export function createImageChecker(publicDir: string): ImageExists {
-  const imgDir = resolve(publicDir, 'img');
-  return async function imageExists(src) {
-    const file = resolve(publicDir, `.${src}`);
-    const rel = relative(imgDir, file);
-    if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return false;
-    try {
-      return (await stat(join(imgDir, rel))).isFile();
-    } catch {
-      return false;
-    }
-  };
-}
 
 /** Resultado de leer una hoja: valor, error del campo o error de estructura. */
 interface LeafResult {

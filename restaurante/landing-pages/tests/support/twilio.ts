@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type { ProductRepository } from '@restaurante/core/catalog';
+
 import type { Env, TwilioBotConfig } from '../../src/config/env.ts';
-import type { ProductRepository } from '../../src/repositories/product-repository.ts';
 import { createBotOrchestrator } from '../../src/services/whatsapp-bot/orchestrator.ts';
 import { createChatBot } from '../../src/services/whatsapp-bot/providers/select.ts';
 import { parseTwilioDelivery } from '../../src/services/whatsapp-bot/providers/twilio/webhook.ts';

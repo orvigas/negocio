@@ -1,4 +1,4 @@
-import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
+import { BUSINESS_IDS, formatDisplayDate, type BusinessId } from '@restaurante/core/shared';
 import {
   DISPLAY_NAME_MAX_LENGTH,
   PASSWORD_MAX_LENGTH,
@@ -11,9 +11,8 @@ import {
   type UserFormValues,
   type UserRecord,
 } from '@restaurante/core/identity';
+import type { Renderer, SafeHtml } from '@restaurante/web';
 
-import { formatDisplayDate } from '../../utils/datetime.ts';
-import type { Renderer, SafeHtml } from '../render.ts';
 import {
   ACCOUNT_PATH,
   ADMIN_CLASSES,

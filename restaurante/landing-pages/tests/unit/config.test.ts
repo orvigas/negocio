@@ -446,3 +446,60 @@ describe('DATABASE_URL (REQ-F-014, RF-5 y CA-8)', () => {
     expect(() => loadDatabaseConfig({ DATABASE_URL: value })).toThrow(ConfigError);
   });
 });
+
+describe('loadConfig: admin nuevo y aviso interno (REQ-F-039, RF-13 y RF-15)', () => {
+  const PROD = { ...VALID_ENV, NODE_ENV: 'production', DATA_DIR: '/var/lib/restaurante' };
+
+  it('sin ADMIN_NEW_URL el /admin actual edita productos como antes (undefined)', () => {
+    expect(loadConfig(VALID_ENV).adminNewUrl).toBeUndefined();
+  });
+
+  it('ADMIN_NEW_URL se normaliza sin "/" final; http solo fuera de producción', () => {
+    expect(loadConfig({ ...VALID_ENV, ADMIN_NEW_URL: 'http://127.0.0.1:3003/' }).adminNewUrl).toBe('http://127.0.0.1:3003');
+    expect(loadConfig({ ...PROD, ADMIN_NEW_URL: 'https://admin.birriaelmuneco.com' }).adminNewUrl).toBe('https://admin.birriaelmuneco.com');
+    expect(() => loadConfig({ ...PROD, ADMIN_NEW_URL: 'http://admin.birriaelmuneco.com' })).toThrow(/ADMIN_NEW_URL debe ser una URL https/);
+  });
+
+  it.each(['no es url', 'ftp://admin.example.com', 'https://usuario:secreto@admin.example.com', 'https://admin.example.com/?x=1', 'https://admin.example.com/#a'])(
+    'rechaza ADMIN_NEW_URL=%s sin repetir el valor',
+    (value) => {
+      let error: unknown;
+      try {
+        loadConfig({ ...VALID_ENV, ADMIN_NEW_URL: value });
+      } catch (err) {
+        error = err;
+      }
+      expect(error).toBeInstanceOf(ConfigError);
+      expect((error as ConfigError).message).toContain('ADMIN_NEW_URL');
+      expect((error as ConfigError).message).not.toContain('secreto');
+    },
+  );
+
+  it('con INTERNAL_NOTIFY_TOKEN, puerto interno 3002 por defecto o INTERNAL_PORT', () => {
+    const token = 'x'.repeat(40);
+    expect(loadConfig({ ...VALID_ENV, INTERNAL_NOTIFY_TOKEN: token }).internalNotify).toEqual({ port: 3002, token });
+    expect(loadConfig({ ...VALID_ENV, INTERNAL_NOTIFY_TOKEN: token, INTERNAL_PORT: '4002' }).internalNotify).toEqual({ port: 4002, token });
+  });
+
+  it('sin token no hay aviso interno (null), también en producción hasta el despliegue del admin nuevo', () => {
+    expect(loadConfig({ ...VALID_ENV, INTERNAL_NOTIFY_TOKEN: undefined }).internalNotify).toBeNull();
+    expect(loadConfig({ ...PROD, INTERNAL_NOTIFY_TOKEN: undefined }).internalNotify).toBeNull();
+  });
+
+  it.each([
+    [{ INTERNAL_NOTIFY_TOKEN: 'corto-secreto' }, /INTERNAL_NOTIFY_TOKEN debe tener al menos 32/],
+    [{ INTERNAL_NOTIFY_TOKEN: `${'x'.repeat(40)} con-espacios` }, /INTERNAL_NOTIFY_TOKEN debe tener al menos 32/],
+    [{ INTERNAL_PORT: '70000' }, /INTERNAL_PORT debe ser un entero/],
+    [{ INTERNAL_PORT: '3000' }, /INTERNAL_PORT debe ser distinto de PORT/],
+  ])('rechaza %j sin repetir el valor', (override, message) => {
+    let error: unknown;
+    try {
+      loadConfig({ ...VALID_ENV, ...override });
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(ConfigError);
+    expect((error as ConfigError).message).toMatch(message);
+    expect((error as ConfigError).message).not.toContain('secreto');
+  });
+});

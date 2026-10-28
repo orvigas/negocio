@@ -2,7 +2,7 @@
   "name": "api",
   "version": "0.1.0",
   "private": true,
-  "description": "API propia (REQ-F-038, paso 3 de restaurante/docs/arquitectura.md): GET /api/v1/public/<negocio>/productos, solo lectura, en la red interna. Usa core, db y contracts.",
+  "description": "API propia (REQ-F-038 y REQ-F-039; restaurante/docs/arquitectura.md): GET /api/v1/public/<negocio>/productos y la administración de productos en /api/v1/admin, en la red interna. Usa core, db, contracts y web.",
   "type": "module",
   "main": "src/server.ts",
   "engines": {
@@ -15,9 +15,11 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@koa/router": "^15.7.0",
     "@restaurante/contracts": "0.1.0",
     "@restaurante/core": "0.1.0",
     "@restaurante/db": "0.1.0",
+    "@restaurante/web": "0.1.0",
     "koa": "^3.2.1"
   },
   "devDependencies": {

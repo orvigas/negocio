@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PublicApiClient, PublicApiResult, PublicBusinessId, PublicProducts } from '@restaurante/contracts';
-import { toPublished } from '@restaurante/core/catalog';
+import { productsFromMenuData, toPublished } from '@restaurante/core/catalog';
 import { BUSINESS_IDS } from '@restaurante/core/shared';
 
-import { productsFromMenuData } from '../../src/repositories/product-repository.ts';
 import { createLandingProducts, loadSeedProducts, withProducts } from '../../src/services/landing-products.ts';
 import { makeRecordingLogger, seedData } from '../helpers.ts';
 

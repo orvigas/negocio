@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 2 de 3, `inventory-manager`: QA ronda 2 aprobada el 2026-10-28; DEF-004 a DEF-008 corregidos; siguiente paso: commit y PR hacia `epic/arquitectura`)
+IN_PROGRESS (PR 2 de 3 listo para merge: PR #95 hacia `epic/arquitectura`, CI en verde el 2026-10-28; el ticket sigue en curso hasta mergear el PR 3)
 
 ## Aprobación
 
@@ -1180,6 +1180,12 @@ Decisiones del usuario: DEF-005: "Ahora, en el PR 2 (Recomendado)"; DEF-008 y DE
   - `npm test`: `api` 90; `landing-pages` 2193 + 1 *expected fail* (105 archivos, con el archivo de QA); `inventory-manager` 70 (7 archivos).
   - No queda ningún proceso abierto.
 
+#### Pull Request del PR 2
+
+- **PR:** #95, https://github.com/orvigas/negocio/pull/95 (base `epic/arquitectura`).
+- **Commit:** `1affdd2`.
+- **CI** (ejecución 40758108416): `cambios`, `calidad`, `docker`, `despliegue`, `auditoria` y GitGuardian en verde. `publish`, `deploy`, `vigente` y `validado` aparecen omitidos, como corresponde a un PR.
+
 #### Desviaciones y pendientes
 
 1. **El PR 2 toca `landing-pages/Dockerfile` y `.dockerignore`.** Sin eso, `npm ci` falla en Docker por el workspace nuevo. Solo copia el `package.json` y el código para el typecheck; la etapa y la imagen `inventory-manager` siguen siendo del PR 3.
@@ -2035,6 +2041,10 @@ La sesión del navegador caducó durante la pausa por el límite de uso (más de
 QA_APPROVED
 
 ## Historial de cambios
+
+### Pull Request del PR 2 (2026-10-28)
+
+Commit `1affdd2`, PR #95 hacia `epic/arquitectura`, CI en verde. El PR 2 está listo para merge; el ticket sigue `IN_PROGRESS` hasta el PR 3.
 
 ### QA del PR 2, ronda 2 (2026-10-28)
 

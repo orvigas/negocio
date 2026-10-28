@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 1 de 3: QA ronda 2 aprobada el 2026-10-27; DEF-001 y DEF-002 corregidos; DEF-003 corregido en la prueba; siguiente paso: commit y PR hacia `epic/arquitectura`)
+IN_PROGRESS (PR 1 de 3 listo para merge: PR #94 hacia `epic/arquitectura`, CI en verde el 2026-10-28; el ticket sigue en curso hasta mergear el PR 3)
 
 ## Aprobación
 
@@ -1028,6 +1028,13 @@ Decisión del usuario: "Ahora, en el PR 1 (Recomendado)".
   - **Cambio, solo en la prueba:** ahora exige exactamente dos avisos, uno de cada negocio con `source: seed`, sin depender del orden. El código de producción no cambia.
   - **Verificación:** 50 ejecuciones seguidas de la prueba, todas en verde.
 
+#### Pull Request del PR 1
+
+- **PR:** #94, https://github.com/orvigas/negocio/pull/94 (base `epic/arquitectura`).
+- **Commit:** `75c4b4d`.
+- **CI** (ejecución 40664267304): `calidad`, `docker`, `despliegue`, `auditoria` y `cambios` en verde. `publish`, `deploy`, `vigente`, `validado` y GitGuardian aparecen omitidos, como corresponde a un PR.
+- **Pendiente para el PR 2 o el PR 3** (observación de QA, sin severidad): `loop(business)` del notificador se lanza con `void`. Si `response.body?.cancel()` o el logger lanzaran, sería un rechazo sin manejar. Hay que capturarlo con `.catch` y registrarlo.
+
 #### Desviaciones y pendientes
 
 1. **Variables del aviso interno opcionales también en producción en el PR 1.** El plan las hacía obligatorias (fallo rápido), pero eso exigiría tocar `compose.prod.yaml`, `deploy.sh` y los smoke, que son del PR 3. Sin ellas no se avisa y queda la red de seguridad de 60 s. El PR 3 las hace obligatorias junto con `compose.prod.yaml`.
@@ -1471,6 +1478,10 @@ El usuario decidió corregir DEF-001 y DEF-002 en el PR 1 ("Ahora, en el PR 1 (R
 QA_APPROVED
 
 ## Historial de cambios
+
+### Pull Request del PR 1 (2026-10-28)
+
+DEF-003 corregido en la prueba (50 ejecuciones en verde). Commit `75c4b4d`, PR #94 hacia `epic/arquitectura`, CI en verde. El PR 1 está listo para merge; el ticket sigue `IN_PROGRESS` hasta el PR 3.
 
 ### QA del PR 1, ronda 2 (2026-10-27)
 

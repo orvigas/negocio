@@ -1,8 +1,8 @@
 import type { BusinessId } from '@restaurante/core/shared';
 import { formatPesos } from '@restaurante/core/catalog';
+import type { Renderer, SafeHtml, TemplateData } from '@restaurante/web';
 
 import { BUSINESS_PATHS } from '../../config/business-paths.ts';
-import type { Renderer, SafeHtml, TemplateData } from '../render.ts';
 import type { LandingViewData } from './index.ts';
 
 /**

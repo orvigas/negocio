@@ -1,18 +1,18 @@
-import type { BusinessId } from '@restaurante/core/shared';
+import { formatDisplayDate, toZonedIsoString, type BusinessId } from '@restaurante/core/shared';
 import {
   categoriesOf,
+  productFormLeaves,
   type DetailsType,
   type FieldErrors,
+  type FormLeaf,
   type ProductCategory,
   type ProductConflictInfo,
   type ProductKind,
+  type ProductView,
 } from '@restaurante/core/catalog';
+import type { Renderer, SafeHtml } from '@restaurante/web';
 
-import type { ProductView } from '../../repositories/product-repository.ts';
-import { productFormLeaves, type FormLeaf } from '../../services/product-form.ts';
-import { formatDisplayDate, toZonedIsoString } from '../../utils/datetime.ts';
 import { formatPesos } from '../landings/shared.ts';
-import type { Renderer, SafeHtml } from '../render.ts';
 import {
   ADMIN_CLASSES as CLASSES,
   ADMIN_NOTICE_TONES as NOTICE_TONES,
@@ -61,10 +61,24 @@ function priceText(product: ProductView): string {
   return product.priceUnit ? `${price} ${product.priceUnit}` : price;
 }
 
-/** Lista de productos de la página de un negocio. */
+/**
+ * Aviso del modo de solo lectura (REQ-F-039, RF-15): la edición de productos se hace en el admin nuevo
+ * (`ADMIN_NEW_URL`). Texto, no solo color, y un enlace con nombre.
+ */
+export function renderProductsMovedNotice(renderer: Renderer, movedTo: string): SafeHtml {
+  return renderNotice(renderer, {
+    tone: 'warning',
+    role: 'status',
+    title: 'Los productos ahora se editan en el admin nuevo.',
+    paragraphs: ['Aquí solo puedes consultarlos: los cambios se hacen en el admin nuevo.'],
+    extra: renderer.render('admin/partials/products-moved-link', { href: movedTo }),
+  });
+}
+
+/** Lista de productos de la página de un negocio; con `movedTo`, en solo lectura (REQ-F-039, RF-15). */
 export function renderProductsSection(
   renderer: Renderer,
-  { businessId, products, csrfToken }: { businessId: BusinessId; products: ProductView[]; csrfToken: string },
+  { businessId, products, csrfToken, movedTo }: { businessId: BusinessId; products: ProductView[]; csrfToken: string; movedTo?: string | undefined },
 ): SafeHtml {
   const categories = categoriesOf(businessId);
   const tables = categories.map((category) => {
@@ -80,36 +94,47 @@ export function renderProductsSection(
         buttonClass: CLASSES.secondaryButton,
       });
     const rows = items.map((product, index) =>
-      renderer.render('admin/partials/product-row', {
-        position: index + 1,
-        name: product.name,
-        price: priceText(product),
-        available: product.available ? 'Sí' : 'No',
-        editHref: productPath(businessId, product.id),
-        deleteHref: `${productPath(businessId, product.id)}/eliminar`,
-        moves: renderer.join([
-          ...(index > 0 ? [moveForm(product, 'subir', 'Subir')] : []),
-          ...(index < items.length - 1 ? [moveForm(product, 'bajar', 'Bajar')] : []),
-        ]),
-      }),
+      movedTo
+        ? renderer.render('admin/partials/product-row-readonly', {
+            position: index + 1,
+            name: product.name,
+            price: priceText(product),
+            available: product.available ? 'Sí' : 'No',
+          })
+        : renderer.render('admin/partials/product-row', {
+            position: index + 1,
+            name: product.name,
+            price: priceText(product),
+            available: product.available ? 'Sí' : 'No',
+            editHref: productPath(businessId, product.id),
+            deleteHref: `${productPath(businessId, product.id)}/eliminar`,
+            moves: renderer.join([
+              ...(index > 0 ? [moveForm(product, 'subir', 'Subir')] : []),
+              ...(index < items.length - 1 ? [moveForm(product, 'bajar', 'Bajar')] : []),
+            ]),
+          }),
     );
     return renderer.render('admin/partials/product-table', {
       id,
       title: CATEGORY_TITLES[category],
       content:
         rows.length > 0
-          ? renderer.render('admin/partials/product-table-rows', { labelledBy: id, rows: renderer.join(rows) })
+          ? renderer.render(movedTo ? 'admin/partials/product-table-rows-readonly' : 'admin/partials/product-table-rows', { labelledBy: id, rows: renderer.join(rows) })
           : renderer.render('admin/partials/product-empty', { text: `No hay ${CATEGORY_TITLES[category].toLowerCase()} activos.` }),
     });
   });
   const link = (href: string, label: string) => renderer.render('admin/partials/product-action-link', { href, label, buttonClass: CLASSES.secondaryButton });
   return renderer.render('admin/partials/products-section', {
     actions: renderer.join([
-      ...categories.map((category) =>
-        link(businessId === 'birria' ? `${productsPath(businessId)}/nuevo` : newProductPath(businessId, category), `Agregar ${CATEGORY_SINGULAR[category]}`),
-      ),
+      ...(movedTo
+        ? []
+        : categories.map((category) =>
+            link(businessId === 'birria' ? `${productsPath(businessId)}/nuevo` : newProductPath(businessId, category), `Agregar ${CATEGORY_SINGULAR[category]}`),
+          )),
       link(deletedProductsPath(businessId), 'Ver productos eliminados'),
     ]),
+    notice: movedTo ? renderProductsMovedNotice(renderer, movedTo) : renderer.join([]),
+    intro: movedTo ? renderer.join([]) : renderer.render('admin/partials/products-intro'),
     tables: renderer.join(tables),
   });
 }
@@ -343,20 +368,23 @@ export function renderProductDelete(
 /** Lista "Productos eliminados" con la acción "Recuperar" (D-12). */
 export function renderProductsDeleted(
   renderer: Renderer,
-  options: AdminPageContext & { businessId: BusinessId; timezone: string; products: ProductView[]; problem?: string | undefined },
+  options: AdminPageContext & { businessId: BusinessId; timezone: string; products: ProductView[]; problem?: string | undefined; movedTo?: string | undefined },
 ): SafeHtml {
-  const { businessId, products, timezone, problem, viewer, csrfToken, faviconBusinessId } = options;
+  const { businessId, products, timezone, problem, viewer, csrfToken, faviconBusinessId, movedTo } = options;
   const title = `Productos eliminados de ${businessName(businessId)}`;
+  const deletedAt = (product: ProductView): string => (product.deletedAt ? formatDisplayDate(toZonedIsoString(product.deletedAt, timezone), timezone) : '');
   const rows = products.map((product) =>
-    renderer.render('admin/partials/product-deleted-row', {
-      name: product.name,
-      category: CATEGORY_SINGULAR[product.category],
-      deletedAt: product.deletedAt ? formatDisplayDate(toZonedIsoString(product.deletedAt, timezone), timezone) : '',
-      action: `${productPath(businessId, product.id)}/recuperar`,
-      csrfToken,
-      version: product.version,
-      buttonClass: CLASSES.secondaryButton,
-    }),
+    movedTo
+      ? renderer.render('admin/partials/product-deleted-row-readonly', { name: product.name, category: CATEGORY_SINGULAR[product.category], deletedAt: deletedAt(product) })
+      : renderer.render('admin/partials/product-deleted-row', {
+          name: product.name,
+          category: CATEGORY_SINGULAR[product.category],
+          deletedAt: deletedAt(product),
+          action: `${productPath(businessId, product.id)}/recuperar`,
+          csrfToken,
+          version: product.version,
+          buttonClass: CLASSES.secondaryButton,
+        }),
   );
   return adminPage(renderer, {
     title,
@@ -368,11 +396,36 @@ export function renderProductsDeleted(
       title,
       backHref: adminPath(businessId),
       businessName: businessName(businessId),
-      notices: problem ? renderNotice(renderer, { tone: 'error', role: 'alert', title: problem }) : renderer.join([]),
+      notices: renderer.join([
+        ...(movedTo ? [renderProductsMovedNotice(renderer, movedTo)] : []),
+        ...(problem ? [renderNotice(renderer, { tone: 'error', role: 'alert', title: problem })] : []),
+      ]),
       content:
         rows.length > 0
-          ? renderer.render('admin/partials/product-deleted-table', { rows: renderer.join(rows) })
+          ? renderer.render(movedTo ? 'admin/partials/product-deleted-table-readonly' : 'admin/partials/product-deleted-table', { rows: renderer.join(rows) })
           : renderer.render('admin/partials/product-empty', { text: 'No hay productos eliminados.' }),
+    }),
+  });
+}
+
+/**
+ * Página 410 del modo de solo lectura (REQ-F-039, RF-15): alta, edición, eliminación, recuperación u
+ * orden de productos en el /admin actual con el admin nuevo activo. No muestra ni cambia nada.
+ */
+export function renderProductsMoved(renderer: Renderer, options: AdminPageContext & { businessId: BusinessId; movedTo: string }): SafeHtml {
+  const { businessId, movedTo, viewer, csrfToken, faviconBusinessId } = options;
+  const title = `Productos de ${businessName(businessId)}`;
+  return adminPage(renderer, {
+    title,
+    viewer,
+    csrfToken,
+    faviconBusinessId,
+    current: businessId,
+    body: renderer.render('admin/products-moved', {
+      title,
+      backHref: adminPath(businessId),
+      businessName: businessName(businessId),
+      notice: renderProductsMovedNotice(renderer, movedTo),
     }),
   });
 }

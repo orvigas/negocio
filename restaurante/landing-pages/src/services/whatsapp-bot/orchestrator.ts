@@ -3,7 +3,7 @@ import { createHmac, randomBytes, randomInt } from 'node:crypto';
 import { errorProp, silentLogger, type BusinessId, type Logger } from '@restaurante/core/shared';
 import { getActiveBusinessId } from '@restaurante/core/schedule';
 
-import type { ProductRepository } from '../../repositories/product-repository.ts';
+import type { ProductRepository } from '@restaurante/core/catalog';
 import { buildWhatsAppLink } from '../whatsapp.ts';
 import { buildCatalog } from './catalog.ts';
 import type { ChatBot, InboundDelivery, InboundMessage } from './chat-bot.ts';

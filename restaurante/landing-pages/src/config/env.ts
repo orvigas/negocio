@@ -110,6 +110,16 @@ export interface Config {
    */
   readonly allowNewerSchema: boolean;
   readonly trustProxy: boolean;
+  /**
+   * ADMIN_NEW_URL (REQ-F-039, RF-15): URL del admin nuevo (inventory-manager). Con ella, la edición de
+   * productos del /admin actual queda en solo lectura y enlaza ahí; sin ella, /admin funciona como antes.
+   */
+  readonly adminNewUrl: string | undefined;
+  /**
+   * Puerto interno del aviso de la API (REQ-F-039, RF-13): INTERNAL_PORT e INTERNAL_NOTIFY_TOKEN.
+   * null sin token: no se abre el puerto y queda la recarga de 60 s.
+   */
+  readonly internalNotify: { readonly port: number; readonly token: string } | null;
   readonly adminBootstrap: AdminBootstrapConfig;
   readonly whatsappBot: ChatBotConfig;
   /** Umbrales de la protección del bot (REQ-F-025, RF-5). */
@@ -133,7 +143,11 @@ export const DEFAULTS = Object.freeze({
   HOST: '127.0.0.1',
   PORT: 3000,
   BUSINESS_TIMEZONE: 'America/Mexico_City',
+  INTERNAL_PORT: 3002,
 });
+
+/** Longitud mínima de la credencial del aviso interno (REQ-F-039, RF-13). */
+export const MIN_NOTIFY_TOKEN_LENGTH = 32;
 
 export class ConfigError extends Error {
   readonly issues: string[];
@@ -235,6 +249,51 @@ function parseApiInternalUrl(raw: string | undefined, issues: string[]): string 
     return undefined;
   }
   return `${url.origin}${url.pathname}`.replace(/\/+$/, '');
+}
+
+/**
+ * URL del admin nuevo (REQ-F-039, RF-15): opcional; http(s) sin credenciales, query ni fragmento, y
+ * https en producción. Se devuelve sin barra final. Los mensajes nunca repiten el valor.
+ */
+function parseAdminNewUrl(raw: string | undefined, nodeEnv: string | undefined, issues: string[]): string | null | undefined {
+  if (raw === undefined) return null;
+  let url: URL | undefined;
+  try {
+    url = new URL(raw);
+  } catch {
+    url = undefined;
+  }
+  const protocols = nodeEnv === 'production' ? ['https:'] : ['http:', 'https:'];
+  if (!url || !protocols.includes(url.protocol) || url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '' || raw.includes('?') || raw.includes('#')) {
+    issues.push(`ADMIN_NEW_URL debe ser una URL ${nodeEnv === 'production' ? 'https' : 'http(s)'} sin credenciales, query ni fragmento (p. ej. https://admin.birriaelmuneco.com)`);
+    return undefined;
+  }
+  return `${url.origin}${url.pathname}`.replace(/\/+$/, '');
+}
+
+/**
+ * Aviso interno de la API (REQ-F-039, RF-13 y RF-14): token de 32 caracteres visibles como mínimo; el
+ * puerto interno no puede ser el de la app (el que enruta Traefik). Sin token no se abre el puerto (queda
+ * la recarga de 60 s); pasa a ser obligatorio en producción con el despliegue del admin nuevo (PR 3).
+ */
+function parseInternalNotify(env: Env, appPort: number | undefined, issues: string[]): { port: number; token: string } | null | undefined {
+  const token = readVar(env, 'INTERNAL_NOTIFY_TOKEN');
+  const rawPort = readVar(env, 'INTERNAL_PORT');
+  const port = rawPort === undefined ? DEFAULTS.INTERNAL_PORT : /^\d{1,5}$/.test(rawPort) ? Number(rawPort) : Number.NaN;
+  let valid = true;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    issues.push('INTERNAL_PORT debe ser un entero entre 1 y 65535');
+    valid = false;
+  } else if (port === appPort) {
+    issues.push('INTERNAL_PORT debe ser distinto de PORT (el aviso interno no se sirve en el puerto público)');
+    valid = false;
+  }
+  if (token === undefined) return valid ? null : undefined;
+  if (token.length < MIN_NOTIFY_TOKEN_LENGTH || !/^[\x21-\x7e]+$/.test(token)) {
+    issues.push(`INTERNAL_NOTIFY_TOKEN debe tener al menos ${MIN_NOTIFY_TOKEN_LENGTH} caracteres visibles, sin espacios (p. ej. openssl rand -hex 32)`);
+    return undefined;
+  }
+  return valid ? { port, token } : undefined;
 }
 
 const isInside = (child: string, parent: string): boolean => {
@@ -654,6 +713,8 @@ export function loadConfig(env: Env = process.env): Config {
   const adminBootstrap = parseAdminBootstrap(env, issues);
   const allowNewerSchema = parseBoolean(readVar(env, 'DATABASE_ALLOW_NEWER_SCHEMA'), 'DATABASE_ALLOW_NEWER_SCHEMA', false, issues);
   const trustProxy = parseBoolean(readVar(env, 'TRUST_PROXY'), 'TRUST_PROXY', false, issues);
+  const adminNewUrl = parseAdminNewUrl(readVar(env, 'ADMIN_NEW_URL'), nodeEnv, issues);
+  const internalNotify = parseInternalNotify(env, port, issues);
   const whatsappBot = parseChatBot(env, nodeEnv, whatsapp.molotes?.phone, issues);
   const botLimits = parseBotLimits(env, issues);
   // La clave solo se exige con el resto del bot ya válido: así cada error del bot se ve una vez.
@@ -678,6 +739,8 @@ export function loadConfig(env: Env = process.env): Config {
     allowNewerSchema === undefined ||
     adminBootstrap === undefined ||
     trustProxy === undefined ||
+    adminNewUrl === undefined ||
+    internalNotify === undefined ||
     whatsappBot === undefined ||
     botLimits === undefined ||
     botKeys === undefined ||
@@ -699,6 +762,8 @@ export function loadConfig(env: Env = process.env): Config {
     database,
     allowNewerSchema,
     trustProxy,
+    adminNewUrl: adminNewUrl ?? undefined,
+    internalNotify: internalNotify ? Object.freeze(internalNotify) : null,
     adminBootstrap,
     whatsappBot,
     botLimits,

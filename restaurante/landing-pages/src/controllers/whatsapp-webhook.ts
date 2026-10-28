@@ -1,10 +1,10 @@
 import type { Context, Middleware } from 'koa';
 
 import type { Logger } from '@restaurante/core/shared';
+import { readRawBody } from '@restaurante/web';
 
 import { BOT_WEBHOOK_PATH } from '../config/env.ts';
 import type { ChatBot, InboundDelivery, WebhookQuery } from '../services/whatsapp-bot/chat-bot.ts';
-import { readRawBody } from '../utils/form-body.ts';
 
 /**
  * Webhook del bot de WhatsApp (REQ-F-009 RF-1; REQ-F-012 RF-3): GET y POST /webhooks/whatsapp,

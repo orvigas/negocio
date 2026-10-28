@@ -1,15 +1,25 @@
 import Koa, { type Middleware } from 'koa';
 
-import { isPublicBusinessId, productsResponseSchemas, type ApiError } from '@restaurante/contracts';
+import { ADMIN_API_PREFIX, isPublicBusinessId, productsResponseSchemas } from '@restaurante/contracts';
 import { toPublished, type ProductStore } from '@restaurante/core/catalog';
-import { DatabaseUnavailableError, errorProp, isBusinessId, silentLogger, type Logger } from '@restaurante/core/shared';
+import { isBusinessId, silentLogger, type Logger } from '@restaurante/core/shared';
+
+import { createAdminRouter } from './admin/router.ts';
+import type { ProductRoutes } from './admin/product-routes.ts';
+import type { SessionRoutes } from './admin/session-routes.ts';
+import { ApiHttpError, createErrorHandler } from './errors.ts';
 
 /**
- * App de la API (REQ-F-038, RF-1). Construida sin abrir puertos (testeable).
+ * App de la API (REQ-F-038, RF-1; REQ-F-039). Construida sin abrir puertos (testeable).
  *
  *   GET|HEAD /api/v1/public/{molotes|birria}/productos -> 200 { data } (contrato de contracts)
+ *   /api/v1/admin/...                                  -> administración (src/admin/router.ts),
+ *                                                         solo si se pasan sus rutas (`admin`)
  *
- * - Solo lectura y sin caché propia: cada petición lee el estado confirmado en la base (CA-3).
+ * La API solo es alcanzable desde la red interna (sin puertos publicados ni router de Traefik): por
+ * eso confía en `X-Forwarded-For` (`proxy`, último valor), que pone el admin con la IP del visitante.
+ *
+ * - Sin caché propia: cada petición lee el estado confirmado en la base (CA-3 de REQ-F-038).
  * - Errores con el formato { error: { code, message } }: 404 (negocio u otra ruta), 405 (otro
  *   método, con Allow), 503 (base no disponible) y 500. Nunca stack, SQL ni credenciales; el log
  *   solo lleva el nombre y el código del error.
@@ -17,48 +27,6 @@ import { DatabaseUnavailableError, errorProp, isBusinessId, silentLogger, type L
 
 const PRODUCTS_PATH = /^\/api\/v1\/public\/([^/]+)\/productos$/;
 const ALLOWED_METHODS = 'GET, HEAD';
-
-class ApiHttpError extends Error {
-  readonly status: number;
-  readonly code: string;
-  readonly headers: Readonly<Record<string, string>>;
-
-  constructor(status: number, code: string, message: string, headers: Record<string, string> = {}) {
-    super(message);
-    this.name = 'ApiHttpError';
-    this.status = status;
-    this.code = code;
-    this.headers = headers;
-  }
-}
-
-function sendError(ctx: Koa.Context, status: number, code: string, message: string): void {
-  const body: ApiError = { error: { code, message } };
-  ctx.status = status;
-  ctx.body = body;
-}
-
-function createErrorHandler(logger: Logger): Middleware {
-  return async function errorHandler(ctx, next) {
-    try {
-      await next();
-      if (ctx.body == null && ctx.status === 404) throw new ApiHttpError(404, 'NOT_FOUND', 'Recurso no encontrado.');
-    } catch (err) {
-      if (err instanceof ApiHttpError) {
-        for (const [name, value] of Object.entries(err.headers)) ctx.set(name, value);
-        sendError(ctx, err.status, err.code, err.message);
-        return;
-      }
-      if (err instanceof DatabaseUnavailableError) {
-        logger.error('request_error', { method: ctx.method, path: ctx.path, status: 503, name: err.name, code: errorProp(err.details, 'code') });
-        sendError(ctx, 503, 'DATABASE_UNAVAILABLE', 'Servicio no disponible temporalmente.');
-        return;
-      }
-      logger.error('request_error', { method: ctx.method, path: ctx.path, status: 500, name: errorProp(err, 'name'), code: errorProp(err, 'code') });
-      sendError(ctx, 500, 'INTERNAL_ERROR', 'Error interno.');
-    }
-  };
-}
 
 function createRequestLogger(logger: Logger): Middleware {
   return async function requestLogger(ctx, next) {
@@ -72,16 +40,23 @@ function createRequestLogger(logger: Logger): Middleware {
 }
 
 export interface ApiAppOptions {
-  /** Store de productos (Prisma en producción, memoria en las pruebas). Solo se lee. */
+  /** Store de productos (Prisma en producción, memoria en las pruebas). La parte pública solo lo lee. */
   store: Pick<ProductStore, 'listBusiness'>;
+  /** Rutas de administración (REQ-F-039); sin ellas, /api/v1/admin responde 404. */
+  admin?: { session: SessionRoutes; products: ProductRoutes } | undefined;
   logger?: Logger;
 }
 
-export function createApiApp({ store, logger = silentLogger }: ApiAppOptions): Koa {
+const isAdminPath = (path: string): boolean => path === ADMIN_API_PREFIX || path.startsWith(`${ADMIN_API_PREFIX}/`);
+
+export function createApiApp({ store, admin, logger = silentLogger }: ApiAppOptions): Koa {
   if (typeof store?.listBusiness !== 'function') throw new TypeError('createApiApp requiere el store de productos');
   const app = new Koa();
   // Los errores se registran en el manejador central, sin el mensaje (podría contener datos).
   app.silent = true;
+  // Solo red interna: la IP del visitante es el último valor de X-Forwarded-For (lo pone el admin).
+  app.proxy = true;
+  app.maxIpsCount = 1;
 
   app.use(createRequestLogger(logger));
   app.use(createErrorHandler(logger));
@@ -90,7 +65,16 @@ export function createApiApp({ store, logger = silentLogger }: ApiAppOptions): K
     ctx.set('X-Content-Type-Options', 'nosniff');
     await next();
   });
+  if (admin) {
+    // El router solo atiende su prefijo; el resto de rutas sigue al manejador público.
+    const router = createAdminRouter(admin);
+    app.use(router.routes());
+    app.use(router.allowedMethods());
+  }
   app.use(async (ctx) => {
+    // Rutas de administración sin coincidencia: 404 sin cuerpo, para que allowedMethods responda 405
+    // si la ruta existe con otro método (y, si no, el manejador central responda 404).
+    if (isAdminPath(ctx.path)) return;
     const match = PRODUCTS_PATH.exec(ctx.path);
     if (!match) throw new ApiHttpError(404, 'NOT_FOUND', 'Recurso no encontrado.');
     if (ctx.method !== 'GET' && ctx.method !== 'HEAD') {

@@ -6,13 +6,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { createPrismaClient } from '@restaurante/db/client';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
-import type { MenuDocument, ProductStore } from '@restaurante/core/catalog';
+import { createImageChecker, createProductRepository, type MenuDocument, type ProductStore } from '@restaurante/core/catalog';
 
 import { DEFAULT_PUBLIC_DIR, createApp } from '../../src/app.ts';
 import { loadSeedDocument } from '../../src/content/seeds.ts';
 import { createFileMenuRepository } from '../../src/repositories/file-menu-repository.ts';
-import { createProductRepository } from '../../src/repositories/product-repository.ts';
-import { createImageChecker } from '../../src/services/admin-form.ts';
 import { makeConfig, makeRecordingLogger } from '../helpers.ts';
 import { FRIDAY_NOON_MX } from '../support/admin.ts';
 import { makeDatabase, makeTempDir, type TestDatabase } from '../support/database.ts';

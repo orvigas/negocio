@@ -6,10 +6,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import type { BusinessId } from '@restaurante/core/shared';
 import type { BirriaVariantsItem, MenuData } from '@restaurante/core/catalog';
+import { createRenderer } from '@restaurante/web';
 
 import { DEFAULT_PUBLIC_DIR, DEFAULT_VIEWS_DIR } from '../../src/app.ts';
 import { renderLandingPage } from '../../src/views/landings/index.ts';
-import { createRenderer } from '../../src/views/render.ts';
 import { initPromoForms } from '../../public/js/modules/promo-form.js';
 import { initVariantSelectors } from '../../public/js/modules/variant-selector.js';
 import { makeConfig, seedData } from '../helpers.ts';

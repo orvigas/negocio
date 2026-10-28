@@ -1,7 +1,6 @@
 import type { UsageCap, UsageDelta, UsagePeriodType, UsageRecord } from '@restaurante/core/bot-control';
-import type { Logger } from '@restaurante/core/shared';
+import { toZonedIsoString, type Logger } from '@restaurante/core/shared';
 
-import { toZonedIsoString } from '../utils/datetime.ts';
 import type { BotLimits } from './whatsapp-bot/protection/limits.ts';
 
 /**

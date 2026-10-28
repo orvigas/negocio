@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { SafeHtml, createRenderer, escapeHtml } from '../../src/views/render.ts';
+import { SafeHtml, createRenderer, escapeHtml } from '@restaurante/web';
 
 describe('escapeHtml', () => {
   it('escapa los caracteres significativos de HTML', () => {

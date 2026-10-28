@@ -5,13 +5,13 @@ import {
   type MenuDataByBusiness,
   type VisibleMenuByBusiness,
 } from '@restaurante/core/catalog';
+import type { Renderer, SafeHtml } from '@restaurante/web';
 
 import { BUSINESS_PATHS } from '../../config/business-paths.ts';
 import type { Config } from '../../config/env.ts';
 import { getIconLinks } from '../../content/icons.ts';
 import type { ImageDescriptor } from '../../content/images.ts';
 import { commonContent, getBusinessContent, type BusinessContentById } from '../../content/index.ts';
-import type { Renderer, SafeHtml } from '../render.ts';
 import { buildBirriaBody } from './birria.ts';
 import { buildMolotesBody } from './molotes.ts';
 

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { apiErrorSchema, productsResponseSchemas } from '@restaurante/contracts';
 import { toPublished } from '@restaurante/core/catalog';
-import { createLogger, type Logger } from '@restaurante/core/shared';
+import type { Logger } from '@restaurante/core/shared';
+import { createLogger } from '@restaurante/web';
 
 import { createApiApp } from '../../src/app.ts';
 import { makeStore } from '../support/fixtures.ts';

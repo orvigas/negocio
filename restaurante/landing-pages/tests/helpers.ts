@@ -27,6 +27,8 @@ export const VALID_ENV = Object.freeze({
   // Obligatoria (REQ-F-038). Un puerto cerrado: un servidor de prueba arranca sin API (sirve la
   // semilla) y nunca habla con una API local del desarrollador; las pruebas de la API usan el doble.
   API_INTERNAL_URL: 'http://127.0.0.1:9',
+  // Aviso interno de la API (REQ-F-039). Solo la usa server.ts (abre el puerto interno).
+  INTERNAL_NOTIFY_TOKEN: 'internal-notify-token-de-prueba-0123456789',
 });
 
 /**

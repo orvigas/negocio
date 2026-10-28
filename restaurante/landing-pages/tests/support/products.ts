@@ -1,12 +1,14 @@
 import type { BusinessId } from '@restaurante/core/shared';
 import {
   createMemoryProductStore,
+  createProductRepository,
+  type ImportSource,
   type MemoryProductStore,
+  type ProductRepositoryOptions,
   type ProductStore,
 } from '@restaurante/core/catalog';
 
 import type { MenuRepository } from '../../src/repositories/menu-repository.ts';
-import { createProductRepository, type ImportSource, type ProductRepositoryOptions } from '../../src/repositories/product-repository.ts';
 import { seedData } from '../helpers.ts';
 
 /** Datos y repositorios de productos para las pruebas (REQ-F-008). */
@@ -55,7 +57,6 @@ export const VALID_INPUTS = {
     variants: [{ label: 'Coca', price: 35, description: 'Vidrio', available: true }],
   },
 };
-
 
 export const ANA = Object.freeze({ id: 1, name: 'Ana' });
 export const LUIS = Object.freeze({ id: 2, name: 'Luis' });

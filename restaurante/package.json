@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Monorepo (npm workspaces) de Molotes y Birria El Muñeco. Workspaces: packages/core (dominio), packages/contracts (contratos de la API, con Zod), packages/db (Prisma y MySQL), api (API propia de solo lectura: productos publicados; red interna) y landing-pages (app Koa con las landings, /admin y el bot de WhatsApp).",
+  "description": "Monorepo (npm workspaces) de Molotes y Birria El Muñeco. Workspaces: packages/core (dominio), packages/contracts (contratos de la API, con Zod), packages/db (Prisma y MySQL), packages/web (utilidades HTTP/SSR de las apps Koa), api (API propia en la red interna: productos publicados y, desde REQ-F-039, administración de productos en /api/v1/admin) y landing-pages (app Koa con las landings, /admin y el bot de WhatsApp).",
   "engines": {
     "node": ">=24.22.1"
   },
   "workspaces": [
     "packages/core",
     "packages/contracts",
+    "packages/web",
     "packages/db",
     "api",
     "landing-pages"

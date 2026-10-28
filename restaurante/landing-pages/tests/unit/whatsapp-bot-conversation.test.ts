@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { BUSINESS, type BusinessId } from '@restaurante/core/shared';
-import { toInput } from '@restaurante/core/catalog';
+import { toInput, type ProductRepository, type PublishedProducts } from '@restaurante/core/catalog';
 
-import type { ProductRepository, PublishedProducts } from '../../src/repositories/product-repository.ts';
 import { ANA } from '../support/products.ts';
 import { CUSTOMER, STAFF, WEEK, inboundPayload, makeBotHarness, mx, type BotHarness } from '../support/whatsapp.ts';
 

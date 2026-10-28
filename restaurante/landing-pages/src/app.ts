@@ -5,32 +5,31 @@ import Koa from 'koa';
 import helmet from 'koa-helmet';
 import serve from 'koa-static';
 
+import { createImageChecker, type ProductRepository } from '@restaurante/core/catalog';
 import {
   SCRYPT_DEFAULTS,
+  createLoginThrottle,
+  createSessionStore,
   createUserAuthenticator,
   type PasswordHashParams,
   type UserRepository,
 } from '@restaurante/core/identity';
 import { getActiveBusinessId } from '@restaurante/core/schedule';
 import { silentLogger, type Logger } from '@restaurante/core/shared';
+import { createRenderer } from '@restaurante/web';
 
 import type { Config } from './config/env.ts';
 import { createAdminGate } from './middleware/admin-guard.ts';
 import { createErrorHandler } from './middleware/error-handler.ts';
 import { createRequestLogger } from './middleware/request-logger.ts';
 import { assertMenuRepository } from './repositories/menu-repository.ts';
-import type { ProductRepository } from './repositories/product-repository.ts';
 import { createRouter } from './routes/index.ts';
-import { createImageChecker } from './services/admin-form.ts';
 import type { BotControl } from './services/bot-control.ts';
 import type { LandingProducts } from './services/landing-products.ts';
-import { createLoginThrottle } from './services/login-throttle.ts';
-import { createSessionStore } from './services/session-store.ts';
 import { createBotOrchestrator, type BotOrchestrator } from './services/whatsapp-bot/orchestrator.ts';
 import { createBotProtection } from './services/whatsapp-bot/protection/protection.ts';
 import { createChatBot, type FetchLike } from './services/whatsapp-bot/providers/select.ts';
 import { renderAdminUnavailable } from './views/admin/index.ts';
-import { createRenderer } from './views/render.ts';
 
 const SRC_DIR = dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_VIEWS_DIR = join(SRC_DIR, 'views');

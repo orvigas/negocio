@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { getLocalMinutes } from '@restaurante/core/shared';
+
 import { BUSINESS_HOURS } from '../../src/content/hours.ts';
 import { createCloudApiClient, toCloudApiRecipient } from '../../src/services/whatsapp-bot/providers/meta/cloud-api.ts';
 import { staffTemplateParams, type OrderDetails } from '../../src/services/whatsapp-bot/messages.ts';
@@ -9,7 +11,6 @@ import { createConversationStore, createExpiringMap, createRateLimiter } from '.
 import { chunkText, codePointLength, normalizeInput, parseNumber } from '../../src/services/whatsapp-bot/text.ts';
 import { checkSignature, parseDelivery } from '../../src/services/whatsapp-bot/providers/meta/webhook.ts';
 import { WhatsAppBot } from '../../src/services/whatsapp-bot/providers/meta/whatsapp-bot.ts';
-import { getLocalMinutes } from '../../src/utils/datetime.ts';
 import { BOT_ENV, makeRecordingLogger } from '../helpers.ts';
 import { createCloudApiDouble, graphError, networkError, timeout } from '../support/cloud-api-double.ts';
 import { PHONE_NUMBER_ID, WEEK, botConfig, loadFixture, mx, sign } from '../support/whatsapp.ts';

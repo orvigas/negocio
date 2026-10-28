@@ -1,19 +1,18 @@
-import { allowedBusinesses, type UserRepository } from '@restaurante/core/identity';
+import { allowedBusinesses, type SessionStore, type UserRepository } from '@restaurante/core/identity';
 import {
   ProductConflictError,
   ProductNotFoundError,
   ProductValidationError,
   isProductCategory,
-  pesos,
-  toInput,
+  toProductDto,
+  type ProductAuthor,
+  type ProductRepository,
+  type ProductView,
 } from '@restaurante/core/catalog';
-import type { Logger } from '@restaurante/core/shared';
+import { toZonedIsoString, type Logger } from '@restaurante/core/shared';
+import { readJsonBody } from '@restaurante/web';
 
-import type { ProductAuthor, ProductRepository, ProductView } from '../repositories/product-repository.ts';
-import type { SessionStore } from '../services/session-store.ts';
 import type { Config } from '../config/env.ts';
-import { toZonedIsoString } from '../utils/datetime.ts';
-import { readJsonBody } from '../utils/json-body.ts';
 import { createAdminApiAccess, type ApiAuth, type ApiContext } from './admin-api-access.ts';
 
 /**
@@ -53,35 +52,20 @@ export function createAdminProductsApi({
   logger: Logger;
 }): AdminProductsApi {
   const access = createAdminApiAccess({ config, sessions, users, logger });
-  const zoned = (date: Date): string => toZonedIsoString(date, config.timezone);
 
-  /** Producto -> JSON: campos de su combinación, precios en pesos y en centavos (RF-5.3). */
-  function serialize(product: ProductView): Record<string, unknown> {
-    const input = toInput(product);
-    const prices: Record<string, unknown> = {};
-    if ('price' in input) prices.priceCents = product.priceCents;
-    if ('orderPrice' in input) prices.orderPriceCents = product.orderPriceCents;
-    if ('variants' in input) {
-      input.variants = product.variants.map((variant) => ({ ...variant, price: pesos(variant.priceCents) }));
-    }
-    return {
-      id: product.id,
-      business: product.business,
-      category: product.category,
-      detailsType: product.detailsType,
-      slug: product.slug,
-      ...input,
-      ...prices,
-      available: product.available,
-      position: product.position,
-      version: product.version,
-      deleted: product.deleted,
-      deletedAt: product.deletedAt ? zoned(product.deletedAt) : null,
-      createdAt: zoned(product.createdAt),
-      updatedAt: zoned(product.updatedAt),
-      updatedBy: product.updatedBy ? { id: product.updatedBy.actorId, name: product.updatedBy.actorName } : null,
-    };
+  /**
+   * Modo de solo lectura (REQ-F-039, RF-15): con ADMIN_NEW_URL, las escrituras responden 410
+   * PRODUCTS_MOVED tras la sesión (401) y el permiso (403), sin leer el cuerpo ni escribir nada.
+   * Las lecturas siguen funcionando.
+   */
+  const productsMoved = config.adminNewUrl !== undefined;
+  function assertNotMoved(ctx: ApiContext, auth: ApiAuth): void {
+    if (!productsMoved) return;
+    logger.info('admin_products_moved', { path: ctx.path, method: ctx.method, userId: auth.user.id });
+    ctx.throw(410, `La edición de productos se hace en el admin nuevo: ${config.adminNewUrl}`, { code: 'PRODUCTS_MOVED' });
   }
+
+  const serialize = (product: ProductView): Record<string, unknown> => toProductDto(product, config.timezone);
 
   const authorOf = ({ user }: ApiAuth): ProductAuthor => ({ id: user.id, name: user.displayName });
 
@@ -109,7 +93,7 @@ export function createAdminProductsApi({
           error: {
             code: 'VERSION_CONFLICT',
             message: 'El producto cambió mientras lo editabas: no se guardó nada.',
-            current: { id: err.current.productId, version: err.current.version, updatedAt: zoned(err.current.updatedAt), updatedBy: err.current.updatedBy },
+            current: { id: err.current.productId, version: err.current.version, updatedAt: toZonedIsoString(err.current.updatedAt, config.timezone), updatedBy: err.current.updatedBy },
           },
         };
         return;
@@ -153,7 +137,8 @@ export function createAdminProductsApi({
     },
 
     async create(ctx) {
-      const auth = await access.business(ctx, { write: true });
+      const auth = await access.business(ctx, { write: !productsMoved });
+      assertNotMoved(ctx, auth);
       const input = await readJsonBody(ctx);
       await run(ctx, async () => {
         const product = await products.create(auth.businessId, { input }, authorOf(auth));
@@ -164,7 +149,8 @@ export function createAdminProductsApi({
     },
 
     async update(ctx) {
-      const auth = await access.business(ctx, { write: true });
+      const auth = await access.business(ctx, { write: !productsMoved });
+      assertNotMoved(ctx, auth);
       const id = productId(ctx);
       await run(ctx, async () => {
         // D-19: la existencia (404) se comprueba antes de leer el cuerpo.
@@ -176,7 +162,8 @@ export function createAdminProductsApi({
     },
 
     async remove(ctx) {
-      const auth = await access.business(ctx, { write: true });
+      const auth = await access.business(ctx, { write: !productsMoved });
+      assertNotMoved(ctx, auth);
       const id = productId(ctx);
       const raw = ctx.query.version;
       const version = typeof raw === 'string' && ID_PATTERN.test(raw) ? Number(raw) : raw;
@@ -186,7 +173,8 @@ export function createAdminProductsApi({
     },
 
     async restore(ctx) {
-      const auth = await access.business(ctx, { write: true });
+      const auth = await access.business(ctx, { write: !productsMoved });
+      assertNotMoved(ctx, auth);
       const id = productId(ctx);
       await run(ctx, async () => {
         await products.get(auth.businessId, id);
@@ -196,7 +184,8 @@ export function createAdminProductsApi({
     },
 
     async reorder(ctx) {
-      const auth = await access.business(ctx, { write: true });
+      const auth = await access.business(ctx, { write: !productsMoved });
+      assertNotMoved(ctx, auth);
       const body = await readJsonBody(ctx);
       const isObject = body !== null && typeof body === 'object' && !Array.isArray(body);
       // Objeto JSON comprobado justo arriba.

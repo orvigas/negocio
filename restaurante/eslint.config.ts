@@ -52,6 +52,14 @@ const CONTRACTS_RESTRICTED_PATTERNS = [
   { regex: '^(?:(?:prisma|mariadb)(?:/|$)|@prisma/)', message: `contracts no importa la base de datos. ${DEPENDENCY_HINT}` },
   { regex: String.raw`^\.\./`, message: `Un import relativo no sale de packages/contracts. ${DEPENDENCY_HINT}` },
 ];
+// web (REQ-F-039, P-1): utilidades HTTP/SSR sin dominio. Koa sí; nada del proyecto ni la base de datos.
+const WEB_RESTRICTED_PATTERNS = [
+  ...RELATIVE_JS_IMPORT_PATTERNS,
+  ...LANDING_PATTERNS,
+  { regex: '^@restaurante/', message: `web no importa ningún paquete del proyecto (ni core, ni db, ni contracts). ${DEPENDENCY_HINT}` },
+  { regex: '^(?:(?:prisma|mariadb)(?:/|$)|@prisma/)', message: `web no importa la base de datos. ${DEPENDENCY_HINT}` },
+  { regex: String.raw`^\.\./`, message: `Un import relativo no sale de packages/web. ${DEPENDENCY_HINT}` },
+];
 const DB_RESTRICTED_PATTERNS = [
   ...RELATIVE_JS_IMPORT_PATTERNS,
   ...KOA_PATTERNS,
@@ -83,13 +91,18 @@ const LANDING_CODE_PATTERNS = [
   { regex: '^@restaurante/db(?:/|$)', message: `Las landings no leen la base de datos. ${LANDING_CODE_HINT}` },
   { regex: '^(?:(?:prisma|mariadb)(?:/|$)|@prisma/)', message: `Las landings no leen la base de datos. ${LANDING_CODE_HINT}` },
   { regex: '^@restaurante/core/(?:identity|bot-control)(?:/|$)', message: `Las landings no usan la identidad ni el control del bot. ${LANDING_CODE_HINT}` },
-  { regex: String.raw`(?:^|/)repositories/product-repository\.ts$`, message: `Las landings no leen el repositorio de productos. ${LANDING_CODE_HINT}` },
 ];
 const LANDING_CODE_PATHS = [
   {
     name: '@restaurante/core/catalog',
     importNames: ['createMemoryProductStore', 'MemoryProductStore', 'ProductStore', 'ProductStoreTx', 'toPublished'],
     message: `Persistencia de productos: fuera del código de las landings. ${LANDING_CODE_HINT}`,
+  },
+  {
+    // El repositorio de productos está en core/catalog desde REQ-F-039.
+    name: '@restaurante/core/catalog',
+    importNames: ['createProductRepository', 'ProductRepository', 'ProductRepositoryOptions', 'productsFromMenuData'],
+    message: `Las landings no leen el repositorio de productos. ${LANDING_CODE_HINT}`,
   },
 ];
 
@@ -217,6 +230,13 @@ export default defineConfig([
     files: ['packages/contracts/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', { patterns: CONTRACTS_RESTRICTED_PATTERNS }],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, PACKAGE_DYNAMIC_IMPORT],
+    },
+  },
+  {
+    files: ['packages/web/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: WEB_RESTRICTED_PATTERNS }],
       'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, PACKAGE_DYNAMIC_IMPORT],
     },
   },

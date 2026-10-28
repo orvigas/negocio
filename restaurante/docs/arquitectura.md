@@ -109,7 +109,8 @@ restaurante/
 │   │   ├── identity/        (usuarios, roles y permisos por negocio)
 │   │   └── bot-control/     (bloqueos, pausa y uso del bot de WhatsApp; desde el paso 2)
 │   ├── contracts/           ← esquemas y DTO de la API + cliente HTTP tipado
-│   └── db/                  ← implementaciones Prisma de los repositorios, schema y migraciones
+│   ├── db/                  ← implementaciones Prisma de los repositorios, schema y migraciones
+│   └── web/                 ← utilidades HTTP/SSR sin dominio de las apps Koa (desde REQ-F-039)
 ├── api/                     ← Koa: la única app que habla con MySQL
 ├── landing-pages/           ← Koa SSR de las landings: HTML, SEO, Tailwind y Vanilla JS
 └── inventory-manager/       ← frontend del administrador
@@ -131,10 +132,11 @@ packages/core/inventory/
 | --- | --- | --- |
 | `packages/core` | Nada del proyecto (solo la biblioteca estándar de Node) | Koa, Prisma, HTML, `contracts` |
 | `packages/contracts` | Nada del proyecto | `core`, `db`, Koa |
-| `packages/db` | `core` (para implementar sus interfaces) | Koa, `contracts` |
-| `api` | `core`, `db`, `contracts` | Código de los frontends |
-| `landing-pages` | `contracts` | `core`, `db`, Prisma |
-| `inventory-manager` | `contracts` | `core`, `db`, Prisma |
+| `packages/db` | `core` (para implementar sus interfaces) | Koa, `contracts`, `web` |
+| `packages/web` | Nada del proyecto (sí Koa) | `core`, `db`, `contracts`, Prisma |
+| `api` | `core`, `db`, `contracts`, `web` | Código de los frontends |
+| `landing-pages` | `contracts`, `web` | `core`, `db`, Prisma |
+| `inventory-manager` | `contracts`, `web` | `core`, `db`, Prisma |
 
 - **Las flechas apuntan hacia `core`.** Entre módulos de `core`, solo a través de su `index.ts`.
 - **Lo compartido queda en la raíz** (desviación registrada en el paso 1, REQ-F-036): `deploy/`,
@@ -149,6 +151,10 @@ packages/core/inventory/
   de los módulos de `core` (y los archivos de `db`), así que `tsc` y Node rechazan también un
   import a un archivo interno. Los módulos de `core` y `packages/db/src` son planos (sin
   subcarpetas): los patrones de "sale del paquete" cuentan con ello.
+- **`packages/web`** (REQ-F-039, decisión P-1 del usuario: "Paquete packages/web (Recomendado)"):
+  el renderizador de plantillas, la lectura de formularios y de JSON, la comprobación de mismo
+  origen y el logger JSON (`createLogger`), movidos desde `landing-pages` y `core/shared`; `core`
+  conserva solo la interfaz `Logger` y `silentLogger`. Lo comparten las apps Koa sin duplicarlo.
 - **Paquetes:** `@restaurante/core` (sin dependencias), `@restaurante/db` (Prisma, `mariadb` y
   `core`) y `@restaurante/contracts` (Zod desde el paso 3, REQ-F-038). La app `api` (paso 3)
   importa `core`, `db` y `contracts`. Todos los `tsconfig.json` extienden `tsconfig.base.json`,

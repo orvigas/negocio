@@ -1,11 +1,10 @@
 /**
- * Logger estructurado mínimo (JSON por línea) sin dependencias.
+ * Contrato del logger estructurado que usan core y db. La implementación (JSON por línea,
+ * `createLogger`) está en `@restaurante/web` desde REQ-F-039 (P-1): core no tiene E/S.
  * Nunca registrar secretos, tokens ni datos personales: pasar solo campos necesarios.
  */
 
-const LEVELS = Object.freeze({ debug: 10, info: 20, warn: 30, error: 40, silent: Infinity });
-
-export type LogLevel = keyof typeof LEVELS;
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
 export type LogFields = Record<string, unknown>;
 export type LogMethod = (msg: string, fields?: LogFields) => void;
 
@@ -16,32 +15,7 @@ export interface Logger {
   readonly error: LogMethod;
 }
 
-export interface LoggerOptions {
-  level?: LogLevel;
-  write?: (line: string) => void;
-}
+const ignore: LogMethod = () => {};
 
-/** Serializa un Error sin propiedades arbitrarias (que podrían contener datos sensibles). */
-export function serializeError(err: unknown): { name?: string; message: string; stack?: string | undefined } {
-  if (!(err instanceof Error)) return { message: String(err) };
-  return { name: err.name, message: err.message, stack: err.stack };
-}
-
-export function createLogger({ level = 'info', write = (line) => process.stdout.write(line) }: LoggerOptions = {}): Logger {
-  if (!Object.hasOwn(LEVELS, level)) throw new TypeError(`Nivel de log inválido: ${level}`);
-  const threshold = LEVELS[level];
-
-  const log = (lvl: Exclude<LogLevel, 'silent'>): LogMethod => (msg, fields = {}) => {
-    if (LEVELS[lvl] < threshold) return;
-    write(`${JSON.stringify({ time: new Date().toISOString(), level: lvl, msg, ...fields })}\n`);
-  };
-
-  return Object.freeze({
-    debug: log('debug'),
-    info: log('info'),
-    warn: log('warn'),
-    error: log('error'),
-  });
-}
-
-export const silentLogger = createLogger({ level: 'silent' });
+/** Logger que no escribe nada (valor por defecto de las fábricas y de las pruebas). */
+export const silentLogger: Logger = Object.freeze({ debug: ignore, info: ignore, warn: ignore, error: ignore });

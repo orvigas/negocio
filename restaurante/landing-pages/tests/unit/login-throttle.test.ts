@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { LOCK_MS, MAX_FAILURES, createLoginThrottle } from '../../src/services/login-throttle.ts';
+import { LOCK_MS, MAX_FAILURES, createLoginThrottle } from '@restaurante/core/identity';
 import { makeClock } from '../support/admin.ts';
 
 describe('createLoginThrottle (P-3)', () => {

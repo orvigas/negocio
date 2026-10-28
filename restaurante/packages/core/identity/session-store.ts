@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
 
 /**
- * Sesiones de administración en memoria (una sola instancia, RT-2).
+ * Sesiones de administración en memoria (una sola instancia, RT-2). En core desde REQ-F-039: cada
+ * admin (el /admin actual y la API del admin nuevo) tiene su propio almacén.
  * - Id opaco aleatorio de 256 bits: no hace falta firmarlo, se valida contra este almacén.
  * - Caducidad por inactividad de 2 horas (P-3), renovada en cada petición autenticada.
  * - Un token CSRF por sesión.

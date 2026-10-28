@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
-import { pickPageData, type PageDataByBusiness } from '@restaurante/core/catalog';
+import { createImageChecker, pickPageData, type ImageExists, type PageDataByBusiness } from '@restaurante/core/catalog';
+import { createRenderer } from '@restaurante/web';
 
 import { DEFAULT_PUBLIC_DIR, DEFAULT_VIEWS_DIR } from '../../src/app.ts';
-import { createImageChecker, parseAdminForm, type AdminFormResult, type ImageExists } from '../../src/services/admin-form.ts';
+import { parseAdminForm, type AdminFormResult } from '../../src/services/admin-form.ts';
 import { renderAdminBusiness } from '../../src/views/admin/index.ts';
-import { createRenderer } from '../../src/views/render.ts';
 import { seedData, seedDocuments } from '../helpers.ts';
 import { formFields, type FormFields } from '../support/admin.ts';
 

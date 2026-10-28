@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { SESSION_IDLE_MS, createSessionStore } from '../../src/services/session-store.ts';
+import { SESSION_IDLE_MS, createSessionStore } from '@restaurante/core/identity';
 import { makeClock } from '../support/admin.ts';
 
 const OWNER = Object.freeze({ userId: 1, sessionVersion: 0 });

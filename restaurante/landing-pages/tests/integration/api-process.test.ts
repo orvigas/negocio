@@ -4,12 +4,11 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { apiErrorSchema, productsResponseSchemas } from '@restaurante/contracts';
-import { toPublished } from '@restaurante/core/catalog';
+import { createProductRepository, toPublished } from '@restaurante/core/catalog';
 import { createPrismaClient } from '@restaurante/db/client';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
 
 import { PROJECT_DIR } from '../../src/config/env.ts';
-import { createProductRepository } from '../../src/repositories/product-repository.ts';
 import { ADMIN_ENV } from '../support/admin.ts';
 import { appDatabaseUrl, makeDatabase, makeScratchDatabase, makeTempDir } from '../support/database.ts';
 import { freePort, startServer } from '../support/process.ts';
@@ -24,7 +23,8 @@ import { databaseUrl, testDatabaseConfigs } from '../support/test-database-confi
  * - CA-2: el cuerpo valida el contrato y coincide con los productos de la base; 503 con la base caída.
  * - CA-3: sin caché en la API.
  * - CA-10 (O-1): la API y landing-pages arrancan a la vez contra una base recién migrada; la
- *   importación se hace una sola vez y la API nunca importa ni escribe.
+ *   importación se hace una sola vez y la API nunca importa (desde REQ-F-039 escribe productos por
+ *   /api/v1/admin, pero no importa semillas).
  */
 
 const API_ENTRY = join('..', 'api', 'src', 'server.ts');
@@ -35,9 +35,12 @@ afterEach(async () => {
   while (cleanups.length > 0) await cleanups.pop()?.();
 });
 
+/** La API sin aviso interno (REQ-F-039): VALID_ENV trae INTERNAL_NOTIFY_TOKEN, que va con LANDING_INTERNAL_URL. */
+const API_ENV = { INTERNAL_NOTIFY_TOKEN: undefined };
+
 async function startApi(env: Record<string, string>) {
   const port = await freePort();
-  const api = await startServer({ ...env, PORT: String(port) }, 30_000, { args: [API_ENTRY] });
+  const api = await startServer({ ...env, ...API_ENV, PORT: String(port) }, 30_000, { args: [API_ENTRY] });
   cleanups.push(async () => void (await api.stop()));
   return { ...api, url: `http://127.0.0.1:${port}` };
 }
@@ -119,7 +122,7 @@ describe('CA-10 (O-1): arranque simultáneo de api y landing-pages', () => {
     const DATABASE_URL = appDatabaseUrl(database.name);
 
     const [api, landing] = await Promise.all([
-      startServer({ DATABASE_URL, PORT: String(apiPort) }, 60_000, { args: [API_ENTRY] }),
+      startServer({ DATABASE_URL, ...API_ENV, PORT: String(apiPort) }, 60_000, { args: [API_ENTRY] }),
       startServer({ DATABASE_URL, DATA_DIR: dataDir.dir, ...ADMIN_ENV, API_INTERNAL_URL: `http://127.0.0.1:${apiPort}` }, 60_000),
     ]);
     cleanups.push(async () => void (await api.stop()), async () => void (await landing.stop()));
@@ -143,12 +146,14 @@ describe('CA-10 (O-1): arranque simultáneo de api y landing-pages', () => {
     expect(logLines(api.output().stdout).some((line) => line.msg === 'products_imported')).toBe(false);
   });
 
-  it('el código de la API no importa semillas ni tiene rutas de escritura', async () => {
+  // Desde REQ-F-039 la API escribe productos (/api/v1/admin), pero sigue sin importar semillas (O-1):
+  // su repositorio se inicia sin fuentes.
+  it('el código de la API no importa semillas', async () => {
     const files = (await readdir(API_SRC, { recursive: true })).filter((file) => file.endsWith('.ts'));
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
       const source = await readFile(join(API_SRC, file), 'utf8');
-      expect(source, file).not.toMatch(/products\.init|importBusiness|seeds|content\/|createProductRepository|\.transaction\(|\.insert\(|\.replace\(|markImported|addChange/);
+      expect(source, file).not.toMatch(/products\.init\([^)]|importBusiness|productsFromMenuData|seeds|content\/|markImported/);
     }
   });
 });

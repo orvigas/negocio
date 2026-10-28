@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { HomeNotice, MolotesNotice } from '@restaurante/core/schedule';
+import { createRenderer } from '@restaurante/web';
 
 import { DEFAULT_VIEWS_DIR } from '../../src/app.ts';
 import { BUSINESS_PATHS } from '../../src/config/business-paths.ts';
@@ -12,7 +13,6 @@ import { birriaContent } from '../../src/content/birria/index.ts';
 import { molotesContent } from '../../src/content/molotes/index.ts';
 import { renderLandingPage } from '../../src/views/landings/index.ts';
 import { withNoticeHref } from '../../src/views/landings/shared.ts';
-import { createRenderer } from '../../src/views/render.ts';
 import { initHomeNotice } from '../../public/js/modules/home-notice.js';
 import { makeConfig, seedData } from '../helpers.ts';
 

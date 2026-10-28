@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { BUSINESS, type BusinessId } from '@restaurante/core/shared';
+import type { ProductRepository } from '@restaurante/core/catalog';
 
 import { botText, getBotContent } from '../../src/content/bot.ts';
-import type { ProductRepository } from '../../src/repositories/product-repository.ts';
 import { buildCatalog } from '../../src/services/whatsapp-bot/catalog.ts';
 import { createDeterministicInterpreter } from '../../src/services/whatsapp-bot/interpreter/deterministic.ts';
 import type { InterpretScope } from '../../src/services/whatsapp-bot/interpreter/types.ts';

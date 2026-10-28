@@ -1,4 +1,4 @@
-import type { BusinessId } from '@restaurante/core/shared';
+import { formatDisplayDate, type BusinessId } from '@restaurante/core/shared';
 import { ROLE_LABELS, allowedBusinesses, isAdmin, type Role } from '@restaurante/core/identity';
 import {
   centsToInput,
@@ -12,12 +12,11 @@ import {
   type ObjectNode,
   type SchemaNode,
 } from '@restaurante/core/catalog';
+import type { Renderer, SafeHtml } from '@restaurante/web';
 
 import { getIconLinks } from '../../content/icons.ts';
 import { getBusinessContent } from '../../content/index.ts';
 import type { ConflictInfo, DamagedInfo } from '../../repositories/menu-repository.ts';
-import { formatDisplayDate } from '../../utils/datetime.ts';
-import type { Renderer, SafeHtml } from '../render.ts';
 
 /** Atributo HTML: `true` lo pinta sin valor; `false` o `undefined` lo omiten. */
 type AttrEntry = [name: string, value: string | boolean | undefined];

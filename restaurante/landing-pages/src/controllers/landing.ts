@@ -7,12 +7,12 @@ import {
   parseForcedDay,
   type NoticeByBusiness,
 } from '@restaurante/core/schedule';
+import type { Renderer } from '@restaurante/web';
 
 import type { Config } from '../config/env.ts';
 import type { MenuRepository } from '../repositories/menu-repository.ts';
 import { withProducts, type LandingProducts } from '../services/landing-products.ts';
 import { renderLandingPage } from '../views/landings/index.ts';
-import type { Renderer } from '../views/render.ts';
 
 type NoticeOptions = Parameters<typeof getHomeNotice>[0];
 

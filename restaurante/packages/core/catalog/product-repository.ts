@@ -1,47 +1,38 @@
-import {
-  BUSINESS,
-  BUSINESS_IDS,
-  errorProp,
-  silentLogger,
-  type BusinessId,
-  type Logger,
-} from '@restaurante/core/shared';
+import { BUSINESS, BUSINESS_IDS, errorProp, silentLogger, type BusinessId, type Logger } from '../shared/index.ts';
+import { diffMenuData, type FieldChange } from './menu-diff.ts';
+import type { MenuDataByBusiness } from './menu-schema.ts';
 import {
   MAX_ACTIVE_PRODUCTS,
+  changeSnapshot,
+  isValidKind,
+  validateProductInput,
+  type FieldErrors,
+  type Product,
+  type ProductCategory,
+  type ProductFields,
+} from './product-schema.ts';
+import {
   PRODUCT_ACTIONS,
   ProductConflictError,
   ProductNotFoundError,
   ProductValidationError,
   SlugTakenError,
-  activeOf,
-  byPosition,
-  changeSnapshot,
-  diffMenuData,
-  isValidKind,
-  toPublished,
-  uniqueSlug,
-  validateProductInput,
   type ChangeEntry,
   type ChangeSummary,
-  type FieldChange,
-  type FieldErrors,
   type ImportSourceName,
-  type MenuDataByBusiness,
   type NewProduct,
-  type Product,
   type ProductAction,
-  type ProductCategory,
-  type ProductFields,
   type ProductStore,
   type ProductStoreTx,
-  type PublishedProducts,
-} from '@restaurante/core/catalog';
+} from './product-store.ts';
+import { activeOf, byPosition, toPublished, type PublishedProducts } from './published.ts';
+import { uniqueSlug } from './slug.ts';
 
-// Movidos a core/catalog/published.ts (REQ-F-038): se reexportan para sus consumidores actuales.
-export { toPublished, type PublishedProducts };
 
 /**
- * Repositorio de productos (REQ-F-008, RF-9).
+ * Repositorio de productos (REQ-F-008, RF-9). En core desde REQ-F-039: es el caso de uso que comparten
+ * `api` (la única que escribe, con `ADMIN_NEW_URL` en landing-pages) y `landing-pages` (caché del bot
+ * y vistas de solo lectura de /admin).
  *
  * Una sola implementación de las reglas (validación, slug, límites, versión, posiciones y
  * registro) sobre un `ProductStore` con dos implementaciones: Prisma/MySQL
@@ -96,8 +87,16 @@ export interface ReorderItem {
 }
 
 export interface ProductRepository {
-  /** Importación única (D-8) y carga de la caché. */
-  init(sources: { [Id in BusinessId]: ImportSource<Id> }): Promise<void>;
+  /**
+   * Importación única (D-8) y carga de la caché. Sin fuentes solo carga la caché, sin importar
+   * nada (la API: la importación es solo de landing-pages, O-1 de REQ-F-037).
+   */
+  init(sources?: { [Id in BusinessId]: ImportSource<Id> }): Promise<void>;
+  /**
+   * Vuelve a leer los productos publicados de un negocio (REQ-F-039, RF-12 y RF-13: aviso interno y
+   * recarga periódica del catálogo del bot). true si pudo; si falla conserva la caché anterior.
+   */
+  reload(business: BusinessId): Promise<boolean>;
   /** Productos que pinta la landing (de memoria, sin E/S). */
   getPublished<Id extends BusinessId>(business: Id): PublishedProducts[Id];
   list(business: BusinessId, options?: { includeDeleted?: boolean; category?: ProductCategory }): Promise<ProductView[]>;
@@ -246,14 +245,16 @@ export function createProductRepository({ store, imageExists, now = () => new Da
     if (!initialized) throw new Error('El repositorio de productos no se ha inicializado (init)');
   }
 
-  async function refresh(business: BusinessId): Promise<void> {
+  async function refresh(business: BusinessId): Promise<boolean> {
     try {
       published.set(business, toPublished(business, await store.listBusiness(business)));
       stale.delete(business);
+      return true;
     } catch (err) {
       // La landing conserva la última versión válida (D-15).
       stale.add(business);
       logger.error('products_cache_refresh_failed', { business, name: errorProp(err, 'name'), code: errorProp(err, 'code') });
+      return false;
     }
   }
 
@@ -377,7 +378,7 @@ export function createProductRepository({ store, imageExists, now = () => new Da
   return Object.freeze<ProductRepository>({
     async init(sources) {
       for (const business of BUSINESS_IDS) {
-        await importBusiness(business, sources[business]);
+        if (sources) await importBusiness(business, sources[business]);
         // Al arrancar, un fallo de la base de datos impide arrancar (D-15).
         published.set(business, toPublished(business, await store.listBusiness(business)));
       }
@@ -393,6 +394,11 @@ export function createProductRepository({ store, imageExists, now = () => new Da
     },
 
     list,
+
+    async reload(business) {
+      ensureReady();
+      return refresh(business);
+    },
 
     onChange(listener) {
       if (typeof listener !== 'function') throw new TypeError('onChange requiere una función');

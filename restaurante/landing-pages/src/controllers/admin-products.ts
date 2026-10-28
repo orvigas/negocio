@@ -7,9 +7,9 @@ import {
   isProductCategory,
   isValidKind,
   type ProductKind,
+  type ProductView,
 } from '@restaurante/core/catalog';
 
-import type { ProductView } from '../repositories/product-repository.ts';
 import {
   emptyProductFormValues,
   formErrors,
@@ -23,6 +23,7 @@ import {
   renderProductForm,
   renderProductTypeChoice,
   renderProductsDeleted,
+  renderProductsMoved,
 } from '../views/admin/products.ts';
 import { createAdminAccess, type AdminRouterContext, type Authenticated } from './admin-access.ts';
 import { authorOf, businessPermission, createBusinessView } from './admin-business-view.ts';
@@ -130,7 +131,7 @@ export function createAdminProductsController(deps: AdminDeps): AdminProductsCon
     return seeOther(ctx, `${adminPath(businessId)}?ok=product_moved`);
   }
 
-  return Object.freeze<AdminProductsController>({
+  const controller: AdminProductsController = {
     async newPage(ctx: AdminRouterContext) {
       const businessId = businessFrom(ctx);
       return page(ctx, businessId, (auth) => {
@@ -188,7 +189,7 @@ export function createAdminProductsController(deps: AdminDeps): AdminProductsCon
       const businessId = businessFrom(ctx);
       return page(ctx, businessId, async (auth) => {
         const list = (await products.list(businessId, { includeDeleted: true })).filter((product) => product.deleted);
-        sendHtml(ctx, 200, renderProductsDeleted(renderer, { ...access.pageContext(auth), businessId, timezone: config.timezone, products: list }));
+        sendHtml(ctx, 200, renderProductsDeleted(renderer, { ...access.pageContext(auth), businessId, timezone: config.timezone, products: list, movedTo: config.adminNewUrl }));
       });
     },
 
@@ -303,6 +304,31 @@ export function createAdminProductsController(deps: AdminDeps): AdminProductsCon
 
     moveUp: (ctx) => move(ctx, 'up'),
     moveDown: (ctx) => move(ctx, 'down'),
+  };
+
+  // Modo de solo lectura (REQ-F-039, RF-15): con el admin nuevo activo (ADMIN_NEW_URL), la edición de
+  // productos se hace allí. Sesión -> permiso -> 410 con el aviso y el enlace; un POST no lee el
+  // formulario ni escribe nada. La lista y los eliminados se consultan sin controles de edición.
+  const movedTo = config.adminNewUrl;
+  if (movedTo === undefined) return Object.freeze(controller);
+  const moved = (ctx: AdminRouterContext) => {
+    const businessId = businessFrom(ctx);
+    return page(ctx, businessId, (auth) => {
+      logger.info('admin_products_moved', { path: ctx.path, method: ctx.method, userId: auth.user.id });
+      sendHtml(ctx, 410, renderProductsMoved(renderer, { ...access.pageContext(auth), businessId, movedTo }));
+    });
+  };
+  return Object.freeze<AdminProductsController>({
+    ...controller,
+    newPage: moved,
+    create: moved,
+    editPage: moved,
+    update: moved,
+    deletePage: moved,
+    remove: moved,
+    restore: moved,
+    moveUp: moved,
+    moveDown: moved,
   });
 }
 

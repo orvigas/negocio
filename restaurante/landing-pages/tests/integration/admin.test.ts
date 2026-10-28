@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type { BusinessId } from '@restaurante/core/shared';
+import { LOCK_MS, SESSION_IDLE_MS } from '@restaurante/core/identity';
 
 import { createApp } from '../../src/app.ts';
 import type { MenuRepository } from '../../src/repositories/menu-repository.ts';
-import { LOCK_MS } from '../../src/services/login-throttle.ts';
-import { SESSION_IDLE_MS } from '../../src/services/session-store.ts';
 import { makeConfig, makeRecordingLogger, makeRepository, seedData } from '../helpers.ts';
 import {
   ADMIN_PASSWORD,

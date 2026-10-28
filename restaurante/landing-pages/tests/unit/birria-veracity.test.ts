@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { HomeNotice } from '@restaurante/core/schedule';
 import type { MenuDocument } from '@restaurante/core/catalog';
+import { createRenderer } from '@restaurante/web';
 
 import { DEFAULT_VIEWS_DIR } from '../../src/app.ts';
 import { getBusinessContent } from '../../src/content/index.ts';
 import { loadSeedDocument } from '../../src/content/seeds.ts';
 import { renderLandingPage } from '../../src/views/landings/index.ts';
-import { createRenderer } from '../../src/views/render.ts';
 import { makeConfig } from '../helpers.ts';
 
 /**

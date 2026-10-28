@@ -1,8 +1,9 @@
 import type { RouterContext } from '@koa/router';
 
 import type { BusinessId, Logger } from '@restaurante/core/shared';
-import type { UserRecord, UserRepository } from '@restaurante/core/identity';
+import type { SessionInfo, SessionStore, UserRecord, UserRepository } from '@restaurante/core/identity';
 import { getActiveBusinessId } from '@restaurante/core/schedule';
+import { readFormBody, type Renderer, type SafeHtml } from '@restaurante/web';
 
 import type { Config } from '../config/env.ts';
 import {
@@ -11,10 +12,7 @@ import {
   createSessionGuard,
   type AdminState,
 } from '../middleware/admin-guard.ts';
-import type { SessionInfo, SessionStore } from '../services/session-store.ts';
-import { readFormBody } from '../utils/form-body.ts';
 import { renderAdminForbidden, type AdminPageContext } from '../views/admin/index.ts';
-import type { Renderer, SafeHtml } from '../views/render.ts';
 
 /**
  * Acceso a las páginas con sesión de /admin (REQ-F-001 y REQ-F-007), compartido por los

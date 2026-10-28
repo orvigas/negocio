@@ -1,11 +1,10 @@
 import type { RouterContext } from '@koa/router';
 
 import { isBusinessId, type BusinessId, type Logger } from '@restaurante/core/shared';
-import { canEditBusiness, type UserRecord, type UserRepository } from '@restaurante/core/identity';
+import { canEditBusiness, type SessionInfo, type SessionStore, type UserRecord, type UserRepository } from '@restaurante/core/identity';
 
 import type { Config } from '../config/env.ts';
 import { CSRF_HEADER, assertCsrfValue, assertSameOrigin, resolveSession, type AdminState } from '../middleware/admin-guard.ts';
-import type { SessionInfo, SessionStore } from '../services/session-store.ts';
 
 /**
  * Acceso a la API JSON de productos (REQ-F-008, D-19 y DT-11). Mismo control que las páginas de

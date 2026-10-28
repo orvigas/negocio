@@ -1,0 +1,13 @@
+<p><a class="font-semibold text-maiz underline underline-offset-4" href="{{ backHref }}">Volver a productos</a></p>
+      <h1 class="mt-4 font-headline text-3xl font-black tracking-tight break-words uppercase">Eliminar {{ name }}</h1>
+      {{{ notices }}}
+      <section class="confirm-panel mt-6 rounded-2xl border border-rim bg-surface p-6" aria-labelledby="confirm-title">
+        <h2 id="confirm-title" class="font-headline text-xl font-bold">¿Eliminar este producto?</h2>
+        <p class="mt-2 text-masa">Deja de verse en la landing y en el bot. Puedes recuperarlo después desde «Ver eliminados».</p>
+        <form class="confirm-panel__form mt-6 flex flex-wrap items-center gap-3" method="post" action="{{ action }}" data-submit-guard>
+          <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+          <input type="hidden" name="version" value="{{ version }}" />
+          <button class="button button--danger inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg border-[1.5px] border-error px-4 py-2 font-label text-sm font-bold tracking-wider text-error uppercase hover:bg-error/10" type="submit" data-busy-text="Eliminando…">Eliminar<span class="sr-only"> {{ name }}</span></button>
+          <a class="button button--ghost inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg px-3 py-2 font-label text-sm font-bold tracking-wider text-maiz uppercase hover:bg-surface-high" href="{{ backHref }}">Cancelar</a>
+        </form>
+      </section>

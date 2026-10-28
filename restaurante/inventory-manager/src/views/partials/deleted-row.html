@@ -1,0 +1,12 @@
+
+            <li class="product-row product-row--deleted flex flex-col gap-3 rounded-lg border border-rim bg-surface p-4 md:flex-row md:items-center md:justify-between">
+              <div class="product-row__info min-w-0">
+                <p class="product-row__name font-bold break-words">{{ name }}</p>
+                <p class="product-row__meta mt-1 text-sm text-masa">{{ category }} · Eliminado el {{ deletedAt }}</p>
+              </div>
+              <form class="product-row__restore" method="post" action="{{ action }}" data-submit-guard>
+                <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+                <input type="hidden" name="version" value="{{ version }}" />
+                <button class="button button--secondary inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border-[1.5px] border-adobo px-4 py-2 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-adobo/15" type="submit" data-busy-text="Recuperando…">Recuperar<span class="sr-only"> {{ name }}</span></button>
+              </form>
+            </li>

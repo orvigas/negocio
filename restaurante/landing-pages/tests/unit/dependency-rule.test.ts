@@ -29,6 +29,8 @@ const AS = {
   admin: join(ROOT, 'landing-pages', 'src', 'controllers', 'admin.ts'),
   bot: join(ROOT, 'landing-pages', 'src', 'services', 'whatsapp-bot', 'catalog.ts'),
   api: join(ROOT, 'api', 'src', 'app.ts'),
+  inventory: join(ROOT, 'inventory-manager', 'src', 'app.ts'),
+  inventoryTest: join(ROOT, 'inventory-manager', 'tests', 'unit', 'product-form.test.ts'),
 } as const;
 
 async function violations(code: string, filePath: string): Promise<string[]> {
@@ -205,6 +207,20 @@ describe('regla de dependencias entre paquetes (REQ-F-037, CA-6; REQ-F-038, CA-9
       expect((await violations(code, AS.api)).length).toBeGreaterThan(0);
     });
 
+    // DEF-004 de QA: los import() dinámicos también se revisan en api.
+    it.each([
+      ['import() de landing-pages', "export const later = import('../../landing-pages/src/app.ts');\n"],
+      ['import() de inventory-manager', "export const later = import('../../inventory-manager/src/app.ts');\n"],
+      ['import() de un archivo interno de core', "export const later = import('@restaurante/core/catalog/price.ts');\n"],
+      ['import() de un archivo de packages/', "export const later = import('../../packages/core/catalog/published.ts');\n"],
+    ])('rechaza %s', async (_name, code) => {
+      expect((await violations(code, AS.api)).length).toBeGreaterThan(0);
+    });
+
+    it('permite import() de un módulo de core por su nombre', async () => {
+      expect(await violations("export const later = import('@restaurante/core/catalog');\n", AS.api)).toEqual([]);
+    });
+
     it.each([
       ['core', "import { toPublished } from '@restaurante/core/catalog';" + use('toPublished')],
       ['db', "import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';" + use('createPrismaProductStore')],
@@ -212,6 +228,50 @@ describe('regla de dependencias entre paquetes (REQ-F-037, CA-6; REQ-F-038, CA-9
       ['koa', "import Koa from 'koa';" + use('Koa')],
     ])('permite %s', async (_name, code) => {
       expect(await violations(code, AS.api)).toEqual([]);
+    });
+  });
+
+  // inventory-manager (REQ-F-039, RF-17 y CA-17; decisión P-1): solo contracts y web.
+  describe('inventory-manager: solo contracts y web', () => {
+    it.each([
+      ['core', "import { BUSINESS } from '@restaurante/core/shared';" + use('BUSINESS')],
+      ['core/catalog', "import { createProductRepository } from '@restaurante/core/catalog';" + use('createProductRepository')],
+      ['db', "import { createPrismaClient } from '@restaurante/db/client';" + use('createPrismaClient')],
+      ['Prisma', "import { PrismaClient } from '@prisma/client';" + use('PrismaClient')],
+      ['mariadb', "import { createConnection } from 'mariadb';" + use('createConnection')],
+      ['la api (relativo)', "import { createApiApp } from '../../api/src/app.ts';" + use('createApiApp')],
+      ['landing-pages (relativo)', "import { createApp } from '../../landing-pages/src/app.ts';" + use('createApp')],
+      ['un archivo de packages/ por ruta relativa', "import { adminPaths } from '../../packages/contracts/admin.ts';" + use('adminPaths')],
+    ])('rechaza %s', async (_name, code) => {
+      expect((await violations(code, AS.inventory)).length).toBeGreaterThan(0);
+    });
+
+    // DEF-004 de QA: los import() dinámicos también se revisan.
+    it.each([
+      ['import() de core', "export const later = import('@restaurante/core/shared');\n"],
+      ['import() de db', "export const later = import('@restaurante/db/client');\n"],
+      ['import() de Prisma', "export const later = import('@prisma/client');\n"],
+      ['import() de la api', "export const later = import('../../api/src/app.ts');\n"],
+      ['import() de un archivo de packages/', "export const later = import('../../packages/contracts/admin.ts');\n"],
+    ])('rechaza %s', async (_name, code) => {
+      expect((await violations(code, AS.inventory)).length).toBeGreaterThan(0);
+    });
+
+    it('permite import() de contracts y de web', async () => {
+      expect(await violations("export const later = import('@restaurante/contracts');\nexport const web = import('@restaurante/web');\n", AS.inventory)).toEqual([]);
+    });
+
+    it('también en sus pruebas', async () => {
+      expect((await violations("import { BUSINESS } from '@restaurante/core/shared';" + use('BUSINESS'), AS.inventoryTest)).length).toBeGreaterThan(0);
+    });
+
+    it.each([
+      ['contracts', "import { createAdminApiClient } from '@restaurante/contracts';" + use('createAdminApiClient')],
+      ['web', "import { createRenderer } from '@restaurante/web';" + use('createRenderer')],
+      ['koa', "import Koa from 'koa';" + use('Koa')],
+      ['un archivo de la app', "import { loadInventoryConfig } from './config.ts';" + use('loadInventoryConfig')],
+    ])('permite %s', async (_name, code) => {
+      expect(await violations(code, AS.inventory)).toEqual([]);
     });
   });
 

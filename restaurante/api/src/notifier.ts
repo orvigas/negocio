@@ -136,7 +136,10 @@ export function createLandingNotifier({
       const next = new Promise<Attempt>((resolve) => {
         waiting.set(business, [...(waiting.get(business) ?? []), resolve]);
       });
-      if (!running.has(business)) void loop(business);
+      if (!running.has(business)) {
+        // Observación de QA (PR 1): un fallo inesperado del bucle nunca queda como rechazo sin manejar.
+        loop(business).catch((err: unknown) => logger.error('products_notify_loop_failed', { business, name: err instanceof Error ? err.name : 'unknown' }));
+      }
       const result = await Promise.race([next, sleep(firstWaitMs).then(() => null)]);
       return result?.kind === 'confirmed' ? 'confirmed' : 'pending';
     },

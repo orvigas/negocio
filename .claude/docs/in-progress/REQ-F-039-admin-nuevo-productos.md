@@ -2,7 +2,7 @@
 
 ## Estado
 
-IN_PROGRESS (PR 1 de 3 listo para merge: PR #94 hacia `epic/arquitectura`, CI en verde el 2026-10-28; el ticket sigue en curso hasta mergear el PR 3)
+IN_PROGRESS (PR 2 de 3 listo para merge: PR #95 hacia `epic/arquitectura`, CI en verde el 2026-10-28; el ticket sigue en curso hasta mergear el PR 3)
 
 ## Aprobación
 
@@ -36,6 +36,8 @@ Decisiones técnicas del usuario sobre la revisión técnica (2026-10-26, citas 
 - P-4: "Sí, lo valido" (base del `DESIGN.md` de Birria El Muñeco y acento por negocio).
 - DEF-001 y DEF-002 de la QA del PR 1 (2026-10-27): "Ahora, en el PR 1 (Recomendado)".
 - DEF-003 de la QA del PR 1, ronda 2 (2026-10-27): "Ahora, en el PR 1 (Recomendado)".
+- Merge del PR 1 (#94), confirmado por el usuario el 2026-10-28: "Fusionado".
+- QA del PR 2, ronda 1 (2026-10-28): DEF-005: "Ahora, en el PR 2 (Recomendado)"; DEF-008 y DEF-004: "DEF-008 ahora (Recomendado), DEF-004 ahora (Recomendado)"; DEF-007: "Aclarar el borde (Recomendado)". DEF-006 (BLOCKER) se corrige obligatoriamente.
 - Technical Action Plan: "Sí, aprobar e implementar PR 1" (aprobado completo con estas respuestas, 2026-10-26).
 
 ## Objetivo
@@ -1045,6 +1047,153 @@ Decisión del usuario: "Ahora, en el PR 1 (Recomendado)".
 6. **Prueba estática de `api-process.test.ts`:** ahora solo comprueba que la API no importa semillas, porque desde REQ-F-039 escribe productos.
 7. **Etiqueta del ticket:** el archivo sigue sin versionar (se creó con estado `APPROVED` sin commit) y se movió a `in-progress/` con `mv`, no con `git mv`.
 
+### PR 2 de 3: `inventory-manager` (2026-10-28)
+
+#### Rama
+
+`feature/REQ-F-039-admin-nuevo-productos-2-inventory`, creada desde `epic/arquitectura` (`fd8bf4b`, con el PR 1 mergeado). No hay commit ni PR.
+
+#### Cambios realizados
+
+**1. `packages/contracts` (desviación 3 del PR 1: el cliente y el formulario llegan ahora, con su consumidor).**
+- `admin-client.ts` (`createAdminApiClient`):
+  - nunca lanza: devuelve los datos validados con el contrato, el error de la API (`code`, `message`, `fields`, `current`) o el fallo de transporte (`timeout`, `network`, `invalid_response`);
+  - la sesión viaja como `Authorization: Bearer`; `X-CSRF-Token` solo en escrituras; `X-Forwarded-For` en el login; `Idempotency-Key` en el alta;
+  - sin redirecciones y con un cuerpo de 1 MiB como máximo.
+- `product-form.ts`: `parseProductForm`, `formErrors`, `productFormValues` y `emptyProductFormValues`, guiados por el descriptor de la API. Misma forma que el `/admin` actual: filas fijas con «Posición» y «Quitar».
+- `http.ts`: las utilidades HTTP de `public-client.ts`, extraídas sin cambios para compartirlas.
+
+**2. Workspace `inventory-manager` (Koa con SSR).**
+- **Configuración** (`src/config.ts`): `NODE_ENV`, `HOST`, `PORT` (3003), `API_INTERNAL_URL` (obligatoria) y `TRUST_PROXY`. No tiene credenciales de la base ni la del aviso interno.
+- **Sesión** (`src/session.ts`):
+  - cookie `__Host-admin_sid` en producción (`admin_sid` fuera de ella), `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`, sin `Domain` ni `Max-Age`; se reenvía como Bearer;
+  - `sanitizeNext`: solo las pantallas GET del admin; cualquier otro destino vuelve a `/`.
+- **Pantallas** (`src/controllers/admin.ts` y `src/routes.ts`):
+  - acceso y salir;
+  - selector de negocio (o directo al único permitido);
+  - lista por categoría y en orden;
+  - alta: primero la categoría y, en Birria, el tipo de detalle;
+  - edición, con 422 por campo y resumen enlazado, y 409 que conserva lo escrito, dice quién y cuándo, y ofrece «Cargar la versión vigente» o «Guardar mis cambios sobre la versión vigente»;
+  - eliminar con confirmación, eliminados con «Recuperar», y subir y bajar.
+  - Todo con POST/redirect/GET.
+  - El mensaje de éxito dice si la landing y el bot ya muestran el cambio (`meta.freshness`).
+- **API no disponible** (RF-10 y CA-8): página 503 con un aviso claro. En alta y edición se vuelve a pintar lo escrito; para eso los descriptores ya recibidos se guardan por combinación, de modo que también funciona si la API cae antes de comprobar la sesión.
+- **Seguridad:**
+  - mismo origen (`assertSameOrigin` de `web`) en todos los POST; el `_csrf` del formulario va a la API como `X-CSRF-Token`;
+  - `X-Forwarded-For` con `ctx.ip` (con `TRUST_PROXY`, el último valor);
+  - `no-store`, `X-Robots-Tag: noindex, nofollow`, `<meta name="robots">`, `Referrer-Policy: same-origin`;
+  - CSP estricta (`script-src 'self'`; estilos y fuentes propios y de Google Fonts; `form-action 'self'`; `frame-ancestors 'none'`);
+  - en producción, solo por HTTPS (503 sin TLS);
+  - `robots.txt` con `Disallow: /`;
+  - `GET /salud` responde sin llamar a la API.
+- **Clave de idempotencia por formulario:** el alta lleva `requestId` (24 caracteres base64url), que se conserva al volver a pintar el formulario tras un 422 o un 503.
+- **Vistas** (`src/views/`): plantillas con el renderizador de `packages/web`.
+  - BEM: `admin-shell`, `admin-header`, `login-card`, `business-picker`, `product-list`, `product-row`, `product-form`, `field`, `notice`, `confirm-panel`, `kind-choice` y `button--primary|secondary|ghost|danger`.
+  - Un solo `h1`, salto al contenido, `aria-current` en la navegación.
+  - Errores con `aria-invalid`, `aria-describedby`, icono y texto «Error:» (no solo color). Un aviso de error recibe el foco.
+- **Tailwind** (`src/styles/main.css`): tokens de P-4 y acento por negocio con `--accent`. Contraste comprobado: crema sobre el rojo de Birria 5,96; sobre el azul de Molotes 5,79; masa sobre superficie 9,91; error sobre superficie 9,95.
+- **JS de mejora** (`public/js`, módulos ES con `data-*`):
+  - `submit-guard.js`: evita el doble envío; pone `aria-busy` y «Guardando…»;
+  - `reorder.js`: sube y baja con `fetch` y `X-Fragment: product-list`; reemplaza la lista con el fragmento del servidor, conserva el foco y lo anuncia en `aria-live`; si falla, envía el formulario normal.
+
+**3. Monorepo.**
+- Workspace en el `package.json` raíz, con los scripts `dev:inventory`, `start:inventory`, `build:css` y `watch:css` de los dos workspaces. `package-lock.json` actualizado sin dependencias nuevas.
+- `eslint.config.ts`: bloque de `inventory-manager` (solo `contracts` y `web`; nunca `core`, `db`, Prisma ni otra app), reglas de servidores de prueba, `public/js` y CSS generado.
+- `dependency-rule.test.ts`: 13 casos de `inventory-manager` (CA-17).
+- `landing-pages/Dockerfile`: las etapas que hacen `npm ci` copian `inventory-manager/package.json`, y la etapa `build` copia el workspace para el typecheck y las pruebas. La imagen propia llega en el PR 3.
+- `.dockerignore` ignora el CSS generado.
+
+**4. Observación de QA del PR 1.** En `api/src/notifier.ts`, el bucle de avisos ya no se lanza con `void`: un fallo inesperado se captura y se registra como `products_notify_loop_failed`. Tiene una prueba.
+
+#### Criterios de aceptación
+
+| CA | Estado en el PR 2 |
+| --- | --- |
+| CA-1 | Cumplido: cookie `__Host-admin_sid` con `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/` y sin `Domain`; credenciales inválidas dan un mensaje genérico y ninguna cookie |
+| CA-2 | Completo: la IP reenviada es la del proxy (último valor), no la falseada por el navegador. La parte de la API ya estaba en el PR 1 |
+| CA-3 | Completo en la interfaz: sin sesión o con una sesión que la API ya no acepta, al acceso con `next` y vuelta; destinos externos ignorados; POST caducado con aviso |
+| CA-4 | Completo: 403 «sin permiso» sin datos ni llamadas a la API del otro negocio; 404 en un negocio inexistente; la navegación solo ofrece los negocios permitidos |
+| CA-5 | Completo: `Origin` ajeno y `Sec-Fetch-Site: cross-site` dan 403 sin llamar a la API; sin token o con el de otra sesión, 403 de la API y nada cambia |
+| CA-6 | Completo sin JS (alta, edición, eliminar, recuperar, mover y doble envío) y con JS (fragmento de reordenar y pruebas jsdom) |
+| CA-7 | Completo: 409 con lo escrito, quién y cuándo, sin botón de guardado normal; sobrescribir solo a petición |
+| CA-8 | Completo: 503 con lo escrito intacto y sin trazas |
+| CA-14 | Pruebas de estructura (etiqueta en cada control, un solo `h1`, salto al contenido, `lang`, foco en el resumen, botones con nombre). La revisión manual con teclado, a 375 px y en escritorio queda para QA |
+| CA-16 | Completo en `inventory-manager`: `no-store`, `noindex` y ningún secreto en el log |
+| CA-17 | Completo (lint y `dependency-rule.test.ts`) |
+| CA-19 | Locales en 0. El CI del PR se ejecuta en T4 |
+| CA-9, CA-15, CA-18 y CA-20 | PR 3 |
+
+#### Validaciones ejecutadas
+
+Desde `restaurante/`, con el MySQL local:
+
+- `npm run typecheck`: 0.
+- `npm run lint`: 0.
+- `npm run build:css`: 0.
+- `npm test`:
+  - antes: `api` 89 y `landing-pages` 2160 + 1 *expected fail* (2250 en total);
+  - después: `api` 90, `landing-pages` 2173 + 1 *expected fail* e `inventory-manager` 67 (6 archivos), 2331 en total. Todo verde.
+- `docker build` de las etapas `api` y `migrate` en local: correcto.
+- No queda ningún proceso abierto.
+
+#### Pantallas (descripción)
+
+Fondo brasa `#1c1412`, tarjetas `#261a17` con borde `#432c27`, texto crema, títulos en Epilogue mayúscula y etiquetas en Space Grotesk.
+
+- **Acceso:** tarjeta centrada con «Administración / Molotes y Birria El Muñeco», usuario, contraseña y el botón «Entrar» a todo el ancho.
+- **Selector:** dos tarjetas con borde superior del acento de cada negocio (azul en Molotes, rojo en Birria).
+- **Cabecera:** marca, chips de los negocios permitidos (el activo, relleno con el acento y `aria-current`), nombre del usuario y «Salir».
+- **Lista:** título con el nombre del negocio en el color secundario del acento; acciones «Agregar platillo», «Agregar bebida» y «Ver eliminados»; tarjetas por producto con número, nombre, precio, estado en texto y los botones «Subir», «Bajar», «Editar» y «Eliminar».
+  - En móvil todo va en una columna; desde `md`, la información a la izquierda y las acciones a la derecha.
+- **Formulario:** grupos «Datos del producto», «Imagen» y «Variantes» (o «Chips»), con filas numeradas, en dos columnas desde `md`, y la ayuda de cada campo.
+- **Confirmación de eliminar:** panel con el botón rojo de contorno y «Cancelar».
+
+#### Correcciones de QA del PR 2, ronda 1 (2026-10-28)
+
+Decisiones del usuario: DEF-005: "Ahora, en el PR 2 (Recomendado)"; DEF-008 y DEF-004: "DEF-008 ahora (Recomendado), DEF-004 ahora (Recomendado)"; DEF-007: "Aclarar el borde (Recomendado)". DEF-006 era BLOCKER y su corrección, obligatoria.
+
+- **DEF-006** (BLOCKER, `public/js/modules/submit-guard.js`).
+  - `submit-guard` ya no copia el name/value del botón a un campo oculto. El navegador ya lo incluye al construir los datos del envío, y el botón se deshabilita después, con `setTimeout`.
+  - Prueba nueva `inventory-manager/tests/integration/js-server.test.ts`, en jsdom:
+    - pinta la página real del servidor y activa `submit-guard`;
+    - toma los datos del envío como los construye el navegador (`new FormData(form, submitter)`) y los manda al servidor;
+    - cubre crear, editar y sobrescribir tras un 409: en los tres hay un solo `action` y responden 303.
+  - Comprobé que estas 3 pruebas fallan con el código anterior.
+  - La prueba jsdom de `submit-guard` exige ahora que no haya un campo oculto repetido.
+- **DEF-005** (`src/middleware/security.ts`): en producción, `/salud` responde 200 también sin TLS (`HEALTH_PATH`); el resto del admin sigue solo por HTTPS.
+  - `access.test.ts`: `/acceso` da 503 y `/salud` da 200, con `no-store`.
+  - El `it.fails` de DEF-005 en `landing-pages/tests/integration/inventory-manager-qa-req-f-039.test.ts` pasa a `it` y queda en verde.
+- **DEF-008** (`src/views/index.ts` y `src/controllers/admin.ts`): el aviso de conflicto del 409 es ahora una alerta urgente (`urgent: true`), con `role="alert"`, `tabindex="-1"` y `autofocus`, igual que los avisos de error del 422 y el 503. Sigue con el tono de advertencia (borde adobo) y su texto dice «no se guardó nada». `products.test.ts` comprueba el rol y el foco.
+- **DEF-004** (`eslint.config.ts`): `api` e `inventory-manager` (código y pruebas) revisan también los `import()` dinámicos con `no-restricted-syntax`.
+  - `inventory-manager`: rechaza `@restaurante/*` salvo `contracts` y `web`, Prisma y mariadb, `api/src`, `landing-pages` y las rutas relativas a `packages/`.
+  - `api`: rechaza `landing-pages`, `inventory-manager`, archivos internos de `core` y rutas relativas a `packages/`.
+  - 11 casos nuevos en `dependency-rule.test.ts`.
+- **DEF-007** (solo en el admin; las landings no cambian):
+  - el borde de los campos en reposo pasa a **`#ab8985`**, el color `outline` de `_stich_source_/birrier_a_el_mu_eco/DESIGN.md`, como token `--color-outline`;
+  - contraste medido: **5,35:1** sobre la tarjeta `#261a17` y **5,74:1** sobre el fondo `#1c1412` de las filas (antes, 1,31:1);
+  - lo usan los campos de texto, selector y área de texto, y la pantalla de acceso;
+  - las casillas mantienen el borde adobo `#c2410c`: 3,26:1 sobre `#261a17` y 3,50:1 sobre `#1c1412`.
+- **Validaciones:**
+  - `npm run typecheck`: 0.
+  - `npm run lint`: 0.
+  - `npm run build:css`: 0.
+  - `npm test`: `api` 90; `landing-pages` 2193 + 1 *expected fail* (105 archivos, con el archivo de QA); `inventory-manager` 70 (7 archivos).
+  - No queda ningún proceso abierto.
+
+#### Pull Request del PR 2
+
+- **PR:** #95, https://github.com/orvigas/negocio/pull/95 (base `epic/arquitectura`).
+- **Commit:** `1affdd2`.
+- **CI** (ejecución 40758108416): `cambios`, `calidad`, `docker`, `despliegue`, `auditoria` y GitGuardian en verde. `publish`, `deploy`, `vigente` y `validado` aparecen omitidos, como corresponde a un PR.
+
+#### Desviaciones y pendientes
+
+1. **El PR 2 toca `landing-pages/Dockerfile` y `.dockerignore`.** Sin eso, `npm ci` falla en Docker por el workspace nuevo. Solo copia el `package.json` y el código para el typecheck; la etapa y la imagen `inventory-manager` siguen siendo del PR 3.
+2. **Los descriptores de formulario se guardan en memoria** para conservar lo escrito con la API caída. Salen del código de core, así que solo cambian cuando se despliega la API.
+3. **Sin favicon propio** (`<link rel="icon" href="data:,">`) para no duplicar binarios entre imágenes. Se puede revisar en el PR 3.
+4. **Las pruebas de `inventory-manager` usan un doble de la API** que cumple el contrato. La prueba con los procesos reales y MySQL es la de extremo a extremo del PR 3.
+5. **La documentación** (README del workspace, `desarrollo.md`, `despliegue.md` y `arquitectura.md`) queda para el PR 3, como dice el plan. `inventory-manager/.env.example` documenta las variables.
+
 ## QA Action Plan
 
 ### PR 1 de 3 (2026-10-27, fase Q1)
@@ -1248,6 +1397,219 @@ Salidas de `typecheck`, `lint`, `test` (totales por workspace) y `build:css`; sa
 - **CI del PR hacia `epic/arquitectura`:** jobs `calidad`, `docker`, `despliegue` y `auditoria` en verde (CA-19 completo). Se verifica en T4 al abrir el PR; QA lo deja como condición.
 - **PR 2:** `inventory-manager` (CA-1, CA-3 con redirección y `next`, CA-4 a CA-8 en la interfaz, CA-14, CA-16 `no-store`/`noindex`, CA-17 bloque de `inventory-manager`), `contracts/admin-client.ts` y `contracts/product-form.ts` (desviación 3), y el `Origin` ajeno de CA-5.
 - **PR 3:** Docker de `inventory-manager`, `compose.prod.yaml`, `deploy.sh` (código 16), smoke del subdominio y de que Traefik no enruta `api` ni el 3002 (CA-10 y CA-15), variables del aviso obligatorias en producción (desviación 1), prueba de extremo a extremo de CA-9 con MySQL, documentación (CA-20) y memoria.
+
+### PR 2 de 3: `inventory-manager` (2026-10-28, fase Q1)
+
+**Aprobación:** aprobado por el usuario el 2026-10-28. Respuesta textual: "Si lo apruebo". Incluye el archivo `inventory-manager-qa-req-f-039.test.ts`, la base temporal `restaurante_test_qa039pr2` y los procesos locales. DEF-003 del PR 1 ya se corrigió antes del merge (#94); si vuelve a fallar, es un hallazgo nuevo.
+
+#### Objetivo
+
+Validar con evidencia que el PR 2 (`feature/REQ-F-039-admin-nuevo-productos-2-inventory`, sin commit, base `epic/arquitectura` = `fd8bf4b`) cumple los CA que le asigna el plan técnico (CA-1, CA-3, CA-4 a CA-8 en la interfaz, CA-14, CA-16 y CA-17, y CA-2 completo), con CA-19 en local y sin regresiones en `api`, `landing-pages`, `contracts` ni en las imágenes Docker.
+
+#### Requisito bajo prueba
+
+- **Workspace `inventory-manager`:** Koa con SSR, Tailwind (tokens de P-4 y acento por negocio) y Vanilla JS de mejora (`submit-guard.js` y `reorder.js`).
+  - Sesión con cookie `__Host-admin_sid` (`admin_sid` fuera de producción) reenviada como Bearer, y `next` con lista cerrada.
+  - CSRF en dos capas: `assertSameOrigin` y `_csrf` → `X-CSRF-Token`.
+  - CSP estricta, `no-store`, `noindex`, `Referrer-Policy: same-origin` y solo HTTPS en producción.
+  - Una `requestId` por formulario de alta como `Idempotency-Key`.
+  - Páginas 403, 404 y 503; esta última conserva lo escrito.
+- **`contracts`:** `admin-client.ts`, `product-form.ts` y `http.ts`. Este último se extrajo de `public-client.ts` y debe seguir igual.
+- **Regla de dependencias:** `inventory-manager` solo importa `contracts` y `web`. La imponen el lint y los 13 casos de `dependency-rule.test.ts`.
+- **Cambios fuera del workspace:** `landing-pages/Dockerfile` y `.dockerignore` (desviación 1), y `api/src/notifier.ts` (`products_notify_loop_failed`, observación del QA del PR 1).
+- **Desviaciones 2 a 5 aceptadas por el usuario:** descriptores en memoria, sin favicon, doble de la API en las pruebas y documentación en el PR 3.
+
+#### Criterios de aceptación (PR 2 → pruebas)
+
+| CA | Pruebas que lo cubren |
+| --- | --- |
+| CA-1 | S-01, S-02, F-01, F-02 |
+| CA-2 (completo) | S-08 |
+| CA-3 | F-03, S-05, S-06, N-01 |
+| CA-4 | F-04, N-02 |
+| CA-5 | S-03, S-04 |
+| CA-6 | F-05 a F-10 (sin JS), J-01 a J-04 (con JS) |
+| CA-7 | F-11, B-07 |
+| CA-8 | F-12, B-08 |
+| CA-14 | B-01 a B-10 (revisión manual), A-03 |
+| CA-16 | S-07, S-09 |
+| CA-17 | D-01 a D-03 |
+| CA-19 (local) | R-01 a R-05 |
+
+Fuera de este QA, por ser del PR 3: CA-9, CA-15, CA-18 y CA-20.
+
+#### Riesgos identificados
+
+1. **R-NEXT.** Redirección abierta o destino no válido en `next` (`//evil`, `/\evil`, esquemas, codificaciones `%2F%2F`, mayúsculas, rutas con barra final o con query).
+2. **R-COOKIE.** Atributos de la cookie en producción detrás de TLS terminado en el proxy (`TRUST_PROXY`). Fijación: la cookie debe renovarse al entrar y borrarse al salir o cuando la API rechace la sesión.
+3. **R-CSRF.** POST con `Origin` ajeno, `Origin: null`, `Sec-Fetch-Site: cross-site` o `same-site`; `_csrf` ausente, de otra sesión o reutilizado tras salir.
+4. **R-CSP.** Recursos bloqueados (estilos o fuentes de Google, JS de módulos) o CSP permisiva (`unsafe-inline` o `unsafe-eval`, comodines).
+5. **R-IDEM.** `requestId` perdida o regenerada al volver a pintar el formulario tras un 422 o un 503; o compartida entre formularios o pestañas.
+6. **R-503.** Lo escrito no se conserva si la API cae antes o después de comprobar la sesión; trazas o detalles internos en la respuesta.
+7. **R-409.** Que se guarde sin querer sobre la versión de otro; que se pierda lo escrito; que falten quién y cuándo.
+8. **R-A11Y.** Foco perdido tras reordenar, anuncio ausente en `aria-live`, contraste insuficiente en estados (deshabilitado, foco, error o éxito), desplazamiento horizontal a 375 px.
+9. **R-JS.** Doble envío con conexiones lentas; `reorder.js` sin respaldo si `fetch` falla; errores en consola o violaciones de CSP.
+10. **R-DEP.** Que `inventory-manager` importe `core`, `db`, Prisma u otra app, también en sus pruebas o scripts.
+11. **R-REG.** Regresión en las landings por la extracción de `http.ts` de `public-client.ts`; en `api` por el cambio del notificador; en Docker por el workspace nuevo.
+12. **R-ENV.** Repetir el incidente del PR 1: `npm run db:migrate` lee `packages/db/.env` y apunta a la base de desarrollo si no se fija `MIGRATION_DATABASE_URL`.
+
+#### Pruebas funcionales (procesos reales, base de pruebas)
+
+Con `api`, `landing-pages` (solo para crear la base, importar la semilla y crear el primer administrador) e `inventory-manager` arrancados como se describe en "Entorno local".
+
+- **F-01.** Entrar con credenciales válidas.
+  - Administrador: llega al selector de negocio.
+  - Editor de Molotes: va directo a `/molotes/productos`.
+  - La cookie `admin_sid` es `HttpOnly`, `SameSite=Strict`, `Path=/` y sin `Domain` ni `Max-Age`.
+- **F-02.** Credenciales inválidas: mensaje genérico y ningún `Set-Cookie` de sesión.
+- **F-03.** Sin sesión, cualquier pantalla lleva a `/acceso?next=<ruta>` y, tras entrar, vuelve a la ruta pedida. Una sesión cerrada en la API (salir desde otra pestaña, o desactivar la cuenta desde el `/admin` actual) lleva al acceso en la siguiente petición. Un POST caducado muestra el aviso de sesión caducada.
+- **F-04.** Editor de Molotes en `/birria/productos` (lista, alta, edición o eliminados): 403 "sin permiso" sin datos de Birria. `/tacos/productos`: 404. La cabecera solo ofrece los negocios permitidos.
+- **F-05.** Alta sin JS: categoría y, en Birria, tipo de detalle; formulario; 303 a la lista con el mensaje de éxito y la frescura. El producto queda no disponible y al final.
+- **F-06.** Edición con 303 y el mensaje según `meta.freshness` ("ya se ve" o "pendiente").
+- **F-07.** Eliminar con la pantalla de confirmación; "Cancelar" vuelve sin cambios.
+- **F-08.** "Recuperar" desde eliminados.
+- **F-09.** Subir y bajar sin JS (formularios POST con 303).
+- **F-10.** Doble envío del alta (el mismo formulario enviado dos veces con la misma `requestId`): un solo producto.
+- **F-11.** 409: dos sesiones con el mismo producto abierto; la segunda guarda.
+  - Conserva lo escrito y muestra quién y cuándo, sin el botón de guardado normal.
+  - "Cargar la versión vigente" carga los datos de la otra sesión.
+  - "Guardar mis cambios sobre la versión vigente" guarda solo a petición, con el historial de sobrescritura.
+- **F-12.** API caída (proceso de `api` detenido) al guardar un alta y una edición: 503 con el aviso, lo escrito intacto y sin trazas. Se repite con la API caída antes de comprobar la sesión (descriptores en memoria, desviación 2).
+- **F-13.** Salir: 303 al acceso, cookie borrada y la sesión ya no vale en la API. Volver atrás no muestra datos (`no-store`).
+- **F-14.** El mensaje de éxito solo dice que la landing y el bot ya muestran el cambio cuando la API respondió `confirmed`. Se comprueba con y sin `landing-pages` escuchando el aviso.
+
+#### Pruebas de seguridad
+
+- **S-01.** Producción detrás de proxy (`NODE_ENV=production`, `TRUST_PROXY=true`, con `X-Forwarded-Proto: https` por `curl`): la cookie se llama `__Host-admin_sid` y lleva `Secure`, `HttpOnly`, `SameSite=Strict` y `Path=/`, sin `Domain`. Sin TLS (sin la cabecera) → 503 "solo por HTTPS".
+- **S-02.** Fijación: al entrar se sustituye cualquier cookie previa por un id nuevo; una cookie inventada no da acceso y se borra.
+- **S-03.** Primera capa de CSRF: POST con `Origin` ajeno, `Origin: null` sin `Sec-Fetch-Site: same-origin`, `Sec-Fetch-Site: cross-site` o `same-site` → 403 sin llamar a la API (se comprueba en el log de `api`, que no recibe la petición) y sin cambios.
+- **S-04.** Segunda capa: `_csrf` ausente, de otra sesión o de una sesión cerrada → 403 de la API y sin cambios en la lista.
+- **S-05.** `next` (R-NEXT), con valores codificados y sin codificar: `//evil.example`, `/\evil`, `https://evil.example`, `javascript:…`, `/%2F%2Fevil`, `/MOLOTES/productos`, `/molotes/productos/`, `/molotes/productos?x=1`, `/molotes/productos/0/editar`, `/salir` y `/acceso` → siempre `/`. Los destinos válidos se respetan.
+- **S-06.** `Location` de todas las redirecciones: siempre una ruta relativa interna.
+- **S-07.** Cabeceras en todas las respuestas (HTML, 403, 404, 503, `robots.txt`, `/salud` y estáticos):
+  - `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow` y `Referrer-Policy: same-origin`;
+  - `<meta name="robots">` en el HTML;
+  - `robots.txt` con `Disallow: /`;
+  - CSP sin `unsafe-inline` ni `unsafe-eval` en `script-src`, con `form-action 'self'`, `frame-ancestors 'none'` y `object-src 'none'`.
+- **S-08.** IP reenviada (CA-2):
+  - con `TRUST_PROXY=true` y `X-Forwarded-For: 1.1.1.1, 203.0.113.9`, la API cuenta la IP `203.0.113.9`;
+  - sin `TRUST_PROXY`, cuenta la del socket, aunque el navegador mande la cabecera;
+  - el límite de 5 fallos bloquea el acceso con un mensaje claro.
+- **S-09.** Logs de `inventory-manager` y de `api` durante toda la ronda: sin contraseñas, ids de sesión (valores de cookie), `_csrf` ni la credencial del aviso.
+- **S-10.** `requestId` (R-IDEM): 24 caracteres base64url, distinta en cada formulario pintado y en cada pestaña; se conserva tras un 422 y un 503; una `requestId` manipulada (formato inválido) no se acepta.
+- **S-11.** `inventory-manager` no recibe credenciales de la base ni el token del aviso. Se comprueba en `config.ts` y en `.env.example`, por nombre de variable, sin leer ningún `.env`.
+
+#### Pruebas negativas y casos límite
+
+- **N-01.** Sesión caducada a mitad de una edición (la API la invalida): al enviar, acceso con aviso y `next` a la pantalla. Se anota si lo escrito se conserva; sin JS no es obligatorio.
+- **N-02.** URL directa a un producto inexistente → 404; a uno del otro negocio → 403 o 404, sin datos.
+- **N-03.** Campos manipulados (desconocidos, categoría o tipo inválidos, `version` no numérica, `?ok=` fuera de la lista cerrada) → 400, 404 o un mensaje controlado, sin trazas.
+- **N-04.** Cuerpos de formulario por encima del límite → 413 controlado.
+- **N-05.** Métodos no permitidos y rutas desconocidas → 404 o 405 con la página del admin, sin trazas.
+
+#### Pruebas con JavaScript
+
+- **J-01.** `submit-guard.js`: al enviar, el botón pasa a `aria-busy` y "Guardando…" y un segundo clic no envía otra vez (red lenta simulada con la API retrasada). Si la página vuelve atrás (`pageshow`), el botón se restablece.
+- **J-02.** `reorder.js`: "Subir" y "Bajar" piden por `fetch` con `X-Fragment: product-list` y reemplazan la lista. El foco queda en el botón equivalente del producto movido y `aria-live` anuncia la nueva posición. En los extremos, el botón que no aplica no rompe el foco.
+- **J-03.** Respaldo de `reorder.js`: con la API devolviendo error o un 409, se envía el formulario normal y el resultado es el mismo que sin JS.
+- **J-04.** Consola sin errores ni violaciones de CSP en todas las pantallas.
+- **J-05.** Pruebas jsdom existentes (`enhancements.test.ts`).
+
+#### Pruebas de accesibilidad y responsive (CA-14, revisión manual en el navegador)
+
+- **B-01. Teclado.** Recorrido completo con Tab y Shift+Tab: salto al contenido (visible al recibir el foco), cabecera, chips de negocio, acciones, filas, formulario y botones. Sin trampas de foco. Todo se puede activar con Enter o Espacio.
+- **B-02. Foco visible.** Contorno de 2 px `#eab308` (o el definido) en enlaces, botones, campos y casillas, sobre las superficies oscuras y sobre el acento.
+- **B-03. Contraste AA.** Medido con un script que calcula el contraste de cada texto visible y de los bordes de los controles a partir de los estilos computados. Cubre texto normal, etiquetas, ayudas, mensajes de error y éxito, botones primario, secundario, *ghost* y peligro, chips activos e inactivos y estados deshabilitados, en los dos acentos. Se contrastan las cifras con las declaradas: 5,96, 5,79, 9,91 y 9,95.
+- **B-04. 375 px.** Sin desplazamiento horizontal (`scrollWidth <= innerWidth`) en acceso, selector, lista, alta, edición con errores, 409, confirmación de eliminar, eliminados, 403, 404 y 503. Las filas se apilan, los botones tienen un área táctil adecuada y no hay textos cortados.
+- **B-05. Escritorio** (1440×900, y 768×1024 como tablet): diseño en dos columnas desde `md` y la misma lista de pantallas.
+- **B-06. Formulario.** Cada control tiene etiqueta. Errores 422: resumen enlazado que recibe el foco; cada campo con `aria-invalid` y `aria-describedby` hacia su error; icono y texto "Error:", no solo color.
+- **B-07. 409** en el navegador: aviso con quién y cuándo, lo escrito conservado, foco en el aviso y las dos acciones claras.
+- **B-08. 503** en el navegador: aviso claro y formulario intacto.
+- **B-09. Estructura.** Un solo `h1`, encabezados jerarquizados, `lang="es"`, `aria-current` en la navegación y estado "Disponible" o "No disponible" con texto.
+- **B-10. Sin JS.** Los formularios son `<form method="post">` con `action` propia y botones `type="submit"`, y el flujo completo funciona sin JS (cubierto por F-05 a F-11 con `curl`, que no ejecuta JS). En el navegador se comprueba que la interfaz no depende de JS para mostrar ni para enviar.
+
+**Cómo se hará en el navegador.** En el PR 1, la ventana de Chrome no se pudo redimensionar (2560 px) y la CSP `frame-ancestors 'none'` impide los iframes. Para 375, 768 y 1440 px se abrirá desde la pestaña de trabajo una ventana emergente del mismo origen con `window.open(url, 'qa', 'width=…,height=…')`, y se medirán diseño, foco y contraste desde la pestaña que la abrió (mismo origen). Si tampoco es posible, B-04 y B-05 quedarán pendientes de revisión manual del usuario y CA-14 volverá como `NEEDS_USER_DECISION`, porque depende de esa revisión.
+
+#### Pruebas de la regla de dependencias (CA-17)
+
+- **D-01.** `dependency-rule.test.ts`: los 13 casos de `inventory-manager` en verde. Se revisa que cubran `core`, `db`, Prisma, las otras apps (`landing-pages` y `api`), imports relativos fuera del workspace, el código de pruebas y que se acepten `contracts`, `web` y las dependencias externas propias.
+- **D-02.** Sondas sin escribir archivos (`npx eslint --stdin --stdin-filename` sobre archivos existentes del workspace: `src/app.ts`, `tests/unit/product-form.test.ts` y `scripts/dev-server.ts`):
+  - importar `@restaurante/core/shared`, `@restaurante/db/client`, `@prisma/client`, `../../landing-pages/src/app.ts` y `../../api/src/app.ts` → error;
+  - importar `@restaurante/contracts`, `@restaurante/web` y `koa` → sin error;
+  - `public/js` con globales del navegador → sin error.
+- **D-03.** `package.json` de `inventory-manager` sin `@restaurante/core` ni `@restaurante/db`, y búsqueda de imports en `src/`, `tests/` y `scripts/`.
+
+#### Pruebas de regresión
+
+- **R-01.** `npm run typecheck` desde la raíz (todos los workspaces y la configuración).
+- **R-02.** `npm run lint`, sin avisos.
+- **R-03.** `npm run build:css` (los dos workspaces).
+- **R-04.** `npm test` de todos los workspaces. Esperado: `api` 90, `landing-pages` 2173 + 1 *expected fail* e `inventory-manager` 67; 2331 en total. Si falla "arranque sin API" de `landing-products-api.test.ts`, se atribuye a DEF-003 (inestabilidad conocida, MINOR, heredada) solo si el diff de orden coincide con `birria` antes que `molotes`, y se vuelve a ejecutar.
+- **R-05.** `docker build` de las etapas `deps`, `build`, `production`, `migrate` y `api` tras el cambio del `Dockerfile` y de `.dockerignore`. Las 6 comprobaciones del job `docker` del CI en local. El contexto no incluye `node_modules`, `.env` ni el CSS generado de `inventory-manager`, y la etapa `build` compila y comprueba los tipos de `inventory-manager`. Las imágenes se borran al terminar.
+- **R-06.** `contracts/public-client.ts` frente a `fd8bf4b`: la extracción de `http.ts` no cambia el comportamiento. El diff solo mueve código, y las pruebas del cliente público y las de las landings pasan.
+- **R-07.** HTML de las landings: las referencias de REQ-F-038 (`tests/snapshots/`) no cambian y `landing-html-reference.test.ts` pasa.
+- **R-08.** `api/src/notifier.ts`: la prueba nueva de `products_notify_loop_failed` y las pruebas N-09 y N-09b del PR 1 en verde.
+- **R-09.** El `/admin` actual (con y sin `ADMIN_NEW_URL`), por la suite (`admin-*.test.ts` y `admin-products-moved.test.ts`).
+
+#### Entorno local para el navegador (sin tocar desarrollo ni producción)
+
+1. **Base:** una base desechable `restaurante_test_qa039pr2` en el MySQL de pruebas (127.0.0.1:3307, usuario DDL de pruebas, el que define el soporte de `tests/`), creada con `docker exec … mysql -e "CREATE DATABASE …"`. Nunca la base `restaurante` ni la de producción.
+2. **Migraciones:** `MIGRATION_DATABASE_URL=<base de pruebas> npm run db:migrate`. Antes de seguir se comprueba que la salida dice `Datasource "db": MySQL database "restaurante_test_qa039pr2"`. Si dice otra base, se detiene y se informa. No se lee ni se muestra ningún `.env`.
+3. **Procesos:** con `env -i` (sin `--env-file`, sin heredar el `.env` de nadie) y solo variables explícitas:
+   - `api` en el 3101 (`DATABASE_URL` del usuario DML de pruebas sobre esa base);
+   - `landing-pages` en el 3100 (misma base, un `DATA_DIR` temporal, el aviso interno en el 3102 con un token generado en la sesión, y `ADMIN_USER` y `ADMIN_PASSWORD_HASH` generados en la sesión) para importar la semilla y crear el primer administrador;
+   - un editor de Molotes creado desde el `/admin` actual;
+   - `inventory-manager` en el 3103 con `API_INTERNAL_URL=http://127.0.0.1:3101`, en `development` para el navegador y en `production` con `TRUST_PROXY=true` para las comprobaciones de S-01 con `curl`.
+4. **Identificación de procesos:** por puerto (`lsof -tiTCP:<puerto> -sTCP:LISTEN`), nunca con `pgrep -f`. Las esperas sondean el puerto o la URL con `curl`.
+5. **Credenciales:** las de prueba se generan en la sesión y no se muestran en el informe.
+6. **Limpieza al terminar:** detener los procesos, borrar la base, el `DATA_DIR` temporal, los logs y los scripts de `/tmp`, y las imágenes Docker de prueba, y cerrar las pestañas del navegador.
+
+#### Pruebas automatizadas
+
+- **Existentes:** todas (R-04), con atención a `inventory-manager/tests/**`, `dependency-rule.test.ts`, `notifier.test.ts`, `admin-client.test.ts`, `product-form.test.ts` y `enhancements.test.ts`.
+- **Nuevas (solo si se aprueba):** en `restaurante/landing-pages/tests/integration/inventory-manager-qa-req-f-039.test.ts`, con procesos reales de `api` e `inventory-manager` sobre MySQL (`startServer` y `makeDatabase`, sin importar código de `inventory-manager`), para lo que la suite del PR 2 no cubre al usar el doble de la API:
+  - S-01 (atributos de la cookie en producción detrás de proxy);
+  - S-05 y S-06 (la lista completa de `next` y `Location`);
+  - S-03 (CSRF de la primera capa sin llegar a la API);
+  - S-08 (IP reenviada con y sin `TRUST_PROXY`);
+  - F-10 y S-10 (`requestId` y doble envío reales);
+  - F-12 (API caída de verdad);
+  - S-09 (logs de los dos procesos sin secretos).
+
+  No se tocan las pruebas de `inventory-manager/` ni el código de producción. Un defecto encontrado se documenta con `it.fails` y la referencia DEF-NNN, como en el PR 1.
+
+#### Evidencia requerida
+
+- Salidas de R-01 a R-05, con totales por workspace.
+- Cabeceras y cuerpos de `curl` de F y S.
+- Salidas de las sondas de lint.
+- Medidas del navegador: `scrollWidth`, contraste por elemento, foco (elemento activo y estilo del contorno), texto de `aria-live`, consola sin errores. Capturas de acceso, lista, formulario con errores, 409, 503 y la vista a 375 px.
+- Extractos de log de S-09.
+
+#### Criterios de aprobación
+
+- CA-1, CA-2, CA-3, CA-4, CA-5, CA-6, CA-7, CA-8, CA-14, CA-16 y CA-17 pasan con evidencia, y CA-19 local en 0.
+- Sin `BLOCKER` ni `CRITICAL`. Cualquier `MAJOR` vuelve al usuario como `NEEDS_USER_DECISION`.
+- La revisión manual de CA-14 hecha en el navegador; si no se puede, `NEEDS_USER_DECISION`.
+- Sin regresiones en `api`, `landing-pages`, `contracts` ni Docker.
+- Entorno limpio al terminar.
+
+#### Lo que queda fuera de este QA
+
+- **CI del PR hacia `epic/arquitectura`:** `calidad`, `docker`, `despliegue` y `auditoria` en verde (CA-19 completo).
+- **PR 3:**
+  - la etapa e imagen Docker de `inventory-manager`;
+  - `compose.prod.yaml` con la red `admin` y Traefik;
+  - `deploy.sh` con 4 imágenes y el código 16;
+  - el smoke del subdominio, el límite de 60 por minuto y que Traefik no enrute `api` ni el puerto 3002;
+  - CA-9 (extremo a extremo con MySQL);
+  - CA-15 (subdominio, certificado y redirección a HTTPS);
+  - CA-18 (despliegue);
+  - CA-20 (documentación);
+  - las variables del aviso obligatorias en producción;
+  - el favicon propio, si se decide (desviación 3);
+  - la memoria.
+- **DEF-003** (prueba inestable heredada): pendiente de la decisión del usuario.
 
 ## QA Report
 
@@ -1477,7 +1839,236 @@ El usuario decidió corregir DEF-001 y DEF-002 en el PR 1 ("Ahora, en el PR 1 (R
 
 QA_APPROVED
 
+### PR 2 de 3: `inventory-manager` — Ronda 1 (2026-10-28, fase Q2)
+
+#### Pruebas ejecutadas
+
+| Prueba | Resultado |
+| --- | --- |
+| `npm run typecheck` / `npm run lint` / `npm run build:css` | 0 / 0 / 0 |
+| `npm test` (inicial) | `api` 90; `landing-pages` 2173 + 1 *expected fail*; `inventory-manager` 67 (6 archivos). 2331 + 1, todo en verde |
+| `npm test` (final, con el archivo de QA) | `api` 90; `landing-pages` 2181 + 2 *expected fail* (105 archivos); `inventory-manager` 67. Todo en verde. "Arranque sin API" no falló |
+| Archivo nuevo `landing-pages/tests/integration/inventory-manager-qa-req-f-039.test.ts` | 9 casos con procesos reales (`api`, `landing-pages` e `inventory-manager` sobre MySQL): 8 pasan; 1 `it.fails` documenta DEF-005. Pasa `typecheck` y `lint` |
+| `docker build` de `deps`, `build`, `production`, `migrate` y `api` | Correcto. Las 6 comprobaciones del job `docker` del CI en local: todas en 0. La etapa `build` comprueba los tipos de `inventory-manager` y no lleva `.env`. Imágenes `qa2:*` borradas al terminar |
+| Revisión de `contracts/public-client.ts` | Solo se movieron `isTimeout`, `isJson` y `readLimited` a `http.ts` (añadiendo `export`); sin cambios de comportamiento. Las referencias de REQ-F-038 (`tests/snapshots/`) no cambian |
+| Regla de dependencias | Los 13 casos de `dependency-rule.test.ts` cubren `core`, `core/catalog`, `db`, Prisma, `mariadb`, `api` y `landing-pages` por ruta relativa, rutas relativas a `packages/` y las pruebas, y permiten `contracts`, `web`, `koa` y archivos propios. Sondas `eslint --stdin` adicionales: `scripts/` rechaza `core` y `db`; `src/` rechaza `@restaurante/core`; `tests/` rechaza `../../../landing-pages`; `koa-static` y `public/js` pasan. **Un `import()` dinámico de `@restaurante/core/shared` pasa el lint** (DEF-004). Ningún import prohibido en `src/`, `tests/`, `scripts/` ni `package.json` |
+| Entorno local | Base `restaurante_test_qa039pr2`. Antes de migrar, `prisma migrate status` con `MIGRATION_DATABASE_URL` explícita confirmó `Datasource "db": MySQL database "restaurante_test_qa039pr2"`. Procesos con `env -i`: `api` 3101, `landing-pages` 3100 (aviso interno 3102) e `inventory-manager` 3103 (desarrollo) y 3104 (producción con `TRUST_PROXY`). Editor de Molotes creado con el repositorio de usuarios sobre la base temporal (comprobando el nombre de la base antes de conectar) |
+| `curl` contra `inventory-manager` | Ver los criterios de aceptación y la seguridad |
+| Navegador (Claude in Chrome) | Pestaña de trabajo a 2560 px y ventana emergente del mismo origen redimensionada a 375×755, 768 y 1440. Teclado, foco, contraste, `reorder.js`, `submit-guard.js`, 422, 409 y 503 |
+
+#### Criterios de aceptación
+
+| CA | Resultado | Evidencia |
+| --- | --- | --- |
+| CA-1 | PASS | Desarrollo: `admin_sid; path=/; samesite=strict; httponly`. Producción detrás del proxy: `__Host-admin_sid; path=/; samesite=strict; secure; httponly`, sin `Domain` ni `Max-Age` (S-01, `curl` y prueba). Credenciales inválidas: 401 "Usuario o contraseña incorrectos." y ningún `Set-Cookie` |
+| CA-2 | PASS | Con `TRUST_PROXY=true` y `X-Forwarded-For: 10.0.0.N, 203.0.113.50`, la API registra `ip: 203.0.113.50`; 5 fallos → 429 "bloqueado temporalmente"; otra IP → 303. Sin `TRUST_PROXY`, la cabecera falseada se ignora (`ip: 127.0.0.1`) |
+| CA-3 | PASS | Sin sesión → `303 /acceso?next=%2Fmolotes%2Fproductos%2F5%2Feditar` y, tras entrar, vuelve a esa pantalla (también en el navegador, con el teclado). 16 destinos maliciosos de `next` (`//evil`, `/\evil`, `https:`, `javascript:`, `%2F%2F`, mayúsculas, barra final, query, id 0, `/salir`, `/acceso`, espacio inicial, CRLF) → `/`. Una cookie inventada → 303 al acceso y la cookie se borra. Tras salir, la cookie anterior ya no vale |
+| CA-4 | PASS | Editor de Molotes en 5 pantallas de Birria → 403 "Sin permiso", sin datos de Birria y **0 llamadas a la API de Birria**; `/tacos/productos` → 404; la cabecera solo ofrece Molotes |
+| CA-5 | PASS | `Origin` ajeno, `Origin: null`, `Sec-Fetch-Site: cross-site` y `same-site` → 403 en `inventory-manager` (`admin_csrf_rejected` con `origin`, `origin_null` y `fetch_site`), **sin ninguna petición a la API**. `_csrf` vacío, de otra sesión o inventado → 403 de la API (`admin_csrf_rejected`, `reason: token`), sin cambios en el orden |
+| CA-6 | **FAIL** | **Sin JS:** pasa. Alta con doble envío (un solo producto), eliminar, recuperar, subir y bajar, y frescura en el mensaje ("La landing y el bot ya muestran el cambio"). **Con JS:** el alta y la edición fallan siempre con 400 "El formulario tiene campos repetidos." (DEF-006, BLOCKER). Eliminar y recuperar con JS funcionan. `reorder.js` funciona (ver J-02) |
+| CA-7 | PASS en el servidor (con la observación de DEF-008 y bloqueado con JS por DEF-006) | 409 real entre dos sesiones: conserva lo escrito, "Última modificación: qa, el 28/10/2026 08:54", sin el botón de guardado normal, "Cargar la versión vigente" y "Guardar mis cambios sobre la versión vigente"; sobrescribe solo a petición (prueba F-11 y navegador) |
+| CA-8 | PASS | API detenida: el alta y la edición → 503 con `role="alert"` "Servicio no disponible…", lo escrito intacto (nombre, precio e imagen), la misma `requestId` y sin trazas (navegador y prueba F-12) |
+| CA-14 | **FAIL** | Ver "Accesibilidad y responsive". Teclado, foco visible, contraste del texto, 375 px y escritorio pasan, pero el formulario de producto no se puede usar con JS (DEF-006). Además, DEF-007 y DEF-008 (MINOR) |
+| CA-16 | PASS | `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`, `Referrer-Policy: same-origin` y CSP en 12 tipos de respuesta (HTML, 303, 403, 404, 400, `robots.txt`, `/salud`, CSS y JS). `<meta name="robots">` y `robots.txt` `Disallow: /`. Logs de los 4 procesos sin las 2 contraseñas, el token interno, el token CSRF ni 4 ids de sesión (0 coincidencias) |
+| CA-17 | PASS (con DEF-004, MINOR) | Lint y `dependency-rule.test.ts`. El hueco del `import()` dinámico es DEF-004 |
+| CA-19 (local) | PASS | `typecheck`, `lint` y `test` en 0 |
+
+#### Seguridad
+
+- **S-01 (TLS):** en producción sin TLS → 503 "Administración disponible solo por HTTPS."
+- **S-07 (CSP):** `default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests`. Sin `unsafe-inline` ni `unsafe-eval`. Sin errores ni violaciones de CSP en la consola.
+- **S-10 (`requestId`):** 24 caracteres base64url; distinta en cada formulario; se conserva tras un 422 y un 503; una `requestId` con formato inválido se sustituye por una nueva en el servidor (el alta se hace una vez y nunca llega `INVALID_IDEMPOTENCY_KEY` a la API).
+- **S-11:** `inventory-manager` solo tiene las variables `NODE_ENV`, `HOST`, `PORT`, `API_INTERNAL_URL` y `TRUST_PROXY` (sin base de datos ni token del aviso).
+
+#### Accesibilidad y responsive (CA-14)
+
+- **Teclado (B-01, B-02):**
+  - el primer Tab va a "Saltar al contenido", visible al recibir el foco;
+  - los 30 siguientes recorren la cabecera, los chips, "Salir", las acciones y las filas, todos con `:focus-visible` y un contorno sólido de 2 px `rgb(234,179,8)`;
+  - sin trampas de foco;
+  - el acceso se hace entero con teclado y vuelve a `next`.
+- **Áreas táctiles:** 44 px de alto en botones y enlaces de acción. Son más pequeños el enlace "Administración" de la marca (28 px) y los enlaces "Volver a productos" (17 px de alto, enlaces de texto).
+- **Contraste del texto (B-03):** script sobre los estilos computados. Lista de Molotes: 89 textos, mínimo 5,79. Formulario con errores: 58 textos, mínimo 5,79. Lista de Birria: 57 textos, mínimo 5,96. Ningún texto por debajo de AA. Bordes de los botones de contorno: mínimo 3,26.
+- **Contraste de los campos (WCAG 1.4.11):** el borde de los campos en reposo `#432c27` sobre la tarjeta `#261a17` da 1,31:1, y el fondo del campo frente a la tarjeta, 1,07:1 (DEF-007).
+- **375 px (B-04):** sin desplazamiento horizontal (`scrollWidth = 375`) en selector, listas de Molotes y Birria, elección de tipo, alta, edición, confirmación de eliminar, eliminados, 404 y 409. Las filas se apilan (acciones debajo del nombre).
+- **768 y 1440 px (B-05):** sin desplazamiento horizontal; desde `md`, la información a la izquierda y las acciones a la derecha en la misma línea.
+- **422 (B-06):** resumen con `role` de alerta que recibe el foco (`:focus-visible`), con 8 enlaces `#f-…` a sus campos. Cada campo con error tiene `aria-invalid="true"` y `aria-describedby` hacia la ayuda y "⚠Error: …". Lo escrito y la `requestId` se conservan. Los 11 controles tienen etiqueta. Un solo `h1`, `lang="es"`.
+- **409 (B-07):** aviso completo y lo escrito conservado, pero el foco queda en `body`: el aviso es `role="status"` sin foco (DEF-008).
+- **503 (B-08):** el aviso `role="alert"` recibe el foco y el formulario queda intacto.
+- **JS (J-01 a J-04):**
+  - `reorder.js`: con "Bajar" y "Subir" por teclado, la lista se reemplaza sin recargar, el foco sigue en el botón del producto movido (o en "Bajar" cuando llega a la primera posición) y `aria-live` anuncia "Molotes de Tinga de Pollo: posición 3 de 8". Con una versión desfasada, aviso "La lista cambió mientras tanto: no se movió nada."
+  - `submit-guard.js`: rompe el alta y la edición (DEF-006).
+  - Consola sin errores.
+- **Sin JS (B-10):** los formularios son `<form method="post">` con `action` propia, y el flujo completo funciona por `curl` y en el navegador sin `submit-guard`.
+
+#### Defectos encontrados
+
+### DEF-006
+- **Severidad:** BLOCKER
+- **Criterio de aceptación afectado:** CA-6 (con JavaScript), CA-7 y CA-14; RF-8.
+- **Descripción:** con JavaScript activo (lo normal en el navegador), crear, editar o sobrescribir un producto falla siempre con 400 "El formulario tiene campos repetidos." Los botones de envío del formulario de producto tienen `name="action"` (`create`, `update` y `overwrite`). `submit-guard.js` copia el valor del botón a un campo oculto con el mismo nombre durante el evento `submit` y deshabilita el botón después (`setTimeout`). Como el botón sigue habilitado al construir los datos del envío, el navegador envía `action` dos veces, y `readFormBody` de `packages/web` rechaza los campos repetidos.
+- **Pasos para reproducir:**
+  1. Entrar en `inventory-manager` en un navegador con JS.
+  2. Abrir "Editar" de cualquier producto.
+  3. Pulsar "Guardar cambios", con el ratón o con Enter, sin cambiar nada.
+  4. Lo mismo con "Crear producto" en un alta.
+- **Resultado esperado:** 303 a la lista con el mensaje de éxito (o 422 si hay errores).
+- **Resultado actual:** página "No se pudo procesar" con "El formulario tiene campos repetidos." y 400 `request_error` en el log de `inventory-manager`. Nada se guarda.
+- **Evidencia:** navegador (alta con Enter y edición con clic de ratón en "Guardar cambios"); el botón de alta tiene `name: "action", value: "create"`; con `data-submit-guard` quitado, el mismo envío funciona (422 o 503 según el caso). Eliminar y recuperar (botones sin `name`) funcionan con JS.
+- **Impacto:** el admin nuevo no permite crear ni editar productos en un navegador normal. Es el flujo principal del ticket. Las pruebas de `submit-guard` con jsdom y las del servidor no lo detectan porque nunca se combinan.
+- **Recomendación:** que el envío con `submit-guard` no duplique el valor del botón, y añadir una prueba que combine el JS con el servidor (o que compruebe en jsdom los datos del envío).
+
+### DEF-004
+- **Severidad:** MINOR
+- **Criterio de aceptación afectado:** CA-17 ("El lint lo rechaza").
+- **Descripción:** el bloque de `inventory-manager` de `eslint.config.ts` solo aplica `no-restricted-imports`, que no revisa `import()`. Un `export const x = await import('@restaurante/core/shared');` en `inventory-manager/src/app.ts` pasa el lint (sonda por stdin, código 0). Los paquetes usan `PACKAGE_DYNAMIC_IMPORT` para eso.
+- **Impacto:** la regla se puede saltar con un import dinámico. Hoy no hay ninguno en el código (búsqueda en `src/`, `tests/` y `scripts/`). `api` tiene el mismo hueco desde REQ-F-038.
+- **Recomendación:** aplicar a `inventory-manager` una restricción equivalente para `import()` y añadir su caso a `dependency-rule.test.ts`.
+
+### DEF-005
+- **Severidad:** MINOR (el impacto llega con el PR 3)
+- **Criterio de aceptación afectado:** RF-19 y CA-18 (el `HEALTHCHECK` contra `/salud`, del PR 3).
+- **Descripción:** en producción, el middleware de "solo HTTPS" responde 503 antes de las rutas, también a `GET /salud`. Un `HEALTHCHECK` del contenedor, que habla por HTTP con `127.0.0.1` sin `X-Forwarded-Proto`, verá siempre 503.
+- **Evidencia:** log de `inventory-manager` en producción: `admin_requires_https` con `path: "/salud"` y estado 503. Prueba `it.fails` DEF-005.
+- **Impacto:** sin corregirlo, el contenedor nunca quedaría sano y el despliegue del PR 3 terminaría con el código 16.
+- **Recomendación:** que `/salud` responda sin exigir TLS, o que el `HEALTHCHECK` del PR 3 lo tenga en cuenta.
+
+### DEF-007
+- **Severidad:** MINOR
+- **Criterio de aceptación afectado:** CA-14 (contraste; `accesibilidad.md`).
+- **Descripción:** el borde de los campos en reposo (`#432c27`) sobre la tarjeta (`#261a17`) tiene un contraste de 1,31:1, y el fondo del campo (`#1c1412`) frente a la tarjeta, 1,07:1. WCAG 1.4.11 pide 3:1 para el límite visual de un control. Los textos sí cumplen AA.
+- **Evidencia:** script de contraste sobre el formulario de alta (campos `name`, `tone` e `image.src` en reposo).
+- **Impacto:** con baja visión cuesta ver dónde están los campos; la etiqueta encima de cada uno lo compensa en parte. El color sale del `DESIGN.md` validado en P-4.
+- **Recomendación:** revisarlo con el usuario, por ejemplo con un borde más claro en reposo.
+
+### DEF-008
+- **Severidad:** MINOR
+- **Criterio de aceptación afectado:** CA-14 y CA-7 (errores accesibles).
+- **Descripción:** tras un 409, el aviso de conflicto es `role="status"` y no recibe el foco; queda en `body`. El 422 y el 503 sí llevan el foco a su aviso.
+- **Evidencia:** navegador, edición con una versión desfasada: `activeElement = BODY`.
+- **Impacto:** un usuario de lector de pantalla o de teclado puede no enterarse de que no se guardó hasta recorrer la página. El aviso está justo debajo del título.
+- **Recomendación:** tratar el aviso de conflicto como los otros avisos de error (foco o `role="alert"`).
+
+#### Regresión
+
+- Sin regresiones en `api`, `landing-pages` ni `contracts`.
+- El `/admin` actual y la API pública pasan la suite.
+- Referencias HTML de las landings sin cambios.
+- La prueba nueva del notificador (`products_notify_loop_failed`) pasa.
+- Docker correcto.
+- "Arranque sin API" no falló en esta ronda.
+
+#### Pendientes de revisión manual
+
+Ninguno: la revisión de CA-14 se hizo en el navegador con la ventana emergente.
+
+#### Limpieza
+
+- Borrados: los procesos (puertos 3100–3104 libres, detenidos por puerto con `lsof`), la base `restaurante_test_qa039pr2`, las imágenes `qa2:*`, la pestaña y la ventana emergente, y los archivos temporales de `/tmp/qa2`.
+- Sin cambios en git ni en el código de producción.
+- Solo escribí el ticket y el archivo de pruebas nuevo.
+
+#### Lo que queda fuera de este QA
+
+- **CI del PR.**
+- **PR 3:** CA-9, CA-15, CA-18 y CA-20; DEF-005 se materializa con el `HEALTHCHECK`.
+
+#### Resultado final
+
+QA_REJECTED
+
+### PR 2 de 3: `inventory-manager` — Ronda 2 (2026-10-28, revalidación)
+
+#### Qué cambió
+
+El usuario aprobó las correcciones de la ronda 1 ("Si apruebo"):
+- **DEF-006:** `submit-guard.js` ya no copia el botón a un campo oculto.
+- **DEF-005:** en producción, `/salud` responde sin TLS.
+- **DEF-008:** el aviso del 409 es `role="alert"`, con `tabindex="-1"` y `autofocus`.
+- **DEF-004:** `no-restricted-syntax` para `import()` en `api` e `inventory-manager`.
+- **DEF-007:** el borde de los campos pasa a `#ab8985`.
+
+#### Pruebas ejecutadas
+
+| Prueba | Resultado |
+| --- | --- |
+| `npm run typecheck` / `lint` / `build:css` | 0 / 0 / 0 |
+| `npm test` | `api` 90; `landing-pages` 2193 + 1 *expected fail* (105 archivos, con el archivo de QA); `inventory-manager` 70 (7 archivos). Todo en verde |
+| `inventory-manager-qa-req-f-039.test.ts` | 9/9; DEF-005 ya es un `it` normal y la aserción es la misma (`/salud` → 200 en producción sin TLS) |
+| Entorno | Base `restaurante_test_qa039pr2r2`; `Datasource` comprobado antes de migrar. Procesos en 3100–3104 con `env -i`. Ya está todo borrado |
+| Navegador | Chrome con JS activo: alta, edición, 409 y sobrescritura, triple clic, 422 y 503 |
+
+#### Defectos de la ronda 1
+
+| Defecto | Resultado | Evidencia |
+| --- | --- | --- |
+| DEF-006 (BLOCKER) | **Corregido** | Con JS (`data-submit-guard` presente): **alta** con clic real en "Crear producto" → 303 `?ok=created` y la fila "Molote JS Ronda2"; **edición** con "Guardar cambios" → 303 `?ok=saved` y "Edit JS R2"; **409** (otra sesión guardó la versión 2 con `curl`) → 409 y no 400; **sobrescribir** → 303 `?ok=saved` y "Mio JS R2". En el log de `inventory-manager`, ningún POST con 400 (POST `/molotes/productos/17`: 3×303 y 1×409). Como el servidor exige `action` (`update` u `overwrite`) y rechaza los repetidos, los 303 confirman que `action` llegó una sola vez. **Triple clic** en "Crear producto": el botón queda con `aria-busy="true"` y "Guardando…", y se crea un solo producto (un único POST) |
+| DEF-005 | **Corregido** | En producción: `/salud` sin TLS → 200 con `no-store`; `/acceso` → 503; `/salud/` y `/SALUD` → 503 (solo se exime la ruta exacta) |
+| DEF-004 | **Corregido** | Sondas `eslint --stdin`: `import()` de `@restaurante/core/shared`, `@restaurante/db/client`, `@prisma/client` y `../../landing-pages/...` → error en `src/`, `tests/` y `scripts/`; `@restaurante/contracts`, `@restaurante/web`, `node:crypto` y `./config.ts` → sin error. En `api`, `import()` de `landing-pages` → error y de `@restaurante/core/catalog` → sin error. Un `import()` con una variable no lo detecta la regla (solo `no-unsafe-assignment`); como cualquier regla sobre literales, es una limitación aceptable |
+| DEF-007 | **Corregido** | En la edición de Birria (35 controles): texto, selector y área de texto `#ab8985` → **5,35:1** sobre `#261a17` y **5,74:1** sobre `#1c1412`; casillas `#c2410c` → 3,26:1 y 3,50:1. Ningún control por debajo de 3:1. Texto de la página: mínimo 5,96, sin fallos AA |
+| DEF-008 | **Corregido** | Tras el 409 con JS: `document.activeElement` es el aviso `role="alert"` (`tabindex="-1"`), con `:focus-visible` y un contorno sólido de 2 px `rgb(234,179,8)`. Lo escrito se conserva, el botón de guardado normal desaparece y queda "Guardar mis cambios sobre la versión vigente" |
+
+#### Criterios de aceptación
+
+| CA | Resultado | Evidencia |
+| --- | --- | --- |
+| CA-6 | **PASS** | Con JS: alta, edición, triple clic sin duplicar y `reorder.js` (ronda 1). Sin JS: ronda 1, `curl` y la prueba F-10 (en verde) |
+| CA-7 | **PASS** | En el cliente con JS: 409 con lo escrito, quién y cuándo ("qa, el 28/10/2026 13:46"), sin guardado normal y sobrescritura solo a petición. Servidor: prueba F-11 en verde |
+| CA-14 | **PASS** | La revisión de la ronda 1 (teclado, foco, 375/768/1440 px, contraste del texto, `reorder.js` y 503) se mantiene. Ahora, además: 422 con JS (el foco va a la alerta y `price` tiene `aria-invalid` y `aria-describedby="f-price-help f-price-error"`), 409 con el foco en la alerta, 503 con JS (alerta con foco y lo escrito intacto) y bordes de los campos ≥ 3:1. Consola sin errores |
+| CA-1 a CA-5, CA-8, CA-16, CA-17 y CA-19 | PASS | Sin cambios respecto a la ronda 1. CA-17, ahora también con `import()` (DEF-004). Suite completa en verde |
+
+#### Defectos abiertos
+
+Ninguno.
+
+#### Observaciones
+
+La sesión del navegador caducó durante la pausa por el límite de uso (más de 2 h sin actividad) y el acceso volvió a la pantalla pedida: es el comportamiento esperado (RF-3).
+
+#### Limpieza
+
+- Borrados: los procesos (puertos 3100–3104 libres, detenidos por puerto con `lsof`), la base `restaurante_test_qa039pr2r2`, la pestaña y los archivos de `/tmp/qa3`.
+- Logs sin la contraseña de prueba, el token interno ni el id de sesión (0 coincidencias).
+- Sin cambios en git ni en el código de producción.
+
+#### Lo que queda fuera de este QA
+
+- **CI del PR.**
+- **PR 3:** CA-9, CA-15, CA-18 y CA-20.
+
+#### Resultado final
+
+QA_APPROVED
+
 ## Historial de cambios
+
+### Pull Request del PR 2 (2026-10-28)
+
+Commit `1affdd2`, PR #95 hacia `epic/arquitectura`, CI en verde. El PR 2 está listo para merge; el ticket sigue `IN_PROGRESS` hasta el PR 3.
+
+### QA del PR 2, ronda 2 (2026-10-28)
+
+senior-qa, revalidación. DEF-004 a DEF-008 corregidos y verificados (DEF-006 con JS en Chrome: alta, edición, 409 y sobrescritura con 303). CA-6, CA-7 y CA-14 en PASS. `typecheck`, `lint`, `build:css` y `test` en 0. Estado `QA_APPROVED`.
+
+### Correcciones de QA del PR 2, ronda 1 (2026-10-28)
+
+DEF-006 (BLOCKER), DEF-005, DEF-008, DEF-004 y DEF-007 corregidos según las decisiones del usuario. `typecheck`, `lint`, `build:css` y `test` en 0. Estado `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA del PR 2, ronda 1 (2026-10-28)
+
+senior-qa, fase Q2. `typecheck`, `lint`, `build:css` y `test` en 0; Docker correcto. Revisión de CA-14 en el navegador. DEF-006 (BLOCKER): con JS, crear y editar productos falla con 400 por un campo `action` duplicado por `submit-guard.js`. Además, DEF-004, DEF-005, DEF-007 y DEF-008 (MINOR). Estado `QA_REJECTED`.
+
+### QA Action Plan del PR 2 (2026-10-28)
+
+senior-qa, fase Q1. El usuario aprobó la implementación del PR 2 ("Si lo apruebo"). Se redacta el QA Action Plan del PR 2: CA-14 manual en el navegador, seguridad, regla de dependencias, regresión con Docker y entorno local solo con bases `restaurante_test*`. Estado `NEEDS_QA_PLAN_APPROVAL`.
+
+### Implementación del PR 2 (2026-10-28)
+
+`inventory-manager` implementado en `feature/REQ-F-039-admin-nuevo-productos-2-inventory`, sin commit. `typecheck`, `lint`, `build:css` y `test` en 0 (2331 pruebas). Estado `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### Merge del PR 1 e inicio del PR 2 (2026-10-28)
+
+PR #94 mergeado en `epic/arquitectura` el 2026-10-28T10:53:26Z (confirmado por el usuario: "Fusionado"). Rama del PR 2: `feature/REQ-F-039-admin-nuevo-productos-2-inventory`, desde `fd8bf4b`.
 
 ### Pull Request del PR 1 (2026-10-28)
 

@@ -1,0 +1,17 @@
+<section class="login-card mx-auto max-w-md rounded-2xl border border-rim bg-surface p-6 md:p-8" aria-labelledby="login-title">
+        <h1 id="login-title" class="font-headline text-3xl font-black tracking-tight uppercase">Administración</h1>
+        <p class="mt-2 text-masa">Molotes y Birria El Muñeco</p>
+        {{{ notice }}}
+        <form class="login-card__form mt-6 space-y-4" method="post" action="/acceso" data-submit-guard>
+          <input type="hidden" name="next" value="{{ next }}" />
+          <div class="field">
+            <label class="field__label block font-label text-xs font-bold tracking-wider text-masa uppercase" for="username">Usuario</label>
+            <input class="field__input mt-1 block w-full rounded-lg border-[1.5px] border-outline bg-brasa text-crema placeholder:text-placeholder focus:border-adobo focus:ring-0 aria-invalid:border-error" id="username" name="username" type="text" autocomplete="username" required maxlength="200" />
+          </div>
+          <div class="field">
+            <label class="field__label block font-label text-xs font-bold tracking-wider text-masa uppercase" for="password">Contraseña</label>
+            <input class="field__input mt-1 block w-full rounded-lg border-[1.5px] border-outline bg-brasa text-crema placeholder:text-placeholder focus:border-adobo focus:ring-0 aria-invalid:border-error" id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024" />
+          </div>
+          <button class="button button--primary inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-(--accent) px-5 py-2.5 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-(--accent-strong) active:scale-[0.98] aria-busy:opacity-70 w-full" type="submit" data-busy-text="Entrando…">Entrar</button>
+        </form>
+      </section>

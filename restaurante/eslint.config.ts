@@ -109,6 +109,34 @@ const LANDING_CODE_PATHS = [
 // api (REQ-F-038): core (por el index.ts de cada módulo), db, contracts y Koa; nunca una app.
 const API_RESTRICTED_PATTERNS = [...RELATIVE_JS_IMPORT_PATTERNS, ...LANDING_PATTERNS, ...PACKAGE_INTERNAL_PATTERNS];
 
+// inventory-manager (REQ-F-039, RF-17 y CA-17; decisión P-1): solo contracts y web del proyecto;
+// nunca core, db, Prisma ni otra app.
+const INVENTORY_HINT = `inventory-manager solo importa contracts y web (REQ-F-039, RF-17). ${DEPENDENCY_HINT}`;
+const INVENTORY_RESTRICTED_PATTERNS = [
+  ...RELATIVE_JS_IMPORT_PATTERNS,
+  ...LANDING_PATTERNS,
+  { regex: String.raw`^\.{1,2}/(?:.*/)?packages/`, message: `Los paquetes se importan por su nombre (@restaurante/<paquete>), nunca por ruta relativa (O-2). ${DEPENDENCY_HINT}` },
+  { regex: '^@restaurante/(?!contracts$|web$)', message: `No puede importar core, db ni otro paquete. ${INVENTORY_HINT}` },
+  { regex: '^(?:(?:prisma|mariadb)(?:/|$)|@prisma/)', message: `No accede a la base de datos. ${INVENTORY_HINT}` },
+  { regex: String.raw`(?:^|/)api/src/`, message: `Una app nunca importa otra app. ${INVENTORY_HINT}` },
+];
+
+// no-restricted-imports no revisa import() (DEF-004 de QA, REQ-F-039): las apps api e inventory-manager
+// repiten su regla de dependencias para los import() dinámicos con no-restricted-syntax.
+const dynamicImport = (pattern: string, message: string) => ({ selector: `ImportExpression > Literal.source[value=/${pattern}/]`, message });
+const API_DYNAMIC_IMPORTS = [
+  dynamicImport(String.raw`(^|\/)landing-pages(\/|$)`, `Una app nunca importa otra app. ${DEPENDENCY_HINT}`),
+  dynamicImport(String.raw`(^|\/)inventory-manager(\/|$)`, `Una app nunca importa otra app. ${DEPENDENCY_HINT}`),
+  dynamicImport(String.raw`^\.{1,2}\/(.*\/)?packages\/`, `Los paquetes se importan por su nombre, nunca por ruta relativa (O-2). ${DEPENDENCY_HINT}`),
+  dynamicImport(String.raw`^@restaurante\/core\/[^/]+\/`, `De core solo se importa el index.ts de cada módulo. ${DEPENDENCY_HINT}`),
+];
+const INVENTORY_DYNAMIC_IMPORTS = [
+  dynamicImport(String.raw`^@restaurante\/(?!contracts$|web$)`, `No puede importar core, db ni otro paquete. ${INVENTORY_HINT}`),
+  dynamicImport(String.raw`^(prisma|mariadb)(\/|$)|^@prisma\/`, `No accede a la base de datos. ${INVENTORY_HINT}`),
+  dynamicImport(String.raw`(^|\/)(landing-pages|api\/src)(\/|$)`, `Una app nunca importa otra app. ${INVENTORY_HINT}`),
+  dynamicImport(String.raw`^\.{1,2}\/(.*\/)?packages\/`, `Los paquetes se importan por su nombre, nunca por ruta relativa (O-2). ${DEPENDENCY_HINT}`),
+];
+
 // no-restricted-imports no revisa import(): en los paquetes solo se permite con node:* o relativo.
 const PACKAGE_DYNAMIC_IMPORT = {
   selector: String.raw`ImportExpression > Literal.source:not([value=/^(?:node:|\.\/)/])`,
@@ -141,7 +169,7 @@ const TEST_HTTP_RESTRICTED_SYNTAX = [
 export default defineConfig([
   // CSS generado por Tailwind, datos editables, cobertura y código generado (p. ej. un cliente de BD).
   // ESLint ya ignora node_modules/ y no lee .gitignore.
-  globalIgnores(['landing-pages/public/css/', 'landing-pages/data/', '**/coverage/', 'packages/db/src/generated/']),
+  globalIgnores(['landing-pages/public/css/', 'inventory-manager/public/css/', 'landing-pages/data/', '**/coverage/', 'packages/db/src/generated/']),
   {
     linterOptions: {
       reportUnusedDisableDirectives: 'error',
@@ -182,7 +210,7 @@ export default defineConfig([
   // (res.body de Supertest, JSON.parse de los archivos que escriben y CorruptibleData) y sus
   // aserciones comprueban la forma. no-explicit-any sigue activa: un `any` nuevo exige justificación.
   {
-    files: ['landing-pages/tests/**/*.ts', 'api/tests/**/*.ts'],
+    files: ['landing-pages/tests/**/*.ts', 'api/tests/**/*.ts', 'inventory-manager/tests/**/*.ts'],
     rules: {
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
@@ -259,13 +287,29 @@ export default defineConfig([
     files: ['api/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', { patterns: API_RESTRICTED_PATTERNS }],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...API_DYNAMIC_IMPORTS],
+    },
+  },
+  // inventory-manager (REQ-F-039, CA-17): solo contracts y web.
+  {
+    files: ['inventory-manager/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: INVENTORY_RESTRICTED_PATTERNS }],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...INVENTORY_DYNAMIC_IMPORTS],
+    },
+  },
+  // Servidores de prueba del admin nuevo: solo en 127.0.0.1 (REQ-F-011).
+  {
+    files: ['inventory-manager/tests/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...INVENTORY_DYNAMIC_IMPORTS, ...TEST_HTTP_RESTRICTED_SYNTAX],
     },
   },
   // Servidores de prueba de la API: solo en 127.0.0.1 (REQ-F-011), como los de landing-pages.
   {
     files: ['api/tests/**/*.ts'],
     rules: {
-      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...TEST_HTTP_RESTRICTED_SYNTAX],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...API_DYNAMIC_IMPORTS, ...TEST_HTTP_RESTRICTED_SYNTAX],
     },
   },
   // REGLA DE TRANSICIÓN — TEMPORAL (REQ-F-037, limitada en REQ-F-038): /admin y el bot de WhatsApp,
@@ -276,7 +320,7 @@ export default defineConfig([
 
   // Frontend en JavaScript Vanilla (módulos ES del navegador), sin información de tipos.
   {
-    files: ['landing-pages/public/js/**/*.js'],
+    files: ['landing-pages/public/js/**/*.js', 'inventory-manager/public/js/**/*.js'],
     extends: [js.configs.recommended],
     languageOptions: { sourceType: 'module', globals: globals.browser },
   },

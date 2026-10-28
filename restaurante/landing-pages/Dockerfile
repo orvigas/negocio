@@ -52,6 +52,7 @@ FROM base AS deps
 COPY package.json package-lock.json /app/
 COPY landing-pages/package.json ./
 COPY api/package.json /app/api/
+COPY inventory-manager/package.json /app/inventory-manager/
 COPY --parents packages/*/package.json /app/
 RUN cd /app && npm ci --strict-allow-scripts --no-audit --no-fund
 
@@ -59,6 +60,8 @@ FROM deps AS build
 COPY landing-pages/ ./
 COPY packages/ /app/packages/
 COPY api/ /app/api/
+# Admin nuevo (REQ-F-039, PR 2): solo para el typecheck y las pruebas; su imagen llega en el PR 3.
+COPY inventory-manager/ /app/inventory-manager/
 # Configuración común de la raíz (REQ-F-037): tsconfig.base.json la extienden todos los workspaces;
 # eslint.config.ts lo revisan el typecheck de la raíz y dos pruebas del lint.
 COPY tsconfig.base.json tsconfig.json eslint.config.ts /app/
@@ -82,6 +85,7 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json /app/
 COPY landing-pages/package.json ./
 COPY api/package.json /app/api/
+COPY inventory-manager/package.json /app/inventory-manager/
 COPY --parents packages/*/package.json /app/
 # Sin --omit=optional: npm instala el CLI de Prisma (par opcional de @prisma/client) y su schema
 # engine, sin las herramientas de desarrollo (vitest, eslint, tailwind...).
@@ -103,6 +107,7 @@ ENV NODE_ENV=production \
 COPY package.json package-lock.json /app/
 COPY landing-pages/package.json ./
 COPY api/package.json /app/api/
+COPY inventory-manager/package.json /app/inventory-manager/
 COPY --parents packages/*/package.json /app/
 # --omit=optional: @prisma/client declara el CLI de Prisma y TypeScript como peerDependencies
 # (devOptional en el lockfile); sin él, npm los instalaría igualmente (+~275 MB).
@@ -145,6 +150,7 @@ WORKDIR /app/api
 COPY package.json package-lock.json /app/
 COPY landing-pages/package.json /app/landing-pages/
 COPY api/package.json ./
+COPY inventory-manager/package.json /app/inventory-manager/
 COPY --parents packages/*/package.json /app/
 RUN cd /app && npm ci --omit=dev --omit=optional --strict-allow-scripts --no-audit --no-fund && npm cache clean --force
 COPY --from=build /app/api/src ./src

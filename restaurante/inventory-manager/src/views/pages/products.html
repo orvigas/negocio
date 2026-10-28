@@ -1,0 +1,12 @@
+<div class="products-page__head flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p class="font-label text-xs font-bold tracking-widest text-(--accent-soft) uppercase">{{ businessName }}</p>
+          <h1 class="font-headline text-3xl font-black tracking-tight uppercase">Productos</h1>
+        </div>
+        <ul class="products-page__actions flex flex-wrap gap-2">{{{ actions }}}
+        </ul>
+      </div>
+      {{{ notices }}}
+      <p class="mt-4 text-sm text-masa">Los productos nuevos y los recuperados quedan al final y no disponibles: edítalos para mostrarlos en la landing.</p>
+      <div class="products-page__list" data-product-list>{{{ list }}}</div>
+      <p class="sr-only" role="status" aria-live="polite" data-reorder-status></p>

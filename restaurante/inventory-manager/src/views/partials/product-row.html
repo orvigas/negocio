@@ -1,0 +1,11 @@
+
+            <li class="product-row flex flex-col gap-3 rounded-lg border border-rim bg-surface p-4 md:flex-row md:items-center md:justify-between" data-product-row="{{ id }}">
+              <div class="product-row__info min-w-0">
+                <p class="product-row__name font-bold break-words"><span class="product-row__position font-label text-sm text-masa">{{ position }}.</span> {{ name }}</p>
+                <p class="product-row__meta mt-1 text-sm break-words text-masa">{{ price }} · <span class="product-row__state product-row__state--{{ stateModifier }} font-semibold {{ stateClass }}">{{ state }}</span></p>
+              </div>
+              <div class="product-row__actions flex flex-wrap items-center gap-2">{{{ moves }}}
+                <a class="button button--secondary inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border-[1.5px] border-adobo px-4 py-2 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-adobo/15" href="{{ editHref }}">Editar<span class="sr-only"> {{ name }}</span></a>
+                <a class="button button--danger inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg border-[1.5px] border-error px-4 py-2 font-label text-sm font-bold tracking-wider text-error uppercase hover:bg-error/10" href="{{ deleteHref }}">Eliminar<span class="sr-only"> {{ name }}</span></a>
+              </div>
+            </li>

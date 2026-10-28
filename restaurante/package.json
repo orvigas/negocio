@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Monorepo (npm workspaces) de Molotes y Birria El Muñeco. Workspaces: packages/core (dominio), packages/contracts (contratos de la API, con Zod), packages/db (Prisma y MySQL), packages/web (utilidades HTTP/SSR de las apps Koa), api (API propia en la red interna: productos publicados y, desde REQ-F-039, administración de productos en /api/v1/admin) y landing-pages (app Koa con las landings, /admin y el bot de WhatsApp).",
+  "description": "Monorepo (npm workspaces) de Molotes y Birria El Muñeco. Workspaces: packages/core (dominio), packages/contracts (contratos de la API, con Zod), packages/db (Prisma y MySQL), packages/web (utilidades HTTP/SSR de las apps Koa), api (API propia en la red interna: productos publicados y, desde REQ-F-039, administración de productos en /api/v1/admin), landing-pages (app Koa con las landings, /admin y el bot de WhatsApp) e inventory-manager (admin nuevo de REQ-F-039: Koa con SSR que consume /api/v1/admin).",
   "engines": {
     "node": ">=24.22.1"
   },
@@ -13,16 +13,19 @@
     "packages/web",
     "packages/db",
     "api",
-    "landing-pages"
+    "landing-pages",
+    "inventory-manager"
   ],
   "scripts": {
     "start": "npm run start -w landing-pages --",
     "start:api": "npm run start -w api --",
-    "dev": "npm run dev:api & npm run dev:landing & wait",
+    "start:inventory": "npm run start -w inventory-manager --",
+    "dev": "npm run dev:api & npm run dev:landing & npm run dev:inventory & wait",
     "dev:api": "npm run dev -w api --",
     "dev:landing": "npm run dev -w landing-pages --",
-    "build:css": "npm run build:css -w landing-pages --",
-    "watch:css": "npm run watch:css -w landing-pages --",
+    "dev:inventory": "npm run dev -w inventory-manager --",
+    "build:css": "npm run build:css -w landing-pages -- && npm run build:css -w inventory-manager --",
+    "watch:css": "npm run watch:css -w landing-pages -- & npm run watch:css -w inventory-manager -- & wait",
     "test": "npm run test --workspaces --if-present",
     "test:watch": "npm run test:watch -w landing-pages --",
     "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.json",

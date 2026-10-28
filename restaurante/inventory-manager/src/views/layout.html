@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{{ title }} | Administración</title>
+    <link rel="icon" href="data:," />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;700;800;900&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" />
+    <link rel="stylesheet" href="/css/main.css" />
+    <script type="module" src="/js/main.js"></script>
+  </head>
+  <body class="admin-shell admin-shell--{{ theme }} min-h-screen bg-brasa font-body text-crema antialiased">
+    <a class="admin-shell__skip sr-only rounded-lg bg-maiz px-4 py-2 font-bold text-brasa focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50" href="#contenido">Saltar al contenido</a>
+    {{{ header }}}
+    <main id="contenido" class="admin-shell__main mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-10" tabindex="-1">
+      {{{ body }}}
+    </main>
+  </body>
+</html>

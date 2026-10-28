@@ -137,6 +137,26 @@ describe('aviso interno a landing-pages', () => {
     expect(requests).toHaveLength(2);
   });
 
+  it('un fallo inesperado del bucle de avisos se registra y no queda como rechazo sin manejar (observación de QA)', async () => {
+    const lines: string[] = [];
+    let thrown = false;
+    const logger = {
+      debug: () => {},
+      info: () => {},
+      warn: () => {
+        // El primer aviso fallido rompe el logger: el bucle termina con un error.
+        if (!thrown) {
+          thrown = true;
+          throw new Error('logger roto');
+        }
+      },
+      error: (msg: string, fields?: Record<string, unknown>) => void lines.push(JSON.stringify({ msg, ...fields })),
+    };
+    const notifier = createLandingNotifier({ url: URL_BASE, token: TOKEN, fetch: () => Promise.reject(new TypeError('x')), logger, sleep: () => Promise.resolve(), firstWaitMs: 50 });
+    expect(await notifier.notify('molotes')).toBe('pending');
+    await vi.waitFor(() => expect(lines.some((line) => line.includes('products_notify_loop_failed'))).toBe(true));
+  });
+
   it('el token nunca va al log', async () => {
     const { notifier, logger, events } = setup([new Response('', { status: 401 })]);
     await notifier.notify('molotes');

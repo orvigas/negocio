@@ -22,6 +22,7 @@ packages/db/src/generated
 
 # CSS generado localmente (la etapa build lo compila); se conserva public/css/.gitkeep
 landing-pages/public/css/*/
+inventory-manager/public/css/main.css
 
 # Logs y cobertura
 coverage

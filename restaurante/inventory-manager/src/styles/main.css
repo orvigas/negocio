@@ -1,0 +1,60 @@
+/*
+ * Admin nuevo (inventory-manager, REQ-F-039). Compila a public/css/main.css (`npm run build:css`).
+ * Sistema visual validado por el usuario (P-4, "Sí, lo valido"): base de
+ * _stich_source_/birrier_a_el_mu_eco/DESIGN.md (fondo brasa, superficies de barro, texto crema,
+ * Epilogue y Space Grotesk, radios de 8 y 16 px) y acento por negocio: Molotes con el primario de
+ * moloteando_tradicional (#1b5eb8 y ámbar #f3a300) y Birria con el chile rojo (#b91c1c y dorado
+ * #eab308). Contraste AA comprobado para el texto crema sobre cada acento.
+ */
+@import "tailwindcss" source(none);
+@plugin "@tailwindcss/forms";
+
+@source "../views";
+@source "../../public/js";
+
+@theme {
+  --color-brasa: #1c1412;
+  --color-surface: #261a17;
+  --color-surface-high: #33221e;
+  --color-rim: #432c27;
+  /* Borde de los campos en reposo (DEF-007, WCAG 1.4.11): `outline` del DESIGN.md de Birria El Muñeco,
+     5,35:1 sobre la tarjeta #261a17 y 5,74:1 sobre el fondo #1c1412. Solo en el admin. */
+  --color-outline: #ab8985;
+  --color-crema: #fbf5ea;
+  --color-masa: #d6c3b3;
+  --color-placeholder: #8c736a;
+  --color-chile: #b91c1c;
+  --color-chile-deep: #991b1b;
+  --color-adobo: #c2410c;
+  --color-maiz: #eab308;
+  --color-error: #ffb4ab;
+  --color-molotes: #1b5eb8;
+  --color-molotes-deep: #164c96;
+  --color-molotes-amber: #f3a300;
+  --font-headline: "Epilogue", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Epilogue", ui-sans-serif, system-ui, sans-serif;
+  --font-label: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Acento del negocio que se está editando (P-4): cabecera, botón primario y elemento activo. */
+@layer base {
+  .admin-shell,
+  .business-picker__item--birria,
+  .admin-shell--birria {
+    --accent: var(--color-chile);
+    --accent-strong: var(--color-chile-deep);
+    --accent-soft: var(--color-maiz);
+  }
+
+  .admin-shell--molotes,
+  .business-picker__item--molotes {
+    --accent: var(--color-molotes);
+    --accent-strong: var(--color-molotes-deep);
+    --accent-soft: var(--color-molotes-amber);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-maiz);
+    outline-offset: 2px;
+  }
+}

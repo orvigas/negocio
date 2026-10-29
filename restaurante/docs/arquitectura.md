@@ -307,7 +307,7 @@ Decisión del usuario: "Sí, 6 tickets en ese orden". Cada ticket es su propio P
 
 | # | Ticket | Notas |
 | --- | --- | --- |
-| 1 | **REQ-F-039**: base del admin nuevo y productos | Aplicado en tres PR (#94, #95 y el de despliegue), detalle abajo |
+| 1 | **REQ-F-039**: base del admin nuevo y productos | Terminado en tres PR (#94, #95 y #99), detalle abajo |
 | 2 | Usuarios y cuenta propia | En `api` y en `inventory-manager` |
 | 3 | Mover el bot a `api` | Publica una entrada de `api` para el webhook (su router de Traefik solo para esa ruta) y cambia la URL en Meta (acción del usuario). Activa la regla de lint para el bot |
 | 4 | Control del bot en el admin nuevo | Pausa, bloqueos y topes |

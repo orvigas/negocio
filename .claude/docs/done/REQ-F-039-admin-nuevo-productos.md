@@ -2,7 +2,22 @@
 
 ## Estado
 
-QA_APPROVED (PR 3 de 3, despliegue, QA ronda 2: DEF-009, DEF-010 y DEF-011 corregidos; DEF-012 TRIVIAL abierto, no bloquea; los PR 1 y 2 se mergearon como #94 y #95)
+DONE
+
+Cerrado el 2026-10-28. Los tres PR se mergearon en `epic/arquitectura`:
+
+- PR 1, `api` y paquetes: #94 (https://github.com/orvigas/negocio/pull/94), merge `fd8bf4b`, 2026-10-28T10:53:26Z.
+- PR 2, `inventory-manager`: #95 (https://github.com/orvigas/negocio/pull/95), merge `3c65ad7`, 2026-10-28T20:06:01Z.
+- PR 3, despliegue: #99 (https://github.com/orvigas/negocio/pull/99), merge `0d3de28`, 2026-10-29T03:14:17Z (2026-10-28, 21:14 en Ciudad de México).
+
+**Pendientes para cuando la épica llegue a `main`:**
+
+- Crear el DNS de `admin.birriaelmuneco.com` hacia el VPS.
+- Comprobar el certificado real del subdominio tras el despliegue.
+- Medir la memoria en el VPS con los cuatro contenedores.
+- Revisar a 375 px la pantalla de acceso en el navegador (no imprescindible; el navegador bloqueó la ventana emergente en el QA del PR 3).
+
+Las demás acciones del usuario antes de mergear la épica a `main` están en "Acciones del usuario pendientes" del Implementation Result del PR 3.
 
 ## Aprobación
 
@@ -2743,6 +2758,14 @@ Los mismos de la ronda 1:
 QA_APPROVED
 
 ## Historial de cambios
+
+### Cierre (2026-10-28)
+
+El usuario confirmó el merge del último PR: "Si confirmo". Los PR #94 (`fd8bf4b`), #95 (`3c65ad7`) y #99 (`0d3de28`) están mergeados en `epic/arquitectura`. El ticket pasa a `done/` con estado `DONE`, por un PR hacia `epic/arquitectura` porque el ticket y su código solo existen en la épica. Los pendientes para `main` quedan en la sección Estado.
+
+### Pull Request del PR 3 (2026-10-28)
+
+Commit `83b2b80` (PR 3) y merge `ff45548` de `epic/arquitectura` (`15dc77d`, PR #96, #97 y #98), sin conflictos. Tras el merge, `npm ci`, `typecheck`, `lint`, `build:css` y `test` en 0 (`api` 91, `landing-pages` 2199 + 1 *expected fail*, `inventory-manager` 71). PR #99 hacia `epic/arquitectura` (https://github.com/orvigas/negocio/pull/99): `calidad`, `docker`, `despliegue` y `auditoria` en verde. Pendientes del usuario cuando la épica llegue a `main`: el DNS de `admin.birriaelmuneco.com`, el certificado real y la medición de memoria en el VPS. Estado `READY_FOR_MERGE`.
 
 ### Corrección de DEF-012 y commit del PR 3 (2026-10-28)
 

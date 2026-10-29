@@ -3,9 +3,9 @@
 # (red externa traefik-public). Ningún servicio publica puertos en el host (CA-3).
 #
 # Variables (interpolación): /opt/restaurante/.env (permisos 600; plantilla en
-# env.production.example). Las imágenes (RESTAURANTE_APP_IMAGE, RESTAURANTE_MIGRATE_IMAGE y
-# RESTAURANTE_API_IMAGE, por digest) las pone deploy.sh en el entorno y quedan registradas en
-# /opt/restaurante/state/release.env.
+# env.production.example). Las imágenes (RESTAURANTE_APP_IMAGE, RESTAURANTE_MIGRATE_IMAGE,
+# RESTAURANTE_API_IMAGE y RESTAURANTE_INVENTORY_IMAGE, por digest) las pone deploy.sh en el entorno y
+# quedan registradas en /opt/restaurante/state/release.env.
 # Para consultar a mano (como deploy, desde /opt/restaurante):
 #   docker compose -f deploy/compose.prod.yaml --env-file .env --env-file state/release.env ps
 #
@@ -69,6 +69,12 @@ services:
       SITE_URL: ${SITE_URL:-}
       # API propia por la red interna db (REQ-F-038): las landings leen de ella los productos.
       API_INTERNAL_URL: http://api:3001
+      # Admin nuevo (REQ-F-039): con ADMIN_NEW_URL, la edición de productos de /admin queda en solo
+      # lectura y enlaza ahí. El aviso interno de la API llega al puerto 3002 (red db; Traefik solo
+      # enruta el 3000) con la credencial compartida.
+      ADMIN_NEW_URL: https://${RESTAURANTE_ADMIN_DOMAIN:?Falta RESTAURANTE_ADMIN_DOMAIN en .env}
+      INTERNAL_PORT: "3002"
+      INTERNAL_NOTIFY_TOKEN: ${RESTAURANTE_INTERNAL_NOTIFY_TOKEN:?Falta RESTAURANTE_INTERNAL_NOTIFY_TOKEN en .env}
       WHATSAPP_MOLOTES_URL: ${WHATSAPP_MOLOTES_URL:-}
       WHATSAPP_MOLOTES: ${WHATSAPP_MOLOTES:-}
       WHATSAPP_MOLOTES_MESSAGE: ${WHATSAPP_MOLOTES_MESSAGE:-}
@@ -179,8 +185,9 @@ services:
       - "traefik.http.middlewares.restaurante-canonical.redirectregex.replacement=https://${RESTAURANTE_DOMAIN}$${1}"
       - "traefik.http.middlewares.restaurante-canonical.redirectregex.permanent=true"
 
-  # API propia (REQ-F-038): solo lectura y solo en la red interna db (sin ports ni labels de Traefik:
-  # nada fuera de Docker la alcanza). La usa app (API_INTERNAL_URL). Usuario solo DML de la app.
+  # API propia (REQ-F-038; administración de productos desde REQ-F-039): solo en las redes internas db
+  # (app y MySQL) y admin (inventory-manager), sin ports ni labels de Traefik: nada fuera de Docker la
+  # alcanza (desviación D-3 de REQ-F-039). Usuario solo DML de la app.
   # Valor por defecto de la imagen (decisión P-2 A): los respaldos de ops/backup/ leen este archivo
   # sin conocer la API; ningún flujo arranca esa imagen (deploy.sh siempre pasa el digest real).
   api:
@@ -192,8 +199,13 @@ services:
       DATABASE_URL: mysql://restaurante_app:${RESTAURANTE_DB_APP_PASSWORD:?Falta RESTAURANTE_DB_APP_PASSWORD en .env}@mysql:3306/restaurante
       # Solo la pone deploy.sh al volver a la versión anterior (D-1); nunca en .env.
       DATABASE_ALLOW_NEWER_SCHEMA: ${DATABASE_ALLOW_NEWER_SCHEMA:-false}
+      BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-America/Mexico_City}
+      # Aviso interno a la app tras cada escritura de productos (REQ-F-039, RF-13).
+      LANDING_INTERNAL_URL: http://app:3002
+      INTERNAL_NOTIFY_TOKEN: ${RESTAURANTE_INTERNAL_NOTIFY_TOKEN:?Falta RESTAURANTE_INTERNAL_NOTIFY_TOKEN en .env}
     networks:
       - db
+      - admin
     depends_on:
       mysql:
         condition: service_healthy
@@ -217,6 +229,63 @@ services:
       start_interval: 2s
     logging: *logging
 
+  # Admin nuevo (REQ-F-039): Koa con SSR en admin.<dominio>. Solo en traefik (entrada) y en la red
+  # interna admin (para llegar a la api): no alcanza MySQL. Como cualquier contenedor de traefik-public,
+  # podría llegar a la app por esa red, pero el aviso interno exige la credencial, que no recibe. Sin
+  # credenciales de la base. Valor por defecto de la imagen como el de la api (los respaldos de ops/backup/
+  # leen este archivo sin conocerla; deploy.sh siempre pasa el digest real).
+  inventory-manager:
+    image: ${RESTAURANTE_INVENTORY_IMAGE:-ghcr.io/orvigas/restaurante-inventory-manager:sin-desplegar}
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3003"
+      TRUST_PROXY: "true"
+      API_INTERNAL_URL: http://api:3001
+    networks:
+      - admin
+      - traefik
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 15s
+    restart: unless-stopped
+    # /salud responde también por HTTP (el healthcheck no pasa por Traefik) y no llama a la api.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3003/salud || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 2s
+    logging: *logging
+    labels:
+      - "traefik.enable=true"
+      # Imprescindible: está en dos redes y Traefik solo llega por traefik-public.
+      - "traefik.docker.network=traefik-public"
+      - "traefik.http.services.restaurante-inventory.loadbalancer.server.port=3003"
+      # HTTPS en el subdominio del admin (RF-18), con su propio límite por IP: 60 por minuto y ráfaga de 60.
+      - "traefik.http.routers.restaurante-inventory.rule=Host(`${RESTAURANTE_ADMIN_DOMAIN:?Falta RESTAURANTE_ADMIN_DOMAIN en .env}`)"
+      - "traefik.http.routers.restaurante-inventory.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-websecure}"
+      - "traefik.http.routers.restaurante-inventory.tls=true"
+      - "traefik.http.routers.restaurante-inventory.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.routers.restaurante-inventory.middlewares=restaurante-inventory-ratelimit"
+      - "traefik.http.routers.restaurante-inventory.service=restaurante-inventory"
+      - "traefik.http.middlewares.restaurante-inventory-ratelimit.ratelimit.average=60"
+      - "traefik.http.middlewares.restaurante-inventory-ratelimit.ratelimit.period=1m"
+      - "traefik.http.middlewares.restaurante-inventory-ratelimit.ratelimit.burst=60"
+      # http -> 301 a https en el subdominio, aunque Traefik no tenga redirección global.
+      - "traefik.http.routers.restaurante-inventory-http.rule=Host(`${RESTAURANTE_ADMIN_DOMAIN}`)"
+      - "traefik.http.routers.restaurante-inventory-http.entrypoints=${TRAEFIK_ENTRYPOINT_HTTP:-web}"
+      - "traefik.http.routers.restaurante-inventory-http.middlewares=restaurante-inventory-https"
+      - "traefik.http.routers.restaurante-inventory-http.service=restaurante-inventory"
+      - "traefik.http.middlewares.restaurante-inventory-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.restaurante-inventory-https.redirectscheme.permanent=true"
+
   migrate:
     image: ${RESTAURANTE_MIGRATE_IMAGE:?Falta RESTAURANTE_MIGRATE_IMAGE (la pone deploy.sh)}
     # Proceso puntual: solo con `docker compose run --rm migrate` (deploy.sh).
@@ -235,6 +304,9 @@ services:
 networks:
   # Solo app, api, migrate y MySQL; sin salida a internet.
   db:
+    internal: true
+  # Solo api e inventory-manager (REQ-F-039): el admin nuevo llega a la api sin ver MySQL.
+  admin:
     internal: true
   traefik:
     external: true

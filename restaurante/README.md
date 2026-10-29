@@ -35,16 +35,18 @@ pedido y lo envía al personal (ver [Bot de WhatsApp](#bot-de-whatsapp)).
 
 ## Monorepo
 
-`restaurante/` es la raíz de un monorepo con **npm workspaces** (REQ-F-036, REQ-F-037 y REQ-F-038). La
+`restaurante/` es la raíz de un monorepo con **npm workspaces** (REQ-F-036 a REQ-F-039). La
 estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md).
 
 | Workspace | Contenido |
 | --- | --- |
 | `landing-pages/` | La app Koa descrita en este README (las landings, `/admin`, `/admin/api` y el bot de WhatsApp). Las landings leen los productos de `api/` (REQ-F-038) |
-| `api/` | API propia de solo lectura (REQ-F-038): `GET /api/v1/public/{molotes,birria}/productos`. Solo en la red interna; ver [API propia](#api-propia-api) |
+| `api/` | API propia (REQ-F-038 y REQ-F-039): `GET /api/v1/public/{molotes,birria}/productos` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos. Solo en la red interna; ver [API propia](#api-propia-api) |
+| `inventory-manager/` | Admin nuevo (REQ-F-039): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
+| `packages/web/` (`@restaurante/web`) | Utilidades HTTP y SSR sin dominio que comparten las apps Koa (REQ-F-039): plantillas, lectura de formularios y JSON, mismo origen y logger JSON |
 | `packages/core/` (`@restaurante/core`) | Dominio en TypeScript puro, sin Koa ni Prisma: módulos `catalog`, `schedule`, `identity`, `bot-control` y `shared`. Cada módulo se importa solo por su `index.ts` (`@restaurante/core/catalog`) |
 | `packages/db/` (`@restaurante/db`) | Persistencia: `prisma/` (schema y migraciones), `prisma.config.ts`, el cliente de Prisma generado (`src/generated/prisma`), la conexión, la verificación al arrancar y las implementaciones Prisma de los repositorios de `core` |
-| `packages/contracts/` (`@restaurante/contracts`) | Contratos de la API con Zod (`zod` 4.6.7, solo aquí): el esquema de la respuesta de productos y el cliente HTTP tipado que usan las landings |
+| `packages/contracts/` (`@restaurante/contracts`) | Contratos de la API con Zod (`zod` 4.6.7, solo aquí): los esquemas de `/api/v1/public` y `/api/v1/admin`, los clientes HTTP tipados de las landings y del admin nuevo, y el formulario de producto guiado por el descriptor |
 
 | En la raíz (`restaurante/`) | En `landing-pages/` |
 | --- | --- |
@@ -58,8 +60,9 @@ estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md)
   ejecuta siempre en la raíz: instala las dependencias en `restaurante/node_modules` y enlaza los
   paquetes en `node_modules/@restaurante/`.
 - **Regla de dependencias:** `core` no importa nada del proyecto (solo `node:*`), `db` solo
-  importa `core`, `contracts` no importa nada del proyecto (solo Zod) y `api` importa `core`,
-  `db` y `contracts`, nunca una app. El código de las landings (`controllers/landing.ts`,
+  importa `core`, `contracts` y `web` no importan nada del proyecto (solo Zod y Koa), `api` importa
+  `core`, `db`, `contracts` y `web`, nunca una app, e `inventory-manager` solo importa `contracts`
+  y `web` (también en sus `import()` dinámicos; REQ-F-039). El código de las landings (`controllers/landing.ts`,
   `views/landings/` y `services/landing-products.ts`) no puede importar `db`, Prisma, `mariadb`,
   `core/identity`, `core/bot-control`, la persistencia de `core/catalog` ni el repositorio de
   productos: los productos le llegan del cliente de `contracts` (REQ-F-038). En todo
@@ -318,6 +321,14 @@ atrás) está en `deploy/` y se describe en [docs/despliegue.md](docs/despliegue
   de consola (`scripts/`). Pesa unos 250 MB.
 - La imagen `migrate` (target `migrate`) solo ejecuta `prisma migrate deploy` con
   `MIGRATION_DATABASE_URL` (usuario con DDL) y termina: 0 si todo se aplicó, 1 si no.
+- La imagen `api` (target `api`, REQ-F-038) y la imagen `inventory-manager` (target
+  `inventory-manager`, REQ-F-039) salen del mismo `Dockerfile`.
+  - `inventory-manager` tiene `WORKDIR` `/app/inventory-manager`, puerto 3003 y `HEALTHCHECK` contra
+    `/salud`.
+  - Solo instala las dependencias de su workspace (sin Prisma) y los iconos de las landings para el
+    favicon.
+  - Se construye con
+    `docker build -f landing-pages/Dockerfile --target inventory-manager -t restaurante:inventory-manager .`.
 - Recuperar el acceso dentro del contenedor:
   `docker exec -it restaurante node scripts/admin-recover.ts --usuario <nombre>`.
 - `/admin` exige HTTPS en producción (ver [Seguridad](#seguridad-1)): en el VPS lo da Traefik y
@@ -325,7 +336,21 @@ atrás) está en `deploy/` y se describe en [docs/despliegue.md](docs/despliegue
 
 ### API propia (`api/`)
 
-La API de solo lectura de REQ-F-038 (paso 3 de [Arquitectura](docs/arquitectura.md)):
+La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquitectura.md)):
+
+- **Administración** (`/api/v1/admin`, REQ-F-039), la que usa el admin nuevo:
+  - acceso (`POST|GET|DELETE /sesion`) con la sesión en la API, que el admin reenvía como
+    `Authorization: Bearer`;
+  - productos de cada negocio (listar, ver, descriptor del formulario, crear con `Idempotency-Key`,
+    editar con `version`, eliminar, recuperar, mover y reordenar), con las mismas reglas que
+    `/admin/api`;
+  - las escrituras exigen el token CSRF de la sesión en `X-CSRF-Token`; el límite de intentos cuenta
+    el último valor de `X-Forwarded-For`, que escribe el admin.
+  - Tras cada escritura, la API avisa a `landing-pages` por su puerto interno (`LANDING_INTERNAL_URL`
+    y la credencial `INTERNAL_NOTIFY_TOKEN`, obligatorias en producción) y su respuesta lleva
+    `meta.freshness` (`confirmed` o `pending`).
+  - El contrato está en `packages/contracts/admin.ts`; el detalle, en
+    [Arquitectura §8](docs/arquitectura.md#8-plan-de-migración).
 
 - `GET /api/v1/public/{molotes|birria}/productos` responde `200 { "data": ... }` con los productos
   publicados (la forma que pintan las landings), validados con el esquema de `contracts`. Lee la
@@ -337,8 +362,9 @@ La API de solo lectura de REQ-F-038 (paso 3 de [Arquitectura](docs/arquitectura.
   `DATABASE_ALLOW_NEWER_SCHEMA` (solo la vuelta atrás de `deploy.sh`). Al arrancar verifica la
   base igual que la app (`database_init_failed` y código 1 si no está lista); nunca migra, nunca
   importa semillas ni escribe: la importación sigue siendo de `landing-pages`.
-- En producción va en su propio contenedor (`api`), solo en la red interna `db`: sin puertos
-  publicados ni router de Traefik. `landing-pages` la alcanza en `API_INTERNAL_URL=http://api:3001`.
+- En producción va en su propio contenedor (`api`), solo en las redes internas `db` y `admin`: sin
+  puertos publicados ni router de Traefik. `landing-pages` la alcanza en
+  `API_INTERNAL_URL=http://api:3001`, igual que `inventory-manager` por la red `admin`.
 - **Landings:** leen los productos de la API con una caché en memoria
   (`src/services/landing-products.ts`). Una escritura de productos de `/admin` (HTML o
   `/admin/api`) invalida la caché de ese negocio y la siguiente visita espera los datos nuevos
@@ -350,6 +376,41 @@ La API de solo lectura de REQ-F-038 (paso 3 de [Arquitectura](docs/arquitectura.
 - `API_INTERNAL_URL` es obligatoria en `landing-pages` (URL `http`/`https` sin usuario,
   contraseña, parámetros ni fragmento): ausente o inválida, la app termina con código 1 sin
   repetir el valor.
+- **Aviso interno** (REQ-F-039): `landing-pages` escucha en `INTERNAL_PORT` (3002 por defecto; nunca
+  el de `PORT`, que es el que enruta Traefik) solo `POST /internal/v1/productos-cambiados`, con
+  `Authorization: Bearer <INTERNAL_NOTIFY_TOKEN>`. Invalida la caché de la landing de ese negocio y
+  recarga el catálogo del bot. Si el aviso se pierde, la red de seguridad es la caducidad de 60 s de
+  la caché y la recarga del catálogo del bot cada 60 s.
+
+### Admin nuevo (`inventory-manager/`)
+
+El admin nuevo de REQ-F-039 (paso 4 de [Arquitectura](docs/arquitectura.md)), en
+`https://admin.birriaelmuneco.com` (en local, `http://127.0.0.1:3003`; ver
+[Entorno de desarrollo](docs/desarrollo.md)).
+
+- **Pantallas:** acceso, selector de negocio, productos (lista por categoría, alta, edición,
+  eliminar con confirmación, eliminados con «Recuperar», y subir y bajar) y salir. Todo funciona sin
+  JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el doble envío y reordena sin
+  recargar.
+- **Sesión:** la de la API. El admin guarda su id en la cookie `__Host-admin_sid` (en producción;
+  `admin_sid` en local), `HttpOnly`, `Secure`, `SameSite=Strict`, sin `Domain`, y la reenvía como
+  Bearer. Caduca tras 2 h sin actividad o si la cuenta cambia. Las cuentas son las de `/admin`; la
+  sesión es aparte.
+- **Errores:** 422 con el error junto a cada campo y un resumen enlazado; 409 con lo escrito, quién y
+  cuándo cambió el producto, y la opción de cargar la versión vigente o guardar encima; 503 con un
+  aviso sin perder lo escrito.
+- **Seguridad:** mismo origen en todo POST y el token CSRF de la API; `no-store` y `noindex`; CSP
+  estricta; en producción, solo por HTTPS (salvo `/salud`, para el `HEALTHCHECK`).
+- **Variables** (`inventory-manager/.env.example`): `NODE_ENV`, `HOST`, `PORT` (3003),
+  `API_INTERNAL_URL` (obligatoria) y `TRUST_PROXY`. No tiene credenciales de la base.
+- **Sistema visual:** el de las landings (P-4): base de Birria El Muñeco y el acento del negocio que
+  se edita. `npm run build:css` genera `inventory-manager/public/css/main.css` (no se versiona).
+- **Producción:** contenedor `inventory-manager` en las redes `traefik-public` y `admin`, con su
+  router de Traefik (límite de 60 peticiones por minuto con ráfaga de 60) ([Despliegue](docs/despliegue.md)).
+- **Convivencia:** con `ADMIN_NEW_URL` en `landing-pages`, la edición de productos del `/admin`
+  actual queda en solo lectura: sin controles, con un aviso y un enlace al admin nuevo; sus POST
+  responden 410 y `/admin/api` responde 410 `PRODUCTS_MOVED`. Usuarios, cuenta, bot y menú siguen en
+  `/admin`.
 
 ## CI
 
@@ -480,8 +541,8 @@ siguientes no se ejecutan; un fallo en una no afecta a las otras.
 | Comprobación | Pasos, en orden |
 | ------------ | --------------- |
 | `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado), `npm run db:up` (MySQL 8.4 de `compose.yaml`), `prisma migrate diff` (el esquema y las migraciones no divergen) y `npm test` (contra MySQL) |
-| `docker`     | Build de los targets `production`, `migrate` y `api` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite, que `production` y `api` llevan el código de `contracts` (REQ-F-038) y que `migrate` aplica el esquema sobre una base vacía con código 0; arranca la `api` en la red interna hasta que queda `healthy` y `production` sin `HOST` con `API_INTERNAL_URL` hacia ella, y comprueba que escucha en `0.0.0.0`, queda `healthy`, responde por el puerto publicado (REQ-F-015) y carga los productos de la API |
-| `despliegue` | `shellcheck` de los scripts de `deploy/`, `deploy/ci/resumen-test.sh` (cada estado del resumen de `deploy`, con entradas simuladas; REQ-F-030) y prueba de humo `deploy/ci/smoke.sh` (REQ-F-016): el compose de producción no publica puertos y MySQL solo está en la red interna; con un registro local y un Traefik v3 ejecuta `deploy.sh` como el comando forzado de SSH y comprueba los rechazos (argumentos, suma de `deploy/`, permisos del `.env`), el primer despliegue, las redirecciones 301, el 429 en `/admin`, la IP y el esquema en el log, la retención de 7 volcados, la migración fallida (la app no se toca), la vuelta atrás ante una imagen rota (también tras una migración nueva) y dos despliegues a la vez. Desde REQ-F-038, también los tres digests (la forma de 2 se rechaza), la `api` solo en la red interna (sin puertos ni labels), la llamada de la app a la `api`, que las landings muestran lo que sirve la `api` y siguen en 200 con la `api` parada, y que una `api` rota termina con 15 sin tocar la app (o, si hubo migraciones nuevas, con la app recreada con `DATABASE_ALLOW_NEWER_SCHEMA=true`, que sobrevive a un reinicio). Después corre la prueba de humo de los respaldos (`ops/backup/ci/smoke.sh`) |
+| `docker`     | Build de los targets `production`, `migrate`, `api` e `inventory-manager` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite, que `production` y `api` llevan el código de `contracts` (REQ-F-038) y de `packages/web` (y `api`, la copia de las imágenes de las landings), que `inventory-manager` (REQ-F-039) no lleva `packages/db` ni `packages/core`, ni Prisma ni mariadb, y sí `contracts`, `web`, su CSS compilado y los iconos de las landings, y que `migrate` aplica el esquema sobre una base vacía con código 0; arranca la `api` en la red interna hasta que queda `healthy` (con la credencial del aviso interno) y `production` sin `HOST` con `API_INTERNAL_URL` hacia ella, y comprueba que escucha en `0.0.0.0`, queda `healthy`, responde por el puerto publicado (REQ-F-015) y carga los productos de la API; por último, `inventory-manager` queda `healthy` con su `HEALTHCHECK` (`/salud`) |
+| `despliegue` | `shellcheck` de los scripts de `deploy/`, `deploy/ci/resumen-test.sh` (cada estado del resumen de `deploy`, con entradas simuladas; REQ-F-030) y prueba de humo `deploy/ci/smoke.sh` (REQ-F-016): el compose de producción no publica puertos y MySQL solo está en la red interna; con un registro local y un Traefik v3 ejecuta `deploy.sh` como el comando forzado de SSH y comprueba los rechazos (argumentos, suma de `deploy/`, permisos del `.env`), el primer despliegue, las redirecciones 301, el 429 en `/admin`, la IP y el esquema en el log, la retención de 7 volcados, la migración fallida (la app no se toca), la vuelta atrás ante una imagen rota (también tras una migración nueva) y dos despliegues a la vez. Desde REQ-F-038, también los tres digests (la forma de 2 se rechaza), la `api` solo en la red interna (sin puertos ni labels), la llamada de la app a la `api`, que las landings muestran lo que sirve la `api` y siguen en 200 con la `api` parada, y que una `api` rota termina con 15 sin tocar la app (o, si hubo migraciones nuevas, con la app recreada con `DATABASE_ALLOW_NEWER_SCHEMA=true`, que sobrevive a un reinicio). Desde REQ-F-039, los cuatro digests (la forma de 3, sin `inventory-manager`, se rechaza), `RESTAURANTE_ADMIN_DOMAIN` y la credencial del aviso interno obligatorios (si faltan, 3), ningún router de Traefik hacia el puerto interno 3002, `inventory-manager` solo en las redes `admin` y `traefik` (sin MySQL ni credenciales de la base), `healthy` y sin puertos, el subdominio del admin (200 en `/acceso` con `no-store` y `noindex`, 301 de HTTP a HTTPS, 429 tras la ráfaga de su límite de 60 por minuto, sin enrutar a la `api`), el aviso de la `api` a la app (401 sin credencial) y que un `inventory-manager` roto termina con 16, vuelve al anterior y deja la app como estaba y la `api` nueva en marcha. Después corre la prueba de humo de los respaldos (`ops/backup/ci/smoke.sh`) |
 | `auditoria`  | Node 24 y `npm run audit:deps` (REQ-F-020; `landing-pages/scripts/audit-deps.ts`), sin `npm ci`: `npm audit` sobre el `package-lock.json` de la raíz por imagen, con la política de [Auditoría de dependencias](#auditoría-de-dependencias) |
 
 La caché de npm se invalida al cambiar `package-lock.json`; la de Docker reutiliza las capas que
@@ -498,6 +559,7 @@ npm ci --strict-allow-scripts && npm run db:generate && npm run typecheck && npm
 docker buildx build --platform linux/amd64 -f landing-pages/Dockerfile --target production .   # docker
 docker buildx build --platform linux/amd64 -f landing-pages/Dockerfile --target migrate .
 docker buildx build --platform linux/amd64 -f landing-pages/Dockerfile --target api .
+docker buildx build --platform linux/amd64 -f landing-pages/Dockerfile --target inventory-manager .
 npm run audit:deps                                                            # auditoria
 ```
 
@@ -506,11 +568,11 @@ dentro de un contenedor con el socket de Docker y una carpeta de trabajo que el 
 misma ruta:
 
 ```sh
-docker build -f landing-pages/Dockerfile -t restaurante:production --target production . && docker build -f landing-pages/Dockerfile -t restaurante:migrate --target migrate . && docker build -f landing-pages/Dockerfile -t restaurante:api --target api .
+docker build -f landing-pages/Dockerfile -t restaurante:production --target production . && docker build -f landing-pages/Dockerfile -t restaurante:migrate --target migrate . && docker build -f landing-pages/Dockerfile -t restaurante:api --target api . && docker build -f landing-pages/Dockerfile -t restaurante:inventory-manager --target inventory-manager .
 docker network create traefik-public 2>/dev/null; w=/tmp/restaurante-smoke; mkdir -p "$w"
 docker run --rm --network traefik-public -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$PWD/deploy:/src/deploy:ro" -v "$w:$w" -e SMOKE_WORKDIR="$w" docker:cli \
-  sh -c 'apk add -q bash curl jq coreutils findutils util-linux gzip && bash /src/deploy/ci/smoke.sh restaurante:production restaurante:migrate restaurante:api'
+  sh -c 'apk add -q bash curl jq coreutils findutils util-linux gzip && bash /src/deploy/ci/smoke.sh restaurante:production restaurante:migrate restaurante:api restaurante:inventory-manager'
 ```
 
 Si un paso falla en GitHub por un problema de red (npm o Docker Hub), vuelve a ejecutarlo desde
@@ -643,7 +705,8 @@ activadas en el repositorio (**Settings → Code security**).
   versión.
 - **Imagen de Node:** el `FROM node:24.22.1-alpine` recibe PR con las versiones menores y de
   parche de la línea 24 (las mayores se revisan a mano). Dependabot solo cambia el `Dockerfile`:
-  en el mismo PR sube `.nvmrc` y `engines.node` de los dos `package.json` a la misma versión (ver
+  en el mismo PR sube `.nvmrc` y `engines.node` de los `package.json` que lo declaran (la raíz,
+  `landing-pages`, `api` e `inventory-manager`) a la misma versión (ver
   [Versión de Node y avisos atendidos](#versión-de-node-y-avisos-atendidos)); el CI toma la
   versión de `.nvmrc`.
 - **Sin merge automático:** cada merge a `main` despliega en producción. Los PR de Dependabot

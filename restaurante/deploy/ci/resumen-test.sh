@@ -16,6 +16,7 @@ MAIN=89abcdef0123456789abcdef0123456789abcdef
 APP=sha256:$(printf 'a%.0s' {1..64})
 MIGRATE=sha256:$(printf 'b%.0s' {1..64})
 API=sha256:$(printf 'c%.0s' {1..64})
+INVENTORY=sha256:$(printf 'd%.0s' {1..64})
 ENLACE="[\`0123456\`]($SERVER/$REPO/commit/$SHA)"
 FAILURES=0
 SALIDA=''
@@ -58,12 +59,13 @@ commit() { # commit <caso>: enlace con el SHA corto y SHA completo
 caso() { printf '\n== %s\n' "$*"; }
 
 caso 'desplegado'
-genera deploy SSH_OUTCOME=success SSH_CODE=0 JOB_STATUS=success APP_DIGEST="$APP" MIGRATE_DIGEST="$MIGRATE" API_DIGEST="$API"
+genera deploy SSH_OUTCOME=success SSH_CODE=0 JOB_STATUS=success APP_DIGEST="$APP" MIGRATE_DIGEST="$MIGRATE" API_DIGEST="$API" INVENTORY_DIGEST="$INVENTORY"
 contiene 'desplegado: encabezado' '### Desplegado'
 commit desplegado
 contiene 'desplegado: digest de la app' "ghcr.io/orvigas/restaurante@$APP"
 contiene 'desplegado: digest de migrate' "ghcr.io/orvigas/restaurante-migrate@$MIGRATE"
 contiene 'desplegado: digest de la api' "ghcr.io/orvigas/restaurante-api@$API"
+contiene 'desplegado: digest de inventory-manager' "ghcr.io/orvigas/restaurante-inventory-manager@$INVENTORY"
 
 caso 'omitido en vigente'
 genera vigente MAIN_SHA="$MAIN"
@@ -149,15 +151,23 @@ genera deploy SSH_OUTCOME=skipped JOB_STATUS=cancelled
 contiene 'cancelado antes: encabezado' '### Cancelado o interrumpido'
 contiene 'cancelado antes: producción intacta' 'producción no se tocó'
 
+caso 'inventory-manager que no queda sano (código 16, REQ-F-039)'
+genera deploy SSH_OUTCOME=failure SSH_CODE=16 JOB_STATUS=failure
+contiene 'inventory 16: encabezado' '### Fallido'
+contiene 'inventory 16: admin nuevo' 'El admin nuevo (inventory-manager) no quedó sano'
+contiene 'inventory 16: la app no se tocó' 'la app no se tocó'
+
 caso 'entradas no válidas'
-genera deploy SSH_OUTCOME=success JOB_STATUS=success APP_DIGEST='sha256:<script>' MIGRATE_DIGEST="$MIGRATE" API_DIGEST="$API"
+genera deploy SSH_OUTCOME=success JOB_STATUS=success APP_DIGEST='sha256:<script>' MIGRATE_DIGEST="$MIGRATE" API_DIGEST="$API" INVENTORY_DIGEST="$INVENTORY"
 contiene 'digest inválido: encabezado' '### Fallido (entrada no válida)'
 no_contiene 'digest inválido: no se escribe' '<script>'
-genera deploy SSH_OUTCOME=success JOB_STATUS=success APP_DIGEST="$APP" MIGRATE_DIGEST="$MIGRATE" API_DIGEST='sha256:<script>'
+genera deploy SSH_OUTCOME=success JOB_STATUS=success APP_DIGEST="$APP" MIGRATE_DIGEST="$MIGRATE" API_DIGEST='sha256:<script>' INVENTORY_DIGEST="$INVENTORY"
 contiene 'digest de la api inválido: encabezado' '### Fallido (entrada no válida)'
 no_contiene 'digest de la api inválido: no se escribe' '<script>'
-genera deploy SSH_OUTCOME=success JOB_STATUS=success APP_DIGEST="$APP" MIGRATE_DIGEST="$MIGRATE"
+genera deploy SSH_OUTCOME=success JOB_STATUS=success APP_DIGEST="$APP" MIGRATE_DIGEST="$MIGRATE" INVENTORY_DIGEST="$INVENTORY"
 contiene 'sin digest de la api: encabezado' '### Fallido (entrada no válida)'
+genera deploy SSH_OUTCOME=success JOB_STATUS=success APP_DIGEST="$APP" MIGRATE_DIGEST="$MIGRATE" API_DIGEST="$API"
+contiene 'sin digest de inventory-manager: encabezado' '### Fallido (entrada no válida)'
 genera deploy SSH_OUTCOME=failure SSH_CODE='21; rm' JOB_STATUS=failure
 contiene 'código inválido: encabezado' '### Fallido (entrada no válida)'
 no_contiene 'código inválido: no se escribe' '21; rm'

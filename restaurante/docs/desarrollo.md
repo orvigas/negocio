@@ -52,9 +52,10 @@ npm run db:up                         # MySQL 8.4 local (ver el paso 4)
 cp landing-pages/.env.example landing-pages/.env
 cp packages/db/.env.example packages/db/.env
 cp api/.env.example api/.env
+cp inventory-manager/.env.example inventory-manager/.env
 ```
 
-Ninguno de los tres `.env` se versiona (están en `.gitignore` y en `.dockerignore`). Cada variable
+Ninguno de los `.env` se versiona (están en `.gitignore` y en `.dockerignore`). Cada variable
 está explicada en su `.env.example` y en [Configuración](../README.md#configuración). Para empezar
 basta con, en `landing-pages/.env`:
 
@@ -70,6 +71,23 @@ API_INTERNAL_URL=http://127.0.0.1:3001
 `PORT=3001` y el mismo `DATABASE_URL`. `API_INTERNAL_URL` es obligatoria en `landing-pages`: sin
 ella (o con un valor que no sea una URL `http(s)` sin credenciales, parámetros ni fragmento) la app
 no arranca.
+
+**Admin nuevo (REQ-F-039).** `inventory-manager/.env` también viene lista (`PORT=3003` y
+`API_INTERNAL_URL=http://127.0.0.1:3001`). Para que la landing y el bot vean al instante los cambios
+de productos que hagas en el admin nuevo, conecta el aviso interno con la misma credencial en los
+dos lados (`openssl rand -hex 32`):
+
+```sh
+# api/.env
+LANDING_INTERNAL_URL=http://127.0.0.1:3002
+INTERNAL_NOTIFY_TOKEN=<la misma credencial>
+# landing-pages/.env
+INTERNAL_NOTIFY_TOKEN=<la misma credencial>
+```
+
+Sin ellas todo funciona igual, pero la landing y el bot ven el cambio como mucho en 60 s. En
+producción las dos son obligatorias. Si además quieres probar el modo de solo lectura de productos
+del `/admin` actual, pon `ADMIN_NEW_URL=http://127.0.0.1:3003` en `landing-pages/.env`.
 
 y, en `packages/db/.env` (solo las lee el CLI de Prisma; la app no las usa):
 
@@ -132,12 +150,13 @@ de página de cada negocio y `changes.jsonl`. Estructura y reglas en
 ## 5. Compilar el CSS y arrancar
 
 ```sh
-npm run build:css   # genera landing-pages/public/css/{molotes,birria,admin}/main.css (no se versiona)
-npm run dev         # api (127.0.0.1:3001) y landings con recarga en http://127.0.0.1:3000
+npm run build:css   # genera el CSS de landing-pages (molotes, birria y admin) e inventory-manager (no se versiona)
+npm run dev         # api (3001), landings (3000) y admin nuevo (3003), con recarga
 ```
 
-`npm run dev` levanta dos procesos (REQ-F-038): la API (`npm run dev:api`, en
-`http://127.0.0.1:3001`) y `landing-pages` (`npm run dev:landing`). Puedes levantarlos por separado
+`npm run dev` levanta tres procesos: la API (`npm run dev:api`, en `http://127.0.0.1:3001`;
+REQ-F-038), `landing-pages` (`npm run dev:landing`) y el admin nuevo (`npm run dev:inventory`, en
+`http://127.0.0.1:3003`; REQ-F-039). Puedes levantarlos por separado
 en dos terminales. Las landings leen los productos de la API: si no está en marcha, muestran la
 semilla de `content/seeds.ts` y registran `landing_products_fallback`; al levantarla, pasan a sus
 datos sin reiniciar (`landing_products_recovered`). Un cambio de producto en `/admin` se ve al
@@ -149,6 +168,7 @@ recargar la landing.
 | `http://127.0.0.1:3000/?dia=lunes` | Fuerza el día del aviso (`lunes` … `domingo`, sin acentos); solo con `NODE_ENV=development`. El aviso sale una vez por sesión: ábrelo en una ventana privada nueva o borra `sessionStorage` para volver a verlo |
 | `http://127.0.0.1:3000/molotes` y `/birria` | Cada landing, siempre |
 | `http://127.0.0.1:3000/admin` | Administración (necesita el primer administrador del paso 3) |
+| `http://127.0.0.1:3003/` | Admin nuevo (REQ-F-039): productos de cada negocio, con las mismas cuentas de `/admin`. Necesita la API en marcha; sin ella, cada pantalla avisa con un 503 |
 
 - `npm run dev` reinicia al editar cualquier `.ts` importado. Un reinicio cierra las sesiones de
   `/admin` y borra las conversaciones del bot (están en memoria).

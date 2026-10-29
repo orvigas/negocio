@@ -34,8 +34,8 @@ describe('loadApiConfig', () => {
     expect(readdirSync(join(API_DEFAULTS.PRODUCT_IMAGES_DIR, 'img', 'molotes')).some((file) => file.endsWith('.jpg'))).toBe(true);
   });
 
-  it('el aviso interno es opcional (sin él, null)', () => {
-    const env = { ...VALID, LANDING_INTERNAL_URL: undefined, INTERNAL_NOTIFY_TOKEN: undefined };
+  it('fuera de producción el aviso interno es opcional (sin él, null)', () => {
+    const env = { ...VALID, NODE_ENV: 'development', LANDING_INTERNAL_URL: undefined, INTERNAL_NOTIFY_TOKEN: undefined };
     expect(loadApiConfig(env).landingNotify).toBeNull();
   });
 
@@ -59,6 +59,7 @@ describe('loadApiConfig', () => {
     [{ INTERNAL_NOTIFY_TOKEN: 'corto-s3cr3t0' }, 'INTERNAL_NOTIFY_TOKEN'],
     [{ INTERNAL_NOTIFY_TOKEN: undefined }, 'INTERNAL_NOTIFY_TOKEN'],
     [{ LANDING_INTERNAL_URL: undefined }, 'LANDING_INTERNAL_URL'],
+    [{ LANDING_INTERNAL_URL: undefined, INTERNAL_NOTIFY_TOKEN: undefined }, 'En producción, LANDING_INTERNAL_URL'],
   ])('rechaza %j sin repetir el valor', (override, name) => {
     let error: unknown;
     try {

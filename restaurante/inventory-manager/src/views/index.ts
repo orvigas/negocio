@@ -94,6 +94,8 @@ export function createViews(renderer: Renderer) {
     return render('layout', {
       title,
       theme: business ?? 'neutral',
+      // Favicon del negocio que se edita; fuera de un negocio, el de la marca de inicio (Birria).
+      favicon: business ?? 'birria',
       header: context ? header(context, business) : join([]),
       body,
     });

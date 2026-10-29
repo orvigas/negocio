@@ -117,7 +117,7 @@ export interface Config {
   readonly adminNewUrl: string | undefined;
   /**
    * Puerto interno del aviso de la API (REQ-F-039, RF-13): INTERNAL_PORT e INTERNAL_NOTIFY_TOKEN.
-   * null sin token: no se abre el puerto y queda la recarga de 60 s.
+   * Obligatorio en producción; null sin token fuera de ella: no se abre el puerto (recarga de 60 s).
    */
   readonly internalNotify: { readonly port: number; readonly token: string } | null;
   readonly adminBootstrap: AdminBootstrapConfig;
@@ -273,10 +273,10 @@ function parseAdminNewUrl(raw: string | undefined, nodeEnv: string | undefined, 
 
 /**
  * Aviso interno de la API (REQ-F-039, RF-13 y RF-14): token de 32 caracteres visibles como mínimo; el
- * puerto interno no puede ser el de la app (el que enruta Traefik). Sin token no se abre el puerto (queda
- * la recarga de 60 s); pasa a ser obligatorio en producción con el despliegue del admin nuevo (PR 3).
+ * puerto interno no puede ser el de la app (el que enruta Traefik). Obligatorio en producción (PR 3 de
+ * REQ-F-039); fuera de ella, sin token no se abre el puerto y queda la recarga de 60 s.
  */
-function parseInternalNotify(env: Env, appPort: number | undefined, issues: string[]): { port: number; token: string } | null | undefined {
+function parseInternalNotify(env: Env, nodeEnv: string | undefined, appPort: number | undefined, issues: string[]): { port: number; token: string } | null | undefined {
   const token = readVar(env, 'INTERNAL_NOTIFY_TOKEN');
   const rawPort = readVar(env, 'INTERNAL_PORT');
   const port = rawPort === undefined ? DEFAULTS.INTERNAL_PORT : /^\d{1,5}$/.test(rawPort) ? Number(rawPort) : Number.NaN;
@@ -288,7 +288,13 @@ function parseInternalNotify(env: Env, appPort: number | undefined, issues: stri
     issues.push('INTERNAL_PORT debe ser distinto de PORT (el aviso interno no se sirve en el puerto público)');
     valid = false;
   }
-  if (token === undefined) return valid ? null : undefined;
+  if (token === undefined) {
+    if (nodeEnv === 'production') {
+      issues.push('INTERNAL_NOTIFY_TOKEN es obligatoria en producción (aviso interno de la API; p. ej. openssl rand -hex 32)');
+      return undefined;
+    }
+    return valid ? null : undefined;
+  }
   if (token.length < MIN_NOTIFY_TOKEN_LENGTH || !/^[\x21-\x7e]+$/.test(token)) {
     issues.push(`INTERNAL_NOTIFY_TOKEN debe tener al menos ${MIN_NOTIFY_TOKEN_LENGTH} caracteres visibles, sin espacios (p. ej. openssl rand -hex 32)`);
     return undefined;
@@ -714,7 +720,7 @@ export function loadConfig(env: Env = process.env): Config {
   const allowNewerSchema = parseBoolean(readVar(env, 'DATABASE_ALLOW_NEWER_SCHEMA'), 'DATABASE_ALLOW_NEWER_SCHEMA', false, issues);
   const trustProxy = parseBoolean(readVar(env, 'TRUST_PROXY'), 'TRUST_PROXY', false, issues);
   const adminNewUrl = parseAdminNewUrl(readVar(env, 'ADMIN_NEW_URL'), nodeEnv, issues);
-  const internalNotify = parseInternalNotify(env, port, issues);
+  const internalNotify = parseInternalNotify(env, nodeEnv, port, issues);
   const whatsappBot = parseChatBot(env, nodeEnv, whatsapp.molotes?.phone, issues);
   const botLimits = parseBotLimits(env, issues);
   // La clave solo se exige con el resto del bot ya válido: así cada error del bot se ve una vez.

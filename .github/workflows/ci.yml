@@ -341,6 +341,20 @@ jobs:
           cache-to: type=gha,scope=api,mode=max
           load: true
           tags: restaurante:api
+      # Admin nuevo (REQ-F-039).
+      - name: build inventory-manager
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: restaurante
+          file: restaurante/landing-pages/Dockerfile
+          target: inventory-manager
+          platforms: linux/amd64
+          push: false
+          provenance: false
+          cache-from: type=gha,scope=inventory-manager
+          cache-to: type=gha,scope=inventory-manager,mode=max
+          load: true
+          tags: restaurante:inventory-manager
       # CA-13: production sin el CLI de Prisma ni SQLite; migrate sin SQLite. Rutas absolutas en todos
       # los niveles de node_modules del workspace (REQ-F-036 y REQ-F-037): /app (elevadas),
       # /app/landing-pages y los paquetes de /app/packages. REQ-F-037 (CA-12): production lleva el
@@ -358,6 +372,10 @@ jobs:
           # de las landings en la misma ruta relativa (PRODUCT_IMAGES_DIR por defecto).
           docker run --rm --entrypoint sh restaurante:production -c 'node -e "import(\"@restaurante/web\").then((m) => process.exit(typeof m.createRenderer === \"function\" ? 0 : 1))"'
           docker run --rm --entrypoint sh restaurante:api -c 'node -e "import(\"@restaurante/web\").then((m) => process.exit(typeof m.createLogger === \"function\" ? 0 : 1))" && ls /app/landing-pages/public/img/molotes/*.jpg >/dev/null'
+          # REQ-F-039: inventory-manager en /app/inventory-manager, sin packages/db ni packages/core (ni
+          # siquiera sus package.json), sin Prisma ni mariadb en ningún node_modules, con contracts y web
+          # resolubles, su CSS compilado y los iconos de las landings (favicon).
+          docker run --rm --entrypoint sh restaurante:inventory-manager -c 'test "$(pwd)" = /app/inventory-manager && test -e src/server.ts && test -s public/css/main.css && test -e /app/landing-pages/public/img/birria/icons/favicon.ico && test -e /app/landing-pages/public/img/molotes/icons/icon-32.png && test ! -e /app/packages/db && test ! -e /app/packages/core && for d in /app/node_modules /app/inventory-manager/node_modules; do test ! -e "$d/@prisma" && test ! -e "$d/prisma" && test ! -e "$d/mariadb" || exit 1; done && node -e "Promise.all([import(\"@restaurante/contracts\"), import(\"@restaurante/web\")]).then(([c, w]) => process.exit(typeof c.createAdminApiClient === \"function\" && typeof w.createRenderer === \"function\" ? 0 : 1))"'
       # CA-13: la imagen migrate aplica el esquema sobre una base vacía con código 0.
       - name: migrate sobre una base vacía
         working-directory: restaurante
@@ -376,8 +394,11 @@ jobs:
         working-directory: restaurante
         run: |
           # REQ-F-038 (CA-11): la API en la red interna db-test, healthy y sin puertos publicados.
+          # REQ-F-039: el aviso interno es obligatorio en producción (credencial desechable de la prueba).
+          token=$(openssl rand -hex 32)
           docker run -d --name api-ca11 --network restaurante_db-test \
             -e DATABASE_URL=mysql://restaurante_test_app:test-dev@mysql-dev:3306/restaurante_test_ci \
+            -e LANDING_INTERNAL_URL=http://app-ca9:3002 -e INTERNAL_NOTIFY_TOKEN="$token" \
             restaurante:api
           api_health=starting
           for _ in $(seq 1 60); do
@@ -398,6 +419,7 @@ jobs:
             -e WHATSAPP_MOLOTES=5210000000001 \
             -e WHATSAPP_BIRRIA=5210000000002 \
             -e API_INTERNAL_URL=http://api-ca11:3001 \
+            -e INTERNAL_NOTIFY_TOKEN="$token" \
             restaurante:production
           docker network connect restaurante_db-test app-ca9
           docker start app-ca9
@@ -417,7 +439,22 @@ jobs:
           curl -fsS -o /dev/null http://127.0.0.1:3000/molotes
           # Las landings cargaron los productos de la API (no de la semilla).
           docker logs app-ca9 | grep '"msg":"landing_products_loaded"' | grep -q '"source":"api"' || { docker logs app-ca9; exit 1; }
-          docker rm -f app-ca9 api-ca11
+          # REQ-F-039 (CA-18): inventory-manager queda healthy por su HEALTHCHECK (/salud por HTTP, sin TLS).
+          docker run -d --name inventory-ca18 --network restaurante_db-test -e TRUST_PROXY=true -e API_INTERNAL_URL=http://api-ca11:3001 restaurante:inventory-manager
+          inv_health=starting
+          for _ in $(seq 1 60); do
+            inv_health=$(docker inspect -f '{{.State.Health.Status}}' inventory-ca18)
+            [ "$inv_health" = healthy ] && break
+            [ "$(docker inspect -f '{{.State.Running}}' inventory-ca18)" = true ] || break
+            sleep 2
+          done
+          if [ "$inv_health" != healthy ]; then
+            echo "inventory-manager no quedó healthy (estado: $inv_health)"
+            docker logs inventory-ca18
+            exit 1
+          fi
+          docker logs inventory-ca18 | grep '"msg":"server_started"' | grep -q '"service":"inventory-manager"' || { docker logs inventory-ca18; exit 1; }
+          docker rm -f app-ca9 api-ca11 inventory-ca18
 
   # Prueba de humo del despliegue (REQ-F-016): deploy/deploy.sh contra el compose de producción, un
   # Traefik v3 y un registro local (CA-2, CA-3, CA-4, CA-5, CA-7, CA-8, CA-9 y D-1). Sin secretos.
@@ -488,8 +525,20 @@ jobs:
           cache-from: type=gha,scope=api
           load: true
           tags: restaurante:api
+      - name: build inventory-manager
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: restaurante
+          file: restaurante/landing-pages/Dockerfile
+          target: inventory-manager
+          platforms: linux/amd64
+          push: false
+          provenance: false
+          cache-from: type=gha,scope=inventory-manager
+          load: true
+          tags: restaurante:inventory-manager
       - name: prueba de humo
-        run: bash restaurante/deploy/ci/smoke.sh restaurante:production restaurante:migrate restaurante:api
+        run: bash restaurante/deploy/ci/smoke.sh restaurante:production restaurante:migrate restaurante:api restaurante:inventory-manager
       - name: age
         run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends age
       - name: prueba de humo de respaldos
@@ -519,6 +568,7 @@ jobs:
       app-digest: ${{ steps.app.outputs.digest }}
       migrate-digest: ${{ steps.migrate.outputs.digest }}
       api-digest: ${{ steps.api.outputs.digest }}
+      inventory-digest: ${{ steps.inventory.outputs.digest }}
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -578,6 +628,22 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+      # Admin nuevo (REQ-F-039).
+      - name: publish inventory-manager
+        id: inventory
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: restaurante
+          file: restaurante/landing-pages/Dockerfile
+          target: inventory-manager
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          cache-from: type=gha,scope=inventory-manager
+          tags: ghcr.io/orvigas/restaurante-inventory-manager:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
 
   # Commit vigente de main (REQ-F-030, RF-3): si mientras tanto llegó otro commit a main, este no se
   # despliega (lo hará la ejecución del siguiente). También en una ejecución manual. Sin environment
@@ -625,7 +691,7 @@ jobs:
 
   # Despliegue en el VPS (REQ-F-016, RF-4 a RF-6). La llave SSH solo puede ejecutar
   # /opt/restaurante/deploy/deploy.sh (comando forzado en authorized_keys): este job le pasa el SHA,
-  # los tres digests (app, migrate y api; REQ-F-038) y la suma de restaurante/deploy, que debe coincidir con la instalada. Solo corre
+  # los cuatro digests (app, migrate, api e inventory-manager; REQ-F-038 y REQ-F-039) y la suma de restaurante/deploy, que debe coincidir con la instalada. Solo corre
   # si `vigente` confirmó que el commit es la punta de main. Su resumen (REQ-F-030,
   # deploy/ci/resumen.sh) se escribe siempre: Desplegado, Revertido (código 21), Fallido, Omitido o
   # Cancelado o interrumpido; el job solo termina en éxito si quedó Desplegado.
@@ -686,6 +752,7 @@ jobs:
           APP_DIGEST: ${{ needs.publish.outputs.app-digest }}
           MIGRATE_DIGEST: ${{ needs.publish.outputs.migrate-digest }}
           API_DIGEST: ${{ needs.publish.outputs.api-digest }}
+          INVENTORY_DIGEST: ${{ needs.publish.outputs.inventory-digest }}
         run: |
           set -eu
           umask 077
@@ -700,7 +767,7 @@ jobs:
           ssh -i "$dir/key" -p "${VPS_SSH_PORT:-22}" \
             -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$dir/known_hosts" -o ServerAliveInterval=30 -o ConnectTimeout=20 \
-            "$VPS_SSH_USER@$VPS_HOST" "deploy $GITHUB_SHA $APP_DIGEST $MIGRATE_DIGEST $API_DIGEST $sum" || rc=$?
+            "$VPS_SSH_USER@$VPS_HOST" "deploy $GITHUB_SHA $APP_DIGEST $MIGRATE_DIGEST $API_DIGEST $INVENTORY_DIGEST $sum" || rc=$?
           echo "codigo=$rc" >> "$GITHUB_OUTPUT"
           exit "$rc"
       # Siempre, sin secretos. Solo informa: el estado del job lo decide `desplegar`.
@@ -715,6 +782,7 @@ jobs:
           APP_DIGEST: ${{ needs.publish.outputs.app-digest }}
           MIGRATE_DIGEST: ${{ needs.publish.outputs.migrate-digest }}
           API_DIGEST: ${{ needs.publish.outputs.api-digest }}
+          INVENTORY_DIGEST: ${{ needs.publish.outputs.inventory-digest }}
         run: |
           if [ -f restaurante/deploy/ci/resumen.sh ]; then
             bash restaurante/deploy/ci/resumen.sh deploy >> "$GITHUB_STEP_SUMMARY"

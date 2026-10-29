@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { createPrismaClient } from '@restaurante/db/client';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
-import { createImageChecker, createProductRepository, type MenuDocument, type ProductStore } from '@restaurante/core/catalog';
+import { createProductRepository, type MenuDocument, type ProductStore } from '@restaurante/core/catalog';
+import { createImageChecker } from '@restaurante/web';
 
 import { DEFAULT_PUBLIC_DIR, createApp } from '../../src/app.ts';
 import { loadSeedDocument } from '../../src/content/seeds.ts';

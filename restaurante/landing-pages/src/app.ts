@@ -5,7 +5,7 @@ import Koa from 'koa';
 import helmet from 'koa-helmet';
 import serve from 'koa-static';
 
-import { createImageChecker, type ProductRepository } from '@restaurante/core/catalog';
+import type { ProductRepository } from '@restaurante/core/catalog';
 import {
   SCRYPT_DEFAULTS,
   createLoginThrottle,
@@ -16,7 +16,7 @@ import {
 } from '@restaurante/core/identity';
 import { getActiveBusinessId } from '@restaurante/core/schedule';
 import { silentLogger, type Logger } from '@restaurante/core/shared';
-import { createRenderer } from '@restaurante/web';
+import { createImageChecker, createRenderer } from '@restaurante/web';
 
 import type { Config } from './config/env.ts';
 import { createAdminGate } from './middleware/admin-guard.ts';

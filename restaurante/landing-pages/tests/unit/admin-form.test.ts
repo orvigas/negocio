@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
-import { createImageChecker, pickPageData, type ImageExists, type PageDataByBusiness } from '@restaurante/core/catalog';
+import { pickPageData, type ImageExists, type PageDataByBusiness } from '@restaurante/core/catalog';
 import { createRenderer } from '@restaurante/web';
 
-import { DEFAULT_PUBLIC_DIR, DEFAULT_VIEWS_DIR } from '../../src/app.ts';
+import { DEFAULT_VIEWS_DIR } from '../../src/app.ts';
 import { parseAdminForm, type AdminFormResult } from '../../src/services/admin-form.ts';
 import { renderAdminBusiness } from '../../src/views/admin/index.ts';
 import { seedData, seedDocuments } from '../helpers.ts';
@@ -156,17 +156,5 @@ describe('parseAdminForm', () => {
   it('birria: rechaza la descripción del hero de 401 caracteres', async () => {
     const result = await parse('birria', { ...pageFields('birria'), 'hero.showcase.description': 'a'.repeat(401) });
     expect(Object.keys(result.errors)).toEqual(['hero.showcase.description']);
-  });
-});
-
-describe('createImageChecker', () => {
-  const imageExistsOnDisk = createImageChecker(DEFAULT_PUBLIC_DIR);
-
-  it('encuentra imágenes reales de public/img', async () => {
-    expect(await imageExistsOnDisk('/img/molotes/molotes-queso-oaxaca.jpg')).toBe(true);
-  });
-
-  it.each(['/img/molotes/no-existe.jpg', '/img/molotes', '/img/../css/.gitkeep', '/img/../../package.json'])('rechaza %s', async (src) => {
-    expect(await imageExistsOnDisk(src)).toBe(false);
   });
 });

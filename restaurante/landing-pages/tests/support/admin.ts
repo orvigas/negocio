@@ -5,9 +5,10 @@ import type { Test } from 'supertest';
 import type { BotControlStore } from '@restaurante/core/bot-control';
 import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
-import { createImageChecker, createProductRepository, type ProductRepository, type ProductStore } from '@restaurante/core/catalog';
+import { createProductRepository, type ProductRepository, type ProductStore } from '@restaurante/core/catalog';
 import { createUserRepository } from '@restaurante/db/user-repository';
 import { SCRYPT_DEFAULTS, hashPassword, type UserRepository } from '@restaurante/core/identity';
+import { createImageChecker } from '@restaurante/web';
 
 import { DEFAULT_PUBLIC_DIR, createApp } from '../../src/app.ts';
 import type { BotKeys, Env } from '../../src/config/env.ts';

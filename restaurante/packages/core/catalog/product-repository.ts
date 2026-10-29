@@ -119,10 +119,17 @@ export interface ProductRepository {
 
 export type ProductChangeListener = (business: BusinessId) => void;
 
+/**
+ * Puerto: ¿la ruta de imagen (`/img/...`) corresponde a un archivo publicado? (DT-6 de REQ-F-001;
+ * RF-7.1 de REQ-F-008). core solo declara el tipo; la implementación con el disco es
+ * `createImageChecker` de `@restaurante/web` (restaurante/docs/arquitectura.md §3 y §4).
+ */
+export type ImageExists = (src: string) => Promise<boolean>;
+
 export interface ProductRepositoryOptions {
   store: ProductStore;
   /** Comprueba que la imagen exista en public/img al guardar (RF-7.1). */
-  imageExists: (src: string) => Promise<boolean>;
+  imageExists: ImageExists;
   now?: () => Date;
   logger?: Logger;
 }

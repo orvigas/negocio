@@ -1,12 +1,12 @@
 import { once } from 'node:events';
 
-import { createImageChecker, createProductRepository } from '@restaurante/core/catalog';
+import { createProductRepository } from '@restaurante/core/catalog';
 import { errorProp } from '@restaurante/core/shared';
 import { createPrismaClient } from '@restaurante/db/client';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
 import { createUserRepository } from '@restaurante/db/user-repository';
 import { probeOf, queryOf, verifyDatabase } from '@restaurante/db/verify';
-import { createLogger, serializeError } from '@restaurante/web';
+import { createImageChecker, createLogger, serializeError } from '@restaurante/web';
 
 import { createAdminRoutes } from './admin/index.ts';
 import { createApiApp } from './app.ts';

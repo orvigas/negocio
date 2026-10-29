@@ -1,5 +1,5 @@
 import { CSRF_HEADER, type Freshness } from '@restaurante/contracts';
-import { createImageChecker, createProductRepository, type MemoryProductStore } from '@restaurante/core/catalog';
+import { createProductRepository, type MemoryProductStore } from '@restaurante/core/catalog';
 import {
   SCRYPT_DEFAULTS,
   hashPassword,
@@ -8,7 +8,7 @@ import {
   type UserRepository,
 } from '@restaurante/core/identity';
 import type { BusinessId, Logger } from '@restaurante/core/shared';
-import { createLogger } from '@restaurante/web';
+import { createImageChecker, createLogger } from '@restaurante/web';
 
 import { createAdminRoutes } from '../../src/admin/index.ts';
 import { createApiApp } from '../../src/app.ts';

@@ -36,13 +36,14 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
 
 ### Cómo llega una versión a producción
 
-1. El CI (`.github/workflows/ci.yml`) del PR ejecuta `calidad`, `docker`, `despliegue` y
-   `auditoria`, y se hace merge a `main` con las cuatro en verde. En un PR de solo documentación
-   (ver "Cuándo se ejecuta" en la sección CI del `README.md`) quedan omitidas.
+1. El CI (`.github/workflows/ci.yml`) del PR ejecuta `calidad`, `docker` (imágenes y pruebas de
+   humo del despliegue y de los respaldos) y `auditoria`, y se hace merge a `main` con las tres en
+   verde. En un PR de solo documentación o en borrador (ver "Cuándo se ejecuta" en la sección CI
+   del `README.md`) quedan omitidas.
 2. En el push a `main`, si solo trae documentación, no se publica ni se despliega nada. Con
    cambios de código, el job `validado` comprueba si el contenido exacto del commit de `main` (su
    *tree*) es el que validó el CI del PR. Si lo es, no se repiten las validaciones. Si no lo es
-   (`main` avanzó después del CI del PR, push directo) o no se puede decidir, las cuatro
+   (`main` avanzó después del CI del PR, push directo) o no se puede decidir, las tres
    validaciones corren en el push y, si alguna falla, no se publica ni se despliega. Así, un PR
    desactualizado respecto a `main` ya no llega a producción sin validar ([Árbol ya
    validado](../README.md#árbol-ya-validado)).
@@ -237,7 +238,8 @@ En **Settings → Environments → production**:
 - **Deployment branches and tags:** "Selected branches and tags" con solo `main`.
 - **Required reviewers** (opcional): exige aprobar cada despliegue.
 
-Con un repositorio privado y el plan Free, GitHub no ofrece estas reglas. Mientras tanto, el
+Con un repositorio privado y el plan Free, GitHub no ofrecía estas reglas; ahora que el
+repositorio es público, el plan Free sí las ofrece y conviene activarlas. En cualquier caso, el
 límite real lo pone el comando forzado de la llave: aunque alguien la robe, solo puede desplegar
 imágenes de `ghcr.io/orvigas` con el `deploy/` que instalaste.
 
@@ -330,7 +332,7 @@ con la rama `main`, o
 gh workflow run ci.yml --ref main
 ```
 
-Corre `calidad`, `docker`, `despliegue` y `auditoria`, y con las cuatro en verde, `publish` y
+Corre `calidad`, `docker` y `auditoria`, y con las tres en verde, `publish` y
 `deploy` del commit de la punta de `main` (con volcado y migración, como cualquier despliegue).
 Sobre otra rama se rechaza (`cambios` falla y no corre nada más). Si mientras tanto llega otro
 commit a `main`, no se despliega: lo hará el del commit nuevo.

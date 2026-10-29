@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prueba de humo de los respaldos (REQ-F-019, job `despliegue` del CI). Levanta el compose de
+# Prueba de humo de los respaldos (REQ-F-019, job `docker` del CI). Levanta el compose de
 # producción (MySQL y app), un S3 local (versitygw, fijado por digest; admite SigV4 e If-None-Match
 # como R2) y un Healthchecks falso, y ejecuta backup.sh, env-backup.sh, restore.sh y
 # verify-backup.sh --drill tal como en el VPS y en el Mac. Nunca toca R2, Healthchecks ni el VPS.

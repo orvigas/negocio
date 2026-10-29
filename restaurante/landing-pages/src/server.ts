@@ -7,9 +7,9 @@ import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
 import { createUserRepository } from '@restaurante/db/user-repository';
 import { createPublicApiClient } from '@restaurante/contracts';
 import { errorProp } from '@restaurante/core/shared';
-import { createLogger, serializeError } from '@restaurante/web';
+import { createImageChecker, createLogger, serializeError } from '@restaurante/web';
 
-import { createImageChecker, createProductRepository } from '@restaurante/core/catalog';
+import { createProductRepository } from '@restaurante/core/catalog';
 
 import { DEFAULT_PUBLIC_DIR, createApp } from './app.ts';
 import { ConfigError, loadConfig } from './config/env.ts';

@@ -14,28 +14,31 @@ necesita desviarse de este documento, lo actualiza en el mismo PR.
 
 ## 1. Contexto
 
-Hoy `restaurante/` es **una sola app Koa** que hace todo (desde el paso 1, en el workspace
-`restaurante/landing-pages/`; las rutas `src/...` de este documento son relativas a él):
+`restaurante/` es un **monorepo de npm workspaces** (pasos 1 y 2, REQ-F-036 y REQ-F-037) con tres
+apps Koa y cuatro paquetes compartidos. Las rutas `src/...` de este documento, sin otro prefijo,
+son relativas a `restaurante/landing-pages/`.
 
-- **Landings** por SSR (`src/views/`, `src/content/`, `public/`), con el aviso del día decidido en
-  el servidor (REQ-F-028 y REQ-F-034).
-- **Administración** en `/admin` por SSR, con sesión y CSRF (usuarios, productos y control del bot),
-  más una **API JSON de productos** en `/admin/api` (REQ-F-008).
-- **Bot de WhatsApp** (`src/services/whatsapp-bot/`), que arma el pedido y **avisa al personal**:
-  los pedidos **no se guardan**.
-- **MySQL 8.4 con Prisma** (`prisma/`, `src/repositories/`).
+- **`landing-pages`**: las landings por SSR (`src/views/`, `src/content/`, `public/`), con el aviso
+  del día decidido en el servidor (REQ-F-028 y REQ-F-034), que obtienen los productos de la API
+  (REQ-F-038). **En transición** sigue conteniendo la administración en `/admin` (SSR con sesión y
+  CSRF: usuarios, productos y control del bot), la API JSON de productos en `/admin/api`
+  (REQ-F-008) y el **bot de WhatsApp** (`src/services/whatsapp-bot/`), que arma el pedido y avisa
+  al personal: los pedidos **no se guardan**.
+- **`api`** (REQ-F-038 y REQ-F-039): la API JSON propia, solo en la red interna. Publica los
+  productos de cada negocio (`/api/v1/public/<negocio>/productos`) y su administración
+  (`/api/v1/admin/...`).
+- **`inventory-manager`** (REQ-F-039): el admin nuevo de productos por SSR, que solo habla con la
+  `api` mediante el cliente de `contracts`.
+- **Paquetes**: `core` (dominio en TypeScript puro, sin E/S de infraestructura), `db` (MySQL 8.4
+  con Prisma: esquema, migraciones y repositorios), `contracts` (esquemas y clientes de la API) y
+  `web` (utilidades HTTP y SSR sin dominio que comparten las apps).
 
-El código ya tiene la base de lo que se propone aquí:
-
-- **Repositorios con interfaz** y varias implementaciones: `ProductRepository` (Prisma y memoria),
-  el repositorio de menús (archivo y memoria) y `BotControlStore` (Prisma y memoria). Gracias a eso
-  el bot y buena parte de la lógica se prueban sin MySQL.
-- **Reglas de negocio sin Koa** en `src/services/` (`product-schema.ts`, `visible-menu.ts`,
-  `business-schedule.ts`, `price.ts`).
-- **Inyección por fábricas** (`createX({ deps })`) armada en `src/server.ts` y `src/app.ts`.
-
-Lo que falta es **separar físicamente** esas piezas para que dos frontends y nuevos dominios
-(inventario, ventas, CRM) las compartan sin duplicarlas.
+El código ya tenía la base de esta separación: **repositorios con interfaz** y varias
+implementaciones (`ProductRepository` sobre Prisma o memoria, el repositorio de menús en archivo o
+memoria y `BotControlStore`), **reglas de negocio sin Koa** e **inyección por fábricas**
+(`createX({ deps })`) armada en el `server.ts` y el `app.ts` de cada app. Lo que queda es terminar
+de sacar de `landing-pages` la administración y el bot (§8) para que los frontends y los dominios
+nuevos (inventario, ventas, CRM) compartan esas piezas sin duplicarlas.
 
 ## 2. Objetivos y restricciones
 
@@ -154,7 +157,10 @@ packages/core/inventory/
 - **`packages/web`** (REQ-F-039, decisión P-1 del usuario: "Paquete packages/web (Recomendado)"):
   el renderizador de plantillas, la lectura de formularios y de JSON, la comprobación de mismo
   origen y el logger JSON (`createLogger`), movidos desde `landing-pages` y `core/shared`; `core`
-  conserva solo la interfaz `Logger` y `silentLogger`. Lo comparten las apps Koa sin duplicarlo.
+  conserva solo la interfaz `Logger` y `silentLogger`. También la comprobación de imágenes en disco
+  (`createImageChecker`), movida desde `core/catalog`: `core` conserva solo el puerto
+  `ImageExists` (en `product-repository.ts`), que `web` implementa con una firma propia compatible
+  (no importa `core`). Lo comparten las apps Koa sin duplicarlo.
 - **Paquetes:** `@restaurante/core` (sin dependencias), `@restaurante/db` (Prisma, `mariadb` y
   `core`) y `@restaurante/contracts` (Zod desde el paso 3, REQ-F-038). La app `api` (paso 3)
   importa `core`, `db` y `contracts`. Todos los `tsconfig.json` extienden `tsconfig.base.json`,
@@ -165,7 +171,8 @@ packages/core/inventory/
   `mariadb`, `core/identity`, `core/bot-control`, la persistencia de `core/catalog`
   (`createMemoryProductStore`, `ProductStore`, `ProductStoreTx`, `toPublished`) ni el repositorio
   de productos: los productos solo les llegan del cliente de `contracts`. **Sí pueden importar**
-  los módulos puros de `core` (`shared`, `schedule` y las funciones sin E/S de `catalog`), porque
+  los módulos puros de `core` (`shared`, `schedule` y las funciones de `catalog`, que no hacen E/S:
+  la comprobación de imágenes en disco vive en `web`), porque
   el aviso del día y el hero, el destacado y las promociones siguen decidiéndose en las landings.
   La desviación respecto de la tabla (`landing-pages` solo importa `contracts`) dura hasta que los
   horarios y el aviso sean endpoints públicos (§6).
@@ -174,9 +181,11 @@ packages/core/inventory/
   `core` falla en el lint.
 - **Regla de transición** (desviación registrada en el paso 2, REQ-F-037; limitada en el paso 3):
   mientras `landing-pages` siga conteniendo `/admin` y el bot, **ese código** puede importar
-  `core`, `db` y `contracts`. El lint lo permite con un comentario que lo marca como temporal. La
-  restricción se activa en el paso 4 para `/admin`, cuando pase a `inventory-manager`, y para el
-  bot, cuando pase a `api`.
+  `core`, `db` y `contracts`. En `eslint.config.ts` no tiene un bloque de restricción propio: solo
+  le aplica la regla general de `landing-pages` (los paquetes se importan por su nombre y, de
+  `core`, solo el `index.ts` de cada módulo; O-2), y un comentario "REGLA DE TRANSICIÓN —
+  TEMPORAL" marca la excepción. La restricción se activa en el paso 4 para `/admin`, cuando pase a
+  `inventory-manager`, y para el bot, cuando pase a `api`.
 
 ## 5. Contratos compartidos (`packages/contracts`)
 

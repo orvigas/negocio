@@ -1,6 +1,5 @@
 // Catálogo: productos, menú visible, precios, slugs y registro de cambios.
 // Lo único que se importa desde fuera del módulo (REQ-F-037, restaurante/docs/arquitectura.md §4).
-export * from './image-checker.ts';
 export * from './menu-diff.ts';
 export * from './menu-schema.ts';
 export * from './memory-product-store.ts';

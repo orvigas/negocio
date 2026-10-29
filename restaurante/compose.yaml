@@ -46,7 +46,10 @@ services:
 
   test:
     build:
+      # Contexto: la raíz de los workspaces (package-lock.json único); el Dockerfile es el de la
+      # app (REQ-F-036).
       context: .
+      dockerfile: landing-pages/Dockerfile
       target: test
       # Diseño fuente (raíz del repositorio): lo leen las pruebas de contenido. Solo entra
       # en la imagen de pruebas, nunca en production.

@@ -13,7 +13,33 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
 - **Servicios** (`deploy/compose.prod.yaml`, proyecto `restaurante`):
   - `app`: la imagen `production` (Koa). Sirve las dos landings, `/admin`, la API `/admin/api` y
     el webhook del bot. Una sola réplica, sin puertos publicados, en la red interna `db` y en
-    `traefik-public`.
+    `traefik-public`. Se construye desde el workspace `restaurante/landing-pages/` del monorepo
+    (REQ-F-036), que incluye los paquetes `restaurante/packages/core` y `packages/db` (REQ-F-037),
+    con el contexto de build en `restaurante/`. Dentro de la imagen, la app está en
+    `/app/landing-pages`, que es su directorio de trabajo: los comandos relativos de esta guía
+    (`node scripts/admin-recover.ts`) valen para las imágenes de antes y de después del monorepo,
+    así que la vuelta atrás no cambia.
+  - `api` (REQ-F-038 y REQ-F-039): la imagen `api`, la API propia.
+    - `GET /api/v1/public/{molotes|birria}/productos`: de aquí las landings de `app` leen los
+      productos (`API_INTERNAL_URL=http://api:3001`).
+    - `/api/v1/admin`: la administración de productos que usa `inventory-manager`. Desde REQ-F-039
+      es la única que escribe los productos.
+    - Tras cada escritura avisa a `app` por su puerto interno 3002 (`LANDING_INTERNAL_URL`, con la
+      credencial `RESTAURANTE_INTERNAL_NOTIFY_TOKEN`), para que la landing y el bot muestren el cambio
+      al instante.
+    - Solo en las redes internas `db` (con `app` y MySQL) y `admin` (con `inventory-manager`): sin
+      puertos publicados ni router de Traefik, así que nada fuera de Docker la alcanza (desviación D-3
+      de REQ-F-039).
+    - Usa el mismo usuario solo DML que la app; nunca migra ni importa semillas. Si se cae, las
+      landings siguen respondiendo con su última copia buena (o la semilla, si `app` arrancó sin ella).
+  - `inventory-manager` (REQ-F-039): la imagen `inventory-manager`, el admin nuevo (Koa con SSR) en
+    `https://admin.birriaelmuneco.com`.
+    - Gestiona los productos llamando a `api` por la red interna `admin`.
+    - Está en `traefik-public` y en `admin`: no alcanza MySQL y no tiene credenciales de la base ni
+      la del aviso.
+    - Con él desplegado, la edición de productos del `/admin` actual queda en solo lectura
+      (`ADMIN_NEW_URL`) y enlaza al admin nuevo. Usuarios, cuenta, bot y menú siguen en `/admin`
+      hasta los tickets siguientes del paso 4.
   - `mysql`: MySQL 8.4 (utf8mb4, `utf8mb4_es_0900_as_cs`), solo en la red interna `db`, con sus
     datos en el volumen `restaurante_mysql-data`.
   - `migrate`: proceso puntual que aplica las migraciones con un usuario con DDL.
@@ -25,14 +51,18 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
   - En los dos casos se conservan la ruta y la query.
   - `/admin` tiene un límite de 10 peticiones por minuto por IP, con ráfaga de 20; después
     responde 429.
+  - `https://admin.birriaelmuneco.com` sirve `inventory-manager` (REQ-F-039), con su propio
+    certificado del certresolver y su propio límite: 60 peticiones por minuto por IP, con ráfaga de
+    60. `http://admin.` responde 301 a `https://` conservando la ruta y la query.
   - Traefik no envía HSTS: lo envía la app.
 - **Datos:**
   - los JSON de página y `changes.jsonl` viven en el volumen `restaurante_app-data`
     (`DATA_DIR=/var/lib/restaurante`);
   - los usuarios, la auditoría y los productos, en MySQL.
-- **Estado en memoria:** sesiones de `/admin`, límite de intentos y conversaciones del bot. Cada
-  despliegue reinicia la app: cierra las sesiones, corta las conversaciones y deja el sitio sin
-  servicio unos 10 a 30 s.
+- **Estado en memoria:** sesiones de `/admin`, límite de intentos y conversaciones del bot, en
+  `app`; sesiones del admin nuevo, su límite de intentos y las claves de idempotencia, en `api`.
+  Cada despliegue reinicia los contenedores: cierra las sesiones, corta las conversaciones y deja el
+  sitio sin servicio unos 10 a 30 s.
 
 ### Cómo llega una versión a producción
 
@@ -47,34 +77,56 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
    validaciones corren en el push y, si alguna falla, no se publica ni se despliega. Así, un PR
    desactualizado respecto a `main` ya no llega a producción sin validar ([Árbol ya
    validado](../README.md#árbol-ya-validado)).
-3. `publish` publica en GHCR (privado) dos imágenes, con la etiqueta `sha-<commit>`:
+3. `publish` publica en GHCR (privado) cuatro imágenes, con la etiqueta `sha-<commit>`:
    - `ghcr.io/orvigas/restaurante`;
-   - `ghcr.io/orvigas/restaurante-migrate`.
+   - `ghcr.io/orvigas/restaurante-migrate`;
+   - `ghcr.io/orvigas/restaurante-api` (REQ-F-038);
+   - `ghcr.io/orvigas/restaurante-inventory-manager` (REQ-F-039).
 4. `vigente` comprueba que el commit siga siendo la punta de `main`. Si mientras tanto llegó otro
    commit, este no se despliega (lo hará el siguiente): su resumen dice **Omitido** y `deploy`
    queda omitido, sin registro en Deployments.
 5. `deploy` se ejecuta en el environment `production`.
    - Solo hay un despliegue a la vez. Justo antes del SSH vuelve a comprobar la punta de `main`:
      si avanzó mientras esperaba, el job falla sin tocar el VPS (resumen **Omitido**).
-   - Se conecta por SSH como `deploy` y ejecuta `deploy.sh` con el commit, los dos digests y la
+   - Se conecta por SSH como `deploy` y ejecuta `deploy.sh` con el commit, los cuatro digests (app,
+     migrate, api e inventory-manager) y la
      suma SHA-256 de `restaurante/deploy/`. La llave **solo** puede ejecutar ese script
      (comando forzado).
 6. `deploy.sh` en el VPS:
-   1. Comprueba los argumentos, que `.env` tenga permisos 600 y que el `deploy/` instalado sea el
-      del commit (la suma).
+   1. Comprueba los argumentos, que `.env` tenga permisos 600, `RESTAURANTE_ADMIN_DOMAIN` y una
+      `RESTAURANTE_INTERNAL_NOTIFY_TOKEN` de 32 caracteres como mínimo (código 3), y que el `deploy/`
+      instalado sea el del commit (la suma).
    2. Descarga las imágenes por digest.
    3. Arranca MySQL si no está en marcha. En el primer arranque, crea la base y los usuarios.
    4. Hace un **volcado** en `/opt/restaurante/backups/` (gzip, permisos 600) y conserva los
       7 más recientes.
    5. **Migra.**
-   6. Cambia la app al digest nuevo y espera `healthy`, más una respuesta 200 a través de
+   6. Cambia la `api` al digest nuevo y espera `healthy` (REQ-F-038). Si no lo queda, vuelve a la
+      `api` anterior (si la hay; si `state/release.env` no la registra, por ejemplo tras una
+      restauración, toma la del contenedor `api` en marcha) y termina con el código 15:
+      - si este despliegue **no** aplicó migraciones, la app no se toca;
+      - si **sí** las aplicó, la app en marcha se recrea con su misma imagen y
+        `DATABASE_ALLOW_NEWER_SCHEMA=true` (unos segundos sin servicio), como en la vuelta atrás.
+        Sin la bandera, la app no podría volver a arrancar sobre la base migrada si se reiniciara
+        (`DATABASE_NEWER_THAN_CODE`) antes del siguiente despliegue correcto. Si la app recreada no
+        queda sana, termina con 22.
+   7. Cambia `inventory-manager` al digest nuevo y espera `healthy`, más una respuesta 200 de
+      `https://admin.<dominio>/salud` a través de Traefik (por `RESTAURANTE_PROBE_ADDRESS`, sin
+      depender del DNS). Va **antes** que la app porque la app nueva activa el modo de solo lectura
+      de los productos de `/admin`. Si no queda sano, vuelve al `inventory-manager` anterior (o lo
+      detiene si no lo había), deja la app como estaba (con la misma protección de las migraciones
+      nuevas que el punto 6) y la `api` nueva, y termina con el **código 16**.
+   8. Cambia la app al digest nuevo y espera `healthy`, más una respuesta 200 a través de
       Traefik.
-   7. Registra el resultado en `state/release.env` y `state/releases.log`.
+   9. Registra el resultado (las cuatro imágenes) en `state/release.env` y `state/releases.log`.
 7. Ante un fallo:
    - si fallan la descarga, el volcado o la migración, la app en marcha no se toca y el workflow
      queda en rojo;
-   - si la versión nueva no queda sana, `deploy.sh` vuelve al digest anterior con
-     `DATABASE_ALLOW_NEWER_SCHEMA=true` y el workflow queda en rojo. La base **no** se restaura
+   - si la versión nueva no queda sana, `deploy.sh` vuelve a los digests anteriores de la app y
+     de la `api` (si había una api anterior; en el primer despliegue con api se queda la nueva) con
+     `DATABASE_ALLOW_NEWER_SCHEMA=true`, y `inventory-manager` vuelve al anterior o se detiene si
+     no lo había (para que no quede junto a una app que todavía edita productos); el workflow queda
+     en rojo. La base **no** se restaura
      sola ([Restaurar la base](#9-restaurar-la-base-desde-un-volcado)).
 8. `deploy` escribe siempre un resumen en la ejecución (REQ-F-030): **Desplegado**,
    **Revertido** (código 21), **Fallido** (con el código), **Omitido** o **Cancelado o
@@ -160,6 +212,31 @@ rm -rf /tmp/restaurante-deploy
 La última suma debe coincidir con la misma orden ejecutada en `restaurante/deploy/` de tu copia
 local.
 
+**Al llegar a `main` el admin nuevo (REQ-F-039):** `compose.prod.yaml` (servicio
+`inventory-manager`, red `admin`, variables nuevas de `app` y `api`) y `deploy.sh` (cuatro digests,
+código 16) cambian, así que su suma cambia. Antes del primer despliegue de ese commit, en este
+orden:
+
+1. Crea el registro DNS de `admin.birriaelmuneco.com` ([paso 1.6](#16-traefik-dns-y-firewall)).
+2. Añade `RESTAURANTE_ADMIN_DOMAIN` y `RESTAURANTE_INTERNAL_NOTIFY_TOKEN` al `.env`
+   ([paso 3](#3-env-del-vps)).
+3. Da al token de GHCR acceso a `restaurante-inventory-manager` ([paso 1.4](#14-acceso-a-ghcr-solo-lectura)).
+4. Reinstala `deploy/` con este paso: con el `deploy/` anterior, `deploy.sh` recibe 7 argumentos en
+   lugar de 6 y termina con el código 2 sin tocar nada.
+5. Reinstala los scripts de respaldos ([paso 11.5](#115-instalar-en-el-vps)): `verify-backup.sh`
+   pasa ahora la credencial del aviso, obligatoria en producción, a la app que verifica.
+
+Después del despliegue, la edición de productos se hace en `https://admin.birriaelmuneco.com`: el
+`/admin` anterior la muestra en solo lectura con un enlace al admin nuevo.
+
+**Al llegar a `main` la épica de arquitectura (REQ-F-038):** `compose.prod.yaml` (servicio `api` y
+`API_INTERNAL_URL` de la app) y `deploy.sh` (tres digests) cambian, así que su suma cambia.
+Reinstala `deploy/` con este paso **antes** del primer despliegue de ese commit: con el `deploy/`
+anterior, `deploy.sh` recibe 6 argumentos en lugar de 5 y termina con el código 2 sin tocar nada,
+y con el nuevo instalado pero el workflow anterior también (rechaza la forma de 2 digests). El
+token de GHCR del paso 1.4 debe poder leer también `ghcr.io/orvigas/restaurante-api` (con
+`read:packages` basta si el paquete pertenece a la misma cuenta).
+
 ### 1.4 Acceso a GHCR (solo lectura)
 
 Las imágenes son privadas. Crea en GitHub un **token clásico** (los de grano fino no sirven para
@@ -169,6 +246,11 @@ Apunta esa fecha: al caducar, los despliegues fallan en la descarga sin tocar la
 ```sh
 sudo -u deploy -H docker login ghcr.io -u orvigas    # pega el token cuando lo pida
 ```
+
+**Al llegar a `main` el admin nuevo (REQ-F-039):** el token debe poder leer también
+`ghcr.io/orvigas/restaurante-inventory-manager`. Comprueba en GitHub (Packages) que el paquete
+pertenece a la misma cuenta o dale acceso al token antes del despliegue: si no, `deploy.sh`
+termina con el código 10 sin tocar nada.
 
 ### 1.5 Llave SSH del workflow
 
@@ -207,6 +289,10 @@ Debe responder `uso: deploy <sha> ...` con código 2: la llave no abre una shell
   declara `traefik.enable=true`).
 - DNS: registros `A` (y `AAAA` si hay IPv6) de `birriaelmuneco.com` y `www.birriaelmuneco.com`
   hacia el VPS.
+- DNS del admin nuevo (REQ-F-039, **a cargo del usuario**): registro `A` (y `AAAA`) de
+  `admin.birriaelmuneco.com` hacia el VPS, **antes** de desplegar la épica a `main`. Sin él, el
+  certificado no se emite y el subdominio no responde; las landings no cambian, y `deploy.sh` no
+  depende del DNS (comprueba el enrutado con `--resolve`).
 - Firewall: solo 80, 443 y el puerto SSH abiertos. El compose no publica puertos: ni 3000 ni 3306
   responden desde fuera. Con Traefik en modo host, ufw sí filtra 80 y 443: ábrelos (`sudo ufw allow 80,443/tcp`).
   Los puertos publicados por Docker, en cambio, se saltan ufw.
@@ -255,12 +341,18 @@ sudo -u deploy -H nano /opt/restaurante/.env
 - **Contraseñas de MySQL:** cada una con `openssl rand -hex 32`. Son obligatorias y deben ser
   hexadecimales. Solo se aplican al crear el volumen de MySQL: cambiarlas después exige también
   `ALTER USER` en MySQL.
-- **App:** las mismas variables que describe [`.env.example`](../.env.example) (WhatsApp, bot de
+- **App:** las mismas variables que describe [`landing-pages/.env.example`](../landing-pages/.env.example) (WhatsApp, bot de
   Meta, `SITE_URL=https://birriaelmuneco.com`, primer administrador).
   - El compose fija `NODE_ENV`, `HOST`, `PORT`, `TRUST_PROXY`, `DATA_DIR` y `DATABASE_URL`: no
     las pongas.
   - `ADMIN_PASSWORD_HASH` va entre comillas simples. Genéralo con `npm run admin:hash-password`
     en tu máquina.
+- **Admin nuevo (REQ-F-039):**
+  - `RESTAURANTE_ADMIN_DOMAIN`: el subdominio, `admin.birriaelmuneco.com`;
+  - `RESTAURANTE_INTERNAL_NOTIFY_TOKEN`: la credencial del aviso interno de la api a la app, generada
+    con `openssl rand -hex 32`. Solo la reciben `app` y `api`.
+  - Las dos son obligatorias: sin ellas, `deploy.sh` termina con el código 3 y `docker compose`
+    no interpola el archivo.
 - **Traefik:** `TRAEFIK_CERTRESOLVER`, `TRAEFIK_ENTRYPOINT_HTTP`, `TRAEFIK_ENTRYPOINT_HTTPS` y
   `RESTAURANTE_DOMAIN`. Cambiarlos no exige tocar el código (CA-11). Se aplican en el siguiente
   despliegue.
@@ -297,6 +389,9 @@ rojo y la app se queda como esté ([Diagnóstico](#10-diagnóstico)).
 | CA-10 | `stat -c '%a %U' /opt/restaurante/.env` → `600 deploy`; `sudo -l -U deploy` sin sudo |
 | Traefik | Certresolver, entrypoints, versión y que no haya routers con el prefijo `restaurante` de otros sitios |
 | Docker | `docker version` del Engine ≥ 25 (para `start_interval` del healthcheck) |
+| CA-15 de REQ-F-039: admin nuevo | Con el DNS ya propagado: `curl -sI https://admin.birriaelmuneco.com/acceso` → 200 con certificado válido en el navegador, `Cache-Control: no-store` y `X-Robots-Tag: noindex, nofollow`; `curl -sI http://admin.birriaelmuneco.com/acceso` → 301 a `https://`; 75 peticiones seguidas a `https://admin.birriaelmuneco.com/salud` reciben 429 al final; `/molotes` sigue en 200 |
+| `api` y aviso no expuestos | `curl -s -o /dev/null -w '%{http_code}' https://admin.birriaelmuneco.com/api/v1/admin/sesion` → 404 (lo responde inventory-manager); `curl -s -o /dev/null -w '%{http_code}' -X POST https://birriaelmuneco.com/internal/v1/productos-cambiados` → 404 |
+| Frescura (CA-9) | Marca un producto como no disponible en el admin nuevo: el mensaje dice «La landing y el bot ya muestran el cambio», la landing deja de mostrarlo y en el log de `app` aparece `products_change_notified` con `landing:true` y `bot:true` |
 
 Después, registra el webhook en Meta ([paso 7](#7-registrar-el-webhook-en-meta)).
 
@@ -351,8 +446,24 @@ motivo:
      DATABASE_ALLOW_NEWER_SCHEMA=true RESTAURANTE_APP_IMAGE=ghcr.io/orvigas/restaurante@sha256:<digest> $C up -d --no-deps app
      ```
 
-     `$C` incluye `state/release.env`, pero las variables del entorno tienen prioridad.
+     `$C` incluye `state/release.env`, pero las variables del entorno tienen prioridad. Para la
+     `api` (REQ-F-038), igual con `RESTAURANTE_API_IMAGE=ghcr.io/orvigas/restaurante-api@sha256:<digest>`
+     y `up -d --no-deps api`. Nombra siempre el servicio (`up -d --no-deps app` o `api`): sin
+     `RESTAURANTE_API_IMAGE`, el compose resuelve la `api` a la imagen
+     `…/restaurante-api:sin-desplegar`, que no existe.
   3. El siguiente despliegue desde `main` deja todo como indica el CI.
+
+**Imagen de la `api` (REQ-F-038).** Está en `state/release.env` (`RESTAURANTE_API_IMAGE`) después
+de cada despliegue correcto. `ops/backup/restore.sh` reescribe ese archivo solo con la app y
+migrate, así que **tras una restauración** la línea ya no está. Búscala, por orden, en:
+
+1. el contenedor en marcha: `docker inspect -f '{{.Config.Image}}' "$($C ps -q api)"`;
+2. `state/release.env.previous` (`restore.sh` guarda ahí el `release.env` anterior);
+3. la última línea `api=sha256:<digest>` de `state/releases.log` (imagen
+   `ghcr.io/orvigas/restaurante-api@sha256:<digest>`).
+
+`deploy.sh` hace lo mismo con la primera opción: si `release.env` no tiene la api, toma la del
+contenedor en marcha como api anterior para su vuelta atrás.
 
 ## 7. Registrar el webhook en Meta
 
@@ -383,7 +494,7 @@ valores por defecto (ver `README.md`, "Topes de gasto, lista negra e interruptor
 1. Actions → `deploy` en verde, con el resumen **Desplegado**: el commit (SHA corto enlazado y SHA
    completo) y los digests.
 2. `https://birriaelmuneco.com/`, `/molotes` y `/birria` responden 200. `/admin` muestra el
-   acceso, no un 503.
+   acceso, no un 503. `https://admin.birriaelmuneco.com/acceso` muestra el acceso del admin nuevo.
 3. En el log: `server_started` y, con el bot, `bot_provider_selected` con `meta`. Vigila
    `bot_staff_delivery_failed` y `bot_webhook_signature_invalid`.
 
@@ -409,6 +520,10 @@ gzip -dc backups/<archivo>.sql.gz | $C exec -T mysql sh -c 'exec mysql -uroot -p
    RESTAURANTE_APP_IMAGE=ghcr.io/orvigas/restaurante@sha256:<digest> $C up -d --no-deps app
    ```
 
+   Si el volcado es de un commit con otra `api` u otro `inventory-manager` (sus digests también
+   están en `state/releases.log`), arráncalos igual con `RESTAURANTE_API_IMAGE` y
+   `RESTAURANTE_INVENTORY_IMAGE`.
+
 2. Los permisos de los usuarios (`GRANT ... ON restaurante.*`) sobreviven al `DROP DATABASE`.
 3. Comprueba `$C ps` (healthy) y el [paso 8](#8-comprobaciones-después-de-cada-despliegue).
 4. Si el siguiente despliegue desde `main` vuelve a fallar en la migración, corrige la migración
@@ -429,13 +544,18 @@ el log del paso `desplegar`.
 | `vigente` en rojo | La API de GitHub no respondió con el commit de `main` | No se tocó producción; vuelve a ejecutar el job |
 | `Host key verification failed` / `Permission denied (publickey)` | Huella del VPS cambiada o llave revocada | Revisa `VPS_SSH_KNOWN_HOSTS` y `authorized_keys` (paso 1.5) |
 | Código 2 `uso: deploy ...` | Argumentos inválidos (o se usó la llave a mano) | — |
-| Código 3 (`.env`, `RESTAURANTE_*`) | `.env` sin permisos 600, con `DATABASE_ALLOW_NEWER_SCHEMA` o con dominio o registro inválidos | Corrige el `.env` |
+| Código 3 (`.env`, `RESTAURANTE_*`) | `.env` sin permisos 600, con `DATABASE_ALLOW_NEWER_SCHEMA`, con dominio, subdominio del admin o registro inválidos, o sin `RESTAURANTE_INTERNAL_NOTIFY_TOKEN` (32 caracteres como mínimo) | Corrige el `.env` |
 | Código 4 `deploy/ instalado no coincide` | Cambió `restaurante/deploy/` en `main` | Reinstala `deploy/` (paso 1.3) y vuelve a ejecutar el job |
 | Código 5 `otro despliegue sigue en curso` | Otro `deploy.sh` tiene el bloqueo hace más de 30 min | Revisa `state/releases.log` y los procesos `deploy.sh`; vuelve a ejecutar el job |
 | Código 10 (descarga) | Token de GHCR caducado o sin `read:packages` | Nuevo token y `docker login` (paso 1.4) |
 | Código 11 `MySQL no quedó healthy` | MySQL no arrancó (memoria, disco, volumen dañado) o el initdb falló en el primer arranque (contraseñas no hexadecimales) | `$C logs mysql`; la app no se tocó |
 | Código 12 (volcado) | MySQL caído, disco lleno o usuario `restaurante_backup` | `$C logs mysql`, `df -h` |
 | Código 13 (migración) | La migración falló; la app sigue con la versión anterior | Lee el error de Prisma en el log. Si quedó a medias, [restaura](#9-restaurar-la-base-desde-un-volcado) |
+| Código 15 (REQ-F-038) | La `api` nueva no quedó `healthy`; se volvió a la anterior si la había. La app no se tocó o, si hubo migraciones nuevas, se recreó con su misma imagen y `DATABASE_ALLOW_NEWER_SCHEMA=true` (el log del paso lo dice) | `$C logs api`: suele ser la base (`database_init_failed`) o la imagen. Las landings siguen con su última copia buena. Corrige y vuelve a desplegar: el siguiente despliegue correcto deja la app sin la bandera |
+| Código 16 (REQ-F-039) | `inventory-manager` no quedó `healthy` o Traefik no lo enruta en `admin.<dominio>`; volvió al anterior (o se detuvo si no lo había). La app no se tocó (o, con migraciones nuevas, se recreó con la bandera, como en el código 15); la `api` nueva sigue | `$C logs inventory-manager`: suele ser la configuración (`API_INTERNAL_URL`) o la imagen. Comprueba `RESTAURANTE_ADMIN_DOMAIN` y los routers `restaurante-inventory*` de Traefik. La edición de productos sigue en el `/admin` anterior hasta un despliegue correcto |
+| `products_notify_failed` / `products_notify_gave_up` en `api` | El aviso interno a `app` (puerto 3002) falla: `app` caída o credencial distinta | `$C ps app`; comprueba que `RESTAURANTE_INTERNAL_NOTIFY_TOKEN` sea la misma para las dos (la reciben del mismo `.env`). Mientras tanto, la landing y el bot ven el cambio como mucho en 60 s |
+| `admin.<dominio>` responde 429 | Límite de Traefik del admin nuevo (60 por minuto por IP, ráfaga de 60) | Espera un minuto |
+| Las landings registran `landing_products_fallback` | La `api` no responde, tarda más de 1,5 s o devuelve algo fuera del contrato | `$C ps api` y `$C logs api`. Las landings sirven su última copia buena (o la semilla tras reiniciar `app`) y vuelven solas cuando la api responde (`landing_products_recovered`) |
 | Código 20 | Primer despliegue sin versión anterior y la app no arranca | `$C logs app`: suele ser el `.env` (`ConfigError` lista los problemas) |
 | Código 21 | La versión nueva no arrancó; se volvió a la anterior | Corrige y vuelve a desplegar. La app anterior corre con `DATABASE_ALLOW_NEWER_SCHEMA=true` si hubo migración |
 | Código 22 | Tampoco arrancó la versión anterior | [Restaura la base](#9-restaurar-la-base-desde-un-volcado) y arranca la versión del volcado |
@@ -650,6 +770,10 @@ nuevo. **Se pierde todo lo escrito después del respaldo.**
 7. Arranca **la imagen de la app del respaldo** y espera a que esté `healthy`.
 8. Actualiza `state/release.env` y anota la restauración en `state/releases.log`.
 
+`restore.sh` no toca `api` ni `inventory-manager` (REQ-F-039): siguen con su imagen. Si el respaldo
+es de un commit con otra `api`, arráncala como en el [paso 9](#9-restaurar-la-base-desde-un-volcado);
+`inventory-manager` no guarda datos, así que basta con que siga en marcha.
+
 Al terminar imprime la duración de cada fase y el tiempo sin servicio.
 
 ```sh
@@ -680,7 +804,16 @@ Después, haz las comprobaciones del [paso 8](#8-comprobaciones-después-de-cada
   3. Copia el `.env` a `/opt/restaurante/.env` (`deploy`, `600`).
   4. Haz `docker login ghcr.io` como `deploy` (paso 1.4) y ejecuta `restore.sh latest`. Crea
      MySQL, la base y los usuarios, y después restaura.
-  5. Activa el timer.
+  5. `restore.sh` no conoce la `api` (REQ-F-038; decisión P-2: `ops/` no cambia): solo arranca la
+     app. En un VPS nuevo la `api` no está en marcha y las landings sirven la semilla de
+     `content/seeds.ts` (sin errores 5xx) hasta que la levantes. Vuelve a desplegar la punta de
+     `main` ([Redesplegar](#redesplegar-la-punta-de-main)), o arráncala a mano con
+     `RESTAURANTE_API_IMAGE=<imagen> $C up -d --no-deps api`. La `<imagen>` sale de
+     `state/release.env.previous` o de `state/releases.log` ([Imagen de la `api`](#6-volver-a-una-versión-anterior-a-mano));
+     `state/release.env` ya no la tiene, porque `restore.sh` lo reescribe sin ella. En el mismo VPS,
+     la `api` sigue en marcha durante la restauración y no hace falta nada: si alguna vez necesitas
+     su imagen, sácala del contenedor (`docker inspect`), como explica esa sección.
+  6. Activa el timer.
 
 ### 11.8 Prueba mensual y simulacro (en tu Mac)
 

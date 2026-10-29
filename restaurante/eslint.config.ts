@@ -1,4 +1,5 @@
-// Lint del proyecto (REQ-F-005). `npm run lint` revisa sin modificar; `npm run lint:fix` corrige.
+// Lint del monorepo (REQ-F-005 y REQ-F-037): un único archivo en la raíz para todos los workspaces.
+// `npm run lint` revisa sin modificar; `npm run lint:fix` corrige.
 // Toda regla es error o está desactivada (sin avisos). Una desactivación en línea exige
 // justificación después de `--` (require-description).
 import comments from '@eslint-community/eslint-plugin-eslint-comments/configs';
@@ -21,8 +22,129 @@ const RELATIVE_JS_DYNAMIC_IMPORT = {
   message: RELATIVE_JS_IMPORT_MESSAGE,
 };
 
+// Regla de dependencias entre paquetes (REQ-F-037; restaurante/docs/arquitectura.md §4). Las flechas
+// apuntan hacia core. Supuesto: los módulos de packages/core y packages/db/src son planos (sin
+// subcarpetas); si se añade una, hay que revisar los patrones de "sale del paquete". La prueba está en
+// landing-pages/tests/unit/dependency-rule.test.ts.
+const DEPENDENCY_HINT = 'Regla de dependencias de restaurante/docs/arquitectura.md §4 (REQ-F-037).';
+const KOA_PATTERNS = [{ regex: '^(?:koa(?:-.+)?|@koa/.+)$', message: `Koa solo se usa en las apps, nunca en los paquetes. ${DEPENDENCY_HINT}` }];
+const LANDING_PATTERNS = [
+  { regex: '^landing-pages(?:/|$)', message: `Un paquete nunca importa una app. ${DEPENDENCY_HINT}` },
+  { regex: String.raw`(?:^|/)landing-pages/`, message: `Un paquete nunca importa una app. ${DEPENDENCY_HINT}` },
+];
+const CORE_RESTRICTED_PATTERNS = [
+  ...RELATIVE_JS_IMPORT_PATTERNS,
+  {
+    regex: String.raw`^(?!node:)(?!\.{1,2}/)`,
+    message: `core es TypeScript puro: solo importa la biblioteca estándar de Node (node:*) y sus propios archivos; nada de Koa, Prisma, contracts, db, landing-pages ni otros paquetes npm. ${DEPENDENCY_HINT}`,
+  },
+  { regex: String.raw`^\.\./\.\./`, message: `Un import relativo no sale de packages/core. ${DEPENDENCY_HINT}` },
+  {
+    regex: String.raw`^\.\./[^/]+/(?!index\.ts$)`,
+    message: `Entre módulos de core solo se importa el index.ts del otro módulo (../<módulo>/index.ts). ${DEPENDENCY_HINT}`,
+  },
+];
+const CONTRACTS_RESTRICTED_PATTERNS = [
+  ...RELATIVE_JS_IMPORT_PATTERNS,
+  ...KOA_PATTERNS,
+  ...LANDING_PATTERNS,
+  { regex: '^@restaurante/', message: `contracts no importa ningún paquete del proyecto (ni core ni db). ${DEPENDENCY_HINT}` },
+  { regex: '^(?:(?:prisma|mariadb)(?:/|$)|@prisma/)', message: `contracts no importa la base de datos. ${DEPENDENCY_HINT}` },
+  { regex: String.raw`^\.\./`, message: `Un import relativo no sale de packages/contracts. ${DEPENDENCY_HINT}` },
+];
+// web (REQ-F-039, P-1): utilidades HTTP/SSR sin dominio. Koa sí; nada del proyecto ni la base de datos.
+const WEB_RESTRICTED_PATTERNS = [
+  ...RELATIVE_JS_IMPORT_PATTERNS,
+  ...LANDING_PATTERNS,
+  { regex: '^@restaurante/', message: `web no importa ningún paquete del proyecto (ni core, ni db, ni contracts). ${DEPENDENCY_HINT}` },
+  { regex: '^(?:(?:prisma|mariadb)(?:/|$)|@prisma/)', message: `web no importa la base de datos. ${DEPENDENCY_HINT}` },
+  { regex: String.raw`^\.\./`, message: `Un import relativo no sale de packages/web. ${DEPENDENCY_HINT}` },
+];
+const DB_RESTRICTED_PATTERNS = [
+  ...RELATIVE_JS_IMPORT_PATTERNS,
+  ...KOA_PATTERNS,
+  ...LANDING_PATTERNS,
+  { regex: '^@restaurante/(?!core/)', message: `db solo importa core (para implementar sus interfaces); nunca contracts. ${DEPENDENCY_HINT}` },
+  { regex: '^@restaurante/core/[^/]+/', message: `De core solo se importa el index.ts de cada módulo (@restaurante/core/<módulo>). ${DEPENDENCY_HINT}` },
+  { regex: String.raw`^\.\./\.\./`, message: `Un import relativo no sale de packages/db. ${DEPENDENCY_HINT}` },
+];
+// O-2 (REQ-F-038): ningún archivo de una app importa por ruta relativa un archivo de packages/; los
+// paquetes se importan por su nombre (@restaurante/<paquete>), y de core solo el index.ts de cada módulo.
+const PACKAGE_INTERNAL_PATTERNS = [
+  { regex: String.raw`^\.{1,2}/(?:.*/)?packages/`, message: `Los paquetes se importan por su nombre (@restaurante/<paquete>), nunca por ruta relativa (O-2). ${DEPENDENCY_HINT}` },
+  { regex: '^@restaurante/core/[^/]+/', message: `De core solo se importa el index.ts de cada módulo (@restaurante/core/<módulo>). ${DEPENDENCY_HINT}` },
+];
+const LANDING_APP_PATTERNS = [...RELATIVE_JS_IMPORT_PATTERNS, ...PACKAGE_INTERNAL_PATTERNS];
+
+// Código de las landings (REQ-F-038, RF-8; decisión P-1 A): obtiene los productos solo de la API
+// (cliente de contracts). Nunca la base de datos, la identidad, el control del bot ni el repositorio
+// de productos; sí los módulos puros de core (shared, schedule y las funciones de catalog), hasta que
+// el aviso y los horarios sean endpoints (desviación registrada en restaurante/docs/arquitectura.md §4).
+const LANDING_CODE_FILES = [
+  'landing-pages/src/controllers/landing.ts',
+  'landing-pages/src/views/landings/**/*.ts',
+  'landing-pages/src/services/landing-products.ts',
+];
+const LANDING_CODE_HINT = `El código de las landings solo obtiene los productos del cliente de la API (@restaurante/contracts; REQ-F-038). ${DEPENDENCY_HINT}`;
+const LANDING_CODE_PATTERNS = [
+  ...LANDING_APP_PATTERNS,
+  { regex: '^@restaurante/db(?:/|$)', message: `Las landings no leen la base de datos. ${LANDING_CODE_HINT}` },
+  { regex: '^(?:(?:prisma|mariadb)(?:/|$)|@prisma/)', message: `Las landings no leen la base de datos. ${LANDING_CODE_HINT}` },
+  { regex: '^@restaurante/core/(?:identity|bot-control)(?:/|$)', message: `Las landings no usan la identidad ni el control del bot. ${LANDING_CODE_HINT}` },
+];
+const LANDING_CODE_PATHS = [
+  {
+    name: '@restaurante/core/catalog',
+    importNames: ['createMemoryProductStore', 'MemoryProductStore', 'ProductStore', 'ProductStoreTx', 'toPublished'],
+    message: `Persistencia de productos: fuera del código de las landings. ${LANDING_CODE_HINT}`,
+  },
+  {
+    // El repositorio de productos está en core/catalog desde REQ-F-039.
+    name: '@restaurante/core/catalog',
+    importNames: ['createProductRepository', 'ProductRepository', 'ProductRepositoryOptions', 'productsFromMenuData'],
+    message: `Las landings no leen el repositorio de productos. ${LANDING_CODE_HINT}`,
+  },
+];
+
+// api (REQ-F-038): core (por el index.ts de cada módulo), db, contracts y Koa; nunca una app.
+const API_RESTRICTED_PATTERNS = [...RELATIVE_JS_IMPORT_PATTERNS, ...LANDING_PATTERNS, ...PACKAGE_INTERNAL_PATTERNS];
+
+// inventory-manager (REQ-F-039, RF-17 y CA-17; decisión P-1): solo contracts y web del proyecto;
+// nunca core, db, Prisma ni otra app.
+const INVENTORY_HINT = `inventory-manager solo importa contracts y web (REQ-F-039, RF-17). ${DEPENDENCY_HINT}`;
+const INVENTORY_RESTRICTED_PATTERNS = [
+  ...RELATIVE_JS_IMPORT_PATTERNS,
+  ...LANDING_PATTERNS,
+  { regex: String.raw`^\.{1,2}/(?:.*/)?packages/`, message: `Los paquetes se importan por su nombre (@restaurante/<paquete>), nunca por ruta relativa (O-2). ${DEPENDENCY_HINT}` },
+  { regex: '^@restaurante/(?!contracts$|web$)', message: `No puede importar core, db ni otro paquete. ${INVENTORY_HINT}` },
+  { regex: '^(?:(?:prisma|mariadb)(?:/|$)|@prisma/)', message: `No accede a la base de datos. ${INVENTORY_HINT}` },
+  { regex: String.raw`(?:^|/)api/src/`, message: `Una app nunca importa otra app. ${INVENTORY_HINT}` },
+];
+
+// no-restricted-imports no revisa import() (DEF-004 de QA, REQ-F-039): las apps api e inventory-manager
+// repiten su regla de dependencias para los import() dinámicos con no-restricted-syntax.
+const dynamicImport = (pattern: string, message: string) => ({ selector: `ImportExpression > Literal.source[value=/${pattern}/]`, message });
+const API_DYNAMIC_IMPORTS = [
+  dynamicImport(String.raw`(^|\/)landing-pages(\/|$)`, `Una app nunca importa otra app. ${DEPENDENCY_HINT}`),
+  dynamicImport(String.raw`(^|\/)inventory-manager(\/|$)`, `Una app nunca importa otra app. ${DEPENDENCY_HINT}`),
+  dynamicImport(String.raw`^\.{1,2}\/(.*\/)?packages\/`, `Los paquetes se importan por su nombre, nunca por ruta relativa (O-2). ${DEPENDENCY_HINT}`),
+  dynamicImport(String.raw`^@restaurante\/core\/[^/]+\/`, `De core solo se importa el index.ts de cada módulo. ${DEPENDENCY_HINT}`),
+];
+const INVENTORY_DYNAMIC_IMPORTS = [
+  dynamicImport(String.raw`^@restaurante\/(?!contracts$|web$)`, `No puede importar core, db ni otro paquete. ${INVENTORY_HINT}`),
+  dynamicImport(String.raw`^(prisma|mariadb)(\/|$)|^@prisma\/`, `No accede a la base de datos. ${INVENTORY_HINT}`),
+  dynamicImport(String.raw`(^|\/)(landing-pages|api\/src)(\/|$)`, `Una app nunca importa otra app. ${INVENTORY_HINT}`),
+  dynamicImport(String.raw`^\.{1,2}\/(.*\/)?packages\/`, `Los paquetes se importan por su nombre, nunca por ruta relativa (O-2). ${DEPENDENCY_HINT}`),
+];
+
+// no-restricted-imports no revisa import(): en los paquetes solo se permite con node:* o relativo.
+const PACKAGE_DYNAMIC_IMPORT = {
+  selector: String.raw`ImportExpression > Literal.source:not([value=/^(?:node:|\.\/)/])`,
+  message: `En los paquetes, import() solo con node:* o un archivo del mismo módulo. ${DEPENDENCY_HINT}`,
+};
+
 // Servidores de prueba (REQ-F-011): las pruebas hablan con la app solo mediante listenLocal de
-// tests/support/http.ts, que escucha en 127.0.0.1. Con request(app.callback()) supertest abre su
+// landing-pages/tests/support/http.ts, que escucha en 127.0.0.1. Con request(app.callback()) supertest abre su
 // propio servidor en :: (todas las interfaces) y conecta a 127.0.0.1; en macOS otro proceso local
 // puede tener ese puerto en 127.0.0.1 y recibir la petición.
 const TEST_HTTP_HINT = 'Usa listenLocal(app) de tests/support/http.ts (o setupAdmin), que escucha solo en 127.0.0.1 (REQ-F-011).';
@@ -47,7 +169,7 @@ const TEST_HTTP_RESTRICTED_SYNTAX = [
 export default defineConfig([
   // CSS generado por Tailwind, datos editables, cobertura y código generado (p. ej. un cliente de BD).
   // ESLint ya ignora node_modules/ y no lee .gitignore.
-  globalIgnores(['public/css/', 'data/', 'coverage/', 'src/generated/']),
+  globalIgnores(['landing-pages/public/css/', 'inventory-manager/public/css/', 'landing-pages/data/', '**/coverage/', 'packages/db/src/generated/']),
   {
     linterOptions: {
       reportUnusedDisableDirectives: 'error',
@@ -63,7 +185,7 @@ export default defineConfig([
   },
 
   // Backend, pruebas, scripts y configuraciones en TypeScript, con información de tipos.
-  // Un .ts fuera de tsconfig.json da error de parseo: lint y typecheck revisan los mismos archivos.
+  // Un .ts fuera de los tsconfig.json da error de parseo: lint y typecheck revisan los mismos archivos.
   {
     files: ['**/*.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommendedTypeChecked],
@@ -88,7 +210,7 @@ export default defineConfig([
   // (res.body de Supertest, JSON.parse de los archivos que escriben y CorruptibleData) y sus
   // aserciones comprueban la forma. no-explicit-any sigue activa: un `any` nuevo exige justificación.
   {
-    files: ['tests/**/*.ts'],
+    files: ['landing-pages/tests/**/*.ts', 'api/tests/**/*.ts', 'inventory-manager/tests/**/*.ts'],
     rules: {
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
@@ -98,26 +220,107 @@ export default defineConfig([
     },
   },
 
-  // Servidores de prueba en 127.0.0.1 (REQ-F-011, RF-7). La prueba de este control está en
-  // tests/unit/http-test-convention.test.ts.
+  // O-2 (REQ-F-038): en todo landing-pages, sin imports relativos a archivos de packages/.
   {
-    files: ['tests/**/*.ts'],
+    files: ['landing-pages/**/*.ts'],
     rules: {
-      'no-restricted-imports': ['error', { paths: TEST_HTTP_RESTRICTED_IMPORTS, patterns: RELATIVE_JS_IMPORT_PATTERNS }],
+      'no-restricted-imports': ['error', { patterns: LANDING_APP_PATTERNS }],
+    },
+  },
+
+  // Servidores de prueba en 127.0.0.1 (REQ-F-011, RF-7). La prueba de este control está en
+  // landing-pages/tests/unit/http-test-convention.test.ts.
+  {
+    files: ['landing-pages/tests/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { paths: TEST_HTTP_RESTRICTED_IMPORTS, patterns: LANDING_APP_PATTERNS }],
       'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...TEST_HTTP_RESTRICTED_SYNTAX],
     },
   },
   // Única excepción: el módulo que crea los clientes de supertest.
   {
-    files: ['tests/support/http.ts'],
+    files: ['landing-pages/tests/support/http.ts'],
     rules: {
-      'no-restricted-imports': ['error', { patterns: RELATIVE_JS_IMPORT_PATTERNS }],
+      'no-restricted-imports': ['error', { patterns: LANDING_APP_PATTERNS }],
     },
   },
 
+  // Regla de dependencias (REQ-F-037): un bloque por paquete. Repiten los patrones de imports .js
+  // porque cada bloque sustituye las opciones de no-restricted-imports.
+  {
+    files: ['packages/core/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: CORE_RESTRICTED_PATTERNS }],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, PACKAGE_DYNAMIC_IMPORT],
+    },
+  },
+  {
+    files: ['packages/contracts/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: CONTRACTS_RESTRICTED_PATTERNS }],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, PACKAGE_DYNAMIC_IMPORT],
+    },
+  },
+  {
+    files: ['packages/web/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: WEB_RESTRICTED_PATTERNS }],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, PACKAGE_DYNAMIC_IMPORT],
+    },
+  },
+  {
+    files: ['packages/db/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: DB_RESTRICTED_PATTERNS }],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, PACKAGE_DYNAMIC_IMPORT],
+    },
+  },
+  // Código de las landings (REQ-F-038, RF-8): sin base de datos ni repositorio de productos.
+  {
+    files: LANDING_CODE_FILES,
+    rules: {
+      'no-restricted-imports': ['error', { paths: LANDING_CODE_PATHS, patterns: LANDING_CODE_PATTERNS }],
+    },
+  },
+  // api (REQ-F-038): nunca importa una app ni archivos internos de los paquetes.
+  {
+    files: ['api/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: API_RESTRICTED_PATTERNS }],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...API_DYNAMIC_IMPORTS],
+    },
+  },
+  // inventory-manager (REQ-F-039, CA-17): solo contracts y web.
+  {
+    files: ['inventory-manager/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: INVENTORY_RESTRICTED_PATTERNS }],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...INVENTORY_DYNAMIC_IMPORTS],
+    },
+  },
+  // Servidores de prueba del admin nuevo: solo en 127.0.0.1 (REQ-F-011).
+  {
+    files: ['inventory-manager/tests/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...INVENTORY_DYNAMIC_IMPORTS, ...TEST_HTTP_RESTRICTED_SYNTAX],
+    },
+  },
+  // Servidores de prueba de la API: solo en 127.0.0.1 (REQ-F-011), como los de landing-pages.
+  {
+    files: ['api/tests/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...API_DYNAMIC_IMPORTS, ...TEST_HTTP_RESTRICTED_SYNTAX],
+    },
+  },
+  // REGLA DE TRANSICIÓN — TEMPORAL (REQ-F-037, limitada en REQ-F-038): /admin y el bot de WhatsApp,
+  // que siguen en landing-pages hasta el paso 4, pueden importar core, db y contracts (desviación
+  // registrada en restaurante/docs/arquitectura.md §4). El código de las landings ya tiene su
+  // restricción (bloque de arriba); la de /admin se activa en el paso 4, cuando pase a
+  // inventory-manager.
+
   // Frontend en JavaScript Vanilla (módulos ES del navegador), sin información de tipos.
   {
-    files: ['public/js/**/*.js'],
+    files: ['landing-pages/public/js/**/*.js', 'inventory-manager/public/js/**/*.js'],
     extends: [js.configs.recommended],
     languageOptions: { sourceType: 'module', globals: globals.browser },
   },

@@ -1,0 +1,38 @@
+{
+  "name": "inventory-manager",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Admin nuevo (REQ-F-039): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en admin.birriaelmuneco.com. Consume /api/v1/admin de la API por la red interna; solo importa contracts y web.",
+  "type": "module",
+  "main": "src/server.ts",
+  "engines": {
+    "node": ">=24.22.1"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.ts",
+    "dev": "node --watch --env-file-if-exists=.env scripts/dev-server.ts",
+    "build:css": "tailwindcss -i src/styles/main.css -o public/css/main.css --minify",
+    "watch:css": "tailwindcss -i src/styles/main.css -o public/css/main.css --watch",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@koa/router": "^15.7.0",
+    "@restaurante/contracts": "0.1.0",
+    "@restaurante/web": "0.1.0",
+    "helmet": "^8.3.0",
+    "koa": "^3.2.1",
+    "koa-helmet": "^9.0.0",
+    "koa-static": "^5.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "@tailwindcss/forms": "^0.5.11",
+    "@types/jsdom": "^30.0.0",
+    "@types/koa": "^3.0.3",
+    "@types/koa-static": "^4.0.4",
+    "jsdom": "^30.1.3",
+    "tailwindcss": "^4.3.3",
+    "vitest": "^5.0.5"
+  }
+}

@@ -45,9 +45,9 @@ En cada fase actualiza la sección `## Estado` del ticket y agrega una línea al
 
 - Una sola app Koa sirve dos landing pages: **Molotes** (lunes a viernes) y **Birria El Muñeco** (sábado y domingo).
 - `GET /` muestra la landing activa según el día en `BUSINESS_TIMEZONE` (por defecto `America/Mexico_City`). `GET /molotes` y `GET /birria` muestran siempre su landing: úsalas para validar visualmente ambas en cualquier día.
-- Ambas landings tienen un CTA de pedido por WhatsApp configurado mediante variables `WHATSAPP_*` (ver `restaurante/.env.example`).
+- Ambas landings tienen un CTA de pedido por WhatsApp configurado mediante variables `WHATSAPP_*` (ver `restaurante/landing-pages/.env.example`).
 - Frontend obligatorio: HTML5 semántico, **Tailwind CSS v4**, BEM y Vanilla JS con hooks `data-*`.
-- El diseño fuente está en `_stich_source_/`; el contenido de cada negocio, en `restaurante/src/content/`.
+- El diseño fuente está en `_stich_source_/`; el contenido de cada negocio, en `restaurante/landing-pages/src/content/`.
 
 ### Herramientas de prueba existentes (desde `restaurante/`)
 
@@ -161,7 +161,7 @@ Omite las subsecciones que no apliquen y devuelve `NEEDS_QA_PLAN_APPROVAL`.
 
 ### Tests automatizados
 
-Puedes crear o modificar archivos **solo en `restaurante/tests/`** y solo si el QA Action Plan aprobado lo contempla. Los tests no deben alterar el comportamiento de producción ni reproducir la implementación interna.
+Puedes crear o modificar archivos **solo en `restaurante/landing-pages/tests/`** y solo si el QA Action Plan aprobado lo contempla. Los tests no deben alterar el comportamiento de producción ni reproducir la implementación interna.
 
 ---
 
@@ -247,7 +247,7 @@ En una revalidación, identifica qué cambió, vuelve a ejecutar las pruebas afe
 
 1. El requisito aprobado es la fuente de verdad funcional; nunca inventes criterios de aceptación.
 2. Nunca ejecutes la validación definitiva sin aprobación explícita del QA Action Plan.
-3. Nunca modifiques código de producción; solo puedes escribir en `restaurante/tests/` (bajo el plan aprobado) y en el archivo del ticket.
+3. Nunca modifiques código de producción; solo puedes escribir en `restaurante/landing-pages/tests/` (bajo el plan aprobado) y en el archivo del ticket.
 4. Nunca invoques a otros agentes ni preguntes directamente al usuario: devuelve un estado.
 5. Toda conclusión importante necesita evidencia; nunca apruebes solo por inspección del código.
 6. Verifica siempre la regresión, móvil y escritorio, y la accesibilidad de lo afectado.

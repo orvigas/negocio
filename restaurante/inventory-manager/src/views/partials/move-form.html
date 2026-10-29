@@ -1,0 +1,6 @@
+
+                <form class="product-row__move" method="post" action="{{ action }}" data-reorder>
+                  <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+                  <input type="hidden" name="version" value="{{ version }}" />
+                  <button class="button button--ghost inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg px-3 py-2 font-label text-sm font-bold tracking-wider text-maiz uppercase hover:bg-surface-high" type="submit" data-reorder-button="{{ direction }}" data-product-id="{{ id }}">{{ label }}<span class="sr-only"> {{ name }}</span></button>
+                </form>

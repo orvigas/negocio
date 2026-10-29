@@ -2,7 +2,7 @@
 
 Aplica a la sesión principal y a todos los agentes (`business-analyst`, `senior-fullstack`, `senior-qa`).
 
-CodeGraph es obligatorio siempre que sea posible para explorar código indexado (`restaurante/src`, `restaurante/public/js`, `restaurante/tests`, `restaurante/scripts`).
+CodeGraph es obligatorio siempre que sea posible para explorar código indexado (`restaurante/landing-pages/src`, `restaurante/landing-pages/public/js`, `restaurante/landing-pages/tests`, `restaurante/landing-pages/scripts`, `restaurante/api/src`, `restaurante/api/tests`, `restaurante/api/scripts`, `restaurante/inventory-manager/src`, `restaurante/inventory-manager/public/js`, `restaurante/inventory-manager/tests`, `restaurante/inventory-manager/scripts` y `restaurante/packages/`).
 
 ## Orden obligatorio
 

@@ -22,7 +22,9 @@ No escribas tests que simplemente reproduzcan la implementación interna.
 
 ## Pruebas HTTP
 
-Las pruebas que hacen peticiones HTTP a la app crean su servidor con `listenLocal(app)` de `restaurante/tests/support/http.ts` (o con `setupAdmin`, que la usa), dentro de cada prueba: escucha solo en `127.0.0.1` y se cierra sola al terminar la prueba. Nunca uses `request(app.callback())` ni `request.agent(app.callback())`: en macOS el cliente puede acabar hablando con otro proceso local (REQ-F-011). `npm run lint` lo impide. Detalles en la sección "Pruebas HTTP" del `README.md` de `restaurante/`.
+Las pruebas que hacen peticiones HTTP a la app crean su servidor con `listenLocal(app)` de `restaurante/landing-pages/tests/support/http.ts` (o con `setupAdmin`, que la usa), dentro de cada prueba: escucha solo en `127.0.0.1` y se cierra sola al terminar la prueba. Nunca uses `request(app.callback())` ni `request.agent(app.callback())`: en macOS el cliente puede acabar hablando con otro proceso local (REQ-F-011). `npm run lint` lo impide. Detalles en la sección "Pruebas HTTP" del `README.md` de `restaurante/` (la raíz del monorepo).
+
+Las apps `api` e `inventory-manager` tienen su propio `listenLocal(app)` en `restaurante/api/tests/support/http.ts` y `restaurante/inventory-manager/tests/support/http.ts`: escucha en `127.0.0.1` con un puerto libre, se cierra al terminar la prueba y devuelve `{ url }` para hacer las peticiones con `fetch` (sin supertest). Lo usan `startAdmin` (`api/tests/support/admin.ts`), `startInventory` (`inventory-manager/tests/support/browser.ts`) y el doble de la API (`inventory-manager/tests/support/api-double.ts`). `npm run lint` rechaza también en sus pruebas `app.callback()` y un `listen` que no sea en `'127.0.0.1'`.
 
 ## Base de datos de pruebas
 

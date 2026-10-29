@@ -1,6 +1,11 @@
 # CI (REQ-F-006 y REQ-F-014): tipos, lint, pruebas contra MySQL 8.4, divergencia entre esquema y
-# migraciones, y build de las imágenes production y migrate en cada PR hacia main o hacia la rama
-# intermedia epic/arquitectura (ver "Rama intermedia" más abajo). MySQL es el servicio mysql-dev
+# migraciones, y build de las cuatro imágenes (production, migrate, api e inventory-manager) en
+# cada PR hacia main o hacia la rama intermedia epic/arquitectura (ver "Rama intermedia" más
+# abajo). restaurante/ es la raíz de los
+# npm workspaces (REQ-F-036): ahí están .nvmrc, el package-lock.json único y los scripts, que
+# delegan en el workspace landing-pages (la app y su Dockerfile) o en los paquetes de packages/
+# (REQ-F-037: core, contracts y db; db:generate y las migraciones van a packages/db). typecheck y
+# lint cubren todos los workspaces desde la raíz. MySQL es el servicio mysql-dev
 # de restaurante/compose.yaml (solo en 127.0.0.1, credenciales de desarrollo): el mismo que en
 # local, porque un `services:` de GitHub no permite fijar la colación del servidor.
 #
@@ -72,14 +77,16 @@ jobs:
   # Detección de cambios con git, sin acciones de terceros. Es documentación: todo lo de .claude/,
   # restaurante/docs/**.md y cualquier *.md fuera de restaurante/. Cualquier otro archivo (también
   # un borrado o el origen de un renombrado) cuenta como código. Los *.md de restaurante/ fuera de
-  # docs/ cuentan como código: tests/unit/whatsapp-bot-free-text.test.ts lee el README.md y
-  # tests/fixtures/ forma parte de las pruebas. En un PR compara el commit de merge que prueba
-  # GitHub (refs/pull/N/merge) con su primer padre, la punta de su rama base (main o
-  # epic/arquitectura): lo que el PR agrega a su base, y deja el tree de ese commit de merge en una
-  # anotación `arbol-validado` (la lee `validado` en el push a main). En un push a main, el rango
-  # before..sha; si `before` no existe en el historial (force push), corre todo. En una ejecución manual todo es código; fuera de main, falla y no
-  # corre nada más. Un PR en borrador da codigo=false sin anotación `arbol-validado` (sus
-  # validaciones quedan omitidas y ninguna ejecución en borrador puede validar un push a main).
+  # docs/ cuentan como código: landing-pages/tests/unit/whatsapp-bot-free-text.test.ts lee el
+  # README.md de la raíz y landing-pages/tests/fixtures/ forma parte de las pruebas. packages/**
+  # (REQ-F-037) cuenta como código como cualquier otro archivo que no sea documentación. En un PR
+  # compara el commit de merge que prueba GitHub (refs/pull/N/merge) con su primer padre, la punta
+  # de su rama base (main o epic/arquitectura): lo que el PR agrega a su base, y deja el tree de
+  # ese commit de merge en una anotación `arbol-validado` (la lee `validado` en el push a main). En
+  # un push a main, el rango before..sha; si `before` no existe en el historial (force push), corre
+  # todo. En una ejecución manual todo es código; fuera de main, falla y no corre nada más. Un PR
+  # en borrador da codigo=false sin anotación `arbol-validado` (sus validaciones quedan omitidas y
+  # ninguna ejecución en borrador puede validar un push a main).
   cambios:
     name: cambios
     runs-on: ubuntu-24.04
@@ -238,7 +245,8 @@ jobs:
       # Solo corren los scripts de instalación aprobados en `allowScripts` (package.json).
       - name: install
         run: npm ci --strict-allow-scripts --no-audit --no-fund
-      # Cliente de Prisma (src/generated/prisma, no versionado): lo necesitan typecheck, lint y test.
+      # Cliente de Prisma (packages/db/src/generated/prisma, no versionado; REQ-F-037): lo necesitan
+      # typecheck, lint y test.
       - name: db:generate
         run: npm run db:generate
       - name: typecheck
@@ -252,10 +260,12 @@ jobs:
       - name: db:up
         run: npm run db:up
       # El esquema y las migraciones no divergen (base sombra del MySQL local).
+      # En el paquete db (su prisma.config.ts y prisma/; REQ-F-037), con el CLI elevado a la raíz.
       - name: migraciones sin divergencia
+        working-directory: restaurante/packages/db
         env:
           SHADOW_DATABASE_URL: mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante_shadow
-        run: npx --no-install prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
+        run: ../../node_modules/.bin/prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
       # Usa las URL de prueba por defecto (TEST_DATABASE_URL/TEST_ADMIN_DATABASE_URL hacia 127.0.0.1:3307).
       # 4 trabajadores de Vitest, solo en el CI (en local, el valor por defecto de Vitest): el runner
       # tiene 4 vCPU y las pruebas esperan sobre todo a MySQL y a procesos hijos. Cada trabajador usa
@@ -288,8 +298,9 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: restaurante/.nvmrc
+      # Delega en landing-pages/scripts/audit-deps.ts, que audita el lockfile de la raíz.
       - name: audit:deps
-        run: node scripts/audit-deps.ts
+        run: npm run audit:deps
 
   # Imágenes y despliegue (REQ-F-014, REQ-F-015, REQ-F-016 y REQ-F-019), en un solo job para
   # construir cada imagen una sola vez (load: true, caché gha): primero las comprobaciones de las
@@ -316,6 +327,7 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: restaurante
+          file: restaurante/landing-pages/Dockerfile
           target: production
           platforms: linux/amd64
           push: false
@@ -329,6 +341,7 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: restaurante
+          file: restaurante/landing-pages/Dockerfile
           target: migrate
           platforms: linux/amd64
           push: false
@@ -337,11 +350,55 @@ jobs:
           cache-to: type=gha,scope=migrate,mode=max
           load: true
           tags: restaurante:migrate
-      # CA-13: production sin el CLI de Prisma ni SQLite; migrate sin SQLite.
+      # Imagen de la API propia (REQ-F-038): solo lectura, red interna.
+      - name: build api
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: restaurante
+          file: restaurante/landing-pages/Dockerfile
+          target: api
+          platforms: linux/amd64
+          push: false
+          provenance: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+          load: true
+          tags: restaurante:api
+      # Admin nuevo (REQ-F-039).
+      - name: build inventory-manager
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: restaurante
+          file: restaurante/landing-pages/Dockerfile
+          target: inventory-manager
+          platforms: linux/amd64
+          push: false
+          provenance: false
+          cache-from: type=gha,scope=inventory-manager
+          cache-to: type=gha,scope=inventory-manager,mode=max
+          load: true
+          tags: restaurante:inventory-manager
+      # CA-13: production sin el CLI de Prisma ni SQLite; migrate sin SQLite. Rutas absolutas en todos
+      # los niveles de node_modules del workspace (REQ-F-036 y REQ-F-037): /app (elevadas),
+      # /app/landing-pages y los paquetes de /app/packages. REQ-F-037 (CA-12): production lleva el
+      # cliente generado y las migraciones en /app/packages/db; migrate conserva prisma.config.ts,
+      # schema y migraciones en su WORKDIR (/app/landing-pages), como espera deploy/ci/smoke.sh.
       - name: contenido de las imágenes
         run: |
-          docker run --rm --entrypoint sh restaurante:production -c 'test ! -e node_modules/prisma && test ! -e node_modules/better-sqlite3 && test ! -e node_modules/@prisma/adapter-better-sqlite3 && test -e node_modules/@prisma/adapter-mariadb'
-          docker run --rm --entrypoint sh restaurante:migrate -c 'test -e node_modules/prisma && test ! -e node_modules/better-sqlite3'
+          docker run --rm --entrypoint sh restaurante:production -c 'for d in /app/node_modules /app/landing-pages/node_modules /app/packages/core/node_modules /app/packages/db/node_modules; do test ! -e "$d/prisma" && test ! -e "$d/better-sqlite3" && test ! -e "$d/@prisma/adapter-better-sqlite3" || exit 1; done; test -e /app/node_modules/@prisma/adapter-mariadb && test -d /app/packages/db/prisma/migrations && test -e /app/packages/db/src/generated/prisma/client.ts'
+          docker run --rm --entrypoint sh restaurante:migrate -c 'test -e /app/node_modules/prisma && for d in /app/node_modules /app/landing-pages/node_modules /app/packages/db/node_modules; do test ! -e "$d/better-sqlite3" || exit 1; done; test "$(pwd)" = /app/landing-pages && test -e prisma.config.ts && test -e prisma/schema.prisma && test -d prisma/migrations'
+          # REQ-F-038 (CA-11, O-3): production y api llevan el código de contracts y Zod resoluble;
+          # api, sin el CLI de Prisma, con el cliente generado, las migraciones y su WORKDIR /app/api.
+          docker run --rm --entrypoint sh restaurante:production -c 'test -e /app/packages/contracts/index.ts && node -e "import(\"@restaurante/contracts\").then((m) => process.exit(typeof m.createPublicApiClient === \"function\" ? 0 : 1))"'
+          docker run --rm --entrypoint sh restaurante:api -c 'test "$(pwd)" = /app/api && test -e src/server.ts && test -e /app/packages/contracts/index.ts && test -e /app/packages/core/catalog/index.ts && test -e /app/packages/db/src/generated/prisma/client.ts && test -d /app/packages/db/prisma/migrations && for d in /app/node_modules /app/api/node_modules /app/packages/db/node_modules; do test ! -e "$d/prisma" || exit 1; done && node -e "import(\"zod\").then(() => process.exit(0))"'
+          # REQ-F-039 (P-1 y RF-11): production y api llevan packages/web; api, la copia de las imágenes
+          # de las landings en la misma ruta relativa (PRODUCT_IMAGES_DIR por defecto).
+          docker run --rm --entrypoint sh restaurante:production -c 'node -e "import(\"@restaurante/web\").then((m) => process.exit(typeof m.createRenderer === \"function\" ? 0 : 1))"'
+          docker run --rm --entrypoint sh restaurante:api -c 'node -e "import(\"@restaurante/web\").then((m) => process.exit(typeof m.createLogger === \"function\" ? 0 : 1))" && ls /app/landing-pages/public/img/molotes/*.jpg >/dev/null'
+          # REQ-F-039: inventory-manager en /app/inventory-manager, sin packages/db ni packages/core (ni
+          # siquiera sus package.json), sin Prisma ni mariadb en ningún node_modules, con contracts y web
+          # resolubles, su CSS compilado y los iconos de las landings (favicon).
+          docker run --rm --entrypoint sh restaurante:inventory-manager -c 'test "$(pwd)" = /app/inventory-manager && test -e src/server.ts && test -s public/css/main.css && test -e /app/landing-pages/public/img/birria/icons/favicon.ico && test -e /app/landing-pages/public/img/molotes/icons/icon-32.png && test ! -e /app/packages/db && test ! -e /app/packages/core && for d in /app/node_modules /app/inventory-manager/node_modules; do test ! -e "$d/@prisma" && test ! -e "$d/prisma" && test ! -e "$d/mariadb" || exit 1; done && node -e "Promise.all([import(\"@restaurante/contracts\"), import(\"@restaurante/web\")]).then(([c, w]) => process.exit(typeof c.createAdminApiClient === \"function\" && typeof w.createRenderer === \"function\" ? 0 : 1))"'
       # CA-13: la imagen migrate aplica el esquema sobre una base vacía con código 0.
       - name: migrate sobre una base vacía
         working-directory: restaurante
@@ -359,11 +416,33 @@ jobs:
       - name: imagen production escucha en 0.0.0.0 y queda healthy
         working-directory: restaurante
         run: |
+          # REQ-F-038 (CA-11): la API en la red interna db-test, healthy y sin puertos publicados.
+          # REQ-F-039: el aviso interno es obligatorio en producción (credencial desechable de la prueba).
+          token=$(openssl rand -hex 32)
+          docker run -d --name api-ca11 --network restaurante_db-test \
+            -e DATABASE_URL=mysql://restaurante_test_app:test-dev@mysql-dev:3306/restaurante_test_ci \
+            -e LANDING_INTERNAL_URL=http://app-ca9:3002 -e INTERNAL_NOTIFY_TOKEN="$token" \
+            restaurante:api
+          api_health=starting
+          for _ in $(seq 1 60); do
+            api_health=$(docker inspect -f '{{.State.Health.Status}}' api-ca11)
+            [ "$api_health" = healthy ] && break
+            [ "$(docker inspect -f '{{.State.Running}}' api-ca11)" = true ] || break
+            sleep 2
+          done
+          if [ "$api_health" != healthy ]; then
+            echo "La api no quedó healthy (estado: $api_health)"
+            docker logs api-ca11
+            exit 1
+          fi
+          docker logs api-ca11 | grep '"msg":"server_started"' | grep -q '"service":"api"' || { docker logs api-ca11; exit 1; }
           docker create --name app-ca9 -p 127.0.0.1:3000:3000 \
             -e DATABASE_URL=mysql://restaurante_test_app:test-dev@mysql-dev:3306/restaurante_test_ci \
             -e DATA_DIR=/var/lib/restaurante \
             -e WHATSAPP_MOLOTES=5210000000001 \
             -e WHATSAPP_BIRRIA=5210000000002 \
+            -e API_INTERNAL_URL=http://api-ca11:3001 \
+            -e INTERNAL_NOTIFY_TOKEN="$token" \
             restaurante:production
           docker network connect restaurante_db-test app-ca9
           docker start app-ca9
@@ -381,7 +460,24 @@ jobs:
           fi
           docker logs app-ca9 | grep '"msg":"server_started"' | grep -q '"host":"0.0.0.0"' || { docker logs app-ca9; exit 1; }
           curl -fsS -o /dev/null http://127.0.0.1:3000/molotes
-          docker rm -f app-ca9
+          # Las landings cargaron los productos de la API (no de la semilla).
+          docker logs app-ca9 | grep '"msg":"landing_products_loaded"' | grep -q '"source":"api"' || { docker logs app-ca9; exit 1; }
+          # REQ-F-039 (CA-18): inventory-manager queda healthy por su HEALTHCHECK (/salud por HTTP, sin TLS).
+          docker run -d --name inventory-ca18 --network restaurante_db-test -e TRUST_PROXY=true -e API_INTERNAL_URL=http://api-ca11:3001 restaurante:inventory-manager
+          inv_health=starting
+          for _ in $(seq 1 60); do
+            inv_health=$(docker inspect -f '{{.State.Health.Status}}' inventory-ca18)
+            [ "$inv_health" = healthy ] && break
+            [ "$(docker inspect -f '{{.State.Running}}' inventory-ca18)" = true ] || break
+            sleep 2
+          done
+          if [ "$inv_health" != healthy ]; then
+            echo "inventory-manager no quedó healthy (estado: $inv_health)"
+            docker logs inventory-ca18
+            exit 1
+          fi
+          docker logs inventory-ca18 | grep '"msg":"server_started"' | grep -q '"service":"inventory-manager"' || { docker logs inventory-ca18; exit 1; }
+          docker rm -f app-ca9 api-ca11 inventory-ca18
       # El MySQL de las comprobaciones anteriores no se necesita más: las pruebas de humo parten,
       # como en un runner nuevo, sin sus contenedores, redes ni volúmenes.
       - name: limpiar MySQL de las comprobaciones
@@ -403,7 +499,7 @@ jobs:
           sudo install -m 755 restaurante/ops/backup/*.sh /opt/restaurante/ops/backup/
           systemd-analyze verify restaurante/ops/backup/systemd/*.service restaurante/ops/backup/systemd/*.timer restaurante/ops/backup/systemd/*.path
       - name: prueba de humo
-        run: bash restaurante/deploy/ci/smoke.sh restaurante:production restaurante:migrate
+        run: bash restaurante/deploy/ci/smoke.sh restaurante:production restaurante:migrate restaurante:api restaurante:inventory-manager
       - name: age
         run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends age
       - name: prueba de humo de respaldos
@@ -432,6 +528,8 @@ jobs:
     outputs:
       app-digest: ${{ steps.app.outputs.digest }}
       migrate-digest: ${{ steps.migrate.outputs.digest }}
+      api-digest: ${{ steps.api.outputs.digest }}
+      inventory-digest: ${{ steps.inventory.outputs.digest }}
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -450,6 +548,7 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: restaurante
+          file: restaurante/landing-pages/Dockerfile
           target: production
           platforms: linux/amd64
           push: true
@@ -464,12 +563,45 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: restaurante
+          file: restaurante/landing-pages/Dockerfile
           target: migrate
           platforms: linux/amd64
           push: true
           provenance: false
           cache-from: type=gha,scope=migrate
           tags: ghcr.io/orvigas/restaurante-migrate:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      # API propia (REQ-F-038).
+      - name: publish api
+        id: api
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: restaurante
+          file: restaurante/landing-pages/Dockerfile
+          target: api
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          cache-from: type=gha,scope=api
+          tags: ghcr.io/orvigas/restaurante-api:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      # Admin nuevo (REQ-F-039).
+      - name: publish inventory-manager
+        id: inventory
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: restaurante
+          file: restaurante/landing-pages/Dockerfile
+          target: inventory-manager
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          cache-from: type=gha,scope=inventory-manager
+          tags: ghcr.io/orvigas/restaurante-inventory-manager:sha-${{ github.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -520,7 +652,7 @@ jobs:
 
   # Despliegue en el VPS (REQ-F-016, RF-4 a RF-6). La llave SSH solo puede ejecutar
   # /opt/restaurante/deploy/deploy.sh (comando forzado en authorized_keys): este job le pasa el SHA,
-  # los dos digests y la suma de restaurante/deploy, que debe coincidir con la instalada. Solo corre
+  # los cuatro digests (app, migrate, api e inventory-manager; REQ-F-038 y REQ-F-039) y la suma de restaurante/deploy, que debe coincidir con la instalada. Solo corre
   # si `vigente` confirmó que el commit es la punta de main. Su resumen (REQ-F-030,
   # deploy/ci/resumen.sh) se escribe siempre: Desplegado, Revertido (código 21), Fallido, Omitido o
   # Cancelado o interrumpido; el job solo termina en éxito si quedó Desplegado.
@@ -580,6 +712,8 @@ jobs:
           VPS_SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
           APP_DIGEST: ${{ needs.publish.outputs.app-digest }}
           MIGRATE_DIGEST: ${{ needs.publish.outputs.migrate-digest }}
+          API_DIGEST: ${{ needs.publish.outputs.api-digest }}
+          INVENTORY_DIGEST: ${{ needs.publish.outputs.inventory-digest }}
         run: |
           set -eu
           umask 077
@@ -594,7 +728,7 @@ jobs:
           ssh -i "$dir/key" -p "${VPS_SSH_PORT:-22}" \
             -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$dir/known_hosts" -o ServerAliveInterval=30 -o ConnectTimeout=20 \
-            "$VPS_SSH_USER@$VPS_HOST" "deploy $GITHUB_SHA $APP_DIGEST $MIGRATE_DIGEST $sum" || rc=$?
+            "$VPS_SSH_USER@$VPS_HOST" "deploy $GITHUB_SHA $APP_DIGEST $MIGRATE_DIGEST $API_DIGEST $INVENTORY_DIGEST $sum" || rc=$?
           echo "codigo=$rc" >> "$GITHUB_OUTPUT"
           exit "$rc"
       # Siempre, sin secretos. Solo informa: el estado del job lo decide `desplegar`.
@@ -608,6 +742,8 @@ jobs:
           JOB_STATUS: ${{ job.status }}
           APP_DIGEST: ${{ needs.publish.outputs.app-digest }}
           MIGRATE_DIGEST: ${{ needs.publish.outputs.migrate-digest }}
+          API_DIGEST: ${{ needs.publish.outputs.api-digest }}
+          INVENTORY_DIGEST: ${{ needs.publish.outputs.inventory-digest }}
         run: |
           if [ -f restaurante/deploy/ci/resumen.sh ]; then
             bash restaurante/deploy/ci/resumen.sh deploy >> "$GITHUB_STEP_SUMMARY"

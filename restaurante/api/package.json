@@ -1,0 +1,29 @@
+{
+  "name": "api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "API propia (REQ-F-038 y REQ-F-039; restaurante/docs/arquitectura.md): GET /api/v1/public/<negocio>/productos y la administración de productos en /api/v1/admin, en la red interna. Usa core, db, contracts y web.",
+  "type": "module",
+  "main": "src/server.ts",
+  "engines": {
+    "node": ">=24.22.1"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.ts",
+    "dev": "node --watch --env-file-if-exists=.env scripts/dev-server.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@koa/router": "^15.7.0",
+    "@restaurante/contracts": "0.1.0",
+    "@restaurante/core": "0.1.0",
+    "@restaurante/db": "0.1.0",
+    "@restaurante/web": "0.1.0",
+    "koa": "^3.2.1"
+  },
+  "devDependencies": {
+    "@types/koa": "^3.0.3",
+    "vitest": "^5.0.5"
+  }
+}

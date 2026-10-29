@@ -1,6 +1,6 @@
 # JavaScript Vanilla
 
-Alcance: **solo el frontend** (`restaurante/public/js`). El backend (`src/`, `tests/`, `scripts/`) usa TypeScript y sigue `.claude/rules/typescript.md`.
+Alcance: **solo el frontend** (`restaurante/landing-pages/public/js` y `restaurante/inventory-manager/public/js`). El backend (`src/`, `tests/`, `scripts/` de `restaurante/landing-pages/`, `restaurante/api/` y `restaurante/inventory-manager/`, y `restaurante/packages/`) usa TypeScript y sigue `.claude/rules/typescript.md`.
 
 Utiliza JavaScript Vanilla moderno.
 
@@ -33,5 +33,5 @@ JavaScript debe identificar el comportamiento mediante atributos `data-*` en lug
 
 ## Lint
 
-- `npm run lint` revisa `public/js` con las reglas recomendadas de ESLint para JavaScript (módulos ES y globales del navegador) y debe terminar con 0. `npm run lint:fix` aplica las correcciones automáticas.
+- `npm run lint` revisa el `public/js` de `landing-pages` y de `inventory-manager` con las reglas recomendadas de ESLint para JavaScript (módulos ES y globales del navegador) y debe terminar con 0. `npm run lint:fix` aplica las correcciones automáticas.
 - Una regla solo se desactiva en una línea concreta y con la justificación después de `--` (`// eslint-disable-next-line <regla> -- <motivo>`).

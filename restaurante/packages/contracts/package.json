@@ -1,0 +1,16 @@
+{
+  "name": "@restaurante/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Esquemas y DTO de la API, con Zod, y su cliente HTTP tipado (REQ-F-038: endpoint público de productos).",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  }
+}

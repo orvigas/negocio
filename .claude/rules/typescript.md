@@ -4,23 +4,28 @@
 
 paths:
 
-- "/src"
-- "/tests"
-- "/scripts"
+- "/restaurante/landing-pages/src"
+- "/restaurante/landing-pages/tests"
+- "/restaurante/landing-pages/scripts"
+- "/restaurante/api"
+- "/restaurante/inventory-manager/src"
+- "/restaurante/inventory-manager/tests"
+- "/restaurante/inventory-manager/scripts"
+- "/restaurante/packages"
 
 ---
 
-El backend (`src/`), las pruebas (`tests/`), los scripts de Node (`scripts/`) y `vitest.config.ts` están en TypeScript estricto. El frontend (`public/js`) sigue en JavaScript Vanilla (`.claude/rules/javascript.md`).
+El backend (`src/`), las pruebas (`tests/`), los scripts de Node (`scripts/`) y `vitest.config.ts` de cada app (`restaurante/landing-pages/`, `restaurante/api/` y `restaurante/inventory-manager/`), y los paquetes de `restaurante/packages/` (`core`, `contracts`, `db` y `web`; REQ-F-037 y REQ-F-039) están en TypeScript estricto. Todos los `tsconfig.json` extienden `restaurante/tsconfig.base.json`. El frontend (`public/js` de `landing-pages` y de `inventory-manager`) sigue en JavaScript Vanilla (`.claude/rules/javascript.md`).
 
 ## Ejecución
 
 - Node 24 (≥ 24.22.1) ejecuta los `.ts` directamente con type stripping: no hay paso de compilación ni carpeta `dist/`.
 - `tsc` solo verifica tipos (`npm run typecheck`, con `noEmit`). No lo uses para generar archivos.
-- No agregues `.js` propios en `src/`, `tests/` ni `scripts/`.
+- No agregues `.js` propios en `src/`, `tests/`, `scripts/` ni `packages/`.
 
 ## Sintaxis permitida
 
-Solo sintaxis borrable (`erasableSyntaxOnly` en `tsconfig.json` la impone):
+Solo sintaxis borrable (`erasableSyntaxOnly` en `tsconfig.base.json` la impone):
 
 - sin `enum` (usa objetos `as const` o uniones de literales);
 - sin `namespace` con valor;

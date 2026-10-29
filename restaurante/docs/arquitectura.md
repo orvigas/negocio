@@ -8,33 +8,37 @@ necesita desviarse de este documento, lo actualiza en el mismo PR.
 
 | | |
 | --- | --- |
-| Estado | **Aceptada** (estrategia general). Quedan abiertas las decisiones de la [sección 9](#9-decisiones-pendientes) |
-| Fecha | 2026-10-24 |
+| Estado | **Aceptada** (estrategia general). Decisiones A (2026-10-24), B y C (2026-10-26) tomadas ([sección 9](#9-decisiones)). Aplicados los pasos 1 (REQ-F-036), 2 (REQ-F-037) y 3 (REQ-F-038) y el ticket 1 del paso 4 (REQ-F-039) |
+| Fecha | 2026-10-24 (última actualización: 2026-10-28) |
 | Alcance | Estructura del código, regla de dependencias, contratos, consumo de la API y orden de la migración. No cambia el stack de `.claude/CLAUDE.md` §2 |
 
 ## 1. Contexto
 
-Hoy `restaurante/` es **una sola app Koa** que hace todo:
+`restaurante/` es un **monorepo de npm workspaces** (pasos 1 y 2, REQ-F-036 y REQ-F-037) con tres
+apps Koa y cuatro paquetes compartidos. Las rutas `src/...` de este documento, sin otro prefijo,
+son relativas a `restaurante/landing-pages/`.
 
-- **Landings** por SSR (`src/views/`, `src/content/`, `public/`), con el aviso del día decidido en
-  el servidor (REQ-F-028 y REQ-F-034).
-- **Administración** en `/admin` por SSR, con sesión y CSRF (usuarios, productos y control del bot),
-  más una **API JSON de productos** en `/admin/api` (REQ-F-008).
-- **Bot de WhatsApp** (`src/services/whatsapp-bot/`), que arma el pedido y **avisa al personal**:
-  los pedidos **no se guardan**.
-- **MySQL 8.4 con Prisma** (`prisma/`, `src/repositories/`).
+- **`landing-pages`**: las landings por SSR (`src/views/`, `src/content/`, `public/`), con el aviso
+  del día decidido en el servidor (REQ-F-028 y REQ-F-034), que obtienen los productos de la API
+  (REQ-F-038). **En transición** sigue conteniendo la administración en `/admin` (SSR con sesión y
+  CSRF: usuarios, productos y control del bot), la API JSON de productos en `/admin/api`
+  (REQ-F-008) y el **bot de WhatsApp** (`src/services/whatsapp-bot/`), que arma el pedido y avisa
+  al personal: los pedidos **no se guardan**.
+- **`api`** (REQ-F-038 y REQ-F-039): la API JSON propia, solo en la red interna. Publica los
+  productos de cada negocio (`/api/v1/public/<negocio>/productos`) y su administración
+  (`/api/v1/admin/...`).
+- **`inventory-manager`** (REQ-F-039): el admin nuevo de productos por SSR, que solo habla con la
+  `api` mediante el cliente de `contracts`.
+- **Paquetes**: `core` (dominio en TypeScript puro, sin E/S de infraestructura), `db` (MySQL 8.4
+  con Prisma: esquema, migraciones y repositorios), `contracts` (esquemas y clientes de la API) y
+  `web` (utilidades HTTP y SSR sin dominio que comparten las apps).
 
-El código ya tiene la base de lo que se propone aquí:
-
-- **Repositorios con interfaz** y varias implementaciones: `ProductRepository` (Prisma y memoria),
-  el repositorio de menús (archivo y memoria) y `BotControlStore` (Prisma y memoria). Gracias a eso
-  el bot y buena parte de la lógica se prueban sin MySQL.
-- **Reglas de negocio sin Koa** en `src/services/` (`product-schema.ts`, `visible-menu.ts`,
-  `business-schedule.ts`, `price.ts`).
-- **Inyección por fábricas** (`createX({ deps })`) armada en `src/server.ts` y `src/app.ts`.
-
-Lo que falta es **separar físicamente** esas piezas para que dos frontends y nuevos dominios
-(inventario, ventas, CRM) las compartan sin duplicarlas.
+El código ya tenía la base de esta separación: **repositorios con interfaz** y varias
+implementaciones (`ProductRepository` sobre Prisma o memoria, el repositorio de menús en archivo o
+memoria y `BotControlStore`), **reglas de negocio sin Koa** e **inyección por fábricas**
+(`createX({ deps })`) armada en el `server.ts` y el `app.ts` de cada app. Lo que queda es terminar
+de sacar de `landing-pages` la administración y el bot (§8) para que los frontends y los dominios
+nuevos (inventario, ventas, CRM) compartan esas piezas sin duplicarlas.
 
 ## 2. Objetivos y restricciones
 
@@ -90,20 +94,29 @@ sin tocar los demás.
 ```text
 restaurante/
 ├── package.json             ← raíz de workspaces: scripts, lint y typecheck comunes
-├── tsconfig.base.json       ← opciones estrictas compartidas
+├── package-lock.json        ← lockfile único
+├── tsconfig.base.json       ← opciones estrictas compartidas (desde el paso 2)
+├── compose.yaml, docker/    ← MySQL de desarrollo y pruebas (compartido)
+├── deploy/                  ← producción: compose.prod.yaml, deploy.sh, mysql/initdb y ci/
+├── ops/                     ← respaldos del host (ops/backup)
+├── security/                ← excepciones de la auditoría de dependencias
+├── docs/                    ← guías (desarrollo, despliegue y este documento)
 ├── packages/
 │   ├── core/                ← dominio y casos de uso. TS puro: sin Koa, sin Prisma, sin HTML
+│   │   ├── shared/          (ids de negocio, logger, errores comunes; desde el paso 2)
 │   │   ├── catalog/         (productos y menú visible)
 │   │   ├── schedule/        (horarios y aviso del día)
 │   │   ├── inventory/       (existencias, movimientos y mermas)   ← nuevo
 │   │   ├── sales/           (pedidos, ventas y cobros)            ← nuevo
 │   │   ├── customers/       (CRM: clientes e historial)           ← nuevo
-│   │   └── identity/        (usuarios, roles y permisos por negocio)
+│   │   ├── identity/        (usuarios, roles y permisos por negocio)
+│   │   └── bot-control/     (bloqueos, pausa y uso del bot de WhatsApp; desde el paso 2)
 │   ├── contracts/           ← esquemas y DTO de la API + cliente HTTP tipado
-│   └── db/                  ← implementaciones Prisma de los repositorios, schema y migraciones
+│   ├── db/                  ← implementaciones Prisma de los repositorios, schema y migraciones
+│   └── web/                 ← utilidades HTTP/SSR sin dominio de las apps Koa (desde REQ-F-039)
 ├── api/                     ← Koa: la única app que habla con MySQL
 ├── landing-pages/           ← Koa SSR de las landings: HTML, SEO, Tailwind y Vanilla JS
-└── inventory-manager/       ← frontend del administrador
+└── inventory-manager/       ← admin nuevo: Koa con SSR, Tailwind y Vanilla JS (decisión B, REQ-F-039)
 ```
 
 Cada módulo de `core` sigue la misma forma:
@@ -122,15 +135,57 @@ packages/core/inventory/
 | --- | --- | --- |
 | `packages/core` | Nada del proyecto (solo la biblioteca estándar de Node) | Koa, Prisma, HTML, `contracts` |
 | `packages/contracts` | Nada del proyecto | `core`, `db`, Koa |
-| `packages/db` | `core` (para implementar sus interfaces) | Koa, `contracts` |
-| `api` | `core`, `db`, `contracts` | Código de los frontends |
-| `landing-pages` | `contracts` | `core`, `db`, Prisma |
-| `inventory-manager` | `contracts` | `core`, `db`, Prisma |
+| `packages/db` | `core` (para implementar sus interfaces) | Koa, `contracts`, `web` |
+| `packages/web` | Nada del proyecto (sí Koa) | `core`, `db`, `contracts`, Prisma |
+| `api` | `core`, `db`, `contracts`, `web` | Código de los frontends |
+| `landing-pages` | `contracts`, `web` | `core`, `db`, Prisma |
+| `inventory-manager` | `contracts`, `web` | `core`, `db`, Prisma |
 
 - **Las flechas apuntan hacia `core`.** Entre módulos de `core`, solo a través de su `index.ts`.
-- **La regla la aplica el lint**, no la memoria: `npm run lint` rechaza un import que la rompa
-  (con `no-restricted-imports` o una regla de rutas en `eslint.config.ts`), igual que hoy rechaza los
-  imports `./x.js` fuera de `public/js`.
+- **Lo compartido queda en la raíz** (desviación registrada en el paso 1, REQ-F-036): `deploy/`,
+  `ops/`, `security/`, `docs/`, `compose.yaml` y `docker/` no pertenecen a ninguna app. `deploy/`
+  conserva su ubicación porque la suma de `compose.prod.yaml`, `deploy.sh` y
+  `mysql/initdb/01-usuarios.sh` debe coincidir con la instalada en el VPS.
+- **La regla la aplica el lint**, no la memoria: `npm run lint` rechaza un import que la rompa,
+  igual que rechaza los imports `./x.js` fuera de `public/js`. Desde el paso 2 (REQ-F-037) hay un
+  único `eslint.config.ts` en la raíz, con un bloque de `no-restricted-imports` por paquete (sin
+  plugins adicionales), y la prueba `landing-pages/tests/unit/dependency-rule.test.ts` comprueba
+  cada caso. Además, el `exports` del `package.json` de cada paquete solo publica los `index.ts`
+  de los módulos de `core` (y los archivos de `db`), así que `tsc` y Node rechazan también un
+  import a un archivo interno. Los módulos de `core` y `packages/db/src` son planos (sin
+  subcarpetas): los patrones de "sale del paquete" cuentan con ello.
+- **`packages/web`** (REQ-F-039, decisión P-1 del usuario: "Paquete packages/web (Recomendado)"):
+  el renderizador de plantillas, la lectura de formularios y de JSON, la comprobación de mismo
+  origen y el logger JSON (`createLogger`), movidos desde `landing-pages` y `core/shared`; `core`
+  conserva solo la interfaz `Logger` y `silentLogger`. También la comprobación de imágenes en disco
+  (`createImageChecker`), movida desde `core/catalog`: `core` conserva solo el puerto
+  `ImageExists` (en `product-repository.ts`), que `web` implementa con una firma propia compatible
+  (no importa `core`). Lo comparten las apps Koa sin duplicarlo.
+- **Paquetes:** `@restaurante/core` (sin dependencias), `@restaurante/db` (Prisma, `mariadb` y
+  `core`) y `@restaurante/contracts` (Zod desde el paso 3, REQ-F-038). La app `api` (paso 3)
+  importa `core`, `db` y `contracts`. Todos los `tsconfig.json` extienden `tsconfig.base.json`,
+  en la raíz.
+- **Código de las landings** (paso 3, REQ-F-038; desviación registrada por la decisión P-1 del
+  usuario, "Prohibir lo que lee datos"): `landing-pages/src/controllers/landing.ts`,
+  `src/views/landings/` y `src/services/landing-products.ts` **no pueden importar** `db`, Prisma,
+  `mariadb`, `core/identity`, `core/bot-control`, la persistencia de `core/catalog`
+  (`createMemoryProductStore`, `ProductStore`, `ProductStoreTx`, `toPublished`) ni el repositorio
+  de productos: los productos solo les llegan del cliente de `contracts`. **Sí pueden importar**
+  los módulos puros de `core` (`shared`, `schedule` y las funciones de `catalog`, que no hacen E/S:
+  la comprobación de imágenes en disco vive en `web`), porque
+  el aviso del día y el hero, el destacado y las promociones siguen decidiéndose en las landings.
+  La desviación respecto de la tabla (`landing-pages` solo importa `contracts`) dura hasta que los
+  horarios y el aviso sean endpoints públicos (§6).
+- **O-2 (REQ-F-038):** en todo `landing-pages` (y en `api`), los paquetes solo se importan por su
+  nombre: un import relativo a un archivo de `packages/` o a un archivo interno de un módulo de
+  `core` falla en el lint.
+- **Regla de transición** (desviación registrada en el paso 2, REQ-F-037; limitada en el paso 3):
+  mientras `landing-pages` siga conteniendo `/admin` y el bot, **ese código** puede importar
+  `core`, `db` y `contracts`. En `eslint.config.ts` no tiene un bloque de restricción propio: solo
+  le aplica la regla general de `landing-pages` (los paquetes se importan por su nombre y, de
+  `core`, solo el `index.ts` de cada módulo; O-2), y un comentario "REGLA DE TRANSICIÓN —
+  TEMPORAL" marca la excepción. La restricción se activa en el paso 4 para `/admin`, cuando pase a
+  `inventory-manager`, y para el bot, cuando pase a `api`.
 
 ## 5. Contratos compartidos (`packages/contracts`)
 
@@ -149,9 +204,45 @@ packages/core/inventory/
 | | Landing pages | Inventory manager |
 | --- | --- | --- |
 | Endpoints | `GET /api/v1/public/...`: menú visible, horarios y aviso del día. Públicos y de solo lectura | `/api/v1/admin/...`: lectura y escritura, con autenticación y permisos por negocio |
-| Renderizado | **Sigue en SSR** con Koa: el SEO y la regla de que el servidor decide el aviso no cambian | Ver la [decisión B](#9-decisiones-pendientes) |
+| Renderizado | **Sigue en SSR** con Koa: el SEO y la regla de que el servidor decide el aviso no cambian | Ver la [decisión B](#9-decisiones) |
 | Resiliencia | Caché corta con `stale-while-revalidate` y la última copia buena como respaldo: una caída de la API no tira las landings | Muestra el error de la API (503 o 409) y no pierde lo que se estaba editando |
 | Seguridad | **Sin credenciales de la base** (mínimo privilegio) | Sesión con cookie `SameSite=Strict` y token CSRF, como hoy en `/admin` |
+
+**Paso 3 aplicado (REQ-F-038):** las landings consumen solo `GET /api/v1/public/{negocio}/productos`
+(decisión "Solo productos": el aviso del día, los horarios y el hero, el destacado y las promociones
+siguen en `landing-pages`). La resiliencia es la de la tabla, concretada así:
+
+- caché en memoria por negocio, fresca 60 s y refrescada en segundo plano al vencer
+  (*stale-while-revalidate*);
+- cada escritura de productos de `/admin` (mismo proceso, `ProductRepository.onChange`) invalida
+  la caché de ese negocio y la siguiente visita espera los datos nuevos (como mucho 1,5 s): la
+  frescura sigue siendo "al instante";
+- un vuelo por negocio (las visitas simultáneas comparten la petición) y, durante una caída, un
+  reintento de fondo cada 5 s como mucho;
+- si la API falla (caída, más de 1,5 s, 5xx o un cuerpo que no cumple el contrato), la última copia
+  buena sin límite de tiempo y, si no la hubo (arranque sin API), la semilla de
+  `content/seeds.ts`; ninguna landing responde 5xx por la API;
+- las landings no tienen credenciales de la base **en su código**, pero el contenedor
+  `landing-pages` las conserva hasta el paso 4 porque `/admin` y el bot siguen en él.
+
+**Paso 4, ticket 1 aplicado (REQ-F-039):** `inventory-manager` renderiza en el servidor (decisión
+B) y es lo único con lo que habla el navegador. Llama a `/api/v1/admin` por la red interna `admin`
+con el cliente de `contracts` (`createAdminApiClient`, que nunca lanza). Concretamente:
+
+- **Sesión (D-1):** la crea y la decide la API. `inventory-manager` guarda su id en la cookie
+  `__Host-admin_sid` y lo reenvía como `Authorization: Bearer`.
+- **CSRF (D-2):** mismo origen en `inventory-manager` y el token de la sesión en `X-CSRF-Token`,
+  que valida la API.
+- **Resiliencia:** con la API caída o en 503, aviso y lo escrito se conserva. Un 409 muestra quién y
+  cuándo, y deja cargar la versión vigente o guardar encima.
+- **Frescura:** tras cada escritura confirmada, la API avisa a `landing-pages` por su puerto interno
+  (`INTERNAL_PORT`, 3002, con credencial): invalida la caché de esa landing y recarga el catálogo del
+  bot. La escritura espera ese primer aviso como mucho 2 s para decir la verdad
+  (`meta.freshness`). La red de seguridad es la caducidad de 60 s de las landings y la recarga del
+  bot cada 60 s.
+- **Un solo escritor:** con `ADMIN_NEW_URL`, el `/admin` actual muestra los productos en solo
+  lectura (410 y `PRODUCTS_MOVED` en sus escrituras), así que la API, con una réplica y su mutex, es
+  la única que escribe productos.
 
 **El bot de WhatsApp es un cliente más de `core`.** Vive dentro de `api` (su webhook es otra entrada
 HTTP) y, cuando exista `sales`, sus pedidos confirmados se guardan como ventas en lugar de solo
@@ -185,9 +276,9 @@ intermedia" del CI en `restaurante/README.md`).
 
 | Paso | Qué hace | Cambia el comportamiento |
 | --- | --- | --- |
-| 1 | **Monorepo sin cambios funcionales.** Workspaces en `restaurante/` y la app actual pasa tal cual a `landing-pages/`. Se ajustan el CI (`.github/workflows/ci.yml`, Dependabot), el `Dockerfile`, `compose.yaml`, `deploy/` y la documentación | No |
-| 2 | **Extraer `core`, `contracts` y `db`** del `src/` actual. Se mueven los archivos y se ajustan los imports, sin reescribir la lógica | No |
-| 3 | **Crear `api/`** con los endpoints públicos. Las landings pasan a consumirlos y dejan de acceder a la base | No (mismo HTML) |
+| 1 | **Monorepo sin cambios funcionales** (REQ-F-036). Workspaces en `restaurante/` y la app actual pasa tal cual a `landing-pages/`. Se ajustan el CI (`.github/workflows/ci.yml`, Dependabot), el `Dockerfile`, `compose.yaml` y la documentación. De `deploy/` no se toca ningún archivo de la suma (`compose.prod.yaml`, `deploy.sh`, `mysql/initdb/01-usuarios.sh`): las imágenes y sus nombres no cambian | No |
+| 2 | **Extraer `core`, `contracts` y `db`** del `src/` actual (REQ-F-037). Se mueven los archivos y se ajustan los imports, sin reescribir la lógica (detalle abajo) | No |
+| 3 | **Crear `api/`** con los endpoints públicos. Las landings pasan a consumirlos y dejan de acceder a la base (REQ-F-038, detalle abajo) | No (mismo HTML) |
 | 4 | **Llevar `/admin`** (productos, usuarios y control del bot) a `/api/v1/admin` y al nuevo `inventory-manager`. El `/admin` actual se retira cuando el nuevo tenga lo mismo | Sí: nueva interfaz de administración |
 | 5 | **Dominios nuevos, un ticket por módulo:** inventario → ventas (incluidos los pedidos del bot) → CRM | Sí |
 
@@ -209,23 +300,260 @@ intermedia" del CI en `restaurante/README.md`).
 
 Los nombres exactos de archivos y endpoints los fija el plan técnico de cada ticket.
 
-## 9. Decisiones pendientes
+### Plan del paso 4 (REQ-F-039)
+
+Decisión del usuario: "Sí, 6 tickets en ese orden". Cada ticket es su propio PR (o varios) hacia
+`epic/arquitectura`.
+
+| # | Ticket | Notas |
+| --- | --- | --- |
+| 1 | **REQ-F-039**: base del admin nuevo y productos | Terminado en tres PR (#94, #95 y #99), detalle abajo |
+| 2 | Usuarios y cuenta propia | En `api` y en `inventory-manager` |
+| 3 | Mover el bot a `api` | Publica una entrada de `api` para el webhook (su router de Traefik solo para esa ruta) y cambia la URL en Meta (acción del usuario). Activa la regla de lint para el bot |
+| 4 | Control del bot en el admin nuevo | Pausa, bloqueos y topes |
+| 5 | Menú y página | Antes se decide si el menú queda en archivos o pasa a MySQL |
+| 6 | Retirada del `/admin` actual | Mover la importación de semillas y el menú, quitar las credenciales de la base de `landing-pages`, quitar el router `restaurante-admin` y activar la regla de lint para `/admin` |
+
+Los IDs de los tickets 2 a 6 se asignan al crearlos.
+
+### Paso 4, ticket 1 aplicado (REQ-F-039)
+
+- **PR 1, `api` y paquetes:**
+  - `packages/web` nuevo (decisión P-1: "Paquete packages/web (Recomendado)");
+  - a `core` pasan el repositorio de productos (con `reload` e `init()` sin importar), las sesiones,
+    el límite de intentos, `resolveSession`, los campos del formulario, el DTO, el comprobador de
+    imágenes y las fechas;
+  - contratos del admin en `contracts`;
+  - `/api/v1/admin` (acceso y productos, con `Idempotency-Key` por negocio y cuerpo);
+  - el aviso interno y su receptor en `landing-pages`, la recarga del bot cada 60 s y el modo de solo
+    lectura con `ADMIN_NEW_URL`.
+  - La imagen `api` lleva una copia de `landing-pages/public/img` para validar `image.src`, del mismo
+    commit que la imagen de las landings.
+- **PR 2, `inventory-manager`:**
+  - pantallas de acceso y productos sin JavaScript, con el JS como mejora;
+  - Tailwind con el sistema visual de las landings (P-4);
+  - el cliente del admin y el formulario guiado por el descriptor en `contracts`;
+  - la regla de lint de `inventory-manager`, también para `import()` dinámicos (CA-17).
+- **PR 3, despliegue:**
+  - imagen `inventory-manager` (`ghcr.io/orvigas/restaurante-inventory-manager`, `/app/inventory-manager`,
+    puerto 3003, `HEALTHCHECK` contra `/salud`, solo las dependencias de su workspace y los iconos de
+    las landings para el favicon);
+  - servicio con router de Traefik en `admin.<dominio>`: HTTPS, HTTP a HTTPS, límite de 60 por minuto
+    con ráfaga de 60;
+  - red interna `admin` (api e inventory-manager);
+  - `deploy.sh` con cuatro digests: `inventory-manager` va antes que la app, y el código 16 si no
+    queda sano;
+  - las variables del aviso, obligatorias en producción;
+  - smoke, CI y la prueba de extremo a extremo de la frescura;
+  - la revisión de memoria (§10).
+- **El DNS de `admin.birriaelmuneco.com` lo crea el usuario** antes de desplegar la épica a `main`
+  ([Despliegue](despliegue.md)).
+
+### Paso 3 aplicado (REQ-F-038)
+
+- **`api/`** (workspace nuevo, Koa): `GET|HEAD /api/v1/public/{molotes|birria}/productos` con
+  `200 { data }` validado por `contracts`; 404, 405 (con `Allow`), 503 (`DATABASE_UNAVAILABLE`) y
+  500 con el formato `{ error: { code, message } }`. Lee la base en cada petición
+  (`createPrismaProductStore` y `toPublished`), sin caché propia. Al arrancar solo verifica la base
+  (`verifyDatabase`): nunca migra, nunca importa semillas ni escribe (O-1 de REQ-F-037 cerrado: la
+  importación sigue solo en `landing-pages`). Usa el usuario solo DML de la app.
+- **`packages/contracts`:** `products.ts` (ids públicos de negocio, esquemas Zod de los productos
+  publicados y de la respuesta, `publicProductsPath`, error común) y `public-client.ts`
+  (`createPublicApiClient`: nunca lanza; límite de tiempo, sin redirecciones, cuerpo de 1 MiB como
+  máximo y validación con el contrato). Zod 4.6.7, solo aquí.
+- **`packages/core/catalog/published.ts`:** `PublishedProducts` y `toPublished`, movidos sin
+  cambios desde `landing-pages` porque los usa la API. Una prueba de tipos de `api/` comprueba que
+  el contrato y `PublishedProducts` son equivalentes. `parseDatabaseUrl` pasó a
+  `packages/db/src/database-config.ts` (la usan las dos apps).
+- **`landing-pages`:** `services/landing-products.ts` (caché de la API, ver §6),
+  `API_INTERNAL_URL` obligatoria, y el repositorio de productos avisa de cada escritura
+  confirmada (`onChange`), que `createApp` conecta con la invalidación.
+- **Imágenes y despliegue:** etapa `api` en `landing-pages/Dockerfile`
+  (`ghcr.io/orvigas/restaurante-api`, `/app/api`, puerto 3001, `HEALTHCHECK` contra su propio
+  endpoint); `production` incluye ahora `packages/contracts` (O-3 de REQ-F-037 cerrado). En
+  `deploy/compose.prod.yaml`, el servicio `api` solo en la red interna `db`, sin puertos ni labels;
+  `deploy.sh` recibe tres digests y levanta la `api` antes de la app (código 15 si no queda sana).
+  Los respaldos de `ops/` no cambian (decisión P-2): su runbook explica qué hacer con la `api` tras
+  restaurar en un VPS nuevo.
+
+### Paso 2 aplicado (REQ-F-037)
+
+- **`packages/core`:**
+  - `catalog/`: `product-schema`, `menu-schema`, `visible-menu`, `price`, `slug` y `menu-diff`, más
+    `product-store.ts` (acciones del registro, contrato del store y errores de dominio, extraídos
+    de `product-repository.ts`) y `memory-product-store.ts`.
+  - `schedule/`: `business-schedule`.
+  - `identity/`: `authorization`, `user-schema`, `admin-auth` y `user-repository.ts` (tipos,
+    acciones de auditoría, errores y la interfaz, extraídos de la implementación Prisma).
+  - `bot-control/`: la interfaz del store del control del bot y su versión en memoria.
+  - `shared/`, las piezas que esos módulos necesitan: los ids de negocio (`BUSINESS`,
+    `BUSINESS_IDS`, `isBusinessId`), `DatabaseUnavailableError` y su `DatabaseErrorDetails`, el
+    logger (con `silentLogger`) y `errorProp`.
+- **`packages/db`:** `prisma/` (schema y migraciones, idénticos), `prisma.config.ts`, el cliente
+  generado (`src/generated/prisma`), `client.ts`, `errors.ts`, `verify.ts`, la implementación
+  Prisma de usuarios, `prisma-product-store.ts` y `prisma-bot-control-store.ts`. También
+  `database-config.ts` (el tipo `DatabaseConfig`, antes en `config/env.ts`) y `paths.ts` (la
+  carpeta del paquete, de la que `verify.ts` toma las migraciones). Sus variables del CLI
+  (`MIGRATION_DATABASE_URL`, `SHADOW_DATABASE_URL`) van en `packages/db/.env`.
+- **`packages/contracts`:** esqueleto, sin exportaciones ni dependencias. Su regla de lint ya está
+  activa.
+- **Se queda en `landing-pages/`:**
+  - el servicio de productos (`repositories/product-repository.ts`, que aplica las reglas sobre el
+    store de `core/catalog`);
+  - `menu-repository.ts`, `file-menu-repository.ts` y `memory-menu-repository.ts`
+    (`menu-repository.ts` depende de `content/seeds.ts`);
+  - `bot-control.ts`, `bot-usage.ts`, `session-store.ts`, `login-throttle.ts`, `admin-form.ts`,
+    `product-form.ts`, `admin-bootstrap.ts` y `whatsapp.ts`;
+  - `services/whatsapp-bot/`, `config/env.ts`, `config/business-paths.ts` (`BUSINESS_PATHS`, las
+    rutas de las landings) y el resto de `utils/`;
+  - las pruebas, que siguen en `landing-pages/tests` y solo cambiaron sus imports.
+- **Imágenes:** `production` incluye `/app/packages/core` y, de `packages/db`, el código, el cliente
+  generado y las migraciones. Los mismos nombre, directorio de trabajo, comando, usuario y
+  `HEALTHCHECK`. `migrate` conserva la misma estructura: `prisma/` y `prisma.config.ts` en
+  `/app/landing-pages`.
+
+## 9. Decisiones
 
 | | Decisión | Recomendación | Alternativa |
 | --- | --- | --- | --- |
-| **A** | **Despliegue** | Tres contenedores (`api`, `landing-pages` e `inventory-manager`) detrás del Traefik del VPS: el dominio actual para las landings y un subdominio de administración, con la API en `admin.<dominio>/api`. El admin y la API comparten origen, así que la cookie funciona sin CORS | Un solo contenedor con las tres apps: menos memoria en el VPS, pero se despliegan juntas |
-| **B** | **Tecnología del inventory manager** | Vanilla JS con Web Components y Tailwind, respetando `.claude/CLAUDE.md` §2 | Cambiar la regla de §2 solo para el admin, para permitir un framework |
-| **C** | **Validación de esquemas en `contracts`** | Una librería de esquemas (por ejemplo Zod o Valibot) que da tipos y validación desde una sola definición, justificada según `.claude/rules/dependencias.md` | Seguir con validadores propios, como `product-schema.ts` hoy |
+| **A** | **Despliegue** (**tomada**, ver abajo) | Tres contenedores (`api`, `landing-pages` e `inventory-manager`) detrás del Traefik del VPS: el dominio actual para las landings y un subdominio de administración, con la API en `admin.<dominio>/api`. El admin y la API comparten origen, así que la cookie funciona sin CORS | Un solo contenedor con las tres apps: menos memoria en el VPS, pero se despliegan juntas |
+| **B** | **Tecnología del inventory manager** (**tomada**, ver abajo) | Vanilla JS con Web Components y Tailwind, respetando `.claude/CLAUDE.md` §2 | Cambiar la regla de §2 solo para el admin, para permitir un framework |
+| **C** | **Validación de esquemas en `contracts`** (**tomada**, ver abajo) | Una librería de esquemas (por ejemplo Zod o Valibot) que da tipos y validación desde una sola definición, justificada según `.claude/rules/dependencias.md` | Seguir con validadores propios, como `product-schema.ts` hoy |
 
 Cada decisión se toma antes del paso que la necesita (A en el paso 1, C en el paso 2 y B en el paso 4)
-y se registra aquí, con la fecha y lo que respondió el usuario.
+y se registra aquí, con la fecha y lo que respondió el usuario. Las tres están tomadas.
+
+### Decisión A: tomada
+
+- **Fecha:** 2026-10-24 (REQ-F-036).
+- **Respuesta del usuario:** "tres contenedores".
+- **Opción elegida:** la recomendación. Tres contenedores, `api`, `landing-pages` e
+  `inventory-manager`, detrás del Traefik del VPS. El dominio actual queda para las landings y la
+  API va en `admin.<dominio>/api`.
+- **Qué aplica en cada paso:**
+
+| Paso | Qué se hace |
+| --- | --- |
+| 1 (REQ-F-036) | La imagen y el contenedor actuales salen del workspace `landing-pages/`, con los mismos nombres (`ghcr.io/orvigas/restaurante`, `restaurante-migrate`, servicio `app` y routers `restaurante*`), el mismo dominio y las mismas rutas. Se mide la memoria del VPS ([sección 10](#10-riesgos)) |
+| 3 | Contenedor e imagen de `api` (**aplicado en REQ-F-038**): solo en la red interna, sin router de Traefik (decisión "Solo red interna"); el subdominio `admin.<dominio>` queda para el paso 4. La revisión de memoria se basó en la estimación del 33,5 % ([sección 10](#10-riesgos)) |
+| 4 | Contenedor `inventory-manager`, `admin.<dominio>`, DNS (a cargo del usuario) y certificado (**aplicado en REQ-F-039** para los productos; desviación D-3: la API sigue sin publicarse). El `/admin` actual se retira en el ticket 6 del paso 4 |
+
+### Decisión B: tomada
+
+- **Fecha:** 2026-10-26 (REQ-F-039).
+- **Respuestas del usuario:** "Quiero que la api use koa.js y todo lo que usan las landing Pagés
+  para que podamos unificar todo en una sola API", "Va acusar koa.js y vainilla js" e
+  "inventory-manager como las landings"; interfaz "SSR + Vanilla JS que mejora (Recomendado)".
+- **Opción elegida:** **Vanilla JS + SSR con Koa (como las landings)**, sin cambiar
+  `.claude/CLAUDE.md` §2.
+  - `inventory-manager` es una app Koa propia, en su contenedor: plantillas, Tailwind y Vanilla JS
+    que mejora la experiencia; los formularios funcionan sin JS.
+  - Una sola API (`api`) sirve `/api/v1/public` y `/api/v1/admin`.
+  - Sistema visual: el de las landings ("Sistema visual de las landings"; base de Birria El Muñeco y
+    acento por negocio, validado en P-4).
+- **Desviación D-3 de la decisión A** ("D-3: api sin publicar hasta el ticket 3"): la API **no** va
+  en `admin.<dominio>/api`.
+  - El navegador solo habla con `inventory-manager`, que reenvía la sesión a la API por la red
+    interna `admin`; así la cookie sigue en el mismo origen sin CORS.
+  - El ticket 3 (webhook del bot) publicará una entrada de `api` y decidirá su host y su ruta.
+
+### Decisión C: tomada
+
+- **Fecha:** 2026-10-26 (REQ-F-037).
+- **Respuesta del usuario:** "Zod (Recomendado)".
+- **Opción elegida:** Zod, una librería de esquemas que da tipos y validación desde una sola
+  definición. Se justificará según `.claude/rules/dependencias.md` en el ticket que la instale.
+- **Cuándo se aplica:** desde el paso 3. En el paso 2 no se instala Zod ni se migra ningún
+  validador: `packages/contracts` es un esqueleto vacío y los validadores propios (por ejemplo
+  `product-schema.ts`) siguen como están.
+- **Aplicada en el paso 3 (REQ-F-038):** Zod 4.6.7 (versión exacta), solo en
+  `packages/contracts` y solo para los esquemas públicos nuevos (decisión "Zod solo en
+  contracts"); ningún validador existente se migró. Justificación según
+  `.claude/rules/dependencias.md`: Node no valida esquemas y los validadores propios no dan tipos
+  desde una sola definición; Zod es MIT, sin dependencias en ejecución ni scripts de instalación
+  (no cambia `allowScripts`) y queda cubierto por `audit:deps`. Se eligió la última versión con al
+  menos dos semanas de antigüedad al instalarla (2026-10-26, 17:13 UTC). La 4.6.5 se descartó: tiene
+  el aviso GHSA-mrhx-c7xc-m3w5 (high, corregido en 4.6.6) que detectó `audit:deps`.
 
 ## 10. Riesgos
 
-- **El paso 1 toca el pipeline de producción.** Se valida con el despliegue de `main` y el
-  `smoke.sh` del CI antes de seguir.
-- **Las landings pasan a depender de la API** (paso 3). Se mitiga con la caché y la última copia
-  buena de la [sección 6](#6-cómo-se-consume-la-api).
-- **Memoria del VPS** con más contenedores (decisión A): se mide en el paso 1.
+- **El paso 1 toca el pipeline de producción.** Se valida con el CI completo (incluido el
+  `smoke.sh`) en el PR hacia `epic/arquitectura`; el despliegue real llega cuando la épica se
+  mergea a `main`.
+- **Las landings pasan a depender de la API** (paso 3, aplicado en REQ-F-038). Se mitiga con la
+  caché, la última copia buena y la semilla de la [sección 6](#6-cómo-se-consume-la-api). Riesgo
+  aceptado: si `landing-pages` se reinicia con la API caída, muestra la semilla (que puede estar
+  desfasada respecto de la base) hasta que la API vuelva. Las cachés del bot (de la base) y de las
+  landings (de la API) pueden divergir un momento si falla un refresco; las dos se invalidan con
+  cada escritura.
+- **Memoria del VPS** con más contenedores (decisión A): medida en el paso 1 (REQ-F-036, CA-13
+  cumplido el 2026-10-26 con la toma de tráfico simulado: 33,5 %). Umbral: si la estimación con
+  tres contenedores supera el 80 % de la RAM total, la decisión A se revisa con el usuario. La
+  revisión previa al paso 3 parte de esta medición y el paso 3 vuelve a comprobar el umbral del
+  80 % ([sección 9](#9-decisiones)). Ver [Medición de memoria](#medición-de-memoria-del-vps).
+- **Revisión de memoria del paso 3** (REQ-F-038): por decisión del usuario ("Memoria: basta el
+  33,5 %"), se basa en la estimación del paso 1 **sin una medición nueva**. El contenedor `api` es
+  uno de los dos contenedores Node de esa estimación (1310,2 MiB, el 33,5 % de la RAM total, muy
+  por debajo del umbral del 80 %): **la decisión A se mantiene**. La medición real con `api` en
+  marcha queda para cuando la épica llegue a `main`.
+- **Revisión de memoria del paso 4, ticket 1** (REQ-F-039, RF-19): con la misma medición del paso 1
+  (pico de 1142 MiB usados en el host y 84,1 MiB del contenedor Node), la estimación con tres
+  contenedores Node (`api`, `inventory-manager` y la app medida) es
+  1142 + 3 × 84,1 = **1394,3 MiB, el 35,6 %** de 3915 MiB, muy por debajo del umbral del 80 %
+  (3132 MiB): **la decisión A se mantiene** sin volver al usuario.
+  - La imagen de `inventory-manager` solo instala las dependencias de su workspace (unos 17 MiB de
+    `node_modules`, sin Prisma). Medida local (Docker Desktop, `docker stats`, tras arrancar y servir
+    unas peticiones): **45,5 MiB**, por debajo de la cota de 84,1 MiB usada en la estimación.
+  - La medición real con los cuatro contenedores queda para cuando la épica llegue a `main`.
 - **Dos administraciones a la vez** durante el paso 4: el `/admin` actual se mantiene hasta que el
-  nuevo tenga lo mismo, y se retira en un ticket propio.
+  nuevo tenga lo mismo y se retira en el ticket 6. Desde REQ-F-039 muestra los productos en solo
+  lectura y el admin nuevo los edita (un solo escritor). Usuarios, cuenta, bot y menú siguen en el
+  `/admin` actual hasta los tickets 2 a 5.
+- **Estado en memoria de la `api`** (REQ-F-039): viven en el proceso las sesiones del admin nuevo,
+  el límite de intentos de acceso y las claves de idempotencia (creadas en `api/src/admin/index.ts`),
+  y la caché y el mutex del repositorio de productos de `core/catalog` (compuesto en
+  `api/src/server.ts`). Un reinicio o un despliegue de `api` cierra todas las sesiones (hay que
+  volver a entrar), y la `api` no puede tener más de una réplica mientras ese estado no pase a MySQL.
+
+### Medición de memoria del VPS
+
+Medida en el paso 1 (REQ-F-036) por SSH, solo con comandos de lectura (`free -m`, `nproc` y
+`docker stats --no-stream`). En MiB.
+
+| Toma | Fecha y hora (America/Mexico_City) | RAM total | Usada en el host | `app` | MySQL | Traefik |
+| --- | --- | --- | --- | --- | --- | --- |
+| En reposo | 2026-10-24 19:57 (sábado, fuera del horario de servicio) | 3915 (1 vCPU, swap de 2047 sin usar) | 1066 (27,2 %) | 67,2 | 509,9 | 118,4 |
+| Con tráfico simulado | 2026-10-25 20:32 a 20:59 (domingo, fuera del horario de servicio; carga generada). Media / pico | 3915 | 1106,9 / 1142 (29,2 % en el pico) | 80,1 / 84,1 | 515,3 / 515,3 | 124,5 / 127,1 |
+
+- **Perfil de la carga simulada** (2026-10-25, de 20:27 a 21:04, contra `https://birriaelmuneco.com`,
+  aprobada por el usuario): reposo de 5 min, rampa de 2 min, 15 min de promedio con 2 visitas por
+  minuto, 10 min de pico con 10 visitas por minuto (× 5) y 5 min de enfriamiento. Cada visita es un
+  navegador nuevo (HTML de la landing y sus CSS, JS e imágenes). A la vez, 10 sesiones de
+  `/admin` de solo lectura (una cuenta de editor temporal) a 8 peticiones por minuto en total. En
+  total: 148 visitas, 2315 peticiones de landing y 217 lecturas de `/admin`, todas con 200; los 10
+  accesos y los 10 cierres de sesión, con 303. Sin 5xx, sin 429 y sin errores de red; p95 máximo
+  de 709 ms en las landings y de 770 ms en `/admin`. La tabla resume las 95 muestras (cada 15 s)
+  de la rampa, el promedio y el pico. Por fase (media / pico de la memoria usada en el host y de
+  `app`): reposo 1101,2 / 1123 y 79,0 / 79,0; promedio 1106,3 / 1128 y 79,0 / 80,8; pico
+  1102,9 / 1113 y 82,1 / 84,1; enfriamiento 1107,9 / 1117 y 81,3 / 81,3. MySQL se mantuvo en
+  515,3 todo el tiempo. Memoria disponible mínima en el host: 2772 MiB.
+- **Estimación con tres contenedores:** con el pico de la carga simulada, el uso del host más dos
+  contenedores Node con el pico de `app` (cota de `api` e `inventory-manager`): 1142 + 2 × 84,1 =
+  **1310,2 MiB, el 33,5 %** de la RAM total. Con la toma en reposo del 2026-10-24 daba
+  1066 + 2 × 67,2 = 1200 MiB (30,7 %). Las dos están muy por debajo del umbral del 80 %
+  (3132 MiB): **la decisión A se mantiene**.
+- **Margen:** aun si cada contenedor Node usara cinco veces lo medido en el pico (unos 420 MiB),
+  la estimación sería de unos 1980 MiB (51 %).
+- **Por qué es simulada:** el tráfico real del domingo 2026-10-25 entre 08:00 y 15:00 fue casi nulo
+  (2 visitas a las landings; el resto, el healthcheck), y el log del sábado 2026-10-24 se perdió
+  porque el contenedor se reinició ese día a las 22:25. El perfil simulado supera con creces ese
+  tráfico real (148 visitas en 27 minutos frente a 2 en 7 horas). El VPS ejecuta todavía la imagen
+  de `main`, anterior al monorepo, con código equivalente. Dos intentos previos esa misma noche se
+  cortaron sin generar carga porque el primer acceso a `/admin` respondió 401 (credenciales de la
+  cuenta temporal); el tercero se completó sin cortes.
+- **Cierre (2026-10-26):** la medición queda cerrada con la toma de tráfico simulado. Por decisión
+  del usuario ("Cierra CA-13 y continua no puedo esperar hasta el sábado") se renunció a la toma
+  pasiva con tráfico real prevista para el sábado 2026-10-31 de 08:00 a 15:00. Es la base de la
+  revisión de memoria previa al paso 3, que vuelve a aplicar el umbral del 80 %: si la estimación lo
+  supera entonces, la decisión A se revisa con el usuario antes de seguir.
+- El Traefik es el del VPS y también sirve otros sitios: su uso no depende de este proyecto.

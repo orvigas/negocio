@@ -1,0 +1,5 @@
+# Workspace inventory-manager (REQ-F-039). Lo común (node_modules, .env) está en ../.gitignore.
+
+# Build de CSS (generado por Tailwind desde src/styles/)
+public/css/*
+!public/css/.gitkeep

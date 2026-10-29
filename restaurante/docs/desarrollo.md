@@ -6,6 +6,14 @@ Twilio). Los detalles de cada tema están en el [README](../README.md); esta gu�
 enlaza.
 
 Todos los comandos se ejecutan desde la carpeta `restaurante/` salvo que se indique otra cosa.
+`restaurante/` es la raíz de los npm workspaces (REQ-F-036 y REQ-F-037): sus scripts delegan en el
+workspace `landing-pages/`, donde está la app, o en `packages/db/` (Prisma: `db:generate`,
+`db:migrate`, `db:migrate:dev`). El dominio está en `packages/core/` (ver
+[Monorepo](../README.md#monorepo)). Las rutas de archivos de la app que cita esta guía (`src/`,
+`public/`, `.env`, `data/`, `.env.example`) son relativas a `landing-pages/`, y `prisma/` está en
+`packages/db/`. Si vienes de una copia anterior al monorepo, mueve tu `.env` y tu `data/` a
+`landing-pages/`. Si vienes de una anterior a REQ-F-037, copia `MIGRATION_DATABASE_URL` y
+`SHADOW_DATABASE_URL` a `packages/db/.env` (paso 3).
 
 ## 1. Requisitos
 
@@ -25,38 +33,70 @@ git clone git@github.com:orvigas/negocio.git
 cd negocio/restaurante
 nvm install && nvm use                # o asegúrate de tener Node >= 24.22.1
 npm ci --strict-allow-scripts         # mismas dependencias que el lockfile, igual que CI y Docker
-npm run db:generate                   # cliente de Prisma en src/generated/prisma (no se versiona)
+npm run db:generate                   # cliente de Prisma en packages/db/src/generated/prisma (no se versiona)
 npm run db:up                         # MySQL 8.4 local (ver el paso 4)
 ```
 
 - `npm ci` instala exactamente lo que dice `package-lock.json`. Usa `npm install` solo cuando
   vayas a agregar o actualizar una dependencia (y justifícala según
   `.claude/rules/dependencias.md`).
-- Solo se ejecutan los scripts de instalación aprobados en `allowScripts` de `package.json`. Si una
+- Solo se ejecutan los scripts de instalación aprobados en `allowScripts` del `package.json` de la raíz. Si una
   dependencia nueva trae uno, `--strict-allow-scripts` falla hasta revisarlo (ver
   [Puesta en marcha](../README.md#puesta-en-marcha)).
-- Repite `npm run db:generate` después de cambiar `prisma/schema.prisma` o de actualizar
+- Repite `npm run db:generate` después de cambiar `packages/db/prisma/schema.prisma` o de actualizar
   `@prisma/client`. Sin el cliente generado fallan `typecheck`, `lint`, `test` y `dev`.
 
 ## 3. Configurar `.env`
 
 ```sh
-cp .env.example .env
+cp landing-pages/.env.example landing-pages/.env
+cp packages/db/.env.example packages/db/.env
+cp api/.env.example api/.env
+cp inventory-manager/.env.example inventory-manager/.env
 ```
 
-`.env` no se versiona (está en `.gitignore` y en `.dockerignore`). Cada variable está explicada
-en `.env.example` y en [Configuración](../README.md#configuración). Para empezar basta con:
+Ninguno de los `.env` se versiona (están en `.gitignore` y en `.dockerignore`). Cada variable
+está explicada en su `.env.example` y en [Configuración](../README.md#configuración). Para empezar
+basta con, en `landing-pages/.env`:
 
 ```sh
 NODE_ENV=development
 WHATSAPP_MOLOTES=<número internacional, solo dígitos>
 WHATSAPP_BIRRIA=<número internacional, solo dígitos>
 DATABASE_URL=mysql://restaurante_app:app-dev@127.0.0.1:3307/restaurante
+API_INTERNAL_URL=http://127.0.0.1:3001
+```
+
+`api/.env` (la API propia de REQ-F-038) ya viene lista en su `.env.example`: `NODE_ENV`, `HOST`,
+`PORT=3001` y el mismo `DATABASE_URL`. `API_INTERNAL_URL` es obligatoria en `landing-pages`: sin
+ella (o con un valor que no sea una URL `http(s)` sin credenciales, parámetros ni fragmento) la app
+no arranca.
+
+**Admin nuevo (REQ-F-039).** `inventory-manager/.env` también viene lista (`PORT=3003` y
+`API_INTERNAL_URL=http://127.0.0.1:3001`). Para que la landing y el bot vean al instante los cambios
+de productos que hagas en el admin nuevo, conecta el aviso interno con la misma credencial en los
+dos lados (`openssl rand -hex 32`):
+
+```sh
+# api/.env
+LANDING_INTERNAL_URL=http://127.0.0.1:3002
+INTERNAL_NOTIFY_TOKEN=<la misma credencial>
+# landing-pages/.env
+INTERNAL_NOTIFY_TOKEN=<la misma credencial>
+```
+
+Sin ellas todo funciona igual, pero la landing y el bot ven el cambio como mucho en 60 s. En
+producción las dos son obligatorias. Si además quieres probar el modo de solo lectura de productos
+del `/admin` actual, pon `ADMIN_NEW_URL=http://127.0.0.1:3003` en `landing-pages/.env`.
+
+y, en `packages/db/.env` (solo las lee el CLI de Prisma; la app no las usa):
+
+```sh
 MIGRATION_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante
 SHADOW_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante_shadow
 ```
 
-- Las tres URL de la base ya vienen así en `.env.example` y apuntan al MySQL local del paso 4
+- Las tres URL de la base ya vienen así en los `.env.example` y apuntan al MySQL local del paso 4
   (credenciales de desarrollo, no secretas). `DATABASE_URL` es obligatoria: sin ella la app no
   arranca. Si cambias la contraseña, codifica los caracteres especiales (`@` -> `%40`).
 
@@ -76,7 +116,7 @@ La base de datos es MySQL 8.4 (usuarios de `/admin` y productos). `compose.yaml`
 
 ```sh
 npm run db:up        # levanta mysql-dev (Docker), solo en 127.0.0.1:3307, y espera a que esté listo
-npm run db:migrate   # aplica las migraciones (prisma migrate deploy con MIGRATION_DATABASE_URL)
+npm run db:migrate   # aplica las migraciones (prisma migrate deploy con MIGRATION_DATABASE_URL de packages/db/.env)
 npm run db:down      # lo detiene (los datos quedan en el volumen mysql-dev-data)
 ```
 
@@ -93,7 +133,7 @@ npm run db:down      # lo detiene (los datos quedan en el volumen mysql-dev-data
   `collation-server=utf8mb4_es_0900_as_cs` y modo estricto, y los mismos usuarios que crea
   `docker/mysql/initdb/01-usuarios.sh`.
 
-`DATA_DIR` vacío usa la carpeta `data/` del proyecto (ignorada por git). Ahí se guardan los JSON
+`DATA_DIR` vacío usa la carpeta `landing-pages/data/` (ignorada por git). Ahí se guardan los JSON
 de página de cada negocio y `changes.jsonl`. Estructura y reglas en
 [Archivos de datos](../README.md#archivos-de-datos-data_dir) y
 [Base de datos](../README.md#base-de-datos).
@@ -110,9 +150,17 @@ de página de cada negocio y `changes.jsonl`. Estructura y reglas en
 ## 5. Compilar el CSS y arrancar
 
 ```sh
-npm run build:css   # genera public/css/{molotes,birria,admin}/main.css (no se versiona)
-npm run dev         # servidor con recarga en http://127.0.0.1:3000
+npm run build:css   # genera el CSS de landing-pages (molotes, birria y admin) e inventory-manager (no se versiona)
+npm run dev         # api (3001), landings (3000) y admin nuevo (3003), con recarga
 ```
+
+`npm run dev` levanta tres procesos: la API (`npm run dev:api`, en `http://127.0.0.1:3001`;
+REQ-F-038), `landing-pages` (`npm run dev:landing`) y el admin nuevo (`npm run dev:inventory`, en
+`http://127.0.0.1:3003`; REQ-F-039). Puedes levantarlos por separado
+en dos terminales. Las landings leen los productos de la API: si no está en marcha, muestran la
+semilla de `content/seeds.ts` y registran `landing_products_fallback`; al levantarla, pasan a sus
+datos sin reiniciar (`landing_products_recovered`). Un cambio de producto en `/admin` se ve al
+recargar la landing.
 
 | URL | Qué muestra |
 | --- | ----------- |
@@ -120,6 +168,7 @@ npm run dev         # servidor con recarga en http://127.0.0.1:3000
 | `http://127.0.0.1:3000/?dia=lunes` | Fuerza el día del aviso (`lunes` … `domingo`, sin acentos); solo con `NODE_ENV=development`. El aviso sale una vez por sesión: ábrelo en una ventana privada nueva o borra `sessionStorage` para volver a verlo |
 | `http://127.0.0.1:3000/molotes` y `/birria` | Cada landing, siempre |
 | `http://127.0.0.1:3000/admin` | Administración (necesita el primer administrador del paso 3) |
+| `http://127.0.0.1:3003/` | Admin nuevo (REQ-F-039): productos de cada negocio, con las mismas cuentas de `/admin`. Necesita la API en marcha; sin ella, cada pantalla avisa con un 503 |
 
 - `npm run dev` reinicia al editar cualquier `.ts` importado. Un reinicio cierra las sesiones de
   `/admin` y borra las conversaciones del bot (están en memoria).
@@ -157,11 +206,11 @@ npm test            # suite completa (Vitest) contra MySQL 8.4
   [Pruebas](../README.md#pruebas)).
 - Las pruebas HTTP siguen la regla de [Pruebas HTTP](../README.md#pruebas-http-servidor-en-127001)
   (`listenLocal`, nunca `app.callback()`).
-- **Cambios en la base de datos:** edita `prisma/schema.prisma` (con la longitud de cada texto),
+- **Cambios en la base de datos:** edita `packages/db/prisma/schema.prisma` (con la longitud de cada texto),
   ejecuta `npm run db:migrate:dev -- --name <nombre>` contra el MySQL local, **revisa a mano** el
   `migration.sql` (cambia `utf8mb4_unicode_ci` por `utf8mb4_es_0900_as_cs` en cada
   `CREATE TABLE`), y después `npm run db:migrate` y `npm run db:generate`. Versiona la carpeta
-  nueva de `prisma/migrations/` y nunca edites una migración ya aplicada.
+  nueva de `packages/db/prisma/migrations/` y nunca edites una migración ya aplicada.
 
 ## 7. Bot de WhatsApp sin cuentas: `bot:chat`
 

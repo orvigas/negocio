@@ -33,6 +33,58 @@ Un solo **bot de WhatsApp** (opcional, conectado a la WhatsApp Cloud API de Meta
 los clientes de los dos negocios con la misma regla de días, muestra el menú del día, arma el
 pedido y lo envía al personal (ver [Bot de WhatsApp](#bot-de-whatsapp)).
 
+## Monorepo
+
+`restaurante/` es la raíz de un monorepo con **npm workspaces** (REQ-F-036 a REQ-F-039). La
+estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md).
+
+| Workspace | Contenido |
+| --- | --- |
+| `landing-pages/` | La app Koa descrita en este README (las landings, `/admin`, `/admin/api` y el bot de WhatsApp). Las landings leen los productos de `api/` (REQ-F-038) |
+| `api/` | API propia (REQ-F-038 y REQ-F-039): `GET /api/v1/public/{molotes,birria}/productos` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos. Solo en la red interna; ver [API propia](#api-propia-api) |
+| `inventory-manager/` | Admin nuevo (REQ-F-039): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
+| `packages/web/` (`@restaurante/web`) | Utilidades HTTP y SSR sin dominio que comparten las apps Koa (REQ-F-039): plantillas, lectura de formularios y JSON, mismo origen y logger JSON |
+| `packages/core/` (`@restaurante/core`) | Dominio en TypeScript puro, sin Koa ni Prisma: módulos `catalog`, `schedule`, `identity`, `bot-control` y `shared`. Cada módulo se importa solo por su `index.ts` (`@restaurante/core/catalog`) |
+| `packages/db/` (`@restaurante/db`) | Persistencia: `prisma/` (schema y migraciones), `prisma.config.ts`, el cliente de Prisma generado (`src/generated/prisma`), la conexión, la verificación al arrancar y las implementaciones Prisma de los repositorios de `core` |
+| `packages/contracts/` (`@restaurante/contracts`) | Contratos de la API con Zod (`zod` 4.6.7, solo aquí): los esquemas de `/api/v1/public` y `/api/v1/admin`, los clientes HTTP tipados de las landings y del admin nuevo, y el formulario de producto guiado por el descriptor |
+
+| En la raíz (`restaurante/`) | En `landing-pages/` |
+| --- | --- |
+| `package.json` (workspaces, `allowScripts`, los scripts y las herramientas comunes: TypeScript y ESLint), `package-lock.json` (único), `tsconfig.base.json` (opciones estrictas que extienden todos los workspaces), `tsconfig.json` y `eslint.config.ts` (lint de todo el monorepo), `.nvmrc`, `compose.yaml` y `docker/` (MySQL local), `.dockerignore`, `deploy/`, `ops/`, `security/`, `docs/` y este README | `src/`, `public/`, `tests/`, `scripts/`, `tsconfig.json`, `vitest.config.ts`, `.env.example` (y el `.env` local), `data/` (`DATA_DIR` por defecto) y el `Dockerfile` |
+
+- **Comandos:** todos los `npm run ...` de este README se ejecutan desde `restaurante/`. Cada
+  script de la raíz delega en su workspace (`npm run <script> -w landing-pages --`, o
+  `-w @restaurante/db` para `db:generate`, `db:migrate` y `db:migrate:dev`), así que los
+  argumentos se pasan igual que antes (`npm run admin:recover -- --usuario <nombre>`).
+  `typecheck` y `lint` cubren todos los workspaces desde la raíz. `npm ci` (o `npm install`) se
+  ejecuta siempre en la raíz: instala las dependencias en `restaurante/node_modules` y enlaza los
+  paquetes en `node_modules/@restaurante/`.
+- **Regla de dependencias:** `core` no importa nada del proyecto (solo `node:*`), `db` solo
+  importa `core`, `contracts` y `web` no importan nada del proyecto (solo Zod y Koa), `api` importa
+  `core`, `db`, `contracts` y `web`, nunca una app, e `inventory-manager` solo importa `contracts`
+  y `web` (también en sus `import()` dinámicos; REQ-F-039). El código de las landings (`controllers/landing.ts`,
+  `views/landings/` y `services/landing-products.ts`) no puede importar `db`, Prisma, `mariadb`,
+  `core/identity`, `core/bot-control`, la persistencia de `core/catalog` ni el repositorio de
+  productos: los productos le llegan del cliente de `contracts` (REQ-F-038). En todo
+  `landing-pages`, los paquetes se importan por su nombre, nunca por ruta relativa. `/admin` y el
+  bot pueden seguir importando `core` y `db` hasta el paso 4 (regla de transición). `npm run lint`
+  lo impone (ver [Arquitectura §4](docs/arquitectura.md#4-estructura-monorepo-con-npm-workspaces)).
+- **Rutas:** salvo que se indique otra cosa, las rutas de archivos de la app que cita este README
+  (`src/...`, `public/...`, `tests/...`, `scripts/...`, `.env`, `data/`) son relativas a
+  `landing-pages/`, y las de `core/...` y `db/...` a `packages/`. `prisma/...` y
+  `prisma.config.ts` están en `packages/db/`. `deploy/`, `ops/`, `security/`, `docs/` y
+  `compose.yaml` son relativas a `restaurante/`.
+- **Copia anterior a REQ-F-037:** copia `MIGRATION_DATABASE_URL` y `SHADOW_DATABASE_URL` de tu
+  `landing-pages/.env` a `packages/db/.env` (plantilla: `packages/db/.env.example`). El CLI de
+  Prisma lee el `.env` de su paquete y la app no usa esas variables. Después ejecuta
+  `npm install` y `npm run db:generate` desde la raíz.
+- **Copia de antes del monorepo:** mueve tu `.env` y tu carpeta `data/` locales (no versionados)
+  de `restaurante/` a `restaurante/landing-pages/` y vuelve a instalar desde la raíz:
+
+  ```sh
+  mv .env data landing-pages/ && rm -rf node_modules && npm ci
+  ```
+
 ## Guías
 
 Paso a paso, con enlaces a las secciones de este README:
@@ -59,25 +111,35 @@ Paso a paso, con enlaces a las secciones de este README:
 
 ## Puesta en marcha
 
+Desde `restaurante/` (la raíz de los workspaces):
+
 ```sh
 nvm use
-npm install
-npm run db:generate    # genera el cliente de Prisma (src/generated/prisma; no se versiona)
-cp .env.example .env   # completa al menos WHATSAPP_MOLOTES(_URL) y WHATSAPP_BIRRIA(_URL); trae DATABASE_URL local
+npm install            # en la raíz: instala todos los workspaces
+npm run db:generate    # genera el cliente de Prisma (packages/db/src/generated/prisma; no se versiona)
+cp landing-pages/.env.example landing-pages/.env   # completa al menos WHATSAPP_MOLOTES(_URL) y WHATSAPP_BIRRIA(_URL); trae DATABASE_URL local
+cp packages/db/.env.example packages/db/.env       # MIGRATION_DATABASE_URL y SHADOW_DATABASE_URL (CLI de Prisma)
+cp api/.env.example api/.env                       # API propia (REQ-F-038): PORT=3001 y el DATABASE_URL local
 npm run db:up          # MySQL 8.4 local (Docker), solo en 127.0.0.1:3307
-npm run db:migrate     # aplica las migraciones (MIGRATION_DATABASE_URL del .env)
+npm run db:migrate     # aplica las migraciones (MIGRATION_DATABASE_URL de packages/db/.env)
 npm run admin:hash-password   # opcional: genera ADMIN_PASSWORD_HASH para crear el primer administrador
 npm run build:css
-npm run dev            # http://127.0.0.1:3000 (administración: http://127.0.0.1:3000/admin)
+npm run dev            # api (127.0.0.1:3001) y landing-pages (http://127.0.0.1:3000; administración: /admin)
 ```
 
-En la primera ejecución se crea la carpeta de datos (`DATA_DIR`, por defecto `data/`) con
+`npm run dev` levanta los dos procesos, la API (`npm run dev:api`) y las landings
+(`npm run dev:landing`); también se pueden levantar por separado. Las landings leen los productos
+de `API_INTERNAL_URL` (en `landing-pages/.env`, `http://127.0.0.1:3001`). Si la API no está en
+marcha, las landings sirven la semilla de `content/seeds.ts` y lo registran
+(`landing_products_fallback`); en cuanto la API responde, muestran sus datos sin reiniciar.
+
+En la primera ejecución se crea la carpeta de datos (`DATA_DIR`, por defecto `landing-pages/data/`) con
 una copia de la semilla de cada negocio, y los productos se importan una sola vez a la base de
 datos MySQL. La app no migra: verifica al arrancar que la base esté lista. Ver
 [Base de datos](#base-de-datos).
 
-`npm install` solo ejecuta los scripts de instalación aprobados en `allowScripts` de
-`package.json` (`prisma` y `@prisma/engines`; `@parcel/watcher` y `fsevents`
+`npm install` solo ejecuta los scripts de instalación aprobados en `allowScripts` del
+`package.json` de la raíz (`prisma` y `@prisma/engines`; `@parcel/watcher` y `fsevents`
 están denegados porque no los necesitan). Si una dependencia nueva trae un script de
 instalación, `npm ci --strict-allow-scripts` (CI y Docker) falla hasta que se revise y se
 apruebe con `npm install-scripts approve <paquete>`.
@@ -87,20 +149,22 @@ apruebe con `npm install-scripts approve <paquete>`.
 | Script               | Descripción                                                 |
 | -------------------- | ----------------------------------------------------------- |
 | `npm start`          | Inicia el servidor (carga `.env` si existe). No fija `NODE_ENV`: debe venir del `.env` o del entorno |
-| `npm run dev`        | Servidor con recarga (`node --watch`; reinicia al editar cualquier `.ts` importado). Siempre con `NODE_ENV=development` (`scripts/dev-server.ts`), diga lo que diga el `.env` |
+| `npm run dev`        | La API y las landings a la vez, con recarga (`node --watch`; reinicia al editar cualquier `.ts` importado). Siempre con `NODE_ENV=development` (`scripts/dev-server.ts` de cada workspace), diga lo que diga el `.env` |
+| `npm run dev:api` / `npm run dev:landing` | Solo la API (`api/`, lee `api/.env`) o solo `landing-pages` (lee `landing-pages/.env`), con recarga |
+| `npm run start:api`  | Inicia la API sin recarga (carga `api/.env` si existe; `NODE_ENV` debe venir del `.env` o del entorno) |
 | `npm run build:css`  | Compila el CSS de ambas landings y de la administración (`build:css:molotes`, `build:css:birria`, `build:css:admin`) |
 | `npm run watch:css`  | Compilación de CSS en modo observación                      |
 | `npm run admin:hash-password` | Pide la contraseña de administración (sin mostrarla) e imprime el valor de `ADMIN_PASSWORD_HASH` |
 | `npm run admin:recover -- --usuario <nombre>` | Recupera el acceso de administración por consola (ver [Recuperar el acceso](#recuperar-el-acceso)) |
 | `npm run bot:chat [-- --ahora AAAA-MM-DDTHH:MM]` | Conversación con el bot de WhatsApp en la terminal contra el simulador de la Cloud API, sin Meta (ver [Probar el bot en local](#probar-el-bot-en-local)) |
-| `npm run db:generate` | Genera el cliente de Prisma en `src/generated/prisma` (necesario antes de `typecheck`, `lint`, `test` y `dev`) |
+| `npm run db:generate` | Genera el cliente de Prisma en `packages/db/src/generated/prisma` (necesario antes de `typecheck`, `lint`, `test` y `dev`) |
 | `npm run db:up` / `npm run db:down` | Levanta / detiene el MySQL 8.4 local de `compose.yaml` (solo en `127.0.0.1:3307`; datos en el volumen `mysql-dev-data`) |
-| `npm run db:migrate` | Aplica las migraciones pendientes (`prisma migrate deploy`) con `MIGRATION_DATABASE_URL` |
-| `npm run db:migrate:dev -- --name <nombre>` | Crea una migración nueva a partir de `prisma/schema.prisma` (solo desarrollo, contra el MySQL local con `MIGRATION_DATABASE_URL` y `SHADOW_DATABASE_URL`). Revisa a mano la colación de cada `CREATE TABLE` (ver [Base de datos](#base-de-datos)) |
-| `npm test`           | Tests unitarios e integración (Vitest + Supertest) contra MySQL 8.4 real (requiere `npm run db:up`; ver [Pruebas](#pruebas-con-base-de-datos)) |
-| `npm run typecheck`  | Verificación de tipos con `tsc` (`tsconfig.json`, sin generar archivos); termina con código distinto de 0 si hay errores. No forma parte de `npm test` |
+| `npm run db:migrate` | Aplica las migraciones pendientes (`prisma migrate deploy`, en `packages/db`) con `MIGRATION_DATABASE_URL` de `packages/db/.env` |
+| `npm run db:migrate:dev -- --name <nombre>` | Crea una migración nueva a partir de `packages/db/prisma/schema.prisma` (solo desarrollo, contra el MySQL local con `MIGRATION_DATABASE_URL` y `SHADOW_DATABASE_URL`). Revisa a mano la colación de cada `CREATE TABLE` (ver [Base de datos](#base-de-datos)) |
+| `npm test`           | Tests unitarios e integración de cada workspace con pruebas: `api/` (en proceso, sin MySQL) y `landing-pages/` (Vitest + Supertest, contra MySQL 8.4 real: requiere `npm run db:up`; ver [Pruebas](#pruebas-con-base-de-datos)) |
+| `npm run typecheck`  | Verificación de tipos con `tsc` en cada workspace (su `tsconfig.json`, que extiende `tsconfig.base.json`) y en la raíz, sin generar archivos; termina con código distinto de 0 si hay errores. No forma parte de `npm test` |
 | `npm run test:watch` | Vitest en modo observación                                  |
-| `npm run lint`       | ESLint (`eslint.config.ts`): backend en TypeScript con información de tipos (typescript-eslint) y `public/js` con las reglas de JavaScript para navegador. No modifica archivos; termina con código distinto de 0 si hay errores o avisos. No forma parte de `npm test` ni del Dockerfile, pero sí del [CI](#ci) |
+| `npm run lint`       | ESLint (`eslint.config.ts` de la raíz) sobre todos los workspaces: TypeScript con información de tipos (typescript-eslint), la regla de dependencias entre paquetes y `public/js` con las reglas de JavaScript para navegador. No modifica archivos; termina con código distinto de 0 si hay errores o avisos. No forma parte de `npm test` ni del Dockerfile, pero sí del [CI](#ci) |
 | `npm run lint:fix`   | Igual que `lint`, pero aplica las correcciones automáticas |
 | `npm run audit:deps` | Auditoría de dependencias por imagen (production, migrate y desarrollo) con la política del CI y las excepciones de `security/audit-exceptions.json` (ver [Auditoría de dependencias](#auditoría-de-dependencias)). Necesita red |
 
@@ -155,27 +219,37 @@ producción. Antes de `npm test`: `npm run db:up` (el MySQL local de `compose.ya
 
 ## Docker
 
-Los archivos están en esta carpeta: `Dockerfile`, `.dockerignore`, `compose.yaml` (MySQL local
-`mysql-dev` y el servicio `test`) y `docker/mysql/initdb/` (bases y usuarios del MySQL local).
+Archivos: `landing-pages/Dockerfile` y, en `restaurante/`, `.dockerignore`, `compose.yaml`
+(MySQL local `mysql-dev` y el servicio `test`) y `docker/mysql/initdb/` (bases y usuarios del
+MySQL local). El **contexto de build es `restaurante/`**, la raíz de los workspaces, porque ahí
+está el `package-lock.json` único: los comandos de esta sección se ejecutan desde `restaurante/`
+con `-f landing-pages/Dockerfile`. Dentro de la imagen se conserva la forma del workspace:
+`/app/package.json` y `/app/package-lock.json`, las dependencias en `/app/node_modules`, los
+paquetes en `/app/packages` (REQ-F-037; npm los enlaza en `/app/node_modules/@restaurante`) y la
+app en `/app/landing-pages`, que es el directorio de trabajo (los comandos relativos, como
+`node src/server.ts` o `node scripts/admin-recover.ts`, no cambian). Node ejecuta los `.ts` de los
+paquetes por su ruta real (`/app/packages/...`, fuera de `node_modules`), así que el type stripping
+funciona igual que con los de la app.
 
 El `Dockerfile` es multi-stage y todas las etapas parten de `node:24.22.1-alpine`: la versión
 exacta de Node, la misma de `.nvmrc`, para que una caché o un mirror nunca construyan la imagen
 con un 24.x vulnerable. La etiqueta solo flota en los parches de Alpine. Subir Node es un cambio
-explícito en tres sitios a la vez: `.nvmrc`, `engines.node` de `package.json` y el `FROM` del
-`Dockerfile` (ver [Versión de Node y avisos atendidos](#versión-de-node-y-avisos-atendidos)):
+explícito en tres sitios a la vez: `.nvmrc`, `engines.node` de los dos `package.json` (raíz y
+`landing-pages/`) y el `FROM` del `Dockerfile` (ver [Versión de Node y avisos atendidos](#versión-de-node-y-avisos-atendidos)):
 
 | Etapa        | Contenido                                                                      |
 | ------------ | ------------------------------------------------------------------------------ |
-| `base`       | Imagen base y directorio de trabajo (`/app`)                                   |
-| `deps`       | `npm ci` con solo `package.json` y `package-lock.json` (caché de dependencias) |
-| `build`      | Código + `npm run typecheck` + `npm run build:css` (si hay errores de tipos o Tailwind falla, el build de la imagen falla) |
-| `test`       | `build` + diseño fuente; comando por defecto `npm test`                        |
-| `migrate`    | Dependencias de producción + CLI de Prisma, `prisma/` y `prisma.config.ts`; usuario `node`; ejecuta `prisma migrate deploy` con `MIGRATION_DATABASE_URL` y termina |
-| `production` | Dependencias de producción (sin `typescript` ni `@types/*`), `src/` (`.ts`) y `public/` con el CSS compilado; usuario `node`; arranca con `node src/server.ts` |
+| `base`       | Imagen base y directorio de trabajo (`/app/landing-pages`)                     |
+| `deps`       | `npm ci` en `/app` con solo los `package.json` (raíz, `landing-pages/` y cada paquete de `packages/`) y `package-lock.json` (caché de dependencias) |
+| `build`      | Código de `landing-pages/` y `packages/`, la configuración común de la raíz (`tsconfig*.json`, `eslint.config.ts`) y el `README.md` de la raíz, que lee una prueba + `npm run db:generate` y `npm run typecheck` de la raíz (todos los workspaces) + `npm run build:css` (si hay errores de tipos o Tailwind falla, el build de la imagen falla) |
+| `test`       | `build` + diseño fuente; comando por defecto `npm test` desde `/app` (las suites de `api/` y `landing-pages/`) |
+| `migrate`    | Dependencias de producción + CLI de Prisma, `prisma/` y `prisma.config.ts` (de `packages/db`, copiados al directorio de trabajo `/app/landing-pages` como siempre); usuario `node`; ejecuta `prisma migrate deploy` con `MIGRATION_DATABASE_URL` y termina |
+| `production` | Dependencias de producción (sin `typescript` ni `@types/*`), `src/` (`.ts`) y `public/` con el CSS compilado, `packages/core`, `packages/contracts` y, de `packages/db`, `src/` (con el cliente generado) y las migraciones; usuario `node`; arranca con `node src/server.ts` |
+| `api`        | API propia (REQ-F-038): dependencias de producción, `api/src`, `packages/core`, `packages/contracts` y, de `packages/db`, `src/` y las migraciones; directorio de trabajo `/app/api`, `PORT=3001`, usuario `node`, `HEALTHCHECK` contra su propio endpoint; arranca con `node src/server.ts` |
 
-El `.dockerignore` deja fuera `node_modules/`, `.env*` (salvo `.env.example`), `data/`, el CSS
-generado localmente, logs, cobertura y `.git`: ningún secreto ni dato editable entra en las
-imágenes.
+El `.dockerignore` (en `restaurante/`, la raíz del contexto) deja fuera `node_modules/`, `.env*`
+(salvo `.env.example`), `data/`, el CSS generado localmente, logs, cobertura, `.git`, `deploy/`,
+`ops/`, `security/` y `docs/`: ningún secreto ni dato editable entra en las imágenes.
 
 ### Pruebas
 
@@ -190,10 +264,10 @@ docker compose run --rm test   # código de salida 0 si todo pasa; distinto de 0
   reconstruir automáticamente.
 - Las pruebas de contenido comparan la semilla con `../_stich_source_/`, que compose pasa como
   contexto adicional `design` (solo entra en la imagen de pruebas). Sin compose:
-  `docker build --target test --build-context design=../_stich_source_ -t restaurante:test .`
+  `docker build -f landing-pages/Dockerfile --target test --build-context design=../_stich_source_ -t restaurante:test .`
 - El contenedor usa UTC; no afecta a la selección de landing, que usa `BUSINESS_TIMEZONE`.
-- Compose lee el `.env` de esta carpeta solo para interpolar variables (no lo pasa al
-  contenedor). Si `ADMIN_PASSWORD_HASH` está sin comillas, Compose interpreta cada `$` del hash
+- Compose lee el `.env` de `restaurante/` (si existe; el de la app está en `landing-pages/`) solo
+  para interpolar variables (no lo pasa al contenedor), p. ej. `RESTAURANTE_DB_*_PASSWORD`. Si `ADMIN_PASSWORD_HASH` está sin comillas, Compose interpreta cada `$` del hash
   y muestra avisos `variable is not set` con fragmentos del hash. Escríbelo entre comillas
   simples (`ADMIN_PASSWORD_HASH='scrypt$...'`, Node lo lee igual) o ejecuta
   `COMPOSE_DISABLE_ENV_FILE=true docker compose run --rm test`.
@@ -208,8 +282,8 @@ completa en [Despliegue a producción](docs/despliegue.md)). Esta sección descr
 `production` por sí sola.
 
 ```sh
-docker build --target production -t restaurante:prod .
-docker build --target migrate -t restaurante:migrate .
+docker build -f landing-pages/Dockerfile --target production -t restaurante:prod .
+docker build -f landing-pages/Dockerfile --target migrate -t restaurante:migrate .
 # Migraciones (usuario con DDL), antes de arrancar la app:
 docker run --rm -e MIGRATION_DATABASE_URL='mysql://migrador:...@mysql:3306/restaurante' restaurante:migrate
 docker volume create restaurante-data
@@ -224,7 +298,7 @@ El compose de producción (red interna con MySQL, Traefik, usuarios de la base, 
 atrás) está en `deploy/` y se describe en [docs/despliegue.md](docs/despliegue.md).
 
 - La configuración se inyecta **al ejecutar** (`-e` o `--env-file .env`), nunca en el build. Se
-  valida igual que sin Docker: si falta una variable obligatoria (`WHATSAPP_*`, `DATABASE_URL`, `DATA_DIR`), el
+  valida igual que sin Docker: si falta una variable obligatoria (`WHATSAPP_*`, `DATABASE_URL`, `DATA_DIR`, `API_INTERNAL_URL`), el
   contenedor termina con código 1 y lista los problemas sin mostrar valores.
 - `NODE_ENV=production`, `HOST=0.0.0.0` (todas las interfaces del contenedor, para que funcionen
   el puerto publicado y el `HEALTHCHECK`) y `PORT=3000` vienen definidos en la imagen; `-e HOST=…`
@@ -243,14 +317,100 @@ atrás) está en `deploy/` y se describe en [docs/despliegue.md](docs/despliegue
 - Al arrancar, la app **verifica** la base de `DATABASE_URL` (no migra; ver
   [Base de datos](#base-de-datos)); si no está lista, el contenedor termina con código 1 y el log
   `database_init_failed`. La imagen no incluye el CLI de Prisma ni SQLite: lleva el cliente
-  generado, las migraciones (`prisma/migrations`, solo para comprobar su estado) y los comandos
+  generado, las migraciones (`/app/packages/db/prisma/migrations`, solo para comprobar su estado) y los comandos
   de consola (`scripts/`). Pesa unos 250 MB.
 - La imagen `migrate` (target `migrate`) solo ejecuta `prisma migrate deploy` con
   `MIGRATION_DATABASE_URL` (usuario con DDL) y termina: 0 si todo se aplicó, 1 si no.
+- La imagen `api` (target `api`, REQ-F-038) y la imagen `inventory-manager` (target
+  `inventory-manager`, REQ-F-039) salen del mismo `Dockerfile`.
+  - `inventory-manager` tiene `WORKDIR` `/app/inventory-manager`, puerto 3003 y `HEALTHCHECK` contra
+    `/salud`.
+  - Solo instala las dependencias de su workspace (sin Prisma) y los iconos de las landings para el
+    favicon.
+  - Se construye con
+    `docker build -f landing-pages/Dockerfile --target inventory-manager -t restaurante:inventory-manager .`.
 - Recuperar el acceso dentro del contenedor:
   `docker exec -it restaurante node scripts/admin-recover.ts --usuario <nombre>`.
 - `/admin` exige HTTPS en producción (ver [Seguridad](#seguridad-1)): en el VPS lo da Traefik y
   `deploy/compose.prod.yaml` fija `TRUST_PROXY=true`.
+
+### API propia (`api/`)
+
+La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquitectura.md)):
+
+- **Administración** (`/api/v1/admin`, REQ-F-039), la que usa el admin nuevo:
+  - acceso (`POST|GET|DELETE /sesion`) con la sesión en la API, que el admin reenvía como
+    `Authorization: Bearer`;
+  - productos de cada negocio (listar, ver, descriptor del formulario, crear con `Idempotency-Key`,
+    editar con `version`, eliminar, recuperar, mover y reordenar), con las mismas reglas que
+    `/admin/api`;
+  - las escrituras exigen el token CSRF de la sesión en `X-CSRF-Token`; el límite de intentos cuenta
+    el último valor de `X-Forwarded-For`, que escribe el admin.
+  - Tras cada escritura, la API avisa a `landing-pages` por su puerto interno (`LANDING_INTERNAL_URL`
+    y la credencial `INTERNAL_NOTIFY_TOKEN`, obligatorias en producción) y su respuesta lleva
+    `meta.freshness` (`confirmed` o `pending`).
+  - El contrato está en `packages/contracts/admin.ts`; el detalle, en
+    [Arquitectura §8](docs/arquitectura.md#8-plan-de-migración).
+
+- `GET /api/v1/public/{molotes|birria}/productos` responde `200 { "data": ... }` con los productos
+  publicados (la forma que pintan las landings), validados con el esquema de `contracts`. Lee la
+  base en cada petición (sin caché propia). Errores con `{ "error": { "code", "message" } }`: 404
+  (`BUSINESS_NOT_FOUND` o `NOT_FOUND`), 405 (`METHOD_NOT_ALLOWED`, con `Allow: GET, HEAD`), 503
+  (`DATABASE_UNAVAILABLE`) y 500. Ningún error lleva stack, SQL ni credenciales.
+- Variables (`api/.env.example`): `NODE_ENV` (obligatoria), `HOST` (127.0.0.1 por defecto),
+  `PORT` (3001 por defecto), `DATABASE_URL` (el usuario solo DML de la app) y
+  `DATABASE_ALLOW_NEWER_SCHEMA` (solo la vuelta atrás de `deploy.sh`). Al arrancar verifica la
+  base igual que la app (`database_init_failed` y código 1 si no está lista); nunca migra, nunca
+  importa semillas ni escribe: la importación sigue siendo de `landing-pages`.
+- En producción va en su propio contenedor (`api`), solo en las redes internas `db` y `admin`: sin
+  puertos publicados ni router de Traefik. `landing-pages` la alcanza en
+  `API_INTERNAL_URL=http://api:3001`, igual que `inventory-manager` por la red `admin`.
+- **Landings:** leen los productos de la API con una caché en memoria
+  (`src/services/landing-products.ts`). Una escritura de productos de `/admin` (HTML o
+  `/admin/api`) invalida la caché de ese negocio y la siguiente visita espera los datos nuevos
+  (como mucho 1,5 s); sin escrituras, se refrescan en segundo plano cada 60 s. Si la API no
+  responde, tarda más del límite o devuelve algo que no cumple el contrato, se sirve la última
+  copia buena (sin límite de tiempo) o, si nunca la hubo, la semilla de `content/seeds.ts`, y se
+  registra `landing_products_fallback` (como mucho uno por minuto durante una caída) y, al volver,
+  `landing_products_recovered`. Ninguna landing responde 5xx por un fallo de la API.
+- `API_INTERNAL_URL` es obligatoria en `landing-pages` (URL `http`/`https` sin usuario,
+  contraseña, parámetros ni fragmento): ausente o inválida, la app termina con código 1 sin
+  repetir el valor.
+- **Aviso interno** (REQ-F-039): `landing-pages` escucha en `INTERNAL_PORT` (3002 por defecto; nunca
+  el de `PORT`, que es el que enruta Traefik) solo `POST /internal/v1/productos-cambiados`, con
+  `Authorization: Bearer <INTERNAL_NOTIFY_TOKEN>`. Invalida la caché de la landing de ese negocio y
+  recarga el catálogo del bot. Si el aviso se pierde, la red de seguridad es la caducidad de 60 s de
+  la caché y la recarga del catálogo del bot cada 60 s.
+
+### Admin nuevo (`inventory-manager/`)
+
+El admin nuevo de REQ-F-039 (paso 4 de [Arquitectura](docs/arquitectura.md)), en
+`https://admin.birriaelmuneco.com` (en local, `http://127.0.0.1:3003`; ver
+[Entorno de desarrollo](docs/desarrollo.md)).
+
+- **Pantallas:** acceso, selector de negocio, productos (lista por categoría, alta, edición,
+  eliminar con confirmación, eliminados con «Recuperar», y subir y bajar) y salir. Todo funciona sin
+  JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el doble envío y reordena sin
+  recargar.
+- **Sesión:** la de la API. El admin guarda su id en la cookie `__Host-admin_sid` (en producción;
+  `admin_sid` en local), `HttpOnly`, `Secure`, `SameSite=Strict`, sin `Domain`, y la reenvía como
+  Bearer. Caduca tras 2 h sin actividad o si la cuenta cambia. Las cuentas son las de `/admin`; la
+  sesión es aparte.
+- **Errores:** 422 con el error junto a cada campo y un resumen enlazado; 409 con lo escrito, quién y
+  cuándo cambió el producto, y la opción de cargar la versión vigente o guardar encima; 503 con un
+  aviso sin perder lo escrito.
+- **Seguridad:** mismo origen en todo POST y el token CSRF de la API; `no-store` y `noindex`; CSP
+  estricta; en producción, solo por HTTPS (salvo `/salud`, para el `HEALTHCHECK`).
+- **Variables** (`inventory-manager/.env.example`): `NODE_ENV`, `HOST`, `PORT` (3003),
+  `API_INTERNAL_URL` (obligatoria) y `TRUST_PROXY`. No tiene credenciales de la base.
+- **Sistema visual:** el de las landings (P-4): base de Birria El Muñeco y el acento del negocio que
+  se edita. `npm run build:css` genera `inventory-manager/public/css/main.css` (no se versiona).
+- **Producción:** contenedor `inventory-manager` en las redes `traefik-public` y `admin`, con su
+  router de Traefik (límite de 60 peticiones por minuto con ráfaga de 60) ([Despliegue](docs/despliegue.md)).
+- **Convivencia:** con `ADMIN_NEW_URL` en `landing-pages`, la edición de productos del `/admin`
+  actual queda en solo lectura: sin controles, con un aviso y un enlace al admin nuevo; sus POST
+  responden 410 y `/admin/api` responde 410 `PRODUCTS_MOVED`. Usuarios, cuenta, bot y menú siguen en
+  `/admin`.
 
 ## CI
 
@@ -277,7 +437,7 @@ el job `deploy` usa secretos (los del environment `production`).
 - Primero corre el job `cambios`, que clasifica con `git diff` los archivos que el PR agrega a su
   rama base (o los del push a `main`). Son **solo documentación** si todos están en `.claude/`, son
   `*.md` fuera de `restaurante/` o están en `restaurante/docs/` con extensión `.md`. Los demás
-  `*.md` de `restaurante/` cuentan como código (`tests/unit/whatsapp-bot-free-text.test.ts` lee
+  `*.md` de `restaurante/` cuentan como código (`landing-pages/tests/unit/whatsapp-bot-free-text.test.ts` lee
   este README y `tests/fixtures/` forma parte de las pruebas), igual que cualquier otro archivo
   (código, Docker, CI, configuración), sin importar el nombre de la rama.
 - En un PR, `calidad`, `docker` y `auditoria` solo corren si hay cambios de código;
@@ -367,7 +527,7 @@ Sin entrar al VPS (REQ-F-030), en **Actions → CI**:
 
 | Estado | Dónde | Qué significa | Job `deploy` |
 | ------ | ----- | ------------- | ------------ |
-| **Desplegado** | `deploy` | El commit quedó sirviendo en producción. Incluye los digests de app y migrate | Éxito |
+| **Desplegado** | `deploy` | El commit quedó sirviendo en producción. Incluye los digests de app, migrate y api (REQ-F-038) | Éxito |
 | **Omitido** | `vigente` | `main` ya está en otro commit (enlazado); lo desplegará su propia ejecución. Producción no se tocó | Omitido (*skipped*) |
 | **Omitido** | `deploy` | Igual, pero `main` avanzó mientras `deploy` esperaba al despliegue en curso, o se volvió a ejecutar solo `deploy` de un commit antiguo | Fallo, sin tocar el VPS |
 | **Revertido** | `deploy` | La versión nueva no quedó sana (código 21) y producción sigue con la anterior. El commit anterior no está disponible en el resumen: la imagen anterior figura en el log del paso `desplegar` y en `state/release.env` | Fallo |
@@ -389,9 +549,9 @@ cada imagen una sola vez y las reutiliza en todas sus comprobaciones.
 
 | Comprobación | Pasos, en orden |
 | ------------ | --------------- |
-| `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado), `npm run db:up` (MySQL 8.4 de `compose.yaml`), `prisma migrate diff` (el esquema y las migraciones no divergen) y `npm test -- --maxWorkers=4` (contra MySQL; ver [Trabajadores de Vitest en el CI](#trabajadores-de-vitest-en-el-ci)) |
-| `docker`     | 1) Imágenes: build de los targets `production` y `migrate` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64`, con la caché `gha` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite y que `migrate` aplica el esquema sobre una base vacía con código 0; arranca `production` sin `HOST` y comprueba que escucha en `0.0.0.0`, queda `healthy` y responde por el puerto publicado (REQ-F-015). 2) Despliegue, con las mismas imágenes: `shellcheck` de los scripts de `deploy/` y de `ops/backup/`, `deploy/ci/resumen-test.sh` (cada estado del resumen de `deploy`, con entradas simuladas; REQ-F-030), las unidades de systemd de los respaldos y la prueba de humo del despliegue, `deploy/ci/smoke.sh` (REQ-F-016): el compose de producción no publica puertos y MySQL solo está en la red interna; con un registro local y un Traefik v3 ejecuta `deploy.sh` como el comando forzado de SSH y comprueba los rechazos (argumentos, suma de `deploy/`, permisos del `.env`), el primer despliegue, las redirecciones 301, el 429 en `/admin`, la IP y el esquema en el log, la retención de 7 volcados, la migración fallida (la app no se toca), la vuelta atrás ante una imagen rota (también tras una migración nueva) y dos despliegues a la vez; por último, la prueba de humo de los respaldos (`ops/backup/ci/smoke.sh`, REQ-F-019) |
-| `auditoria`  | Node 24 y `node scripts/audit-deps.ts` (REQ-F-020), sin `npm ci`: `npm audit` sobre `package-lock.json` por imagen, con la política de [Auditoría de dependencias](#auditoría-de-dependencias) |
+| `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado), `npm run db:up` (MySQL 8.4 de `compose.yaml`), `prisma migrate diff` (el esquema y las migraciones no divergen) y `npm test -- --maxWorkers=4` (contra MySQL; el argumento llega a cada workspace; ver [Trabajadores de Vitest en el CI](#trabajadores-de-vitest-en-el-ci)) |
+| `docker`     | 1) Imágenes: build de los targets `production`, `migrate`, `api` e `inventory-manager` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64`, con la caché `gha` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite, que `production` y `api` llevan el código de `contracts` (REQ-F-038) y de `packages/web` (y `api`, la copia de las imágenes de las landings), que `inventory-manager` (REQ-F-039) no lleva `packages/db` ni `packages/core`, ni Prisma ni mariadb, y sí `contracts`, `web`, su CSS compilado y los iconos de las landings, y que `migrate` aplica el esquema sobre una base vacía con código 0; arranca la `api` en la red interna hasta que queda `healthy` (con la credencial del aviso interno) y `production` sin `HOST` con `API_INTERNAL_URL` hacia ella, y comprueba que escucha en `0.0.0.0`, queda `healthy`, responde por el puerto publicado (REQ-F-015) y carga los productos de la API; después, `inventory-manager` queda `healthy` con su `HEALTHCHECK` (`/salud`), y se retira el MySQL de estas comprobaciones (`docker compose down --volumes`). 2) Despliegue, con las mismas imágenes: `shellcheck` de los scripts de `deploy/` y de `ops/backup/`, `deploy/ci/resumen-test.sh` (cada estado del resumen de `deploy`, con entradas simuladas; REQ-F-030), las unidades de systemd de los respaldos y la prueba de humo del despliegue, `deploy/ci/smoke.sh` (REQ-F-016), con las cuatro imágenes: el compose de producción no publica puertos y MySQL solo está en la red interna; con un registro local y un Traefik v3 ejecuta `deploy.sh` como el comando forzado de SSH y comprueba los rechazos (argumentos, suma de `deploy/`, permisos del `.env`), el primer despliegue, las redirecciones 301, el 429 en `/admin`, la IP y el esquema en el log, la retención de 7 volcados, la migración fallida (la app no se toca), la vuelta atrás ante una imagen rota (también tras una migración nueva) y dos despliegues a la vez. Desde REQ-F-038, también los tres digests (la forma de 2 se rechaza), la `api` solo en la red interna (sin puertos ni labels), la llamada de la app a la `api`, que las landings muestran lo que sirve la `api` y siguen en 200 con la `api` parada, y que una `api` rota termina con 15 sin tocar la app (o, si hubo migraciones nuevas, con la app recreada con `DATABASE_ALLOW_NEWER_SCHEMA=true`, que sobrevive a un reinicio). Desde REQ-F-039, los cuatro digests (la forma de 3, sin `inventory-manager`, se rechaza), `RESTAURANTE_ADMIN_DOMAIN` y la credencial del aviso interno obligatorios (si faltan, 3), ningún router de Traefik hacia el puerto interno 3002, `inventory-manager` solo en las redes `admin` y `traefik` (sin MySQL ni credenciales de la base), `healthy` y sin puertos, el subdominio del admin (200 en `/acceso` con `no-store` y `noindex`, 301 de HTTP a HTTPS, 429 tras la ráfaga de su límite de 60 por minuto, sin enrutar a la `api`), el aviso de la `api` a la app (401 sin credencial) y que un `inventory-manager` roto termina con 16, vuelve al anterior y deja la app como estaba y la `api` nueva en marcha; por último, la prueba de humo de los respaldos (`ops/backup/ci/smoke.sh`, REQ-F-019) |
+| `auditoria`  | Node 24 y `npm run audit:deps` (REQ-F-020; `landing-pages/scripts/audit-deps.ts`), sin `npm ci`: `npm audit` sobre el `package-lock.json` de la raíz por imagen, con la política de [Auditoría de dependencias](#auditoría-de-dependencias) |
 
 La caché de npm se invalida al cambiar `package-lock.json`; la de Docker reutiliza las capas que
 no cambian. El runner usa UTC; la selección de landing depende de `BUSINESS_TIMEZONE`, no de la
@@ -405,8 +565,12 @@ de un repositorio público tiene 4 vCPU (con 2 vCPU, Vitest usaba un solo trabaj
 pruebas corrían en serie). Medido con la suite en el contenedor `test` limitado a 4 CPU
 (`docker run --cpus=4`): 3 trabajadores, 160 s; 4, 143 y 149 s (dos ejecuciones); 6, 154 s; 8, 175 s. Más trabajadores
 que núcleos no ayuda: la CPU se satura y las pruebas de procesos hijos y de bloqueos tardan más.
-Cada trabajador usa su propia base `restaurante_test_*` (la salvaguarda de `tests/setup/` no
-cambia).
+Cada trabajador usa su propia base `restaurante_test_*` (la salvaguarda de
+`landing-pages/tests/setup/` no cambia). El script `test` de la raíz
+(`npm run test --workspaces --if-present --`) pasa a cada workspace los argumentos que siguen a
+`--`: `npm test -- --maxWorkers=4` llega como `vitest run --maxWorkers=4` a `api/`,
+`landing-pages/` e `inventory-manager/`. Sin el `--` final del script, npm tomaría
+`--maxWorkers` como opción propia (aviso `Unknown cli config`) y Vitest no lo recibiría.
 
 Con varios trabajadores, la suite llega a abrir entre 105 y 130 conexiones a MySQL a la vez (de 4 a 8 trabajadores) (pools, procesos hijos
 y bases de cada trabajador), cerca del límite por defecto de MySQL (151; error 1040 *Too many
@@ -420,9 +584,11 @@ Desde esta carpeta (`restaurante/`):
 
 ```sh
 npm ci --strict-allow-scripts && npm run db:generate && npm run typecheck && npm run lint && npm run build:css && npm run db:up && npm test   # calidad
-SHADOW_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante_shadow npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code   # divergencia
-docker buildx build --platform linux/amd64 --target production .              # docker
-docker buildx build --platform linux/amd64 --target migrate .
+(cd packages/db && SHADOW_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante_shadow ../../node_modules/.bin/prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code)   # divergencia
+docker buildx build --platform linux/amd64 -f landing-pages/Dockerfile --target production .   # docker
+docker buildx build --platform linux/amd64 -f landing-pages/Dockerfile --target migrate .
+docker buildx build --platform linux/amd64 -f landing-pages/Dockerfile --target api .
+docker buildx build --platform linux/amd64 -f landing-pages/Dockerfile --target inventory-manager .
 npm run audit:deps                                                            # auditoria
 ```
 
@@ -431,11 +597,11 @@ dentro de un contenedor con el socket de Docker y una carpeta de trabajo que el 
 misma ruta:
 
 ```sh
-docker build -t restaurante:production --target production . && docker build -t restaurante:migrate --target migrate .
+docker build -f landing-pages/Dockerfile -t restaurante:production --target production . && docker build -f landing-pages/Dockerfile -t restaurante:migrate --target migrate . && docker build -f landing-pages/Dockerfile -t restaurante:api --target api . && docker build -f landing-pages/Dockerfile -t restaurante:inventory-manager --target inventory-manager .
 docker network create traefik-public 2>/dev/null; w=/tmp/restaurante-smoke; mkdir -p "$w"
 docker run --rm --network traefik-public -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$PWD/deploy:/src/deploy:ro" -v "$w:$w" -e SMOKE_WORKDIR="$w" docker:cli \
-  sh -c 'apk add -q bash curl jq coreutils findutils util-linux gzip && bash /src/deploy/ci/smoke.sh restaurante:production restaurante:migrate'
+  sh -c 'apk add -q bash curl jq coreutils findutils util-linux gzip && bash /src/deploy/ci/smoke.sh restaurante:production restaurante:migrate restaurante:api restaurante:inventory-manager'
 ```
 
 Si un paso falla en GitHub por un problema de red (npm o Docker Hub), vuelve a ejecutarlo desde
@@ -552,8 +718,9 @@ El servidor ya desplegado sigue con la versión anterior hasta el siguiente desp
 
 ### Dependabot
 
-`.github/dependabot.yml` (REQ-F-020) revisa cada lunes las dependencias npm de `restaurante/`,
-la imagen base de su `Dockerfile` y las acciones de GitHub. Las alertas y las actualizaciones de seguridad de Dependabot están
+`.github/dependabot.yml` (REQ-F-020) revisa cada lunes las dependencias npm de `restaurante/` (la
+raíz de los workspaces, con su lockfile único), la imagen base de `landing-pages/Dockerfile` y las
+acciones de GitHub. Las alertas y las actualizaciones de seguridad de Dependabot están
 activadas en el repositorio (**Settings → Code security**).
 
 - **Actualización rutinaria:** un PR semanal agrupado con las versiones menores y de parche. Las
@@ -561,13 +728,14 @@ activadas en el repositorio (**Settings → Code security**).
 - **Seguridad:** los PR de seguridad se abren siempre, también si exigen una versión mayor.
 - **Prisma:** `prisma`, `@prisma/*` y `mariadb` llegan juntos en un PR propio. Ese PR queda en
   rojo en `npm ci --strict-allow-scripts` hasta que actualices en el mismo PR las entradas
-  `prisma@x.y.z` y `@prisma/engines@x.y.z` de `allowScripts` en `package.json`, después de revisar
+  `prisma@x.y.z` y `@prisma/engines@x.y.z` de `allowScripts` en el `package.json` de la raíz, después de revisar
   sus scripts de instalación.
 - **Acciones:** siguen fijadas por SHA completo; Dependabot actualiza el SHA y el comentario de
   versión.
 - **Imagen de Node:** el `FROM node:24.22.1-alpine` recibe PR con las versiones menores y de
   parche de la línea 24 (las mayores se revisan a mano). Dependabot solo cambia el `Dockerfile`:
-  en el mismo PR sube `.nvmrc` y `engines.node` de `package.json` a la misma versión (ver
+  en el mismo PR sube `.nvmrc` y `engines.node` de los `package.json` que lo declaran (la raíz,
+  `landing-pages`, `api` e `inventory-manager`) a la misma versión (ver
   [Versión de Node y avisos atendidos](#versión-de-node-y-avisos-atendidos)); el CI toma la
   versión de `.nvmrc`.
 - **Sin merge automático:** cada merge a `main` despliega en producción. Los PR de Dependabot
@@ -614,8 +782,9 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `WHATSAPP_BIRRIA`          | Esta o la URL           | Igual que arriba, para Birria                                      |
 | `WHATSAPP_BIRRIA_MESSAGE`  | No                      | Igual que arriba, para Birria                                      |
 | `DATABASE_URL`             | Sí                      | Conexión a MySQL de la app: `mysql://usuario:contraseña@host[:puerto]/base`, sin parámetros; usuario solo DML. Los caracteres especiales van codificados (`@` -> `%40`, `:` -> `%3A`, `/` -> `%2F`, `%` -> `%25`). Secreta: nunca aparece en logs ni errores. Ver [Base de datos](#base-de-datos) |
-| `MIGRATION_DATABASE_URL`   | Solo para migrar        | Conexión con DDL para `npm run db:migrate`, `db:migrate:dev` y la imagen `migrate`. La app no la lee |
-| `SHADOW_DATABASE_URL`      | Solo `db:migrate:dev`   | Base sombra de Prisma para crear migraciones (desarrollo y CI) |
+| `API_INTERNAL_URL`         | Sí                      | Base de la API propia de la que las landings leen los productos (REQ-F-038): `http`/`https`, sin usuario, contraseña, parámetros ni fragmento. En local `http://127.0.0.1:3001`; en producción la fija el compose (`http://api:3001`). Ver [API propia](#api-propia-api) |
+| `MIGRATION_DATABASE_URL`   | Solo para migrar        | Conexión con DDL para `npm run db:migrate`, `db:migrate:dev` y la imagen `migrate`. La app no la lee: en local va en `packages/db/.env` (plantilla `packages/db/.env.example`), que carga el CLI de Prisma |
+| `SHADOW_DATABASE_URL`      | Solo `db:migrate:dev`   | Base sombra de Prisma para crear migraciones (desarrollo y CI). En local, en `packages/db/.env` |
 | `DATA_DIR`                 | Solo en producción (ruta absoluta) | Carpeta de los datos editables: JSON de página y `changes.jsonl` (por defecto `data/` del proyecto fuera de producción). No puede estar dentro de `src/` ni de `public/` |
 | `ADMIN_USER`               | No                      | Usuario del **primer administrador** (1-60 caracteres). Solo se usa si la base de datos no tiene usuarios; después se ignora (aviso `admin_bootstrap_ignored` en el log, sin valores). Sin usuarios ni estas variables, `/admin` responde 503 "no disponible"; con solo una de las dos o un hash inválido, la app no arranca |
 | `ADMIN_PASSWORD_HASH`      | No                      | Hash scrypt de la contraseña del primer administrador (`npm run admin:hash-password`). Nunca la contraseña en claro |
@@ -639,7 +808,7 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 
 Las tres rutas HTML usan el mismo controlador (`src/controllers/landing.ts`): con un
 `businessId` fijo renderiza ese negocio y sin él (`/`) renderiza Birria con el aviso del día;
-`/molotes` lleva el suyo (tabla de `getMolotesNotice` en `src/services/business-schedule.ts`).
+`/molotes` lleva el suyo (tabla de `getMolotesNotice` en `core/schedule/business-schedule.ts`).
 Responden con `Cache-Control: no-cache`, así que cada carga de `/` y de `/molotes` trae el aviso
 del día. La
 `<link rel="canonical">` siempre apunta a la ruta dedicada (`/` apunta a `/birria`), así que no
@@ -1142,7 +1311,7 @@ Los datos editables de cada landing están en dos sitios (REQ-F-008):
 | **Productos**: platillos y bebidas de Molotes, platillos de Birria (con sus variantes o chips) | Base de datos MySQL (tablas `product`, `product_variant`, `product_chip`) | Las listas de `src/content/<negocio>/seed.json` (solo para la importación inicial) |
 | **Página**: showcase del hero, texto destacado del menú ("8 Sabores de Barrio") y promoción | JSON por negocio (`DATA_DIR/<negocio>/current.json`) | `src/content/<negocio>/seed.json` |
 
-- **Modelo común de producto** (`src/services/product-schema.ts`): negocio, categoría
+- **Modelo común de producto** (`core/catalog/product-schema.ts`): negocio, categoría
   (`platillo` o `bebida`; Birria solo tiene platillos), slug, nombre, descripción, etiqueta
   (badge en Molotes, tag en Birria), precio y unidad, disponible, posición, imagen, versión y
   fechas. Según la combinación: tono, precio y cantidad por orden (Molotes platillo); icono y
@@ -1158,9 +1327,9 @@ Los datos editables de cada landing están en dos sitios (REQ-F-008):
 - **Eliminar** es lógico: el producto deja de verse y se puede recuperar.
 - Las semillas tienen los datos originales del diseño fuente; `tests/unit/content.test.ts`
   comprueba que coincidan con `../_stich_source_/` y que sus fotos existan.
-- El esquema del JSON de página está en `src/services/menu-schema.ts`. El formato de los precios
+- El esquema del JSON de página está en `core/catalog/menu-schema.ts`. El formato de los precios
   (`$45 c/u`, `$155 MXN`, `$45.50`) se aplica en `src/views/landings/`.
-- Disponibilidad: lo no disponible se oculta (`src/services/visible-menu.ts`). En Birria, la
+- Disponibilidad: lo no disponible se oculta (`core/catalog/visible-menu.ts`). En Birria, la
   variante activa es la primera disponible y de ella salen el precio y la descripción de la
   tarjeta; un platillo sin variantes disponibles se oculta. Si una sección se queda sin
   productos, conserva su encabezado y muestra un aviso con el CTA de WhatsApp.
@@ -1383,7 +1552,7 @@ DATA_DIR/
   `UPDATE`, `DELETE`) y **nunca migra**. Las migraciones las aplica un proceso aparte con un
   usuario con DDL (`MIGRATION_DATABASE_URL`): `npm run db:migrate` en local o la imagen `migrate`
   (`prisma migrate deploy`).
-- **Verificación al arrancar** (`src/db/verify.ts`): conexión (reintenta hasta 60 s si MySQL aún
+- **Verificación al arrancar** (`db/src/verify.ts`): conexión (reintenta hasta 60 s si MySQL aún
   arranca), credenciales, modo estricto (`STRICT_TRANS_TABLES`), utf8mb4 y colación de la base,
   las tablas y las columnas, y estado de las migraciones. Si algo falla, el servidor termina con
   código 1 y el log `database_init_failed` con un código estable, sin SQL, URL, credenciales ni
@@ -1391,12 +1560,12 @@ DATA_DIR/
   `DATABASE_NOT_STRICT`, `DATABASE_CHARSET_INVALID` (con la tabla o columna), `MIGRATIONS_PENDING`,
   `MIGRATION_INCOMPLETE`, `MIGRATION_MODIFIED`, `DATABASE_NEWER_THAN_CODE`,
   `MIGRATIONS_UNREADABLE` o `DATABASE_ERROR`. Mientras espera registra `database_waiting`.
-- **Migraciones nuevas (desarrollo):** cambia `prisma/schema.prisma`, ejecuta
+- **Migraciones nuevas (desarrollo):** cambia `packages/db/prisma/schema.prisma`, ejecuta
   `npm run db:migrate:dev -- --name <nombre>` (contra el MySQL local) y **revisa a mano** el
   `migration.sql`: Prisma escribe `COLLATE utf8mb4_unicode_ci` en cada `CREATE TABLE` y hay que
   cambiarlo por `utf8mb4_es_0900_as_cs` (`tests/unit/migrations-collation.test.ts` falla hasta
   hacerlo). Después `npm run db:migrate` y `npm run db:generate`. Versiona la carpeta nueva de
-  `prisma/migrations/`; nunca edites una migración ya aplicada (`MIGRATION_MODIFIED`). En MySQL el
+  `packages/db/prisma/migrations/`; nunca edites una migración ya aplicada (`MIGRATION_MODIFIED`). En MySQL el
   DDL no es transaccional: una migración que falla a mitad queda incompleta
   (`MIGRATION_INCOMPLETE`) y la salida es restaurar el respaldo. Prefiere migraciones pequeñas.
 - **Último administrador con concurrencia:** las escrituras de usuarios son transacciones
@@ -1434,85 +1603,107 @@ Si `current.json` no es JSON válido o no cumple el esquema (por ejemplo, un pre
 ## Estructura
 
 ```text
-restaurante/
-├── src/
-│   ├── server.ts             # Entrada del proceso: valida config, prepara DATA_DIR y la base de datos, primer administrador, importación de productos, escucha en PORT, cierre ordenado
-│   ├── app.ts                # createApp(): app Koa testeable (config, repositorio, logger y `now` inyectables)
-│   ├── config/               # env.ts (carga/validación y tipo Config), businesses.ts (ids de negocio)
-│   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests), whatsapp-webhook.ts (webhook del bot),
-│   │                         # admin.ts (acceso, inicio y menús), admin-products.ts (productos en HTML), admin-products-api.ts y
-│   │                         # admin-api-access.ts (API JSON), admin-business-view.ts, admin-users.ts, admin-account.ts, admin-access.ts
-│   ├── db/                   # client.ts (Prisma + adaptador MariaDB/MySQL), verify.ts (verificación al arrancar), errors.ts
-│   ├── generated/prisma/     # Cliente de Prisma generado por `npm run db:generate` (ignorado por git)
-│   ├── routes/               # Router (@koa/router): index.ts (landings), admin.ts (/admin), admin-api.ts (/admin/api)
-│   ├── middleware/           # Manejo centralizado de errores, log de requests, protección de /admin
-│   ├── repositories/         # Menús (contrato y reglas, archivos y memoria), productos (reglas + store Prisma y memoria) y usuarios (Prisma)
-│   ├── services/             # business-schedule, whatsapp, menu-schema, price, visible-menu, admin-form,
-│   │                         # menu-diff, admin-auth, session-store, login-throttle, user-schema,
-│   │                         # authorization, admin-bootstrap, product-schema, product-form, slug,
-│   │                         # whatsapp-bot/ (bot de WhatsApp: chat-bot (interfaz ChatBot), orchestrator, conversation, catalog,
-│   │                         #   schedule, messages, store, text; providers/: select, http-send, meta/ (WhatsAppBot), twilio/ (TwilioBot))
-│   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), textos del bot (bot.ts), horarios (hours.ts), semillas seed.json e icons.ts
-│   ├── utils/                # logger.ts (JSON estructurado), datetime.ts (zona del negocio), form-body.ts, json-body.ts, errors.ts
-│   ├── views/                # render.ts + plantillas HTML
-│   │   ├── layouts/base.html # <head> común (SEO, fuentes, CSS/JS por negocio) y skip link
-│   │   ├── pages/            # molotes.html, birria.html: header, secciones y footer del diseño
-│   │   ├── partials/         # icons/ (WhatsApp), seo-absolute, favicon-links, molotes/ y birria/ (tarjetas, aviso de sección vacía, etc.)
-│   │   ├── landings/         # Contenido -> datos de plantilla (index.ts, molotes.ts, birria.ts)
-│   │   └── admin/            # Plantillas y vistas de la administración (formulario generado desde el esquema)
-│   └── styles/
-│       ├── shared/base.css   # Base común de ambos diseños
-│       ├── molotes/main.css  # Entrada Tailwind + tokens @theme de Moloteando
-│       ├── birria/main.css   # Entrada Tailwind + tokens @theme de Birria El Muñeco
-│       ├── admin/main.css    # Entrada Tailwind de la administración
-│       └── components/       # Bloques BEM propios (sin uso por ahora)
-├── public/
-│   ├── css/{molotes,birria,admin}/main.css   # Generado por `npm run build:css` (ignorado por git)
-│   ├── js/
-│   │   ├── modules/          # Módulos ES compartidos (promo-form, variant-selector)
-│   │   ├── molotes/main.js   # Entrada JS de Moloteando
-│   │   └── birria/main.js    # Entrada JS de Birria El Muñeco
-│   └── img/
-│       ├── common/           # Imágenes usadas por ambas landings
-│       ├── molotes/          # icons/: favicons e iconos de pantalla de inicio (generados)
-│       └── birria/           # icons/: ídem
-├── prisma/
-│   ├── schema.prisma         # Esquema de la base de datos (usuarios, negocios asignados, auditoría y productos)
-│   └── migrations/           # Migraciones SQL de MySQL versionadas (las aplica el proceso migrate, nunca la app)
-├── prisma.config.ts          # Configuración del CLI de Prisma (solo desarrollo, CI y las etapas build/test/migrate)
-├── scripts/
-│   ├── hash-password.ts      # `npm run admin:hash-password`
-│   ├── admin-recover.ts      # `npm run admin:recover`
-│   ├── bot-chat.ts           # `npm run bot:chat`: el bot en la terminal contra el simulador (solo desarrollo)
-│   ├── audit-deps.ts         # `npm run audit:deps`: auditoría de dependencias por imagen (CI, job auditoria)
-│   ├── support/read-hidden.ts # Lectura de contraseñas sin eco (compartida)
-│   ├── support/audit-policy.ts # Política de la auditoría (umbral, excepciones, fail closed)
-│   └── generate-icons.py     # Genera public/img/<negocio>/icons/ (Python 3 + Pillow; solo desarrollo)
+restaurante/                  # Raíz de los npm workspaces (REQ-F-036, REQ-F-037 y REQ-F-038)
+├── package.json              # Workspaces, `allowScripts`, scripts (delegan en cada workspace) y herramientas comunes (TypeScript, ESLint)
+├── package-lock.json         # Lockfile único del monorepo
+├── tsconfig.base.json        # Opciones estrictas de TypeScript que extienden todos los workspaces
+├── tsconfig.json             # Solo para eslint.config.ts (raíz)
+├── eslint.config.ts          # ESLint de todo el monorepo (`npm run lint`), con la regla de dependencias entre paquetes
+├── .nvmrc                    # Versión de Node (la toman el CI y nvm)
+├── packages/
+│   ├── core/                 # @restaurante/core: dominio en TS puro (sin Koa ni Prisma); cada módulo se importa por su index.ts
+│   │   ├── shared/           # businesses.ts (ids de negocio), logger.ts (JSON estructurado), errors.ts (errorProp), database-errors.ts (DatabaseUnavailableError)
+│   │   ├── catalog/          # product-schema, menu-schema, visible-menu, price, slug, menu-diff, product-store (contrato del store y errores), memory-product-store y published (toPublished; REQ-F-038)
+│   │   ├── schedule/         # business-schedule (negocio activo y avisos del día)
+│   │   ├── identity/         # authorization, user-schema, admin-auth (scrypt) y user-repository (contrato del repositorio de usuarios)
+│   │   └── bot-control/      # bot-control-store (contrato: bloqueos, pausa y uso) y memory-bot-control-store
+│   ├── db/                   # @restaurante/db: persistencia con Prisma sobre MySQL
+│   │   ├── prisma/           # schema.prisma y migrations/ (SQL de MySQL versionado; las aplica el proceso migrate, nunca la app)
+│   │   ├── prisma.config.ts  # Configuración del CLI de Prisma (solo desarrollo, CI y las etapas build/test/migrate)
+│   │   ├── .env.example      # MIGRATION_DATABASE_URL y SHADOW_DATABASE_URL (el `.env` local va junto a él; ignorado por git)
+│   │   └── src/              # client.ts, verify.ts (verificación al arrancar), errors.ts, database-config.ts, paths.ts, user-repository.ts,
+│   │                         # prisma-product-store.ts, prisma-bot-control-store.ts y generated/prisma/ (cliente generado; ignorado por git)
+│   └── contracts/            # @restaurante/contracts: contratos de la API con Zod: products.ts (esquemas del endpoint público) y public-client.ts (cliente HTTP)
+├── api/                      # Workspace de la API propia (REQ-F-038): solo lectura, red interna
+│   ├── src/                  # server.ts (arranque: config, verificación de la base, escucha), app.ts (endpoint y errores), config.ts
+│   ├── scripts/dev-server.ts # Entrada de `npm run dev:api` (NODE_ENV=development)
+│   ├── tests/                # Pruebas en proceso con el store en memoria (sin MySQL)
+│   └── .env.example          # NODE_ENV, HOST, PORT (3001) y DATABASE_URL
+├── landing-pages/            # Workspace de la app Koa: landings, /admin, /admin/api y el bot de WhatsApp
+│   ├── src/
+│   │   ├── server.ts             # Entrada del proceso: valida config, prepara DATA_DIR y la base de datos, primer administrador, importación de productos, escucha en PORT, cierre ordenado
+│   │   ├── app.ts                # createApp(): app Koa testeable (config, repositorio, logger y `now` inyectables)
+│   │   ├── config/               # env.ts (carga/validación y tipo Config), business-paths.ts (ruta de cada landing)
+│   │   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests), whatsapp-webhook.ts (webhook del bot),
+│   │   │                         # admin.ts (acceso, inicio y menús), admin-products.ts (productos en HTML), admin-products-api.ts y
+│   │   │                         # admin-api-access.ts (API JSON), admin-business-view.ts, admin-users.ts, admin-account.ts, admin-access.ts
+│   │   ├── routes/               # Router (@koa/router): index.ts (landings), admin.ts (/admin), admin-api.ts (/admin/api)
+│   │   ├── middleware/           # Manejo centralizado de errores, log de requests, protección de /admin
+│   │   ├── repositories/         # Menús (contrato y reglas, archivos y memoria) y productos (reglas sobre el store de core/catalog)
+│   │   ├── services/             # whatsapp, admin-form, session-store, login-throttle, admin-bootstrap,
+│   │   │                         # product-form, bot-control, bot-usage, landing-products (productos de las landings desde la API; REQ-F-038),
+│   │   │                         # whatsapp-bot/ (bot de WhatsApp: chat-bot (interfaz ChatBot), orchestrator, conversation, catalog,
+│   │   │                         #   schedule, messages, store, text; providers/: select, http-send, meta/ (WhatsAppBot), twilio/ (TwilioBot))
+│   │   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), textos del bot (bot.ts), horarios (hours.ts), semillas seed.json e icons.ts
+│   │   ├── utils/                # datetime.ts (zona del negocio), form-body.ts, json-body.ts
+│   │   ├── views/                # render.ts + plantillas HTML
+│   │   │   ├── layouts/base.html # <head> común (SEO, fuentes, CSS/JS por negocio) y skip link
+│   │   │   ├── pages/            # molotes.html, birria.html: header, secciones y footer del diseño
+│   │   │   ├── partials/         # icons/ (WhatsApp), seo-absolute, favicon-links, molotes/ y birria/ (tarjetas, aviso de sección vacía, etc.)
+│   │   │   ├── landings/         # Contenido -> datos de plantilla (index.ts, molotes.ts, birria.ts)
+│   │   │   └── admin/            # Plantillas y vistas de la administración (formulario generado desde el esquema)
+│   │   └── styles/
+│   │       ├── shared/base.css   # Base común de ambos diseños
+│   │       ├── molotes/main.css  # Entrada Tailwind + tokens @theme de Moloteando
+│   │       ├── birria/main.css   # Entrada Tailwind + tokens @theme de Birria El Muñeco
+│   │       ├── admin/main.css    # Entrada Tailwind de la administración
+│   │       └── components/       # Bloques BEM propios (sin uso por ahora)
+│   ├── public/
+│   │   ├── css/{molotes,birria,admin}/main.css   # Generado por `npm run build:css` (ignorado por git)
+│   │   ├── js/
+│   │   │   ├── modules/          # Módulos ES compartidos (promo-form, variant-selector)
+│   │   │   ├── molotes/main.js   # Entrada JS de Moloteando
+│   │   │   └── birria/main.js    # Entrada JS de Birria El Muñeco
+│   │   └── img/
+│   │       ├── common/           # Imágenes usadas por ambas landings
+│   │       ├── molotes/          # icons/: favicons e iconos de pantalla de inicio (generados)
+│   │       └── birria/           # icons/: ídem
+│   ├── scripts/
+│   │   ├── hash-password.ts      # `npm run admin:hash-password`
+│   │   ├── admin-recover.ts      # `npm run admin:recover`
+│   │   ├── bot-chat.ts           # `npm run bot:chat`: el bot en la terminal contra el simulador (solo desarrollo)
+│   │   ├── audit-deps.ts         # `npm run audit:deps`: auditoría de dependencias por imagen (CI, job auditoria)
+│   │   ├── support/read-hidden.ts # Lectura de contraseñas sin eco (compartida)
+│   │   ├── support/audit-policy.ts # Política de la auditoría (umbral, excepciones, fail closed)
+│   │   └── generate-icons.py     # Genera public/img/<negocio>/icons/ (Python 3 + Pillow; solo desarrollo)
+│   ├── data/                     # DATA_DIR por defecto fuera de producción (ignorado por git)
+│   ├── tests/
+│   │   ├── helpers.ts            # Config válida, semillas y repositorio en memoria para pruebas
+│   │   ├── setup/                # no-meta.ts (ninguna llamada a Meta ni Twilio), database-global.ts y database-guard.ts (MySQL de pruebas y salvaguarda)
+│   │   ├── support/admin.ts      # App con administración (base de datos de prueba), usuarios, inicio de sesión y formularios
+│   │   ├── support/products.ts   # Entradas válidas de producto y repositorios de productos para pruebas
+│   │   ├── support/database.ts   # Bases MySQL de prueba por trabajador (restaurante_test_*; nunca una base real) y database-admin.ts, test-database-config.ts (salvaguarda), tcp-proxy.ts
+│   │   ├── support/process.ts    # Procesos reales: arranque del servidor y comandos de consola
+│   │   ├── support/png.ts        # Lectura mínima de PNG/ICO (dimensiones, opacidad, color de fondo)
+│   │   ├── support/cloud-api-double.ts # Doble de la WhatsApp Cloud API (ninguna prueba llama a Meta)
+│   │   ├── support/twilio-api-double.ts # Doble de la API de mensajes de Twilio (ninguna prueba llama a Twilio)
+│   │   ├── support/whatsapp.ts   # Entregas del webhook de Meta, firma, reloj y bot de prueba
+│   │   ├── support/twilio.ts     # Entregas (formulario) y firma de Twilio, y bot de prueba con Twilio
+│   │   ├── support/chat-bot-drivers.ts # Drivers por proveedor de la batería de contrato de ChatBot
+│   │   ├── fixtures/whatsapp/    # Entregas de ejemplo del webhook de Meta (forma de los ejemplos oficiales)
+│   │   ├── fixtures/twilio/      # Entregas de ejemplo del webhook de Twilio (formulario y StatusCallback)
+│   │   ├── snapshots/            # HTML de referencia de las landings (regresión visual con la semilla)
+│   │   ├── unit/                 # config, esquema, precios, formulario, repositorio de archivos, sesión, landings, contenido vs. diseño, JS sobre el HTML real
+│   │   └── integration/          # Landings (fecha, SEO, CTA, datos editables, datos dañados), administración, estáticos, errores
+│   ├── tsconfig.json             # Extiende tsconfig.base.json (+ DOM); solo verifica tipos (`npm run typecheck`; sin emitir archivos)
+│   ├── vitest.config.ts          # Configuración de Vitest
+│   ├── .env.example              # Variables documentadas; el `.env` local va junto a él (ignorado por git)
+│   └── Dockerfile                # Imagen multi-stage (base, deps, build, test, migrate, production; contexto de build: restaurante/); ver [Docker](#docker)
+├── deploy/                   # Producción: compose.prod.yaml, deploy.sh, mysql/initdb y ci/ (pruebas de humo); ver [Despliegue](docs/despliegue.md)
+├── ops/backup/               # Respaldos del host (REQ-F-019)
+├── docs/                     # Guías: desarrollo, despliegue y arquitectura
 ├── security/audit-exceptions.json # Excepciones de la auditoría de dependencias (30 días como máximo)
-├── data/                     # DATA_DIR por defecto fuera de producción (ignorado por git)
-├── tests/
-│   ├── helpers.ts            # Config válida, semillas y repositorio en memoria para pruebas
-│   ├── setup/                # no-meta.ts (ninguna llamada a Meta ni Twilio), database-global.ts y database-guard.ts (MySQL de pruebas y salvaguarda)
-│   ├── support/admin.ts      # App con administración (base de datos de prueba), usuarios, inicio de sesión y formularios
-│   ├── support/products.ts   # Entradas válidas de producto y repositorios de productos para pruebas
-│   ├── support/database.ts   # Bases MySQL de prueba por trabajador (restaurante_test_*; nunca una base real) y database-admin.ts, test-database-config.ts (salvaguarda), tcp-proxy.ts
-│   ├── support/process.ts    # Procesos reales: arranque del servidor y comandos de consola
-│   ├── support/png.ts        # Lectura mínima de PNG/ICO (dimensiones, opacidad, color de fondo)
-│   ├── support/cloud-api-double.ts # Doble de la WhatsApp Cloud API (ninguna prueba llama a Meta)
-│   ├── support/twilio-api-double.ts # Doble de la API de mensajes de Twilio (ninguna prueba llama a Twilio)
-│   ├── support/whatsapp.ts   # Entregas del webhook de Meta, firma, reloj y bot de prueba
-│   ├── support/twilio.ts     # Entregas (formulario) y firma de Twilio, y bot de prueba con Twilio
-│   ├── support/chat-bot-drivers.ts # Drivers por proveedor de la batería de contrato de ChatBot
-│   ├── fixtures/whatsapp/    # Entregas de ejemplo del webhook de Meta (forma de los ejemplos oficiales)
-│   ├── fixtures/twilio/      # Entregas de ejemplo del webhook de Twilio (formulario y StatusCallback)
-│   ├── snapshots/            # HTML de referencia de las landings (regresión visual con la semilla)
-│   ├── unit/                 # config, esquema, precios, formulario, repositorio de archivos, sesión, landings, contenido vs. diseño, JS sobre el HTML real
-│   └── integration/          # Landings (fecha, SEO, CTA, datos editables, datos dañados), administración, estáticos, errores
-├── tsconfig.json             # TypeScript estricto solo para verificar tipos (`npm run typecheck`; sin emitir archivos)
-├── vitest.config.ts          # Configuración de Vitest
-├── eslint.config.ts          # Configuración de ESLint (`npm run lint`)
-├── Dockerfile                # Imagen multi-stage (base, deps, build, test, migrate, production); ver [Docker](#docker)
-├── .dockerignore             # Excluye secretos, datos, dependencias y artefactos locales del build
+├── .dockerignore             # Contexto de build = restaurante/; excluye secretos, datos, dependencias y artefactos locales del build
 ├── docker/mysql/initdb/      # Bases y usuarios del MySQL local (solo desarrollo y pruebas)
 └── compose.yaml              # MySQL local `mysql-dev` (`npm run db:up`) y servicio `test` (`docker compose run --rm test`)
 ```
@@ -1544,7 +1735,7 @@ El horario real de cada negocio tiene una sola fuente estructurada: `src/content
 (días de servicio, apertura y cierre en `HH:MM` de 24 h), validada y expuesta por
 `src/content/hours.ts` (`BUSINESS_HOURS`, `getBusinessHours(id)`). Las horas son locales en
 `BUSINESS_TIMEZONE`; la fuente no guarda la zona. Esta fuente no decide qué landing se muestra
-(eso sigue en `src/services/business-schedule.ts`) y la usará el bot de WhatsApp.
+(eso sigue en `core/schedule/business-schedule.ts`) y la usará el bot de WhatsApp.
 
 Los textos de horario de las landings son literales en `src/content/<negocio>/index.ts`, porque
 cada lugar tiene su propio estilo. `tests/unit/business-hours.test.ts` comprueba que coinciden con
@@ -1629,7 +1820,7 @@ los PNG de alta resolución de `../_stich_source_/logo_<negocio>.png/screen.png`
 **Regenerar los iconos** (por ejemplo, si cambia un logo):
 
 1. Requisitos (solo en la máquina de desarrollo): Python 3 y Pillow (`pip install Pillow`).
-2. Desde `restaurante/`: `python3 scripts/generate-icons.py --preview-dir /tmp/iconos`.
+2. Desde `restaurante/landing-pages/`: `python3 scripts/generate-icons.py --preview-dir /tmp/iconos`.
    El recorte de la mascota (coordenadas en píxeles de la fuente) y los colores de fondo están
    al inicio del script; los colores deben coincidir con `icons.themeColor` del contenido.
 3. Revisa la hoja de contacto `icons-preview-<negocio>.png` que se deja en `--preview-dir`

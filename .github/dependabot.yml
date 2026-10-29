@@ -6,7 +6,9 @@
 # desde REQ-F-037); la imagen base desde restaurante/landing-pages/, donde está el Dockerfile de las
 # cuatro imágenes (production, migrate, api e inventory-manager).
 #
-# - Actualización rutinaria semanal y agrupada; las versiones mayores quedan fuera y se revisan a
+# - Actualización rutinaria mensual (el día 1 de cada mes) y agrupada, para no gastar una ejecución
+#   completa del CI cada semana por ecosistema; el grupo general conserva el nombre `semanal` (es el
+#   de sus ramas y PR). Las versiones mayores quedan fuera y se revisan a
 #   mano. Se excluyen con `allow` + `update-types`, que según la documentación de GitHub solo
 #   afecta a las actualizaciones de versión: las de seguridad se abren siempre, también si son
 #   mayores (un `ignore` sí podría bloquearlas).
@@ -26,8 +28,7 @@ updates:
   - package-ecosystem: npm
     directory: /restaurante
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "07:00"
       timezone: America/Mexico_City
     open-pull-requests-limit: 5
@@ -52,8 +53,7 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "07:00"
       timezone: America/Mexico_City
     commit-message:
@@ -65,8 +65,7 @@ updates:
   - package-ecosystem: docker
     directory: /restaurante/landing-pages
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "07:00"
       timezone: America/Mexico_City
     commit-message:

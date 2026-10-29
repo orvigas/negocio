@@ -1,6 +1,7 @@
 # CI (REQ-F-006 y REQ-F-014): tipos, lint, pruebas contra MySQL 8.4, divergencia entre esquema y
-# migraciones, y build de las imágenes production y migrate en cada PR hacia main o hacia la rama
-# intermedia epic/arquitectura (ver "Rama intermedia" más abajo). restaurante/ es la raíz de los
+# migraciones, y build de las cuatro imágenes (production, migrate, api e inventory-manager) en
+# cada PR hacia main o hacia la rama intermedia epic/arquitectura (ver "Rama intermedia" más
+# abajo). restaurante/ es la raíz de los
 # npm workspaces (REQ-F-036): ahí están .nvmrc, el package-lock.json único y los scripts, que
 # delegan en el workspace landing-pages (la app y su Dockerfile) o en los paquetes de packages/
 # (REQ-F-037: core, contracts y db; db:generate y las migraciones van a packages/db). typecheck y
@@ -9,19 +10,25 @@
 # local, porque un `services:` de GitHub no permite fijar la colación del servidor.
 #
 # Solo documentación: el job `cambios` compara los archivos del PR (o del push a main) y, si todos
-# son documentación (ver su comentario), calidad, docker, despliegue y auditoria quedan omitidas
-# (skipped) en el PR, y en main no se publica ni se despliega nada.
+# son documentación (ver su comentario), calidad, docker y auditoria quedan omitidas (skipped) en
+# el PR, y en main no se publica ni se despliega nada. Un PR en borrador tampoco corre las
+# validaciones (quedan omitidas): corren completas al marcarlo como listo (`ready_for_review`).
 #
-# Despliegue (REQ-F-016): las validaciones (calidad, docker, despliegue y auditoria, REQ-F-020)
+# Imágenes y despliegue en un solo job (`docker`): construye cada imagen una vez y, con ellas,
+# comprueba su contenido, la migración sobre una base vacía, la imagen production healthy y las
+# pruebas de humo del despliegue y de los respaldos (antes, jobs docker y despliegue, que volvía
+# a construir las imágenes).
+#
+# Despliegue (REQ-F-016): las validaciones (calidad, docker y auditoria, REQ-F-020)
 # corren en los PR. En un push a main con cambios de código, el job `validado` comprueba si el
 # árbol (tree) del commit de main es exactamente el que validó una ejecución en verde del PR
 # mergeado (ver su comentario): si lo es, `publish` publica las imágenes en GHCR (privado) sin
 # repetir las validaciones; si no lo es o no se puede decidir (main avanzó después del CI del PR,
-# push directo, error de la API), las cuatro validaciones corren en el push y `publish` solo
+# push directo, error de la API), las tres validaciones corren en el push y `publish` solo
 # corre si todas quedan en verde. `vigente` comprueba que el commit siga siendo la punta de main
 # (si no, resumen "Omitido" y no se despliega) y `deploy` despliega lo publicado en el VPS por SSH,
 # en el environment `production`. Redespliegue manual: `workflow_dispatch` sobre main (cualquier
-# otra rama se rechaza) corre las cuatro validaciones, publica y despliega la punta de main.
+# otra rama se rechaza) corre las tres validaciones, publica y despliega la punta de main.
 #
 # Rama intermedia (epic/arquitectura): los PR de los pasos de restaurante/docs/arquitectura.md van
 # a esa rama y corren las mismas validaciones que un PR hacia main, sin publicar ni desplegar
@@ -48,7 +55,8 @@ run-name: ${{ github.event_name == 'pull_request' && format('{0} · {1}', github
 on:
   pull_request:
     branches: [main, epic/arquitectura]
-    types: [opened, synchronize, reopened]
+    # ready_for_review: al pasar de borrador a listo corre el CI completo (en borrador se omite).
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
   # Redespliegue manual (Actions > CI > Run workflow). Solo sobre main: `cambios` rechaza otra rama.
@@ -76,8 +84,9 @@ jobs:
   # de su rama base (main o epic/arquitectura): lo que el PR agrega a su base, y deja el tree de
   # ese commit de merge en una anotación `arbol-validado` (la lee `validado` en el push a main). En
   # un push a main, el rango before..sha; si `before` no existe en el historial (force push), corre
-  # todo. En una ejecución manual todo es código; fuera de main, falla y no
-  # corre nada más.
+  # todo. En una ejecución manual todo es código; fuera de main, falla y no corre nada más. Un PR
+  # en borrador da codigo=false sin anotación `arbol-validado` (sus validaciones quedan omitidas y
+  # ninguna ejecución en borrador puede validar un push a main).
   cambios:
     name: cambios
     runs-on: ubuntu-24.04
@@ -102,9 +111,15 @@ jobs:
         env:
           EVENTO: ${{ github.event_name }}
           ANTES: ${{ github.event.before }}
+          BORRADOR: ${{ github.event.pull_request.draft }}
         run: |
           set -euo pipefail
-          if [ "$EVENTO" = workflow_dispatch ]; then
+          if [ "$EVENTO" = pull_request ] && [ "$BORRADOR" = true ]; then
+            echo "PR en borrador: se omiten las validaciones. Corren completas al marcarlo como listo." >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice::PR en borrador: se omiten las validaciones hasta marcarlo como listo."
+            echo "codigo=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          elif [ "$EVENTO" = workflow_dispatch ]; then
             echo "Ejecución manual: se valida, se publica y se despliega la punta de main." >> "$GITHUB_STEP_SUMMARY"
             echo "codigo=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -140,7 +155,7 @@ jobs:
   # (refs/pull/N/merge) que validó; por eso `cambios` deja su tree en la anotación
   # `arbol-validado`. Aquí: PR mergeado de este commit (uno solo, base main, merge_commit_sha =
   # este SHA) → ejecuciones del CI con evento pull_request y conclusión success para la punta de
-  # ese PR → en alguna, calidad, auditoria, docker y despliegue en success y la anotación de
+  # ese PR → en alguna, calidad, auditoria y docker en success y la anotación de
   # `cambios` igual al tree de este commit. Si coincide, validado=true. Cualquier otra cosa (sin
   # PR, varios PR, error de la API, sin ejecución válida, tree distinto) da validado=false y las
   # validaciones corren en el push. Ante la duda, siempre se valida. Solo cuenta el PR hacia main
@@ -183,10 +198,10 @@ jobs:
           for ejecucion in $ejecuciones; do
             trabajos=$(gh api "repos/$repo/actions/runs/$ejecucion/jobs?filter=latest&per_page=100" --jq '.jobs[] | "\(.name) \(.conclusion) \(.id)"') || continue
             verdes=0
-            for nombre in calidad auditoria docker despliegue; do
+            for nombre in calidad auditoria docker; do
               grep -Eq "^$nombre success [0-9]+$" <<< "$trabajos" && verdes=$((verdes + 1))
             done
-            [ "$verdes" -eq 4 ] || continue
+            [ "$verdes" -eq 3 ] || continue
             cambios=$(awk '$1 == "cambios" && $2 == "success" { print $3 }' <<< "$trabajos")
             [ -n "$cambios" ] || continue
             probado=$(gh api "repos/$repo/check-runs/$cambios/annotations" --jq '[.[] | select(.title == "arbol-validado") | .message] | if length == 1 then .[0] else "" end') || continue
@@ -252,8 +267,11 @@ jobs:
           SHADOW_DATABASE_URL: mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante_shadow
         run: ../../node_modules/.bin/prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
       # Usa las URL de prueba por defecto (TEST_DATABASE_URL/TEST_ADMIN_DATABASE_URL hacia 127.0.0.1:3307).
+      # 4 trabajadores de Vitest, solo en el CI (en local, el valor por defecto de Vitest): el runner
+      # tiene 4 vCPU y las pruebas esperan sobre todo a MySQL y a procesos hijos. Cada trabajador usa
+      # su propia base restaurante_test_*; ver la sección "CI" de restaurante/README.md.
       - name: test
-        run: npm test
+        run: npm test -- --maxWorkers=4
 
   # Auditoría de dependencias por imagen (REQ-F-020): npm audit sobre package-lock.json en los cortes
   # production (--omit=dev --omit=optional), migrate (--omit=dev) y desarrollo. Rompe con un aviso
@@ -284,6 +302,11 @@ jobs:
       - name: audit:deps
         run: npm run audit:deps
 
+  # Imágenes y despliegue (REQ-F-014, REQ-F-015, REQ-F-016 y REQ-F-019), en un solo job para
+  # construir cada imagen una sola vez (load: true, caché gha): primero las comprobaciones de las
+  # imágenes y después la prueba de humo del despliegue (deploy/deploy.sh contra el compose de
+  # producción, un Traefik v3 y un registro local: CA-2, CA-3, CA-4, CA-5, CA-7, CA-8, CA-9 y D-1)
+  # y la de los respaldos. Sin secretos.
   docker:
     name: docker
     needs: [cambios, validado]
@@ -291,7 +314,7 @@ jobs:
       !cancelled() && needs.cambios.result == 'success' && needs.cambios.outputs.codigo == 'true'
       && (github.event_name != 'push' || needs.validado.outputs.validado != 'true')
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -455,22 +478,11 @@ jobs:
           fi
           docker logs inventory-ca18 | grep '"msg":"server_started"' | grep -q '"service":"inventory-manager"' || { docker logs inventory-ca18; exit 1; }
           docker rm -f app-ca9 api-ca11 inventory-ca18
-
-  # Prueba de humo del despliegue (REQ-F-016): deploy/deploy.sh contra el compose de producción, un
-  # Traefik v3 y un registro local (CA-2, CA-3, CA-4, CA-5, CA-7, CA-8, CA-9 y D-1). Sin secretos.
-  despliegue:
-    name: despliegue
-    needs: [cambios, validado]
-    if: >-
-      !cancelled() && needs.cambios.result == 'success' && needs.cambios.outputs.codigo == 'true'
-      && (github.event_name != 'push' || needs.validado.outputs.validado != 'true')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - name: checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+      # El MySQL de las comprobaciones anteriores no se necesita más: las pruebas de humo parten,
+      # como en un runner nuevo, sin sus contenedores, redes ni volúmenes.
+      - name: limpiar MySQL de las comprobaciones
+        working-directory: restaurante
+        run: docker compose down --volumes
       - name: shellcheck
         working-directory: restaurante/deploy
         run: shellcheck deploy.sh mysql/initdb/01-usuarios.sh ci/smoke.sh ci/resumen.sh ci/resumen-test.sh
@@ -486,57 +498,6 @@ jobs:
           sudo install -d /opt/restaurante/ops/backup
           sudo install -m 755 restaurante/ops/backup/*.sh /opt/restaurante/ops/backup/
           systemd-analyze verify restaurante/ops/backup/systemd/*.service restaurante/ops/backup/systemd/*.timer restaurante/ops/backup/systemd/*.path
-      - name: setup-buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      # Solo lee la caché del job docker (no la escribe: evita pisar sus entradas).
-      - name: build production
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: restaurante
-          file: restaurante/landing-pages/Dockerfile
-          target: production
-          platforms: linux/amd64
-          push: false
-          provenance: false
-          cache-from: type=gha,scope=production
-          load: true
-          tags: restaurante:production
-      - name: build migrate
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: restaurante
-          file: restaurante/landing-pages/Dockerfile
-          target: migrate
-          platforms: linux/amd64
-          push: false
-          provenance: false
-          cache-from: type=gha,scope=migrate
-          load: true
-          tags: restaurante:migrate
-      - name: build api
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: restaurante
-          file: restaurante/landing-pages/Dockerfile
-          target: api
-          platforms: linux/amd64
-          push: false
-          provenance: false
-          cache-from: type=gha,scope=api
-          load: true
-          tags: restaurante:api
-      - name: build inventory-manager
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: restaurante
-          file: restaurante/landing-pages/Dockerfile
-          target: inventory-manager
-          platforms: linux/amd64
-          push: false
-          provenance: false
-          cache-from: type=gha,scope=inventory-manager
-          load: true
-          tags: restaurante:inventory-manager
       - name: prueba de humo
         run: bash restaurante/deploy/ci/smoke.sh restaurante:production restaurante:migrate restaurante:api restaurante:inventory-manager
       - name: age
@@ -545,20 +506,20 @@ jobs:
         run: bash restaurante/ops/backup/ci/smoke.sh restaurante:production restaurante:migrate
 
   # Publicación en GHCR (REQ-F-016, RF-3): en main (push o ejecución manual) con cambios de código,
-  # y solo si el árbol ya estaba validado (`validado`, solo en push) o las cuatro validaciones de
+  # y solo si el árbol ya estaba validado (`validado`, solo en push) o las tres validaciones de
   # esta ejecución quedaron en success. Una validación fallida, cancelada u omitida sin árbol
   # validado impide publicar. Las imágenes se identifican por digest (salidas del job) y se
   # etiquetan con el SHA del commit.
   publish:
     name: publish
-    needs: [cambios, validado, calidad, auditoria, docker, despliegue]
+    needs: [cambios, validado, calidad, auditoria, docker]
     if: >-
       !cancelled() && github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       && needs.cambios.result == 'success' && needs.cambios.outputs.codigo == 'true'
       && ((github.event_name == 'push' && needs.validado.outputs.validado == 'true')
         || (needs.calidad.result == 'success' && needs.auditoria.result == 'success'
-          && needs.docker.result == 'success' && needs.despliegue.result == 'success'))
+          && needs.docker.result == 'success'))
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:

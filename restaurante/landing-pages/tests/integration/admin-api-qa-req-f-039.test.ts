@@ -312,8 +312,10 @@ describe('QA REQ-F-039 PR 1: aviso interno con los procesos reales', () => {
     const published = await publishMolote(stack, eli, 'Molote Avisado QA');
     expect(published.meta).toEqual({ freshness: 'confirmed' });
     expect(await landingHas(stack, 'Molote Avisado QA')).toBe(true);
-    const notified = logLines(stack.landing.output().stdout).filter((line) => line.msg === 'products_change_notified');
-    expect(notified.at(-1)).toMatchObject({ business: 'molotes', landing: true, bot: true });
+    // La línea de log llega por la tubería de stdout del hijo y puede hacerlo después de la respuesta.
+    const notifiedLines = () => logLines(stack.landing.output().stdout).filter((line) => line.msg === 'products_change_notified');
+    await expect.poll(() => notifiedLines().length).toBeGreaterThan(0);
+    expect(notifiedLines().at(-1)).toMatchObject({ business: 'molotes', landing: true, bot: true });
     expectNoSecrets(stack);
   });
 
@@ -377,8 +379,8 @@ describe('QA REQ-F-039 PR 1: aviso interno con los procesos reales', () => {
     expect(await landingHas(stack, 'Molote Tercero QA')).toBe(true);
     expect((await first).status).toBe(201);
     // Nunca dos avisos en paralelo del mismo negocio: los avisos recibidos no se solapan.
-    const notified = logLines(stack.landing.output().stdout).filter((line) => line.msg === 'products_change_notified' && line.business === 'molotes');
-    expect(notified.length).toBeGreaterThanOrEqual(3);
+    // Se espera a las líneas de log (tubería de stdout del hijo), que pueden llegar después de la respuesta.
+    await expect.poll(() => logLines(stack.landing.output().stdout).filter((line) => line.msg === 'products_change_notified' && line.business === 'molotes').length).toBeGreaterThanOrEqual(3);
   });
 
   it('N-10: con la base caída, /api/v1/admin responde 503 sin trazas, SQL ni credenciales', async () => {

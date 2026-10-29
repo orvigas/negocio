@@ -498,8 +498,8 @@ y se registra aquí, con la fecha y lo que respondió el usuario. Las tres está
 - **Revisión de memoria del paso 3** (REQ-F-038): por decisión del usuario ("Memoria: basta el
   33,5 %"), se basa en la estimación del paso 1 **sin una medición nueva**. El contenedor `api` es
   uno de los dos contenedores Node de esa estimación (1310,2 MiB, el 33,5 % de la RAM total, muy
-  por debajo del umbral del 80 %): **la decisión A se mantiene**. La épica ya está en `main` (#105,
-  2026-10-29): la medición real con `api` en marcha está **pendiente**.
+  por debajo del umbral del 80 %): **la decisión A se mantiene**. La medición real con `api` en
+  marcha se hizo tras el despliegue de la épica (ver la revisión del paso 4, ticket 1).
 - **Revisión de memoria del paso 4, ticket 1** (REQ-F-039, RF-19): con la misma medición del paso 1
   (pico de 1142 MiB usados en el host y 84,1 MiB del contenedor Node), la estimación con tres
   contenedores Node (`api`, `inventory-manager` y la app medida) es
@@ -508,8 +508,12 @@ y se registra aquí, con la fecha y lo que respondió el usuario. Las tres está
   - La imagen de `inventory-manager` solo instala las dependencias de su workspace (unos 17 MiB de
     `node_modules`, sin Prisma). Medida local (Docker Desktop, `docker stats`, tras arrancar y servir
     unas peticiones): **45,5 MiB**, por debajo de la cota de 84,1 MiB usada en la estimación.
-  - La épica ya está en `main` (#105, 2026-10-29): la medición real con los cuatro contenedores
-    está **pendiente** (la hace el usuario en el VPS).
+  - **Medición real en producción** (2026-10-29, tras el despliegue del #105; `free -m` y
+    `docker stats --no-stream` en el VPS, sin carga simulada): **1232 MiB usados en el host, el
+    31,5 %** de 3915 MiB (disponible: 2682 MiB; swap sin usar), por debajo de la estimación del
+    35,6 % y del umbral del 80 %. Por contenedor: `app` 76,9 MiB, `api` 72,6 MiB,
+    `inventory-manager` 43,2 MiB, MySQL 527,3 MiB y Traefik 120,3 MiB (los tres Node suman
+    192,7 MiB frente a los 252,3 MiB de la estimación). **La decisión A se mantiene.**
 - **Dos administraciones a la vez** durante el paso 4: el `/admin` actual se mantiene hasta que el
   nuevo tenga lo mismo y se retira en el ticket 6. Desde REQ-F-039 muestra los productos en solo
   lectura y el admin nuevo los edita (un solo escritor). Usuarios, cuenta, bot y menú siguen en el

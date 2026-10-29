@@ -16,9 +16,9 @@ Cerrado el 2026-10-28. Los tres PR se mergearon en `epic/arquitectura`:
 
 - [x] Crear el DNS de `admin.birriaelmuneco.com` hacia el VPS. Hecho (2026-10-29): `https://admin.birriaelmuneco.com/acceso` responde 200 con `Cache-Control: no-store` y `X-Robots-Tag: noindex, nofollow`; `http://admin.…/acceso?next=%2F` responde 301 (con GET) a `https://` con la ruta y la query.
 - [x] Comprobar el certificado real del subdominio tras el despliegue. Hecho (2026-10-29): certificado de Let's Encrypt para `admin.birriaelmuneco.com`, válido hasta el 2027-01-27. Además: `/api/v1/admin/sesion` en el subdominio y `POST https://birriaelmuneco.com/internal/v1/productos-cambiados` dan 404; 120 peticiones en paralelo a `/salud` dieron 62 con 200 y 58 con 429, con `/molotes` en 200; las landings `/`, `/birria` y `/molotes` y el `/admin/login` anterior dan 200.
-- [ ] Medir la memoria en el VPS con los cuatro contenedores (pendiente del usuario).
-- [ ] Revisar a 375 px la pantalla de acceso en el navegador (no imprescindible; el navegador bloqueó la ventana emergente en el QA del PR 3; pendiente del usuario).
-- [ ] Probar la edición de un producto en el admin nuevo en producción (pendiente del usuario).
+- [x] Medir la memoria en el VPS con los cuatro contenedores. Hecho (2026-10-29): 1232 de 3915 MiB usados en el host (31,5 %, por debajo de la estimación del 35,6 % y del umbral del 80 %); `app` 76,9, `api` 72,6, `inventory-manager` 43,2, MySQL 527,3 y Traefik 120,3 MiB. La decisión A se mantiene (`restaurante/docs/arquitectura.md` §10).
+- [x] Revisar a 375 px la pantalla de acceso en el navegador. Hecho por el usuario (2026-10-29): "Ya hice todas las comprobaciones y son correctas".
+- [x] Probar la edición de un producto en el admin nuevo en producción, con el cambio visible en la landing y el `/admin` anterior en solo lectura. Hecho por el usuario (2026-10-29), con la misma cita.
 
 Las demás acciones del usuario antes de mergear la épica a `main` están en "Acciones del usuario pendientes" del Implementation Result del PR 3.
 
@@ -2761,6 +2761,10 @@ Los mismos de la ronda 1:
 QA_APPROVED
 
 ## Historial de cambios
+
+### Comprobaciones finales en producción (2026-10-29)
+
+El usuario confirmó la prueba de edición de un producto, el `/admin` anterior en solo lectura y la revisión a 375 px ("Ya hice todas las comprobaciones y son correctas"), y pasó la medición de memoria del VPS: 1232 de 3915 MiB (31,5 %). Todos los pendientes del ticket quedan cumplidos.
 
 ### Despliegue a producción (2026-10-29)
 

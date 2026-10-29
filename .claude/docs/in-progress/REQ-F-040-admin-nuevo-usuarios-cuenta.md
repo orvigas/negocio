@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 1 de 2: `api` y contratos; 2026-10-29)
+READY_FOR_MERGE (PR 1 de 2: `api` y contratos, https://github.com/orvigas/negocio/pull/110, hacia `epic/arquitectura`; 2026-10-29). El ticket sigue en `in-progress/` hasta el PR 2.
 
 ## Aprobación
 
@@ -974,6 +974,16 @@ Respuestas textuales del usuario:
 2. Archivo de sondas: "Conservarlas en el PR". Queda como prueba permanente, estable y sin `it.fails`. Se llama `users-api-qa-req-f-040.test.ts` en lugar de `qa-req-f-040-api-probes.test.ts`: sigue la convención de las pruebas de QA del repositorio (`admin-api-qa-req-f-039.test.ts` e `inventory-manager-qa-req-f-039.test.ts`).
 3. `noindex`: "Sí, en el PR 2 (Recomendado)".
 
+#### Pull Request del PR 1
+
+- **PR:** https://github.com/orvigas/negocio/pull/110, de `feature/REQ-F-040-admin-usuarios-1-api` hacia `epic/arquitectura`.
+- **Commits:**
+  - `29dad31`: `feat: gestiona los usuarios y la cuenta propia desde la API de administración (REQ-F-040, PR 1 de 2)`;
+  - y este commit, `docs: registra el Pull Request del PR 1 de REQ-F-040`.
+- **Base:** `origin/epic/arquitectura` seguía en `9354724` al hacer el commit, así que no hizo falta integrar nada.
+- **Prueba de QA:** se incluye `landing-pages/tests/integration/users-api-qa-req-f-040.test.ts`, que el usuario decidió conservar ("Conservarlas en el PR").
+- **Estado:** `READY_FOR_MERGE` se registra en este commit para que entre en el merge, como se pidió tras lo ocurrido en el #99. El PR se marca como listo después de subirlo, y el resultado del CI (`calidad`, `docker` y `auditoria`) se informa al usuario. Si el CI fallara, el estado volvería a corregirse antes del merge.
+
 ## QA Report
 
 ### PR 1 de 2: `api` y contratos
@@ -1097,3 +1107,7 @@ El usuario aprobó la implementación del PR 1 ("Si"), con las cuatro desviacion
 ### QA del PR 1 (2026-10-29)
 
 El usuario aprobó el QA Action Plan ("Sí, apruebo el plan"), decidió conservar las sondas en el PR ("Conservarlas en el PR") y dejó el `noindex` para el PR 2 ("Sí, en el PR 2 (Recomendado)"). Fase Q2 (senior-qa), ronda 1: prueba nueva `landing-pages/tests/integration/users-api-qa-req-f-040.test.ts` (7 pruebas, estable en 6 ejecuciones) y la suite completa en 0, sin defectos. Estado: `QA_APPROVED`.
+
+### Pull Request del PR 1 (2026-10-29)
+
+Commit `29dad31` y PR #110 (https://github.com/orvigas/negocio/pull/110) hacia `epic/arquitectura`, con la prueba de QA incluida. Estado: `READY_FOR_MERGE` (PR 1 de 2), sujeto a que el CI termine en verde.

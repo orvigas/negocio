@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 3 de 3, despliegue, QA ronda 2: DEF-009, DEF-010 y DEF-011 corregidos; DEF-012 TRIVIAL abierto, no bloquea; los PR 1 y 2 se mergearon como #94 y #95)
+READY_FOR_MERGE (PR 3 de 3, despliegue: PR #99 hacia `epic/arquitectura`, https://github.com/orvigas/negocio/pull/99, con el CI en verde; DEF-009 a DEF-012 corregidos; los PR 1 y 2 se mergearon como #94 y #95)
 
 ## Aprobación
 
@@ -2743,6 +2743,10 @@ Los mismos de la ronda 1:
 QA_APPROVED
 
 ## Historial de cambios
+
+### Pull Request del PR 3 (2026-10-28)
+
+Commit `83b2b80` (PR 3) y merge `ff45548` de `epic/arquitectura` (`15dc77d`, PR #96, #97 y #98), sin conflictos. Tras el merge, `npm ci`, `typecheck`, `lint`, `build:css` y `test` en 0 (`api` 91, `landing-pages` 2199 + 1 *expected fail*, `inventory-manager` 71). PR #99 hacia `epic/arquitectura` (https://github.com/orvigas/negocio/pull/99): `calidad`, `docker`, `despliegue` y `auditoria` en verde. Pendientes del usuario cuando la épica llegue a `main`: el DNS de `admin.birriaelmuneco.com`, el certificado real y la medición de memoria en el VPS. Estado `READY_FOR_MERGE`.
 
 ### Corrección de DEF-012 y commit del PR 3 (2026-10-28)
 

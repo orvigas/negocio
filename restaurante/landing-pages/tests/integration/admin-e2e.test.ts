@@ -134,8 +134,11 @@ describe('admin nuevo -> api -> aviso -> landing y bot (CA-9 y CA-10)', () => {
 
     // La siguiente visita ya no lo muestra, sin reiniciar ningún proceso.
     expect(await landingHtml(stack.landing.url)).not.toContain(name);
-    const notified = logLines(stack.landing.output().stdout).filter((line) => line.msg === 'products_change_notified');
-    expect(notified.at(-1)).toMatchObject({ business: 'molotes', landing: true, bot: true });
+    // La línea de log llega por la tubería de stdout del proceso hijo y puede hacerlo después de la
+    // respuesta HTTP: se espera a que esté antes de comprobarla.
+    const notifiedLines = () => logLines(stack.landing.output().stdout).filter((line) => line.msg === 'products_change_notified');
+    await expect.poll(() => notifiedLines().length).toBeGreaterThan(0);
+    expect(notifiedLines().at(-1)).toMatchObject({ business: 'molotes', landing: true, bot: true });
 
     // Ningún log de los tres procesos lleva la contraseña ni la credencial del aviso (CA-16).
     const all = [stack.landing, stack.api, stack.inventory].flatMap((proc) => [proc.output().stdout, proc.output().stderr]).join('\n');
@@ -152,6 +155,8 @@ describe('admin nuevo -> api -> aviso -> landing y bot (CA-9 y CA-10)', () => {
         body: JSON.stringify({ business: 'molotes' }),
       });
     for (const token of [null, 'otra-credencial-incorrecta-0123456789abcdef']) expect((await post(token)).status).toBe(401);
+    // La respuesta 401 puede llegar antes que la línea de log del rechazo (tubería de stdout del hijo).
+    await expect.poll(() => logLines(stack.landing.output().stdout).filter((line) => line.msg === 'internal_notify_rejected').length).toBe(2);
     const lines = logLines(stack.landing.output().stdout);
     expect(lines.filter((line) => line.msg === 'internal_notify_rejected')).toHaveLength(2);
     expect(lines.some((line) => line.msg === 'products_change_notified')).toBe(false);

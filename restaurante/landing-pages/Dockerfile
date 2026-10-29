@@ -35,6 +35,10 @@
 #                 de api/ y de los paquetes core, contracts y db (con el cliente generado y las
 #                 migraciones, que verify.ts lee), puerto 3001, usuario no root y HEALTHCHECK contra
 #                 su propio endpoint. Uso: docker build -f landing-pages/Dockerfile --target api .
+#   inventory-manager -> admin nuevo (REQ-F-039): solo las dependencias de producción de ese
+#                 workspace (npm ci -w), su código, su CSS, los paquetes contracts y web, y los
+#                 iconos de las landings (favicon); puerto 3003, usuario no root y HEALTHCHECK
+#                 contra /salud (responde también sin TLS). Sin base de datos ni credenciales.
 #   production -> dependencias de producción, código (app y paquetes core, contracts y db), CSS, migraciones
 #                 (en /app/packages/db/prisma/migrations; la app las lee para verificar el estado
 #                 de la base, no las aplica) y scripts de consola; usuario no
@@ -60,7 +64,7 @@ FROM deps AS build
 COPY landing-pages/ ./
 COPY packages/ /app/packages/
 COPY api/ /app/api/
-# Admin nuevo (REQ-F-039, PR 2): solo para el typecheck y las pruebas; su imagen llega en el PR 3.
+# Admin nuevo (REQ-F-039): su código, para el typecheck, las pruebas, el CSS y la etapa inventory-manager.
 COPY inventory-manager/ /app/inventory-manager/
 # Configuración común de la raíz (REQ-F-037): tsconfig.base.json la extienden todos los workspaces;
 # eslint.config.ts lo revisan el typecheck de la raíz y dos pruebas del lint.
@@ -69,6 +73,7 @@ COPY README.md /app/README.md
 RUN cd /app && npm run db:generate
 RUN cd /app && npm run typecheck
 RUN npm run build:css
+RUN cd /app && npm run build:css -w inventory-manager
 
 FROM build AS test
 # Solo los code.html del diseño fuente (fuera de restaurante/), en la ruta que esperan las pruebas.
@@ -168,4 +173,32 @@ EXPOSE 3001
 # Comprueba que la API responde con su propio endpoint (wget de busybox; sin rutas adicionales).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -q -O /dev/null "http://127.0.0.1:${PORT:-3001}/api/v1/public/birria/productos" || exit 1
+CMD ["node", "src/server.ts"]
+
+FROM base AS inventory-manager
+# Admin nuevo (REQ-F-039): Koa con SSR en admin.<dominio> (router propio de Traefik). Solo habla con
+# la API por la red interna admin; nunca con MySQL.
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=3003
+WORKDIR /app/inventory-manager
+COPY package.json package-lock.json /app/
+COPY landing-pages/package.json /app/landing-pages/
+COPY api/package.json /app/api/
+COPY inventory-manager/package.json ./
+# Solo los manifiestos de los paquetes que usa (contracts y web): sin packages/db ni packages/core en
+# la imagen. npm ci -w inventory-manager no necesita los demás, y el árbol instalado es el mismo.
+COPY --parents packages/contracts/package.json packages/web/package.json /app/
+# Solo las dependencias de este workspace (y de contracts y web): sin Prisma ni mariadb.
+RUN cd /app && npm ci --omit=dev --omit=optional --strict-allow-scripts --no-audit --no-fund -w inventory-manager && npm cache clean --force
+COPY --from=build /app/inventory-manager/src ./src
+COPY --from=build /app/inventory-manager/public ./public
+COPY --from=build /app/packages/contracts /app/packages/contracts
+COPY --from=build /app/packages/web /app/packages/web
+# Favicon por negocio: los iconos de las landings, en la misma ruta relativa que en el repositorio.
+COPY --from=build --parents /app/landing-pages/public/img/./birria/icons /app/landing-pages/public/img/./molotes/icons /app/landing-pages/public/img/
+USER node
+EXPOSE 3003
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -q -O /dev/null "http://127.0.0.1:${PORT:-3003}/salud" || exit 1
 CMD ["node", "src/server.ts"]

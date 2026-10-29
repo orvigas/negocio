@@ -107,6 +107,7 @@ for script in lib.sh backup.sh env-backup.sh restore.sh; do install -m 755 "$OPS
     -e "s/^RESTAURANTE_DB_BACKUP_PASSWORD=.*/RESTAURANTE_DB_BACKUP_PASSWORD=$(hex)/" \
     -e 's/^WHATSAPP_MOLOTES=.*/WHATSAPP_MOLOTES=5210000000001/' \
     -e 's/^WHATSAPP_BIRRIA=.*/WHATSAPP_BIRRIA=5210000000002/' \
+    -e "s/^RESTAURANTE_INTERNAL_NOTIFY_TOKEN=.*/RESTAURANTE_INTERNAL_NOTIFY_TOKEN=$(hex)/" \
     "$DEPLOY_SRC/env.production.example"
 } >"$BASE/.env"
 chmod 600 "$BASE/.env"

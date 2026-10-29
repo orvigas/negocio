@@ -171,6 +171,22 @@ describe('CSRF en dos capas (D-2, CA-5)', () => {
 });
 
 describe('cabeceras y logs (RF-5, CA-16)', () => {
+  it('favicon del negocio desde los iconos de las landings (lista cerrada de archivos)', async () => {
+    const h = await startInventory();
+    const browser = h.browser();
+    const icon = await browser.get('/img/birria/icons/favicon.ico');
+    expect(icon.status).toBe(200);
+    expect(icon.headers.get('content-type')).toBe('image/x-icon');
+    expect(icon.headers.get('cache-control')).toBe('public, max-age=86400');
+    expect((await browser.get('/img/molotes/icons/icon-32.png')).headers.get('content-type')).toBe('image/png');
+    for (const path of ['/img/tacos/icons/favicon.ico', '/img/birria/icons/icon-512.png', '/img/birria/icons/..%2F..%2Fbirria.jpg']) expect((await browser.get(path)).status, path).toBe(404);
+    await browser.login(ELI);
+    const page = dom(await (await browser.get('/molotes/productos')).text());
+    expect(page.querySelector('link[rel="icon"][sizes="any"]')?.getAttribute('href')).toBe('/img/molotes/icons/favicon.ico');
+    const login = dom(await (await h.browser().get('/acceso')).text());
+    expect(login.querySelector('link[rel="icon"][sizes="any"]')?.getAttribute('href')).toBe('/img/birria/icons/favicon.ico');
+  });
+
   it('no-store, noindex, CSP estricta y Referrer-Policy same-origin en las pantallas; robots.txt lo bloquea todo', async () => {
     const h = await startInventory();
     const browser = h.browser();

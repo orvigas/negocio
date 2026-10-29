@@ -481,9 +481,9 @@ describe('loadConfig: admin nuevo y aviso interno (REQ-F-039, RF-13 y RF-15)', (
     expect(loadConfig({ ...VALID_ENV, INTERNAL_NOTIFY_TOKEN: token, INTERNAL_PORT: '4002' }).internalNotify).toEqual({ port: 4002, token });
   });
 
-  it('sin token no hay aviso interno (null), también en producción hasta el despliegue del admin nuevo', () => {
+  it('sin token fuera de producción no hay aviso interno (null); en producción es obligatorio', () => {
     expect(loadConfig({ ...VALID_ENV, INTERNAL_NOTIFY_TOKEN: undefined }).internalNotify).toBeNull();
-    expect(loadConfig({ ...PROD, INTERNAL_NOTIFY_TOKEN: undefined }).internalNotify).toBeNull();
+    expect(() => loadConfig({ ...PROD, INTERNAL_NOTIFY_TOKEN: undefined })).toThrow(/INTERNAL_NOTIFY_TOKEN es obligatoria en producción/);
   });
 
   it.each([

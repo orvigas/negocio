@@ -40,8 +40,8 @@ export interface ApiConfig {
   readonly productImagesDir: string;
   /**
    * Aviso interno a landing-pages (REQ-F-039, RF-13): LANDING_INTERNAL_URL e INTERNAL_NOTIFY_TOKEN,
-   * las dos o ninguna. null: no se avisa (queda la red de seguridad de 60 s). Pasan a ser obligatorias
-   * en producción con el despliegue del admin nuevo (PR 3 de REQ-F-039, compose.prod.yaml).
+   * las dos o ninguna; obligatorias en producción (PR 3 de REQ-F-039, compose.prod.yaml). null fuera de
+   * producción sin ellas: no se avisa (queda la red de seguridad de 60 s).
    */
   readonly landingNotify: { readonly url: string; readonly token: string } | null;
 }
@@ -117,6 +117,9 @@ export function loadApiConfig(env: Env = process.env): ApiConfig {
     issues.push(`INTERNAL_NOTIFY_TOKEN debe tener al menos ${MIN_NOTIFY_TOKEN_LENGTH} caracteres visibles, sin espacios (p. ej. openssl rand -hex 32)`);
   }
   if ((notifyUrl === undefined) !== (notifyToken === undefined)) issues.push('LANDING_INTERNAL_URL e INTERNAL_NOTIFY_TOKEN van juntas: define las dos o ninguna');
+  if (nodeEnv === 'production' && (notifyUrl === undefined || notifyToken === undefined)) {
+    issues.push('En producción, LANDING_INTERNAL_URL e INTERNAL_NOTIFY_TOKEN son obligatorias (aviso interno a landing-pages)');
+  }
 
   if (issues.length > 0 || database === undefined || nodeEnv === undefined || !isNodeEnv(nodeEnv)) throw new ApiConfigError(issues);
   return Object.freeze({

@@ -8,8 +8,8 @@ necesita desviarse de este documento, lo actualiza en el mismo PR.
 
 | | |
 | --- | --- |
-| Estado | **Aceptada** (estrategia general). Decisiones A (2026-10-24) y C (2026-10-26) tomadas; queda abierta B ([sección 9](#9-decisiones)). Paso 1 aplicado en REQ-F-036 y paso 2 en REQ-F-037 |
-| Fecha | 2026-10-24 |
+| Estado | **Aceptada** (estrategia general). Decisiones A (2026-10-24), B y C (2026-10-26) tomadas ([sección 9](#9-decisiones)). Aplicados los pasos 1 (REQ-F-036), 2 (REQ-F-037) y 3 (REQ-F-038) y el ticket 1 del paso 4 (REQ-F-039) |
+| Fecha | 2026-10-24 (última actualización: 2026-10-28) |
 | Alcance | Estructura del código, regla de dependencias, contratos, consumo de la API y orden de la migración. No cambia el stack de `.claude/CLAUDE.md` §2 |
 
 ## 1. Contexto
@@ -113,7 +113,7 @@ restaurante/
 │   └── web/                 ← utilidades HTTP/SSR sin dominio de las apps Koa (desde REQ-F-039)
 ├── api/                     ← Koa: la única app que habla con MySQL
 ├── landing-pages/           ← Koa SSR de las landings: HTML, SEO, Tailwind y Vanilla JS
-└── inventory-manager/       ← frontend del administrador
+└── inventory-manager/       ← admin nuevo: Koa con SSR, Tailwind y Vanilla JS (decisión B, REQ-F-039)
 ```
 
 Cada módulo de `core` sigue la misma forma:
@@ -216,6 +216,25 @@ siguen en `landing-pages`). La resiliencia es la de la tabla, concretada así:
 - las landings no tienen credenciales de la base **en su código**, pero el contenedor
   `landing-pages` las conserva hasta el paso 4 porque `/admin` y el bot siguen en él.
 
+**Paso 4, ticket 1 aplicado (REQ-F-039):** `inventory-manager` renderiza en el servidor (decisión
+B) y es lo único con lo que habla el navegador. Llama a `/api/v1/admin` por la red interna `admin`
+con el cliente de `contracts` (`createAdminApiClient`, que nunca lanza). Concretamente:
+
+- **Sesión (D-1):** la crea y la decide la API. `inventory-manager` guarda su id en la cookie
+  `__Host-admin_sid` y lo reenvía como `Authorization: Bearer`.
+- **CSRF (D-2):** mismo origen en `inventory-manager` y el token de la sesión en `X-CSRF-Token`,
+  que valida la API.
+- **Resiliencia:** con la API caída o en 503, aviso y lo escrito se conserva. Un 409 muestra quién y
+  cuándo, y deja cargar la versión vigente o guardar encima.
+- **Frescura:** tras cada escritura confirmada, la API avisa a `landing-pages` por su puerto interno
+  (`INTERNAL_PORT`, 3002, con credencial): invalida la caché de esa landing y recarga el catálogo del
+  bot. La escritura espera ese primer aviso como mucho 2 s para decir la verdad
+  (`meta.freshness`). La red de seguridad es la caducidad de 60 s de las landings y la recarga del
+  bot cada 60 s.
+- **Un solo escritor:** con `ADMIN_NEW_URL`, el `/admin` actual muestra los productos en solo
+  lectura (410 y `PRODUCTS_MOVED` en sus escrituras), así que la API, con una réplica y su mutex, es
+  la única que escribe productos.
+
 **El bot de WhatsApp es un cliente más de `core`.** Vive dentro de `api` (su webhook es otra entrada
 HTTP) y, cuando exista `sales`, sus pedidos confirmados se guardan como ventas en lugar de solo
 avisar al personal.
@@ -271,6 +290,55 @@ intermedia" del CI en `restaurante/README.md`).
 | `src/config/env.ts` | Cada app valida solo sus variables; lo común va en un módulo compartido |
 
 Los nombres exactos de archivos y endpoints los fija el plan técnico de cada ticket.
+
+### Plan del paso 4 (REQ-F-039)
+
+Decisión del usuario: "Sí, 6 tickets en ese orden". Cada ticket es su propio PR (o varios) hacia
+`epic/arquitectura`.
+
+| # | Ticket | Notas |
+| --- | --- | --- |
+| 1 | **REQ-F-039**: base del admin nuevo y productos | Aplicado en tres PR (#94, #95 y el de despliegue), detalle abajo |
+| 2 | Usuarios y cuenta propia | En `api` y en `inventory-manager` |
+| 3 | Mover el bot a `api` | Publica una entrada de `api` para el webhook (su router de Traefik solo para esa ruta) y cambia la URL en Meta (acción del usuario). Activa la regla de lint para el bot |
+| 4 | Control del bot en el admin nuevo | Pausa, bloqueos y topes |
+| 5 | Menú y página | Antes se decide si el menú queda en archivos o pasa a MySQL |
+| 6 | Retirada del `/admin` actual | Mover la importación de semillas y el menú, quitar las credenciales de la base de `landing-pages`, quitar el router `restaurante-admin` y activar la regla de lint para `/admin` |
+
+Los IDs de los tickets 2 a 6 se asignan al crearlos.
+
+### Paso 4, ticket 1 aplicado (REQ-F-039)
+
+- **PR 1, `api` y paquetes:**
+  - `packages/web` nuevo (decisión P-1: "Paquete packages/web (Recomendado)");
+  - a `core` pasan el repositorio de productos (con `reload` e `init()` sin importar), las sesiones,
+    el límite de intentos, `resolveSession`, los campos del formulario, el DTO, el comprobador de
+    imágenes y las fechas;
+  - contratos del admin en `contracts`;
+  - `/api/v1/admin` (acceso y productos, con `Idempotency-Key` por negocio y cuerpo);
+  - el aviso interno y su receptor en `landing-pages`, la recarga del bot cada 60 s y el modo de solo
+    lectura con `ADMIN_NEW_URL`.
+  - La imagen `api` lleva una copia de `landing-pages/public/img` para validar `image.src`, del mismo
+    commit que la imagen de las landings.
+- **PR 2, `inventory-manager`:**
+  - pantallas de acceso y productos sin JavaScript, con el JS como mejora;
+  - Tailwind con el sistema visual de las landings (P-4);
+  - el cliente del admin y el formulario guiado por el descriptor en `contracts`;
+  - la regla de lint de `inventory-manager`, también para `import()` dinámicos (CA-17).
+- **PR 3, despliegue:**
+  - imagen `inventory-manager` (`ghcr.io/orvigas/restaurante-inventory-manager`, `/app/inventory-manager`,
+    puerto 3003, `HEALTHCHECK` contra `/salud`, solo las dependencias de su workspace y los iconos de
+    las landings para el favicon);
+  - servicio con router de Traefik en `admin.<dominio>`: HTTPS, HTTP a HTTPS, límite de 60 por minuto
+    con ráfaga de 60;
+  - red interna `admin` (api e inventory-manager);
+  - `deploy.sh` con cuatro digests: `inventory-manager` va antes que la app, y el código 16 si no
+    queda sano;
+  - las variables del aviso, obligatorias en producción;
+  - smoke, CI y la prueba de extremo a extremo de la frescura;
+  - la revisión de memoria (§10).
+- **El DNS de `admin.birriaelmuneco.com` lo crea el usuario** antes de desplegar la épica a `main`
+  ([Despliegue](despliegue.md)).
 
 ### Paso 3 aplicado (REQ-F-038)
 
@@ -340,11 +408,11 @@ Los nombres exactos de archivos y endpoints los fija el plan técnico de cada ti
 | | Decisión | Recomendación | Alternativa |
 | --- | --- | --- | --- |
 | **A** | **Despliegue** (**tomada**, ver abajo) | Tres contenedores (`api`, `landing-pages` e `inventory-manager`) detrás del Traefik del VPS: el dominio actual para las landings y un subdominio de administración, con la API en `admin.<dominio>/api`. El admin y la API comparten origen, así que la cookie funciona sin CORS | Un solo contenedor con las tres apps: menos memoria en el VPS, pero se despliegan juntas |
-| **B** | **Tecnología del inventory manager** | Vanilla JS con Web Components y Tailwind, respetando `.claude/CLAUDE.md` §2 | Cambiar la regla de §2 solo para el admin, para permitir un framework |
+| **B** | **Tecnología del inventory manager** (**tomada**, ver abajo) | Vanilla JS con Web Components y Tailwind, respetando `.claude/CLAUDE.md` §2 | Cambiar la regla de §2 solo para el admin, para permitir un framework |
 | **C** | **Validación de esquemas en `contracts`** (**tomada**, ver abajo) | Una librería de esquemas (por ejemplo Zod o Valibot) que da tipos y validación desde una sola definición, justificada según `.claude/rules/dependencias.md` | Seguir con validadores propios, como `product-schema.ts` hoy |
 
 Cada decisión se toma antes del paso que la necesita (A en el paso 1, C en el paso 2 y B en el paso 4)
-y se registra aquí, con la fecha y lo que respondió el usuario. B sigue pendiente.
+y se registra aquí, con la fecha y lo que respondió el usuario. Las tres están tomadas.
 
 ### Decisión A: tomada
 
@@ -359,7 +427,26 @@ y se registra aquí, con la fecha y lo que respondió el usuario. B sigue pendie
 | --- | --- |
 | 1 (REQ-F-036) | La imagen y el contenedor actuales salen del workspace `landing-pages/`, con los mismos nombres (`ghcr.io/orvigas/restaurante`, `restaurante-migrate`, servicio `app` y routers `restaurante*`), el mismo dominio y las mismas rutas. Se mide la memoria del VPS ([sección 10](#10-riesgos)) |
 | 3 | Contenedor e imagen de `api` (**aplicado en REQ-F-038**): solo en la red interna, sin router de Traefik (decisión "Solo red interna"); el subdominio `admin.<dominio>` queda para el paso 4. La revisión de memoria se basó en la estimación del 33,5 % ([sección 10](#10-riesgos)) |
-| 4 | Contenedor `inventory-manager`, `admin.<dominio>`, DNS y certificado. `/admin` pasa al subdominio y el `/admin` actual se retira en un ticket propio |
+| 4 | Contenedor `inventory-manager`, `admin.<dominio>`, DNS (a cargo del usuario) y certificado (**aplicado en REQ-F-039** para los productos; desviación D-3: la API sigue sin publicarse). El `/admin` actual se retira en el ticket 6 del paso 4 |
+
+### Decisión B: tomada
+
+- **Fecha:** 2026-10-26 (REQ-F-039).
+- **Respuestas del usuario:** "Quiero que la api use koa.js y todo lo que usan las landing Pagés
+  para que podamos unificar todo en una sola API", "Va acusar koa.js y vainilla js" e
+  "inventory-manager como las landings"; interfaz "SSR + Vanilla JS que mejora (Recomendado)".
+- **Opción elegida:** **Vanilla JS + SSR con Koa (como las landings)**, sin cambiar
+  `.claude/CLAUDE.md` §2.
+  - `inventory-manager` es una app Koa propia, en su contenedor: plantillas, Tailwind y Vanilla JS
+    que mejora la experiencia; los formularios funcionan sin JS.
+  - Una sola API (`api`) sirve `/api/v1/public` y `/api/v1/admin`.
+  - Sistema visual: el de las landings ("Sistema visual de las landings"; base de Birria El Muñeco y
+    acento por negocio, validado en P-4).
+- **Desviación D-3 de la decisión A** ("D-3: api sin publicar hasta el ticket 3"): la API **no** va
+  en `admin.<dominio>/api`.
+  - El navegador solo habla con `inventory-manager`, que reenvía la sesión a la API por la red
+    interna `admin`; así la cookie sigue en el mismo origen sin CORS.
+  - El ticket 3 (webhook del bot) publicará una entrada de `api` y decidirá su host y su ruta.
 
 ### Decisión C: tomada
 
@@ -400,8 +487,24 @@ y se registra aquí, con la fecha y lo que respondió el usuario. B sigue pendie
   uno de los dos contenedores Node de esa estimación (1310,2 MiB, el 33,5 % de la RAM total, muy
   por debajo del umbral del 80 %): **la decisión A se mantiene**. La medición real con `api` en
   marcha queda para cuando la épica llegue a `main`.
+- **Revisión de memoria del paso 4, ticket 1** (REQ-F-039, RF-19): con la misma medición del paso 1
+  (pico de 1142 MiB usados en el host y 84,1 MiB del contenedor Node), la estimación con tres
+  contenedores Node (`api`, `inventory-manager` y la app medida) es
+  1142 + 3 × 84,1 = **1394,3 MiB, el 35,6 %** de 3915 MiB, muy por debajo del umbral del 80 %
+  (3132 MiB): **la decisión A se mantiene** sin volver al usuario.
+  - La imagen de `inventory-manager` solo instala las dependencias de su workspace (unos 17 MiB de
+    `node_modules`, sin Prisma). Medida local (Docker Desktop, `docker stats`, tras arrancar y servir
+    unas peticiones): **45,5 MiB**, por debajo de la cota de 84,1 MiB usada en la estimación.
+  - La medición real con los cuatro contenedores queda para cuando la épica llegue a `main`.
 - **Dos administraciones a la vez** durante el paso 4: el `/admin` actual se mantiene hasta que el
-  nuevo tenga lo mismo, y se retira en un ticket propio.
+  nuevo tenga lo mismo y se retira en el ticket 6. Desde REQ-F-039 muestra los productos en solo
+  lectura y el admin nuevo los edita (un solo escritor). Usuarios, cuenta, bot y menú siguen en el
+  `/admin` actual hasta los tickets 2 a 5.
+- **Estado en memoria de la `api`** (REQ-F-039): viven en el proceso las sesiones del admin nuevo,
+  el límite de intentos de acceso y las claves de idempotencia (creadas en `api/src/admin/index.ts`),
+  y la caché y el mutex del repositorio de productos de `core/catalog` (compuesto en
+  `api/src/server.ts`). Un reinicio o un despliegue de `api` cierra todas las sesiones (hay que
+  volver a entrar), y la `api` no puede tener más de una réplica mientras ese estado no pase a MySQL.
 
 ### Medición de memoria del VPS
 

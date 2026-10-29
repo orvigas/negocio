@@ -2,7 +2,7 @@
 
 ## Estado
 
-IN_PROGRESS (PR 2 de 3 listo para merge: PR #95 hacia `epic/arquitectura`, CI en verde el 2026-10-28; el ticket sigue en curso hasta mergear el PR 3)
+QA_APPROVED (PR 3 de 3, despliegue, QA ronda 2: DEF-009, DEF-010 y DEF-011 corregidos; DEF-012 TRIVIAL abierto, no bloquea; los PR 1 y 2 se mergearon como #94 y #95)
 
 ## Aprobación
 
@@ -37,6 +37,7 @@ Decisiones técnicas del usuario sobre la revisión técnica (2026-10-26, citas 
 - DEF-001 y DEF-002 de la QA del PR 1 (2026-10-27): "Ahora, en el PR 1 (Recomendado)".
 - DEF-003 de la QA del PR 1, ronda 2 (2026-10-27): "Ahora, en el PR 1 (Recomendado)".
 - Merge del PR 1 (#94), confirmado por el usuario el 2026-10-28: "Fusionado".
+- Merge del PR 2 (#95), confirmado por el usuario el 2026-10-28: "Mergeado".
 - QA del PR 2, ronda 1 (2026-10-28): DEF-005: "Ahora, en el PR 2 (Recomendado)"; DEF-008 y DEF-004: "DEF-008 ahora (Recomendado), DEF-004 ahora (Recomendado)"; DEF-007: "Aclarar el borde (Recomendado)". DEF-006 (BLOCKER) se corrige obligatoriamente.
 - Technical Action Plan: "Sí, aprobar e implementar PR 1" (aprobado completo con estas respuestas, 2026-10-26).
 
@@ -1194,6 +1195,192 @@ Decisiones del usuario: DEF-005: "Ahora, en el PR 2 (Recomendado)"; DEF-008 y DE
 4. **Las pruebas de `inventory-manager` usan un doble de la API** que cumple el contrato. La prueba con los procesos reales y MySQL es la de extremo a extremo del PR 3.
 5. **La documentación** (README del workspace, `desarrollo.md`, `despliegue.md` y `arquitectura.md`) queda para el PR 3, como dice el plan. `inventory-manager/.env.example` documenta las variables.
 
+### PR 3 de 3: despliegue (2026-10-28)
+
+#### Rama
+
+`feature/REQ-F-039-admin-nuevo-productos-3-despliegue`, creada desde `epic/arquitectura` (`3c65ad7`, con el PR 2 mergeado). No hay commit ni PR.
+
+#### Cambios realizados
+
+**1. Imagen `inventory-manager`** (`landing-pages/Dockerfile`):
+- etapa `inventory-manager`, con `WORKDIR` `/app/inventory-manager` y puerto 3003;
+- `npm ci -w inventory-manager`: solo las dependencias de ese workspace, unos 17 MiB de `node_modules`, sin Prisma ni mariadb;
+- su código, su CSS (compilado en la etapa `build`), `contracts` y `web`;
+- los iconos de las landings para el favicon, en la misma ruta relativa;
+- usuario `node` y `HEALTHCHECK` contra `/salud`.
+
+**2. Favicon por negocio:** `inventory-manager` sirve `/img/{molotes|birria}/icons/{favicon.ico|icon-32.png}` con una lista cerrada de archivos, leídos de `landing-pages/public/img` (sin duplicar binarios). El layout usa el icono del negocio que se edita y, fuera de un negocio, el de Birria.
+
+**3. `deploy/compose.prod.yaml`:**
+- **Servicio `inventory-manager`:**
+  - redes `admin` y `traefik`; `read_only`, `tmpfs`, `cap_drop` y `no-new-privileges`;
+  - *healthcheck* contra `/salud`;
+  - router `restaurante-inventory` en `Host(RESTAURANTE_ADMIN_DOMAIN)` con HTTPS y certresolver, y el *middleware* de límite `average=60`, `period=1m` y `burst=60`;
+  - router `restaurante-inventory-http` con `redirectscheme` a HTTPS permanente.
+- **Red interna nueva** `admin`, con `api` e `inventory-manager`.
+- **`app`:** `ADMIN_NEW_URL=https://${RESTAURANTE_ADMIN_DOMAIN}`, `INTERNAL_PORT=3002` e `INTERNAL_NOTIFY_TOKEN`.
+- **`api`:** redes `db` y `admin`; `LANDING_INTERNAL_URL=http://app:3002`, `INTERNAL_NOTIFY_TOKEN` y `BUSINESS_TIMEZONE`.
+- **Variables nuevas del `.env`:** `RESTAURANTE_ADMIN_DOMAIN` y `RESTAURANTE_INTERNAL_NOTIFY_TOKEN`, obligatorias. La plantilla `env.production.example` las incluye.
+
+**4. `deploy/deploy.sh`:**
+- recibe siete argumentos: `deploy <sha> <app> <migrate> <api> <inventory> <suma>`;
+- valida el digest nuevo, `RESTAURANTE_ADMIN_DOMAIN` y la credencial (32 caracteres como mínimo, sin imprimirla); si fallan, código 3;
+- descarga las cuatro imágenes;
+- **orden:** api → `inventory-manager` (*healthy* y Traefik en `https://admin.<dominio>/salud` con `--resolve`) → app;
+- **si `inventory-manager` falla:** vuelve al anterior o lo detiene, deja la app y la api nueva, protege la app si hubo migraciones nuevas (la misma lógica que el código 15, ahora en `protect_running_app`) y termina con el **código 16**;
+- **en la vuelta atrás de la app:** `inventory-manager` también vuelve o se detiene, para no quedar junto a una app que todavía edita productos;
+- `release.env` y `releases.log` registran la cuarta imagen.
+
+**5. Variables del aviso obligatorias en producción** (desviación 1 del PR 1, cerrada):
+- `landing-pages` exige `INTERNAL_NOTIFY_TOKEN`;
+- `api` exige `LANDING_INTERNAL_URL` e `INTERNAL_NOTIFY_TOKEN`;
+- `ops/backup/verify-backup.sh` pasa una credencial desechable a la app que verifica, y el smoke de respaldos la rellena desde la plantilla.
+
+**6. CI** (`.github/workflows/ci.yml`):
+- `docker`: construye la imagen `inventory-manager` (caché propia) y comprueba su contenido (`WORKDIR`, CSS, iconos, sin `packages/db` ni Prisma, `contracts` y `web` resolubles). Las pruebas de las imágenes de producción pasan la credencial, y `inventory-manager` queda *healthy* por su `HEALTHCHECK`.
+- `despliegue`: pasa la cuarta imagen al smoke.
+- `publish`: publica `ghcr.io/orvigas/restaurante-inventory-manager`.
+- `deploy`: pasa cuatro digests y el resumen.
+- `deploy/ci/resumen.sh` añade la cuarta imagen y el código 16, con su prueba en `resumen-test.sh`. Dependabot solo cambia los comentarios.
+
+**7. Smoke** (`deploy/ci/smoke.sh`, cuatro imágenes):
+- **Compose estático:**
+  - la api solo en `admin` y `db`, la red `admin` interna, `inventory-manager` solo en `admin` y `traefik`;
+  - `inventory-manager` sin credenciales de la base ni la del aviso;
+  - `ADMIN_NEW_URL`, `LANDING_INTERNAL_URL` y la credencial compartida;
+  - ningún router hacia el 3002; límite 60, 1m, 60; routers solo de la app y de `inventory-manager`.
+- **Rechazos:** el formato de tres digests, el digest de `inventory-manager` mal formado, y la falta del subdominio o de la credencial (código 3).
+- **Subdominio:**
+  - 429 tras la ráfaga (61 respuestas 200 y 14 de 429) y las landings sin cambios;
+  - *healthy* y sin puertos; `/acceso` 200 con `no-store` y `noindex`; HTTP → 301 a HTTPS;
+  - `/api/v1/admin` en el subdominio da 404 (no se enruta a la api), y el aviso no está en el dominio;
+  - `inventory-manager` llega a la api y no ve MySQL;
+  - la api llega al aviso, que sin credencial responde 401;
+  - `/admin` de las landings sigue en su dominio.
+- **Fallo:** `inventory-manager` roto termina con el código 16, la app sin tocar, el anterior *healthy*, las landings y la api en marcha, y `inventory_failed` en el log.
+
+**8. Prueba de extremo a extremo** (`landing-pages/tests/integration/admin-e2e.test.ts`): los tres procesos reales contra MySQL, con el aviso conectado.
+- **CA-9:** marcar «no disponible» en el admin nuevo da 303 `ok=saved` sin «pendiente»; la siguiente visita a la landing ya no lo muestra y `products_change_notified` registra `landing:true` y `bot:true`, sin reiniciar nada. Ningún log contiene la contraseña ni la credencial.
+- **CA-10:** con una credencial incorrecta o sin ella, 401 y no se invalida nada; en el puerto de la app, 404.
+
+**9. Documentación (CA-20):**
+- `docs/arquitectura.md`:
+  - §4, el árbol;
+  - §6, cómo consume la API `inventory-manager`;
+  - §8, el plan de 6 tickets del paso 4 y el ticket 1 aplicado (tres PR);
+  - §9, la decisión B tomada con las citas, la desviación D-3 y la fila del paso 4 de la decisión A;
+  - §10, la revisión de memoria y las dos administraciones.
+- `docs/despliegue.md`: servicios, borde HTTPS, cuatro imágenes, orden y código 16; GHCR; DNS a cargo del usuario; variables nuevas; una lista ordenada de acciones antes del primer despliegue; verificación de CA-15 y CA-9; restauración; diagnóstico (16, aviso, 429).
+- `docs/desarrollo.md`: el `.env` de `inventory-manager`, el aviso en local y `npm run dev` con tres procesos.
+- `README.md`:
+  - tabla de workspaces y regla de dependencias;
+  - `/api/v1/admin` y el aviso interno;
+  - sección nueva «Admin nuevo (`inventory-manager/`)»;
+  - imagen `inventory-manager`, el smoke en local y Dependabot.
+- `.env.example` de `api` y `landing-pages`.
+
+#### Revisión de memoria (RF-19)
+
+- **Estimación:** 1142 + 3 × 84,1 = **1394,3 MiB, el 35,6 %** de 3915 MiB, por debajo del 80 %. La decisión A se mantiene sin volver al usuario.
+- **Medida local** del contenedor `inventory-manager` (Docker Desktop, `docker stats`, tras servir unas peticiones): **45,5 MiB**, por debajo de la cota usada.
+- La medición real con los cuatro contenedores queda para cuando la épica llegue a `main`.
+
+#### Criterios de aceptación
+
+| CA | Estado en el PR 3 |
+| --- | --- |
+| CA-9 | Cumplido con los procesos reales y MySQL (prueba de extremo a extremo) |
+| CA-10 | Completo: pruebas del PR 1 y de extremo a extremo; en el smoke, el aviso no está en Traefik y sin credencial responde 401 |
+| CA-15 | Cumplido en el smoke (subdominio con su router, redirección, límite de 60/60, api y aviso no expuestos, landings y `/admin` iguales). El certificado real lo comprueba el usuario tras crear el DNS (documentado en `despliegue.md`, verificación del primer despliegue) |
+| CA-18 | Cumplido en el smoke: cuatro imágenes y el código 16 con las landings y la api sirviendo; `HEALTHCHECK` de `inventory-manager` *healthy* en el CI (`docker`) y en el smoke |
+| CA-19 | Locales en 0. El CI del PR se ejecuta en T4 |
+| CA-20 | Cumplido (ver punto 9) |
+| CA-1 a CA-8, CA-11 a CA-14, CA-16 y CA-17 | Cumplidos en los PR 1 y 2, sin regresión |
+
+#### Validaciones ejecutadas
+
+Desde `restaurante/`, con el MySQL local:
+
+- `npm run typecheck`: 0.
+- `npm run lint`: 0.
+- `npm run build:css`: 0.
+- `npm test`:
+  - antes: `api` 90, `landing-pages` 2193 + 1 *expected fail* e `inventory-manager` 70 (2354 en total);
+  - después: `api` 91, `landing-pages` 2195 + 1 *expected fail* (106 archivos) e `inventory-manager` 71, 2358 en total. Todo verde.
+- `docker build` de las cuatro etapas: correcto.
+- **Smoke de despliegue en local**, dentro de un contenedor Linux con el socket de Docker:
+  - **112 comprobaciones, todas en verde**, en la segunda ejecución;
+  - la primera dejó un fallo en la comprobación nueva del `/admin` de las landings: sin usuarios en la base de la prueba, `/admin` responde 503. La comprobación ahora verifica `ADMIN_UNAVAILABLE`.
+- `shellcheck` de `deploy.sh`, `ci/smoke.sh`, `ci/resumen.sh`, `ci/resumen-test.sh` y los scripts de `ops/backup` (imagen `koalaman/shellcheck:stable`): sin avisos. `resumen-test.sh`: en verde.
+- No queda ningún proceso ni contenedor de prueba; la red `traefik-public` local de la prueba se borró.
+
+#### Acciones del usuario pendientes (antes de mergear la épica a `main`)
+
+1. Crear el registro DNS A (y AAAA) de `admin.birriaelmuneco.com` hacia el VPS.
+2. Añadir al `.env` del VPS `RESTAURANTE_ADMIN_DOMAIN=admin.birriaelmuneco.com` y `RESTAURANTE_INTERNAL_NOTIFY_TOKEN` (`openssl rand -hex 32`).
+3. Dar al token de GHCR acceso de lectura a `restaurante-inventory-manager` (y a `restaurante-api`, pendiente heredado de REQ-F-038).
+4. Reinstalar `deploy/` (paso 1.3) y los scripts de `ops/backup` (paso 11.5).
+5. Tras el despliegue, comprobar el certificado real y la verificación de CA-15 y CA-9 de `despliegue.md`.
+
+#### Desviaciones y pendientes
+
+1. **`inventory-manager` comparte la red `traefik-public` con la app**, como cualquier contenedor de esa red, así que podría llegar a ella por ahí. El aviso interno exige la credencial, que `inventory-manager` no recibe. El smoke comprueba que no ve MySQL, en vez de afirmar que no ve la app.
+2. **La comprobación del `/admin` de las landings** en el smoke verifica la respuesta `ADMIN_UNAVAILABLE` (503 sin usuarios) en lugar de un 200.
+3. **El bot «en su siguiente mensaje»** se demuestra por la recarga del catálogo (`bot:true` tras `products.reload`) y por las pruebas del bot del PR 1, no con una conversación de WhatsApp de extremo a extremo.
+
+#### Correcciones de la QA ronda 1 (2026-10-28)
+
+**DEF-009 (CRITICAL, CA-19).** Opción elegida: la imagen `inventory-manager` ya no lleva los manifiestos de `packages/db` ni de `packages/core`, y la comprobación del CI se endurece.
+
+- `landing-pages/Dockerfile`, etapa `inventory-manager`: `COPY --parents packages/*/package.json /app/` pasa a `COPY --parents packages/contracts/package.json packages/web/package.json /app/`. Las demás etapas no cambian.
+- Por qué esta opción:
+  - es la intención de RF-17 y CA-17: la imagen no contiene nada de `db` ni de `core`, ni siquiera un manifiesto, y "sin `packages/db`" significa lo mismo en la imagen y en el CI;
+  - `npm ci -w inventory-manager` funciona sin esos manifiestos y sin avisos ("added 62 packages"). El árbol instalado es idéntico: se compararon los 70 `package.json` de `node_modules` de la imagen anterior y de la nueva, y coinciden;
+  - en `/app/node_modules/@restaurante` solo quedan los enlaces `contracts` y `web`, así que no hay enlaces rotos hacia paquetes ausentes.
+- `.github/workflows/ci.yml` (paso "contenido de las imágenes"): la comprobación de `inventory-manager` exige ahora `test ! -e /app/packages/db` y `test ! -e /app/packages/core`, y busca `@prisma`, `prisma` y `mariadb` en `/app/node_modules` y en `/app/inventory-manager/node_modules`. Antes solo los buscaba en `/app/node_modules`, y no buscaba `prisma`. El comentario del paso lo explica.
+
+**DEF-010 (MINOR, CA-20).** En `restaurante/README.md`, tabla del CI:
+
+- la fila `docker` ahora incluye:
+  - el build de `inventory-manager` y lo que se comprueba de esa imagen: sin `packages/db` ni `packages/core`, sin Prisma ni mariadb, y con `contracts`, `web`, el CSS y los iconos;
+  - `packages/web` en `production` y en `api`, y la copia de las imágenes en `api`;
+  - la credencial del aviso en el arranque de la `api`;
+  - el `HEALTHCHECK` de `inventory-manager`.
+- la fila `despliegue` ahora incluye:
+  - los cuatro digests, y que la forma de 3 se rechaza;
+  - `RESTAURANTE_ADMIN_DOMAIN` y la credencial del aviso como obligatorios (código 3);
+  - que ningún router apunta al 3002;
+  - las redes de `inventory-manager`;
+  - el subdominio: 200 con `no-store` y `noindex`, 301, 429 con el límite de 60 por minuto, y sin enrutar a la `api`;
+  - el 401 del aviso sin credencial;
+  - el código 16 con vuelta al anterior.
+
+  Todo coincide con `deploy/ci/smoke.sh` y `deploy/deploy.sh`.
+
+**DEF-011 (TRIVIAL):** lo corrigió la sesión principal en `docs/arquitectura.md` §10. Este agente no tocó ese archivo.
+
+**Validaciones de la corrección** (desde `restaurante/`):
+
+- `npm run typecheck`: 0. `npm run lint`: 0, sin avisos. `npm run build:css`: 0.
+- `npm test`: `api` 91/91; `landing-pages` 2195 + 1 *expected fail* (106 archivos); `inventory-manager` 71/71. Todo en verde.
+  - Una primera ejecución falló en `landing-pages` con `No space left on device` (errno 28) al crear una base de pruebas: el disco de Docker Desktop estaba al 100 %. Se liberó espacio borrando solo la caché de build de Docker de más de 6 h (ni imágenes en uso ni volúmenes), y la segunda ejecución pasó entera.
+- **Job `docker` del CI, reproducido en local:**
+  - build `linux/amd64` de `production`, `migrate`, `api` e `inventory-manager` con los tags del CI (`restaurante:<target>`): los cuatro en 0;
+  - se extrajeron los `run` de los pasos "contenido de las imágenes", "migrate sobre una base vacía" e "imagen production escucha en 0.0.0.0 y queda healthy" del propio `ci.yml` y se ejecutaron tal cual con `bash -eo pipefail`;
+  - "contenido": rc 0, y con él la comprobación nueva de `inventory-manager`. En la imagen, `/app/packages` solo contiene `contracts` y `web`;
+  - "migrate": "All migrations have been successfully applied";
+  - "healthy": la `api`, `app-ca9` e `inventory-ca18` quedan *healthy*. La landing responde y carga productos de la API, y el script llega a su último `docker rm -f`;
+  - después se borró la base `restaurante_test_ci` del MySQL local.
+- No se repitió el smoke de despliegue (`deploy/ci/smoke.sh`). El cambio solo quita dos manifiestos sin código de la imagen `inventory-manager`, y su `node_modules` es idéntico.
+
+#### Corrección de DEF-012 (fase T4, 2026-10-28)
+
+Decisión del usuario: "si corrigelo".
+
+- `restaurante/README.md`, fila `despliegue` de la tabla del CI: un `inventory-manager` roto "termina con 16, vuelve al anterior y deja la app como estaba y la `api` nueva en marcha". Antes decía que dejaba "la app y la `api` como estaban".
+- `restaurante/deploy/deploy.sh`: el comentario de cabecera tenía la misma imprecisión y se corrigió con las mismas palabras. Solo cambia el comentario: el bloque del paso 6 ya mantiene la `api` nueva (`protect_running_app "$API_IMAGE" … 16 'inventory-manager no quedó healthy; la api nueva sigue'`). Así coincide con `deploy/ci/resumen.sh` y con `docs/despliegue.md`. La suma de `deploy/` cambia, pero el smoke la calcula en cada ejecución.
+
 ## QA Action Plan
 
 ### PR 1 de 3 (2026-10-27, fase Q1)
@@ -1610,6 +1797,288 @@ Con `api`, `landing-pages` (solo para crear la base, importar la semilla y crear
   - el favicon propio, si se decide (desviación 3);
   - la memoria.
 - **DEF-003** (prueba inestable heredada): pendiente de la decisión del usuario.
+
+### PR 3 de 3: despliegue (2026-10-28, fase Q1)
+
+**Aprobación:** aprobado por el usuario el 2026-10-28. Respuesta textual: "apruebo el plan". La implementación del PR 3 se aprobó el mismo día ("lo apruebo").
+
+#### Objetivo
+
+Validar con evidencia que el PR 3 (`feature/REQ-F-039-admin-nuevo-productos-3-despliegue`, sin commit, base `3c65ad7`) cumple los CA que le asigna el plan técnico: CA-9, CA-10 (completo), CA-15, CA-18 y CA-20, y CA-19 en local. También que sigue sin regresiones en CA-1 a CA-8, CA-11 a CA-14, CA-16 y CA-17, en las landings, en el `/admin` actual, en la `api`, en `ops/backup` y en el pipeline. Además, que la rama sigue en verde al combinarla con `epic/arquitectura` (PR #96, merge `22badbc`).
+
+#### Requisito bajo prueba
+
+- **RF-18:** subdominio `admin.<dominio>` con HTTPS, redirección desde HTTP, límite propio de 60/min con ráfaga de 60, `api` y aviso no accesibles desde internet, y dominio y rutas de las landings (también `/admin`) sin cambios.
+- **RF-19:**
+  - `deploy.sh` con cuatro imágenes: orden api → `inventory-manager` → app, y código 16 con las landings y la `api` sirviendo;
+  - smoke del subdominio;
+  - revisión de memoria frente al 80 %.
+- **Cambios del PR 3:**
+  - etapa Docker `inventory-manager`;
+  - favicon por negocio (lista cerrada);
+  - `compose.prod.yaml` con la red `admin`;
+  - `deploy.sh`, `smoke.sh`, `resumen.sh` y `resumen-test.sh`;
+  - jobs del CI `docker`, `despliegue`, `publish` y `deploy`;
+  - comentarios de Dependabot;
+  - aviso interno obligatorio en producción (`landing-pages`, `api`, `verify-backup.sh` y smoke de respaldos);
+  - prueba de extremo a extremo `admin-e2e.test.ts`;
+  - documentación.
+- **Correcciones de la sesión principal en `docs/arquitectura.md`:**
+  - fila "Estado" y "Fecha";
+  - el riesgo "Dos administraciones a la vez" unificado en §10;
+  - el riesgo nuevo "Estado en memoria de la `api`".
+- **Desviaciones declaradas, que se validan como comportamiento esperado salvo que contradigan un CA:**
+  1. `inventory-manager` comparte `traefik-public` con la app;
+  2. el smoke comprueba `/admin` con `ADMIN_UNAVAILABLE` (503 sin usuarios);
+  3. el bot "en su siguiente mensaje" se demuestra con la recarga del catálogo.
+
+#### Criterios de aceptación (PR 3 → pruebas)
+
+| CA | Pruebas que lo cubren |
+| --- | --- |
+| CA-9 | E-01, E-02, E-04 |
+| CA-10 (completo) | E-03, C-05, K-SMOKE (aviso no en Traefik, 401 sin credencial) |
+| CA-15 | C-01 a C-07, K-SMOKE (subdominio, 301, 429, `api` no enrutada, landings y `/admin`), R-07; certificado real: pendiente manual documentado (DOC-02) |
+| CA-18 | I-01 a I-05, K-SMOKE, K-01 a K-04, K-07 |
+| CA-19 (local) | R-01 a R-05, MRG-01 a MRG-03 |
+| CA-20 | DOC-01 a DOC-06 |
+| CA-1 a CA-8, CA-11 a CA-14, CA-16 y CA-17 (regresión) | R-04, R-06, F-01 y F-02, N-01 a N-04 |
+
+El CI del PR hacia `epic/arquitectura` (CA-19 completo) y el certificado real tras el DNS (CA-15) quedan fuera de este QA. Ver "Lo que queda fuera".
+
+#### Riesgos identificados
+
+1. **R-ROLLBACK.** Rutas de `deploy.sh` que el smoke no ejercita:
+   - el primer despliegue con `inventory-manager` roto y sin versión anterior (debe detenerse y terminar con 16);
+   - el código 16 tras migraciones nuevas (`protect_running_app` recrea la app con `DATABASE_ALLOW_NEWER_SCHEMA=true`);
+   - la vuelta atrás de la app (21), que debe devolver `inventory-manager` a su versión anterior. En el smoke actual no se nota, porque usa siempre `INV1`.
+2. **R-WRITERS.** Que tras un 16 o un 21 queden dos escritores: `inventory-manager` en marcha junto a una app que todavía edita productos. O lo contrario: la app en solo lectura (`ADMIN_NEW_URL`) sin un admin nuevo sano.
+3. **R-HEALTH.** `HEALTHCHECK` y `probe_admin` usan `/salud`, que no llama a la `api`. Un `inventory-manager` que no llegue a la `api` pasaría por sano y la app nueva entraría en solo lectura. Se evalúa frente a RF-19 (el requisito pide el `HEALTHCHECK`, no la conectividad con la `api`). Solo es defecto si contradice un CA; si no, se registra como observación.
+4. **R-EXPOSE.**
+   - La `api` es accesible desde `traefik-public` (no debe serlo).
+   - El 3002 de la app es accesible desde `traefik-public` (desviación 1: debe exigir la credencial).
+   - El subdominio enruta hacia la `api` o hacia el 3002.
+   - Hay routers de Traefik en servicios que no deberían tenerlos.
+5. **R-RATE.** El límite de Traefik (`average=60`, `period=1m`, `burst=60`) no se comporta como 60/min con ráfaga de 60. O se comparte con el límite de `/admin` (10/min, ráfaga de 20), o lo afecta.
+6. **R-TOKEN.** El aviso pasa a ser obligatorio en producción. Cualquier arranque de la app o de la `api` en producción sin la credencial deja de funcionar:
+   - compose;
+   - CI `docker`;
+   - `verify-backup.sh` y el smoke de respaldos;
+   - `restore.sh`;
+   - los comandos de consola documentados (`docker compose run/exec`).
+
+   La credencial tampoco debe aparecer en logs, en `docker inspect` de `inventory-manager` ni en los mensajes de error.
+7. **R-IMAGE.** La imagen `inventory-manager`:
+   - podría llevar Prisma, mariadb, `packages/db` o `core`;
+   - podría no funcionar con `read_only` y `tmpfs` (escrituras en disco);
+   - podría correr como root;
+   - podría no resolver `contracts` y `web`;
+   - podría faltarle CSS o iconos;
+   - podría ser innecesariamente grande.
+8. **R-FAVICON.** La ruta nueva de iconos:
+   - recorrido de rutas (codificado o no);
+   - tipos MIME;
+   - métodos distintos de GET y HEAD;
+   - cabeceras (deben mantener `noindex`; `max-age` es coherente con los estáticos de la línea 667 del plan técnico);
+   - CSP `img-src`;
+   - el icono incorrecto según el negocio.
+9. **R-MERGE.** La combinación con `epic/arquitectura` (#96 mueve `createImageChecker` a `@restaurante/web`):
+   - imports rotos en el código o en las pruebas nuevas del PR 3;
+   - conflicto o duplicación en `arquitectura.md` §1, §4 y §10;
+   - reglas de `.claude/` divergentes.
+10. **R-DOC.** La documentación incompleta o incoherente con el código:
+    - las filas `docker` y `despliegue` de la tabla del CI del `README.md` sin `inventory-manager` ni el código 16;
+    - anclas rotas (`#10-diagnóstico` en `resumen.sh`);
+    - cifras de memoria;
+    - puertos 3002 y 3003;
+    - variables nuevas;
+    - pasos del usuario (DNS, `.env`, GHCR y reinstalación de `deploy/` y `ops/backup`).
+11. **R-SCOPE.** El archivo sin rastrear `.claude/rules/notebookLM.md` no pertenece al PR 3. Se informa para que no entre por error en el commit, o para que el usuario decida.
+12. **R-ENV.** Pruebas que tocan una base que no sea `restaurante_test*`. "Too many connections" (1040) en el `mysql-dev` compartido: es de entorno, no un defecto. Se reintenta la prueba afectada.
+
+#### Pruebas del compose estático (`docker compose config` con un `.env` sintético en el scratchpad, sin secretos reales)
+
+- **C-01.** `inventory-manager`:
+  - redes exactas `admin` y `traefik`;
+  - `read_only`, `tmpfs /tmp`, `cap_drop ALL`, `no-new-privileges` y sin `ports`;
+  - *healthcheck* contra `/salud`;
+  - `NODE_ENV=production`, `TRUST_PROXY=true` y `API_INTERNAL_URL=http://api:3001`;
+  - sin `DATABASE_URL`, `MYSQL_*` ni `INTERNAL_NOTIFY_TOKEN`.
+- **C-02.** Red `admin` con `internal: true`. La `api` está solo en `db` y `admin`, sin labels ni puertos.
+- **C-03.** Routers:
+  - `restaurante-inventory` con `Host(admin)`, el entrypoint HTTPS, `tls`, `certresolver` y el middleware de límite 60/1m/60;
+  - `restaurante-inventory-http` con `redirectscheme` https permanente;
+  - `traefik.docker.network=traefik-public`;
+  - ningún router hacia el 3002 ni hacia la `api`;
+  - los routers de las landings y de `/admin` idénticos a `3c65ad7`, comparados con `git show 3c65ad7:restaurante/deploy/compose.prod.yaml`.
+- **C-04.** La app con `ADMIN_NEW_URL=https://<admin>`, `INTERNAL_PORT=3002` e `INTERNAL_NOTIFY_TOKEN`; la `api` con `LANDING_INTERNAL_URL=http://app:3002`, la misma credencial y `BUSINESS_TIMEZONE`.
+- **C-05.** Sin `RESTAURANTE_ADMIN_DOMAIN` o sin `RESTAURANTE_INTERNAL_NOTIFY_TOKEN`, `docker compose config` falla con el mensaje `Falta …` y sin imprimir ningún valor.
+- **C-06.** `ops/backup` sigue pudiendo leer el compose sin conocer `inventory-manager`: la imagen por defecto es `sin-desplegar`, y `RESTAURANTE_INVENTORY_IMAGE` no se exige.
+- **C-07.** `env.production.example` contiene las dos variables nuevas, comentadas y sin valor secreto.
+
+#### Pruebas de `deploy.sh` (en el contenedor Linux con el socket de Docker, como el implementador)
+
+- **K-SMOKE.** `deploy/ci/smoke.sh` con las cuatro imágenes construidas en local. Se esperan 112 comprobaciones en verde, y se anotan el desglose de los códigos de la ráfaga (200/429) y el tiempo total.
+- **Escenarios adicionales**, con una copia de `smoke.sh` en el scratchpad que reutiliza sus funciones y sus imágenes, sin modificar el script del repositorio. Se borra al terminar.
+  - **K-01.** Primer despliegue (sin `release.env` ni contenedor previo) con `INV_BAD`:
+    - termina con 16;
+    - `inventory-manager` queda detenido;
+    - la app y la `api` siguen sirviendo y la app anterior sigue editando. En el primer despliegue no hay app anterior, así que se anota lo que queda: la app no se cambia;
+    - `releases.log` registra `inventory_failed`.
+  - **K-02.** `INV_BAD` con una migración nueva:
+    - termina con 16;
+    - la app se recrea con la misma imagen y `DATABASE_ALLOW_NEWER_SCHEMA=true`, y sobrevive a un reinicio;
+    - `inventory-manager` vuelve al anterior;
+    - la `api` nueva sigue *healthy*.
+  - **K-03.** Vuelta atrás de la app (21) con un `INV2` distinto de `INV1`:
+    - la app vuelve a la v2;
+    - `inventory-manager` vuelve a `INV1`, no se queda en `INV2`;
+    - `release.env` no cambia.
+  - **K-04.** `inventory-manager` *healthy* pero sin enrutar en Traefik (por ejemplo, un `RESTAURANTE_ADMIN_DOMAIN` válido distinto del que resuelve `--resolve`, o el router desactivado en una imagen derivada): `probe_admin` falla y termina con 16.
+- **K-05.** Código 3 sin imprimir el valor: credencial con espacios, con 31 caracteres y vacía; subdominio con mayúsculas o caracteres no válidos. Se revisa que la salida de `deploy.sh` no contenga la credencial.
+- **K-06.** `shellcheck` (imagen `koalaman/shellcheck:stable`) de `deploy.sh`, `ci/smoke.sh`, `ci/resumen.sh`, `ci/resumen-test.sh` y los scripts de `ops/backup`. Además, `bash deploy/ci/resumen-test.sh` con los casos del código 16 y de los cuatro digests (un digest de `inventory-manager` inválido da "entrada no válida").
+- **K-07.** Smoke de respaldos (`ops/backup/ci/smoke.sh restaurante:production restaurante:migrate`) en verde con la credencial obligatoria. Lectura de `restore.sh` y de los comandos de consola de `despliegue.md`: todo arranque de la app en producción recibe la credencial.
+
+#### Pruebas de la imagen (`docker build` local de las cuatro etapas)
+
+- **I-01.** Las comprobaciones del job `docker` del CI en local:
+  - `WORKDIR` `/app/inventory-manager`, `src/server.ts` y `public/css/main.css` no vacío;
+  - los iconos `favicon.ico` e `icon-32.png` de los dos negocios;
+  - sin `/app/packages/db`, `@prisma` ni `mariadb`;
+  - `contracts` y `web` resolubles.
+  Además, sin `packages/core` ni `api/src`.
+- **I-02.** Usuario `node` (`docker inspect` y `id` en el contenedor), `HEALTHCHECK` declarado y puerto 3003.
+- **I-03.** Arranque con `--read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges`: queda *healthy* y los logs no tienen errores de escritura.
+- **I-04.** Tamaño de la imagen y de `node_modules`. Se compara con la imagen `api` y con los ~17 MiB declarados.
+- **I-05.** Las imágenes `production`, `migrate` y `api` siguen pasando sus comprobaciones del CI. La `api` contiene `public/img`. `production` y `api` arrancan con la credencial y sin ella fallan en producción con el mensaje esperado.
+
+#### Pruebas funcionales y de extremo a extremo (MySQL real, solo bases `restaurante_test*`)
+
+- **E-01.** `admin-e2e.test.ts` (CA-9), ejecutada aislada y dentro de la suite completa:
+  - 303 con `ok=saved` sin «pendiente»;
+  - la landing deja de mostrar el producto en la siguiente visita;
+  - `products_change_notified` con `landing:true` y `bot:true`;
+  - todo sin reinicios.
+- **E-02.** Revisión de la prueba:
+  - comprueba el comportamiento por HTTP y por logs, sin reproducir la implementación;
+  - arranca los tres procesos reales;
+  - usa `makeDatabase`;
+  - limpia procesos y bases.
+  Se ejecuta tres veces seguidas para detectar inestabilidad.
+- **E-03.** CA-10 en la prueba: con la credencial incorrecta o sin ella, 401 sin invalidar nada; en el puerto público de la app, 404.
+- **E-04.** Logs de los tres procesos de la prueba: sin la contraseña del editor, la credencial, ids de sesión ni `_csrf`.
+- **F-01.** Favicon:
+  - `/img/{molotes,birria}/icons/{favicon.ico,icon-32.png}` → 200 con el tipo correcto;
+  - `noindex` presente;
+  - `HEAD` correcto, y `POST` con 404 o 405;
+  - `/img/birria/icons/../../…`, `%2e%2e`, `%2F`, mayúsculas, `icon-512.png` y `/img/tacos/…` → 404 sin trazas.
+  - El layout usa el icono del negocio editado y, en el acceso, el selector, el 403, el 404 y el 503, el de Birria.
+- **F-02.** Fuera de producción, la configuración sigue igual: sin la credencial, la app no abre el 3002 y la `api` no avisa (`null`). En producción, las dos fallan con el mensaje esperado sin repetir el valor (pruebas unitarias y un arranque real con `NODE_ENV=production`).
+
+#### Pruebas negativas y casos límite
+
+- **N-01.** Una IP que agota el límite del subdominio no afecta a las landings ni a `/admin` (ya está en el smoke), y en el minuto siguiente vuelve a tener servicio (se anota si el smoke no lo cubre).
+- **N-02.** Con el DNS sin crear: el subdominio no responde y las landings no cambian. Se comprueba en el smoke: `--resolve` solo hacia el dominio raíz, y el `Host` del subdominio desconocido no enruta a las landings.
+- **N-03.** `GET /api/v1/admin/*` y `/internal/*` en el subdominio dan 404 de `inventory-manager`. En el dominio raíz, el aviso no está expuesto.
+- **N-04.** Un `docker exec` desde `inventory-manager` hacia `app:3002` sin credencial da 401 (desviación 1). Desde un contenedor solo en `traefik-public`, `api` no resuelve.
+
+#### Pruebas en navegador
+
+Cambio visual mínimo (favicon). Con `inventory-manager` en local (procesos o contenedor, base `restaurante_test_qa039pr3`, credenciales generadas en la sesión):
+
+- **B-01.** El icono de la pestaña es el del negocio en `/molotes/productos` y `/birria/productos`, y el de Birria en el acceso.
+- **B-02.** La consola no muestra errores ni violaciones de CSP en el acceso, la lista y el formulario.
+- **B-03.** A 375 px y en escritorio, sin desplazamiento horizontal en el acceso y en la lista (regresión rápida de CA-14).
+
+Si la extensión no responde tras 2 o 3 intentos, B-01 a B-03 quedan pendientes de revisión manual. Ningún CA del PR 3 depende solo de ellos: F-01 cubre el favicon por HTTP.
+
+#### Pruebas de regresión
+
+- **R-01.** `npm run typecheck` desde `restaurante/`.
+- **R-02.** `npm run lint`, sin avisos.
+- **R-03.** `npm run build:css` (`landing-pages` e `inventory-manager`).
+- **R-04.** `npm test` de todos los workspaces. Se esperan `api` 91, `landing-pages` 2195 + 1 *expected fail* (106 archivos) e `inventory-manager` 71: 2358 en total.
+- **R-05.** `docker build` de `deps`, `build`, `test`, `production`, `migrate`, `api` e `inventory-manager`.
+- **R-06.** El `/admin` actual con `ADMIN_NEW_URL` (`admin-products-moved.test.ts` y `admin-*.test.ts`) y el bot (pruebas de recarga del catálogo).
+- **R-07.** HTML de las landings: las referencias de REQ-F-038 (`landing-html-reference.test.ts` y `tests/snapshots/`) no cambian.
+- **R-08.** `git diff 3c65ad7 -- restaurante/packages restaurante/api/src restaurante/landing-pages/src`: aparte de `config.ts` y `env.ts`, no hay cambios de comportamiento fuera de lo declarado.
+
+#### Combinación con `epic/arquitectura` (R-MERGE)
+
+Es un requisito previo al commit del PR 3. QA lo comprueba antes, sin tocar la rama ni la copia de trabajo:
+
+- **MRG-01.** `git worktree add` en el scratchpad desde `origin/epic/arquitectura` (`22badbc`). Se aplica `git diff HEAD` de esta rama y se copia el archivo sin rastrear `admin-e2e.test.ts`. Se anota cualquier conflicto. Se comprueba que `arquitectura.md` queda con un solo riesgo "Dos administraciones a la vez", con el riesgo "Estado en memoria de la `api`" y con §1 y §4 de #96 intactos.
+- **MRG-02.** En ese árbol: `npm ci`, `npm run typecheck`, `npm run lint`, `npm run build:css` y `npm test` (con MySQL de pruebas). Se buscan imports de `createImageChecker` desde `@restaurante/core` en los archivos del PR 3.
+- **MRG-03.** `docker build --target inventory-manager` y `--target api` en ese árbol (el `Dockerfile` copia `packages/web`, que #96 cambia).
+- Al terminar se eliminan el *worktree* y su `node_modules`.
+- Aunque MRG pase, `senior-fullstack` debe volver a ejecutar `typecheck`, `lint` y `test` después de integrar `epic/arquitectura` en la rama y antes del commit. El CI del PR lo confirma.
+
+#### Pruebas de documentación (CA-20)
+
+- **DOC-01.** `arquitectura.md`:
+  - §4: el árbol con `inventory-manager` y `web`;
+  - §6: cómo consume la API `inventory-manager`;
+  - §8: el plan de 6 tickets y el ticket 1 aplicado;
+  - §9: la decisión B con las citas y la desviación D-3;
+  - §10: la memoria, recalculada (1142 + 3 × 84,1 = 1394,3 MiB, el 35,6 % de 3915), y los dos riesgos que tocó la sesión principal.
+  Se contrasta el riesgo de estado en memoria con `api/src/admin/index.ts` mediante CodeGraph. La fila "Estado" y la "Fecha" deben ser coherentes con lo aplicado.
+- **DOC-02.** `despliegue.md`:
+  - servicios y borde HTTPS;
+  - cuatro imágenes, orden y código 16 (también en §10 "Diagnóstico");
+  - GHCR;
+  - el DNS a cargo del usuario;
+  - las variables nuevas en §3;
+  - la reinstalación de `deploy/` y de `ops/backup`;
+  - la verificación del certificado real y de CA-15 y CA-9 tras el primer despliegue.
+- **DOC-03.** `desarrollo.md`: el `.env` de `inventory-manager`, el aviso en local y `npm run dev` con tres procesos. Se comprueba que los comandos existen en `package.json`.
+- **DOC-04.** `README.md`:
+  - la tabla de workspaces y la regla de dependencias;
+  - `/api/v1/admin` y el aviso;
+  - la sección "Admin nuevo";
+  - la imagen nueva y el smoke en local;
+  - Dependabot;
+  - y las filas `docker`, `despliegue`, `publish` y `deploy` de la tabla del CI con `inventory-manager` y el código 16 (R-DOC).
+- **DOC-05.** Los `.env.example` de `api` y `landing-pages`, `env.production.example` y los comentarios de `compose.prod.yaml`, `deploy.sh` y `dependabot.yml` coinciden con el código: obligatoriedad en producción, longitud mínima de 32 y puertos.
+- **DOC-06.** Los enlaces y las anclas citados en `resumen.sh` y en la documentación existen.
+
+#### Pruebas automatizadas
+
+- **Existentes:** todas (R-04), con atención a `admin-e2e.test.ts`, `config.test.ts` (`api` y `landing-pages`), `access.test.ts` (favicon), `dependency-rule.test.ts`, `admin-products-moved.test.ts`, `landing-html-reference.test.ts` y `resumen-test.sh`.
+- **Nuevas:** ninguna por defecto. Si aparece un defecto que una prueba pueda fijar, se documenta con `it.fails` y la referencia DEF-NNN en `restaurante/landing-pages/tests/integration/deploy-qa-req-f-039.test.ts`, solo dentro de `landing-pages/tests/`.
+- Los escenarios K-01 a K-04 se ejecutan con un script temporal del scratchpad, no versionado, y su salida queda como evidencia.
+
+#### Entorno (sin tocar desarrollo ni producción)
+
+- **Base:** `restaurante_test_qa039pr3` en el MySQL de pruebas, creada y borrada en la sesión, solo para el navegador y para F-01 y F-02. Las migraciones van con `MIGRATION_DATABASE_URL` explícita, y se comprueba la base en la salida antes de seguir. No se lee ni se muestra ningún `.env`.
+- **Smoke:** usa su propio MySQL, su propio registro y su propio Traefik en contenedores. La red `traefik-public` local se crea y se borra en la sesión.
+- **Procesos:** se lanzan con `env -i` y variables explícitas, y se identifican por puerto (`lsof -tiTCP:<puerto> -sTCP:LISTEN`).
+- **Limpieza:** procesos, contenedores, imágenes de prueba, red, *worktree*, base, scripts y logs del scratchpad, y pestañas del navegador.
+
+#### Evidencia requerida
+
+- Salidas de R-01 a R-05 y de MRG-02, con totales por workspace.
+- Resumen del smoke: número de comprobaciones, fallos, desglose de la ráfaga y salida de K-01 a K-05 con los códigos de salida y el estado de los contenedores (`docker ps`, `docker inspect`).
+- Extractos de `docker compose config` filtrados con `jq`, sin valores secretos.
+- Salida de `shellcheck` y de `resumen-test.sh`.
+- Cabeceras de `curl` de F-01.
+- Extractos de log de E-04.
+- Contenido y tamaño de la imagen (I-01 a I-04).
+- Lista de hallazgos de DOC-01 a DOC-06 con su archivo y línea.
+
+#### Criterios de aprobación
+
+- CA-9, CA-10, CA-15 (salvo el certificado real), CA-18 y CA-20 pasan con evidencia, y CA-19 en local en 0, tanto en la rama como en la combinación con `epic/arquitectura`.
+- K-01 a K-04 confirman que nunca quedan dos escritores ni la app en solo lectura junto a un admin nuevo caído, y que las landings y la `api` siguen sirviendo.
+- Sin `BLOCKER` ni `CRITICAL`. Cualquier `MAJOR` vuelve al usuario como `NEEDS_USER_DECISION`.
+- Sin regresiones en las landings, el `/admin` actual, la `api`, `inventory-manager`, `ops/backup` ni el pipeline.
+- Entorno limpio al terminar.
+
+#### Lo que queda fuera de este QA
+
+- **CI del PR hacia `epic/arquitectura`** (`calidad`, `docker`, `despliegue` y `auditoria`): CA-19 completo, en T4.
+- **Certificado real, DNS y medición de memoria con los cuatro contenedores en el VPS:** a cargo del usuario cuando la épica llegue a `main` (acciones pendientes 1 a 5 del Implementation Result del PR 3).
+- **Integración real de `epic/arquitectura` en la rama:** la hace `senior-fullstack` antes del commit. QA solo valida la combinación en un *worktree* temporal.
+- **Conversación de WhatsApp de extremo a extremo con el bot** (desviación 3).
 
 ## QA Report
 
@@ -2040,7 +2509,268 @@ La sesión del navegador caducó durante la pausa por el límite de uso (más de
 
 QA_APPROVED
 
+### PR 3 de 3: despliegue — Ronda 1 (2026-10-28, fase Q2)
+
+**Aprobación del QA Action Plan:** dada por el usuario el 2026-10-28. Respuesta textual: "apruebo el plan". `.claude/rules/notebookLM.md` queda fuera del PR 3, por decisión del usuario ("Si, subelo en un pr pequeño"); no es un defecto.
+
+#### Pruebas ejecutadas
+
+Rama `feature/REQ-F-039-admin-nuevo-productos-3-despliegue`, sin commit, base `3c65ad7`.
+
+| ID | Acción | Resultado |
+| --- | --- | --- |
+| R-01 | `npm run typecheck` | 0 |
+| R-02 | `npm run lint` | 0, sin avisos |
+| R-03 | `npm run build:css` | 0 |
+| R-04 | `npm test` | `api` 91/91 e `inventory-manager` 71/71. `landing-pages`: 2192 + 1 *expected fail*, con 3 fallos en `product-repository-contract.test.ts` por `Too many connections` (1040, entorno); ese archivo, ejecutado solo, pasa 36/36. Total: 2358 en verde |
+| R-05 | `docker build` de `production`, `migrate`, `api`, `inventory-manager` y `test` (con `--build-context design=../_stich_source_`) | Todas en 0 |
+| C-01 a C-07 | `docker compose config` con un `.env` sintético, comparado con `3c65ad7` | PASS. El servicio `app` es idéntico salvo las tres variables nuevas (labels, entorno y resto). Solo `app` e `inventory-manager` tienen routers; ninguna label apunta al 3002; ningún servicio publica puertos. Sin `RESTAURANTE_ADMIN_DOMAIN` o sin la credencial, el error `Falta …` no muestra valores. La imagen por defecto es `:sin-desplegar` |
+| K-SMOKE | `deploy/ci/smoke.sh` con las cuatro imágenes, en un contenedor `docker:cli` | **112 ok, 0 fallos**. Ráfaga del subdominio: 61 × 200 y 14 × 429. `/admin`: 10 × 429 y 20 × 503 (sin usuarios) |
+| K-01 a K-05, N-02 a N-04 | Copia del smoke en el scratchpad con los escenarios del plan | **155 ok y 1 fallo, que es un artefacto del escenario** (ver la observación de K-02) |
+| K-06 | `shellcheck` (`koalaman/shellcheck:stable`) de `deploy/`, `deploy/ci/` y `ops/backup/` | Sin avisos |
+| K-06 | `resumen-test.sh`, y `resumen.sh` a mano con el digest de `inventory-manager` inválido o ausente | En verde. Con el digest inválido o ausente, el resumen es "Fallido (entrada no válida)" |
+| K-07 | `ops/backup/ci/smoke.sh qa039:production qa039:migrate` | 55 ok, incluido el simulacro `--drill`. Los dos intentos anteriores fallaron por el entorno: el puerto S3 no era accesible desde la red del contenedor, y una ruta no estaba compartida con Docker Desktop |
+| I-01 a I-05 | Inspección de las imágenes | Ver DEF-009 y la sección "Imagen" |
+| E-01 a E-03 | `admin-e2e.test.ts`, tres veces seguidas | 2/2 en cada ejecución |
+| F-01 | Favicon en el contenedor `inventory-manager` (`read_only`, `X-Forwarded-Proto: https`) | PASS (detalle en "Favicon") |
+| F-02 | Imágenes `api` y `production` en producción sin la credencial | Las dos rechazan el arranque con el mensaje esperado, sin repetir valores |
+| MRG-01 a MRG-03 | *Worktree* desde `origin/epic/arquitectura` (`22badbc`) con el diff de la rama y `admin-e2e.test.ts` | El diff se aplica sin conflictos. `typecheck`, `lint` y `build:css` en 0. `npm test` en verde: `api` 91, `landing-pages` 2199 + 1 *expected fail* (107 archivos) e `inventory-manager` 71. `docker build` de `inventory-manager`, `api` y `production` en 0. En la imagen `api`, `createImageChecker` se resuelve desde `@restaurante/web` |
+| B-01 a B-03 | Chrome: `/acceso` con `inventory-manager` en local | Los iconos de Birria responden 200 (`image/x-icon` de 9494 B e `image/png` de 2847 B). Consola sin errores ni violaciones de CSP. Sin desplazamiento horizontal a 1280 px. El navegador bloqueó la ventana emergente de 375 px |
+
+#### Criterios de aceptación
+
+| CA | Resultado | Evidencia |
+| --- | --- | --- |
+| CA-9 | PASS | E-01, estable en tres ejecuciones: 303 `ok=saved`; el producto ya no aparece en la siguiente visita a `/molotes`; `products_change_notified` con `landing:true` y `bot:true`, sin reiniciar nada |
+| CA-10 | PASS | E-03: sin credencial o con una incorrecta, 401; `internal_notify_rejected` dos veces y ninguna invalidación; en el puerto público, el aviso da 404. Smoke: el aviso no está en Traefik. N-04: desde `inventory-manager`, `app:3002` sin credencial da 401, y desde `traefik-public` el nombre `api` no resuelve |
+| CA-15 | PASS (salvo el certificado real, pendiente del usuario) | C-03 y K-SMOKE: el subdominio responde 200 con `no-store` y `noindex`; HTTP → 301 a HTTPS conservando la ruta; 429 tras la ráfaga de 60; `/api/v1/admin/sesion` → 404; el aviso fuera del dominio; las landings y `/admin` sin cambios. N-02: un `Host` desconocido da 404. N-03: `/internal/...` en el subdominio da 404 |
+| CA-18 | PASS en `deploy.sh`; el CI no pasaría (DEF-009) | K-SMOKE: cuatro imágenes, y código 16 con vuelta al anterior. K-01: primer despliegue con la imagen rota → 16; `inventory-manager` queda detenido, la app no se arranca y la `api` queda *healthy*. K-02: 16 tras una migración nueva; la app, con `DATABASE_ALLOW_NEWER_SCHEMA=true`, sobrevive a un reinicio, y `inventory-manager` vuelve a v1. K-03: el 21 devuelve `inventory-manager` de v2 a v1. K-04: *healthy* por dentro pero sin enrutar → 16. Nunca quedan dos escritores, ni la app en solo lectura junto a un admin nuevo caído |
+| CA-19 | **FAIL** | Las validaciones locales y las de la combinación con la épica pasan, pero la comprobación nueva del job `docker` termina siempre con 1 (DEF-009): el CI del PR no puede quedar en verde |
+| CA-20 | PASS, con DEF-010 y DEF-011 | DOC-01 a DOC-06: `arquitectura.md` §4, §6, §8, §9 y §10. Memoria: 1142 + 3 × 84,1 = 1394,3 MiB, el 35,6 %, bien calculada. Un solo riesgo "Dos administraciones a la vez", también tras combinar con #96. `despliegue.md` §1.3, §1.4, §1.6, §3, §4 y §10 (código 16, 429 y aviso). `.env.example`, `env.production.example` y los comentarios |
+| CA-1 a CA-8, CA-11 a CA-14, CA-16 y CA-17 | PASS (sin regresión) | R-04 y MRG-02 en verde, incluidas `access.test.ts`, `dependency-rule.test.ts` y `admin-products-moved.test.ts`. F-01 |
+
+#### Defectos encontrados
+
+### DEF-009
+- **Severidad:** CRITICAL. La comprobación nueva del CI falla siempre: el PR hacia `epic/arquitectura` no puede quedar en verde, y en `main` no se publicaría ni se desplegaría nada.
+- **Criterio de aceptación afectado:** CA-19 (y la parte de CI de CA-18).
+- **Descripción:**
+  - `.github/workflows/ci.yml:377` exige `test ! -e /app/packages/db` en la imagen `inventory-manager`.
+  - La etapa del `Dockerfile` (`landing-pages/Dockerfile:189`, `COPY --parents packages/*/package.json /app/`) deja en la imagen `/app/packages/db/package.json` y `/app/packages/core/package.json`.
+  - Son solo los manifiestos, sin código, Prisma ni mariadb. Seguramente `npm ci -w` los necesita para resolver los workspaces.
+- **Pasos para reproducir:**
+  1. Desde `restaurante/`: `docker build -f landing-pages/Dockerfile --target inventory-manager -t x .`.
+  2. Ejecutar sobre `x` la orden de la línea 377 del CI.
+- **Resultado esperado:** código 0.
+- **Resultado actual:** código 1.
+  - `find /app/packages -maxdepth 2` muestra `core/package.json` y `db/package.json`, además de `contracts` y `web` completos.
+  - `@prisma`, `prisma` y `mariadb` no están en `node_modules`.
+- **Evidencia:** `docker run … qa039:inventory-manager` en esta ronda: `no-db=1`, `noprisma=0` y `nomariadb=0`; la orden del CI, con rc=1.
+- **Impacto:** el job `docker` queda en rojo, y con él `publish` y `deploy`. La imagen en sí no lleva código de la base.
+- **Recomendación:**
+  - Que la imagen y la comprobación coincidan en qué significa "sin `packages/db`": o la imagen no lleva esos manifiestos, o la comprobación verifica que no hay código ni dependencias de la base, en lugar de que no exista la carpeta.
+  - Ejecutar en local las comprobaciones del job `docker` antes de entregar.
+
+### DEF-010
+- **Severidad:** MINOR. Documentación incompleta, sin efecto en el comportamiento.
+- **Criterio de aceptación afectado:** CA-20 (README).
+- **Descripción:** en la tabla del CI de `restaurante/README.md` (líneas 544 y 545), las filas `docker` y `despliegue` siguen describiendo tres imágenes. No mencionan:
+  - la imagen `inventory-manager` ni sus comprobaciones;
+  - la cuarta imagen del smoke;
+  - el subdominio ni su límite de 60/60;
+  - el código 16.
+- **Pasos para reproducir:** leer esas filas.
+- **Resultado esperado:** reflejan los jobs del PR 3, como ya lo hacen `docs/despliegue.md` y "Reproducirlo en local".
+- **Resultado actual:** se quedan en REQ-F-038 ("los tres digests").
+- **Evidencia:** `README.md:544-545`.
+- **Impacto:** quien lea el README no sabe qué comprueba el CI del admin nuevo.
+- **Recomendación:** actualizar las dos filas.
+
+### DEF-011
+- **Severidad:** TRIVIAL. Ubicación imprecisa en un texto.
+- **Criterio de aceptación afectado:** CA-20 (`arquitectura.md` §10, una de las correcciones de la sesión principal).
+- **Descripción:** el riesgo "Estado en memoria de la `api`" sitúa la caché y el mutex de productos en `api/src/admin/index.ts`. Según CodeGraph:
+  - `api/src/admin/index.ts` crea las sesiones (`createSessionStore`), el límite de intentos (`createLoginThrottle`) y las claves de idempotencia (`createIdempotencyStore`);
+  - la caché y el mutex pertenecen al repositorio de productos de `core/catalog` (`createProductRepository`, con `exclusive` y `refresh`), que se compone en `api/src/server.ts`.
+- **Resultado esperado:** el texto indica dónde vive cada estado, o solo nombra lo que crea `admin/index.ts`.
+- **Resultado actual:** lo atribuye todo a `admin/index.ts`.
+- **Evidencia:** `codegraph_explore` de `api/src/admin/index.ts` y de `packages/core/catalog/product-repository.ts` en esta ronda.
+- **Impacto:** mínimo. La conclusión del riesgo es correcta: una sola réplica, y las sesiones se pierden al reiniciar.
+- **Recomendación:** precisar dónde vive cada estado.
+
+#### Observaciones (sin severidad)
+
+- **K-02:** la comprobación "la app se recreó" falló porque la app ya llevaba `DATABASE_ALLOW_NEWER_SCHEMA=true` del escenario D-1 anterior, y `compose up` no recrea un contenedor con la misma configuración. El log muestra la decisión correcta ("hubo migraciones nuevas … se recrea") y la bandera está puesta. Es un artefacto del escenario, no un fallo de `deploy.sh`.
+- **R-HEALTH:** el `HEALTHCHECK` y `probe_admin` usan `/salud`, que no consulta la `api`. RF-19 no pide más, y el smoke comprueba una vez que `inventory-manager` llega a la `api`. Riesgo residual: un `inventory-manager` sano que no llegue a la `api` activaría igualmente el modo de solo lectura de la app.
+- **E-04:** `admin-e2e.test.ts` busca en los logs la contraseña y la credencial, no los ids de sesión ni `_csrf`. Esos los cubrió S-09 del PR 2.
+- **Combinación con la épica:** pasa en local. Antes del commit, `senior-fullstack` debe integrar `epic/arquitectura` en la rama y volver a ejecutar `typecheck`, `lint` y `test`.
+
+#### Imagen
+
+- **`inventory-manager`:**
+  - 183 MB, con 17,4 MiB de `node_modules`: Koa, helmet, zod y similares, sin Prisma ni mariadb;
+  - usuario `node` (uid 1000), `WORKDIR` `/app/inventory-manager`, puerto 3003 y `HEALTHCHECK` en `/salud`;
+  - con `--read-only`, `tmpfs` y `cap_drop ALL` queda *healthy*, sin errores en el log.
+- **Referencia:** `api` 262 MB y `production` 263 MB.
+
+#### Favicon (F-01)
+
+- **Rutas válidas:** `/img/{birria,molotes}/icons/{favicon.ico,icon-32.png}` → 200, con:
+  - `Content-Type` `image/x-icon` o `image/png`;
+  - `X-Robots-Tag: noindex, nofollow` y `nosniff`;
+  - `public, max-age=86400`, coherente con los estáticos del plan técnico.
+- **Rutas rechazadas, 404 sin trazas:** `/img/tacos/…`, `icon-512.png`, `..%2F..`, `%2e%2e`, `../..`, mayúsculas y barra final. `POST` también da 404.
+- **`/acceso`:** sigue con `no-store` y enlaza los iconos de Birria.
+
+#### Regresión
+
+Sin regresiones en:
+- las landings;
+- el `/admin` actual, con y sin `ADMIN_NEW_URL`;
+- `api` e `inventory-manager`;
+- `ops/backup` y el smoke de despliegue.
+
+El servicio `app` del compose es idéntico al de `3c65ad7`, salvo las tres variables nuevas.
+
+#### Responsive y accesibilidad
+
+- El PR 3 solo cambia el favicon. En escritorio no hay desplazamiento horizontal y la consola está limpia.
+- No se midió a 375 px: el navegador bloqueó la ventana emergente. Ningún CA del PR 3 depende de esa medida, y CA-14 ya se aprobó en el PR 2.
+
+#### Performance
+
+- La imagen nueva es la más pequeña de las cuatro.
+- La memoria estimada es el 35,6 %, por debajo del 80 %. La medición real queda para el VPS.
+
+#### SEO
+
+- Las referencias HTML de las landings no cambian, y el admin sigue con `noindex`.
+
+#### Pendientes de revisión manual
+
+- Medir a 375 px el acceso en el navegador. No es imprescindible.
+- En el VPS, a cargo del usuario: el certificado real, el DNS y la memoria con los cuatro contenedores.
+
+#### Limpieza
+
+- El *worktree* está eliminado: `git worktree list` solo muestra el árbol principal.
+- Borrados: las imágenes `qa039*` y `smoke/*`, la red local `traefik-public` y los contenedores de los smokes.
+- El proceso local del puerto 3103 está detenido y la pestaña de Chrome, cerrada.
+- La base `restaurante_test_qa039pr3` no llegó a crearse porque no hizo falta, y no queda ninguna base `restaurante_test_qa*`.
+- Hay elementos anteriores a esta sesión que no toqué: `smoke-ops-runner`, `restaurante-test-1` y tres imágenes `localhost:5000/orvigas/*:<none>`.
+- Los archivos temporales de esta ronda en el scratchpad están borrados. Los que ya existían allí antes de la ronda no se tocaron.
+
+#### Resultado final
+
+QA_REJECTED: CA-19 falla por DEF-009 (CRITICAL). Además, hay dos defectos de documentación: DEF-010 (MINOR) y DEF-011 (TRIVIAL).
+
+### PR 3 de 3: despliegue — Ronda 2 (2026-10-28, revalidación)
+
+**Decisión del usuario sobre las correcciones:** "si la apruebo". El plan de QA ya estaba aprobado y el alcance no cambia.
+
+#### Qué cambió
+
+- **DEF-009:**
+  - en `landing-pages/Dockerfile`, la etapa `inventory-manager` copia solo `packages/contracts/package.json` y `packages/web/package.json`;
+  - en `ci.yml`, el paso "contenido de las imágenes" exige además que no exista `/app/packages/core`, y busca `@prisma`, `prisma` y `mariadb` en `/app/node_modules` y en `/app/inventory-manager/node_modules`.
+- **DEF-010:** `README.md`, filas `docker` y `despliegue` de la tabla del CI.
+- **DEF-011:** `docs/arquitectura.md` §10, corregido por la sesión principal.
+
+#### Pruebas ejecutadas
+
+Rama `feature/REQ-F-039-admin-nuevo-productos-3-despliegue`, sin commit.
+
+| Prueba | Resultado |
+| --- | --- |
+| `npm run typecheck`, `npm run lint` y `npm run build:css` | 0, 0 (sin avisos) y 0 |
+| `npm test` | Todo en verde: `api` 91/91, `landing-pages` 2195 + 1 *expected fail* (106 archivos) e `inventory-manager` 71/71. Esta vez no hubo errores 1040 |
+| `docker build` de `production`, `migrate`, `api` e `inventory-manager` (etiquetas propias `qa039r2:*`, sin pisar las `restaurante:*` que ya existían) | Todas en 0 |
+| Las 7 órdenes del paso "contenido de las imágenes" de `ci.yml` (líneas 365 a 379), sin cambios salvo el nombre de la imagen | Las 7 terminan con 0 |
+| Prueba negativa de la orden de `inventory-manager`: la misma orden en un contenedor al que se añade `/app/packages/db`, `/app/packages/core`, `inventory-manager/node_modules/prisma` o `node_modules/mariadb` | rc=1 en los cuatro casos y rc=0 sin cambios: la comprobación detecta lo que debe |
+| Contenido de `inventory-manager` | `/app/packages` solo contiene `contracts` y `web`; `/app/node_modules/@restaurante` solo `contracts` y `web`. `node_modules` sigue ocupando 17,4 MiB (45 entradas) y la imagen 183 MB, igual que en la ronda 1 |
+| `deploy/ci/smoke.sh` completo con las cuatro imágenes | **112 ok, 0 fallos**. Ráfaga del subdominio: 61 × 200 y 14 × 429. `deploy con inventory-manager roto -> 16` en verde. Ningún router hacia el 3002 |
+| Combinación con `epic/arquitectura` en `15dc77d` (#96, #97 y #98), en un *worktree* temporal con el diff de la rama y `admin-e2e.test.ts` | El diff se aplica sin conflictos. Coinciden `ci.yml` y `arquitectura.md`: los SHA de las acciones son los mismos (`build-push-action@c3c9e263`) y queda un solo riesgo de cada tipo en §10. `npm ci`, `typecheck`, `lint` y `build:css` en 0. `npm test` en verde: `api` 91, `landing-pages` 2199 + 1 *expected fail* (107 archivos) e `inventory-manager` 71. `docker build` de `inventory-manager` y de `api`: 0. Las órdenes del CI sobre esas dos imágenes: 0. `inventory-manager` combinado: *healthy* con `--read-only` |
+
+#### Defectos de la ronda 1
+
+| Defecto | Estado | Evidencia |
+| --- | --- | --- |
+| DEF-009 (CRITICAL) | **Corregido** | La orden exacta del CI da 0 con la imagen nueva, y 1 si se le añade cualquiera de los contenidos prohibidos |
+| DEF-010 (MINOR) | **Corregido** | Las filas `docker` y `despliegue` de `README.md` (líneas 544 y 545) describen `inventory-manager`, sus comprobaciones, los cuatro digests, el subdominio, el límite de 60, el 401 del aviso y el código 16. Queda un detalle menor: DEF-012 |
+| DEF-011 (TRIVIAL) | **Corregido** | `arquitectura.md` §10 (líneas 503 a 507) separa sesiones, límite de intentos e idempotencia (`api/src/admin/index.ts`) de la caché y el mutex del repositorio de `core/catalog` (compuesto en `api/src/server.ts`). Coincide con lo que mostró CodeGraph en la ronda 1 |
+
+#### Defectos nuevos
+
+### DEF-012
+- **Severidad:** TRIVIAL. Una frase imprecisa en la documentación; no cambia ningún comportamiento.
+- **Criterio de aceptación afectado:** CA-20 (README).
+- **Descripción:** la fila `despliegue` de `README.md:545` dice que un `inventory-manager` roto "deja la app y la `api` como estaban". Pero `deploy.sh` mantiene la `api` nueva tras el código 16, como dicen su comentario ("La api nueva queda"), el mensaje de error ("la api nueva sigue"), `resumen.sh` y `docs/despliegue.md`.
+- **Pasos para reproducir:** comparar la fila con el mensaje del código 16 en `deploy/ci/resumen.sh`.
+- **Resultado esperado:** "deja la app como estaba y la `api` nueva en marcha".
+- **Resultado actual:** se entiende que la `api` también vuelve a la anterior.
+- **Evidencia:** `README.md:545`; `deploy.sh`, bloque del paso 6.
+- **Impacto:** mínimo. En el smoke no se nota, porque usa la misma `api` en los dos despliegues.
+- **Recomendación:** precisar la frase cuando se vuelva a tocar el README. No bloquea.
+
+#### Criterios de aceptación
+
+| CA | Resultado |
+| --- | --- |
+| CA-9, CA-10, CA-15 y CA-18 | PASS. Se mantienen las pruebas de la ronda 1, y en esta ronda se repitieron el smoke (112/112) y la suite completa, con `admin-e2e.test.ts` incluido |
+| CA-19 | PASS en local: `typecheck`, `lint` y `test` en 0 en la rama y en la combinación con `15dc77d`, y las comprobaciones del job `docker` reproducidas en 0. El CI real del PR hacia `epic/arquitectura` queda para T4 |
+| CA-20 | PASS. Quedan DEF-012 (TRIVIAL) y la revisión manual del certificado real, a cargo del usuario |
+| Resto (regresión) | PASS |
+
+#### Pendientes de revisión manual
+
+Los mismos de la ronda 1:
+- la medida a 375 px del acceso;
+- en el VPS, el certificado real, el DNS y la memoria con los cuatro contenedores.
+
+#### Limpieza
+
+- Borrados: el *worktree* temporal, las imágenes `qa039r2*` y las etiquetas `smoke/*` y `localhost:5000/orvigas/*:{v1,v2,bad,newer}` que creó este smoke, la red local `traefik-public` y los archivos de esta ronda en el scratchpad.
+- No queda ningún contenedor de los smokes.
+- No se tocaron:
+  - las etiquetas `restaurante:*`, que ya existían;
+  - dos imágenes `localhost:5000/orvigas/*:<none>` de hace dos semanas y `smoke-ops-runner`;
+  - los volúmenes;
+  - la caché de build, que es compartida y no permite separar la de esta sesión.
+- Disco de Docker Desktop: 4,0 GB libres al empezar y 3,1 GB al terminar (94 %). Lo que falta es caché de build de esta ronda que no se pudo separar de la compartida.
+
+#### Resultado final
+
+QA_APPROVED
+
 ## Historial de cambios
+
+### Corrección de DEF-012 y commit del PR 3 (2026-10-28)
+
+DEF-012 corregido con la decisión del usuario ("si corrigelo"): `README.md` y la cabecera de `deploy.sh` dicen ahora que, con el código 16, la app queda como estaba y la `api` nueva sigue en marcha. Commit del PR 3 e integración de `epic/arquitectura` (`15dc77d`) con un merge.
+
+### QA del PR 3, ronda 2 (2026-10-28)
+
+El usuario aprobó las correcciones ("si la apruebo"). DEF-009, DEF-010 y DEF-011 están corregidos: las órdenes exactas del job `docker` pasan, y la prueba negativa demuestra que detectan contenido prohibido. El smoke de despliegue pasa (112/112). La suite está en verde, también al combinarla con `epic/arquitectura` (`15dc77d`). Queda un defecto nuevo, DEF-012 (TRIVIAL, no bloquea). Estado `QA_APPROVED`.
+
+### Correcciones de QA del PR 3, ronda 1 (2026-10-28)
+
+DEF-009: la imagen `inventory-manager` ya no lleva los manifiestos de `packages/db` ni de `packages/core` (mismo árbol de `node_modules`), y la comprobación del job `docker` también exige que no haya `packages/core` ni Prisma o mariadb en `inventory-manager/node_modules`. Los pasos del job `docker` se reprodujeron en local, ejecutando literalmente los de `ci.yml`, y todos pasan. DEF-010: las filas `docker` y `despliegue` del README ya describen el PR 3. `typecheck`, `lint`, `build:css` y `test` en 0. Estado `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA del PR 3, ronda 1 (2026-10-28)
+
+El usuario aprobó el QA Action Plan del PR 3 ("apruebo el plan"). En la ronda 1 pasan CA-9, CA-10, CA-15, CA-18 y CA-20, y la combinación con `epic/arquitectura` queda en verde. CA-19 falla por DEF-009 (CRITICAL): el job `docker` exige que no exista `/app/packages/db`, y la imagen lleva su `package.json`. Además, DEF-010 (MINOR) y DEF-011 (TRIVIAL). Estado `QA_REJECTED`.
+
+### QA Action Plan del PR 3 (2026-10-28)
+
+Implementación del PR 3 aprobada por el usuario ("lo apruebo"). QA Action Plan del PR 3 redactado (compose, `deploy.sh` con escenarios adicionales de vuelta atrás, imagen, extremo a extremo, documentación y combinación con `epic/arquitectura` en un *worktree* temporal). Estado `NEEDS_QA_PLAN_APPROVAL`.
+
+### Implementación del PR 3 (2026-10-28)
+
+Despliegue implementado en `feature/REQ-F-039-admin-nuevo-productos-3-despliegue`, sin commit. `typecheck`, `lint`, `build:css` y `test` en 0 (2358 pruebas). El smoke de despliegue en local pasa con 112 comprobaciones. Estado `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### Merge del PR 2 e inicio del PR 3 (2026-10-28)
+
+PR #95 mergeado en `epic/arquitectura` el 2026-10-28T20:06Z (confirmado por el usuario: "Mergeado"). Rama del PR 3: `feature/REQ-F-039-admin-nuevo-productos-3-despliegue`, desde `3c65ad7`. Se borraron las ramas de los PR 1 y 2, con autorización.
 
 ### Pull Request del PR 2 (2026-10-28)
 

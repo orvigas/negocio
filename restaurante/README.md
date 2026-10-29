@@ -422,8 +422,14 @@ el job `deploy` usa secretos (los del environment `production`).
 
 ### Cuándo se ejecuta
 
-- En cada PR hacia `main` o hacia `epic/arquitectura`, al abrirlo, al actualizarlo (push nuevo) o
-  al reabrirlo.
+- En cada PR hacia `main` o hacia `epic/arquitectura`, al abrirlo, al actualizarlo (push nuevo),
+  al reabrirlo o al marcarlo como listo (*Ready for review*).
+- **PR en borrador:** `cambios` da `codigo=false` (con un aviso en el resumen) y `calidad`, `docker`
+  y `auditoria` quedan omitidas, sin gastar una ejecución completa por cada push. Al marcarlo como
+  listo corre el CI completo. Una ejecución en borrador nunca deja la anotación `arbol-validado`
+  ni sus validaciones en verde, así que nunca da por validado un push a `main` ([Árbol ya
+  validado](#árbol-ya-validado)). Para un PR que recibirá varios commits: ábrelo como borrador
+  (`gh pr create --draft`) y márcalo como listo (`gh pr ready`) al subir el último.
 - En cada push a `main` (por ejemplo, al hacer merge de un PR).
 - A mano, sobre `main` ([Redespliegue manual](#redespliegue-manual)).
 - Un push nuevo al mismo PR cancela la ejecución anterior de ese PR; las de `main` (push o
@@ -434,16 +440,16 @@ el job `deploy` usa secretos (los del environment `production`).
   `*.md` de `restaurante/` cuentan como código (`landing-pages/tests/unit/whatsapp-bot-free-text.test.ts` lee
   este README y `tests/fixtures/` forma parte de las pruebas), igual que cualquier otro archivo
   (código, Docker, CI, configuración), sin importar el nombre de la rama.
-- En un PR, `calidad`, `docker`, `despliegue` y `auditoria` solo corren si hay cambios de código;
+- En un PR, `calidad`, `docker` y `auditoria` solo corren si hay cambios de código;
   en un PR de solo documentación quedan omitidas (*skipped*) y el PR no queda con comprobaciones
   pendientes.
 - En un push a `main` de solo documentación no se publica ni se despliega nada. Con cambios de
   código, el job `validado` decide si hace falta validar otra vez ([Árbol ya
   validado](#árbol-ya-validado)): si el contenido exacto de `main` ya pasó el CI del PR, `publish`
-  y `deploy` corren directamente; si no, `calidad`, `docker`, `despliegue` y `auditoria` corren en
-  el push y solo con las cuatro en verde se publica y se despliega. Un PR nunca publica ni
+  y `deploy` corren directamente; si no, `calidad`, `docker` y `auditoria` corren en el push y
+  solo con las tres en verde se publica y se despliega. Un PR nunca publica ni
   despliega.
-- Cada comprobación tiene un tiempo máximo de 20 minutos (`despliegue`, 30; `auditoria`, 10;
+- Cada comprobación tiene un tiempo máximo de 20 minutos (`docker`, 40; `auditoria`, 10;
   `cambios`, `validado` y `vigente`, 5).
 
 ### Rama intermedia
@@ -453,7 +459,7 @@ a `epic/arquitectura`, no a `main`, hasta que la épica esté madura. La regla d
 está en `.claude/rules/git.md`.
 
 - Un PR hacia `epic/arquitectura` corre lo mismo que uno hacia `main` (`cambios`, `calidad`,
-  `docker`, `despliegue` y `auditoria`, con la misma regla de solo documentación), pero nunca
+  `docker` y `auditoria`, con las mismas reglas de solo documentación y de borrador), pero nunca
   publica ni despliega: `publish`, `vigente` y `deploy` quedan omitidos.
 - El merge a `epic/arquitectura` no dispara el CI (no hay `push` sobre esa rama): cada cambio ya
   se validó en su PR contra la punta de la épica, y nada se publica desde ella.
@@ -467,18 +473,19 @@ está en `.claude/rules/git.md`.
 El CI de un PR prueba el commit de merge que prepara GitHub (`refs/pull/N/merge`: el PR combinado
 con la punta de `main` de ese momento). Si `main` avanza después (otro merge) y el PR se integra
 sin actualizarlo, el contenido que llega a `main` no es el que se validó. Sin protección de rama
-(plan Free), GitHub no puede exigir que el PR esté al día, así que lo comprueba el CI del push:
+(hoy no está activada), GitHub no puede exigir que el PR esté al día, así que lo comprueba el CI del push:
 
 1. En el PR, `cambios` deja el *tree* (el contenido completo) de ese commit de merge en una
    anotación `arbol-validado` (visible en el resumen de la ejecución). La API de GitHub solo da,
    de una ejecución de PR, la punta de la rama (`head_sha`), no el commit de merge que probó; por
    eso se publica aparte.
 2. En el push a `main`, `validado` busca el PR mergeado de ese commit (uno solo, hacia `main`) y
-   sus ejecuciones del CI en verde para la punta del PR. Si en alguna `calidad`, `docker`,
-   `despliegue` y `auditoria` quedaron en verde y su anotación coincide con el *tree* del commit
-   de `main`, no se repiten las validaciones.
+   sus ejecuciones del CI en verde para la punta del PR. Si en alguna `calidad`, `docker` y
+   `auditoria` quedaron en verde y su anotación coincide con el *tree* del commit de `main`, no se
+   repiten las validaciones.
 3. En cualquier otro caso (`main` avanzó, push directo sin PR, varios PR, PR de solo
-   documentación, error de la API, ejecución anterior a este mecanismo) se valida en el push. Ante
+   documentación, ejecución en borrador, error de la API, ejecución anterior a este mecanismo) se
+   valida en el push. Ante
    la duda, siempre se valida.
 
 Dos commits con el mismo *tree* tienen exactamente los mismos archivos: da igual que el merge sea
@@ -499,7 +506,7 @@ la terminal:
 gh workflow run ci.yml --ref main
 ```
 
-Corre `calidad`, `docker`, `despliegue` y `auditoria`, y con las cuatro en verde, `publish` y
+Corre `calidad`, `docker` y `auditoria`, y con las tres en verde, `publish` y
 `deploy`. Sobre otra rama, `cambios` falla y no corre nada más. Como en un push, no se despliega
 si mientras tanto `main` avanzó (resumen **Omitido**). La ejecución se titula `Ejecución manual ·
 <SHA de main>`: un redespliegue del mismo commit se distingue por su propia ejecución y fecha.
@@ -534,20 +541,42 @@ aparece y los demás estados distintos de Desplegado quedan como fallidos, nunca
 
 ### Qué comprueba
 
-Cuatro comprobaciones independientes, que aparecen por separado en el PR (`CI / calidad`,
-`CI / docker`, `CI / despliegue` y `CI / auditoria`). Si un paso falla, la comprobación queda en rojo y sus pasos
-siguientes no se ejecutan; un fallo en una no afecta a las otras.
+Tres comprobaciones independientes, que aparecen por separado en el PR (`CI / calidad`,
+`CI / docker` y `CI / auditoria`). Si un paso falla, la comprobación queda en rojo y sus pasos
+siguientes no se ejecutan; un fallo en una no afecta a las otras. `docker` reúne las imágenes y
+el despliegue (antes, `docker` y `despliegue`, que volvía a construir las imágenes): construye
+cada imagen una sola vez y las reutiliza en todas sus comprobaciones.
 
 | Comprobación | Pasos, en orden |
 | ------------ | --------------- |
-| `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado), `npm run db:up` (MySQL 8.4 de `compose.yaml`), `prisma migrate diff` (el esquema y las migraciones no divergen) y `npm test` (contra MySQL) |
-| `docker`     | Build de los targets `production`, `migrate`, `api` e `inventory-manager` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite, que `production` y `api` llevan el código de `contracts` (REQ-F-038) y de `packages/web` (y `api`, la copia de las imágenes de las landings), que `inventory-manager` (REQ-F-039) no lleva `packages/db` ni `packages/core`, ni Prisma ni mariadb, y sí `contracts`, `web`, su CSS compilado y los iconos de las landings, y que `migrate` aplica el esquema sobre una base vacía con código 0; arranca la `api` en la red interna hasta que queda `healthy` (con la credencial del aviso interno) y `production` sin `HOST` con `API_INTERNAL_URL` hacia ella, y comprueba que escucha en `0.0.0.0`, queda `healthy`, responde por el puerto publicado (REQ-F-015) y carga los productos de la API; por último, `inventory-manager` queda `healthy` con su `HEALTHCHECK` (`/salud`) |
-| `despliegue` | `shellcheck` de los scripts de `deploy/`, `deploy/ci/resumen-test.sh` (cada estado del resumen de `deploy`, con entradas simuladas; REQ-F-030) y prueba de humo `deploy/ci/smoke.sh` (REQ-F-016): el compose de producción no publica puertos y MySQL solo está en la red interna; con un registro local y un Traefik v3 ejecuta `deploy.sh` como el comando forzado de SSH y comprueba los rechazos (argumentos, suma de `deploy/`, permisos del `.env`), el primer despliegue, las redirecciones 301, el 429 en `/admin`, la IP y el esquema en el log, la retención de 7 volcados, la migración fallida (la app no se toca), la vuelta atrás ante una imagen rota (también tras una migración nueva) y dos despliegues a la vez. Desde REQ-F-038, también los tres digests (la forma de 2 se rechaza), la `api` solo en la red interna (sin puertos ni labels), la llamada de la app a la `api`, que las landings muestran lo que sirve la `api` y siguen en 200 con la `api` parada, y que una `api` rota termina con 15 sin tocar la app (o, si hubo migraciones nuevas, con la app recreada con `DATABASE_ALLOW_NEWER_SCHEMA=true`, que sobrevive a un reinicio). Desde REQ-F-039, los cuatro digests (la forma de 3, sin `inventory-manager`, se rechaza), `RESTAURANTE_ADMIN_DOMAIN` y la credencial del aviso interno obligatorios (si faltan, 3), ningún router de Traefik hacia el puerto interno 3002, `inventory-manager` solo en las redes `admin` y `traefik` (sin MySQL ni credenciales de la base), `healthy` y sin puertos, el subdominio del admin (200 en `/acceso` con `no-store` y `noindex`, 301 de HTTP a HTTPS, 429 tras la ráfaga de su límite de 60 por minuto, sin enrutar a la `api`), el aviso de la `api` a la app (401 sin credencial) y que un `inventory-manager` roto termina con 16, vuelve al anterior y deja la app como estaba y la `api` nueva en marcha. Después corre la prueba de humo de los respaldos (`ops/backup/ci/smoke.sh`) |
+| `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado), `npm run db:up` (MySQL 8.4 de `compose.yaml`), `prisma migrate diff` (el esquema y las migraciones no divergen) y `npm test -- --maxWorkers=4` (contra MySQL; el argumento llega a cada workspace; ver [Trabajadores de Vitest en el CI](#trabajadores-de-vitest-en-el-ci)) |
+| `docker`     | 1) Imágenes: build de los targets `production`, `migrate`, `api` e `inventory-manager` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64`, con la caché `gha` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite, que `production` y `api` llevan el código de `contracts` (REQ-F-038) y de `packages/web` (y `api`, la copia de las imágenes de las landings), que `inventory-manager` (REQ-F-039) no lleva `packages/db` ni `packages/core`, ni Prisma ni mariadb, y sí `contracts`, `web`, su CSS compilado y los iconos de las landings, y que `migrate` aplica el esquema sobre una base vacía con código 0; arranca la `api` en la red interna hasta que queda `healthy` (con la credencial del aviso interno) y `production` sin `HOST` con `API_INTERNAL_URL` hacia ella, y comprueba que escucha en `0.0.0.0`, queda `healthy`, responde por el puerto publicado (REQ-F-015) y carga los productos de la API; después, `inventory-manager` queda `healthy` con su `HEALTHCHECK` (`/salud`), y se retira el MySQL de estas comprobaciones (`docker compose down --volumes`). 2) Despliegue, con las mismas imágenes: `shellcheck` de los scripts de `deploy/` y de `ops/backup/`, `deploy/ci/resumen-test.sh` (cada estado del resumen de `deploy`, con entradas simuladas; REQ-F-030), las unidades de systemd de los respaldos y la prueba de humo del despliegue, `deploy/ci/smoke.sh` (REQ-F-016), con las cuatro imágenes: el compose de producción no publica puertos y MySQL solo está en la red interna; con un registro local y un Traefik v3 ejecuta `deploy.sh` como el comando forzado de SSH y comprueba los rechazos (argumentos, suma de `deploy/`, permisos del `.env`), el primer despliegue, las redirecciones 301, el 429 en `/admin`, la IP y el esquema en el log, la retención de 7 volcados, la migración fallida (la app no se toca), la vuelta atrás ante una imagen rota (también tras una migración nueva) y dos despliegues a la vez. Desde REQ-F-038, también los tres digests (la forma de 2 se rechaza), la `api` solo en la red interna (sin puertos ni labels), la llamada de la app a la `api`, que las landings muestran lo que sirve la `api` y siguen en 200 con la `api` parada, y que una `api` rota termina con 15 sin tocar la app (o, si hubo migraciones nuevas, con la app recreada con `DATABASE_ALLOW_NEWER_SCHEMA=true`, que sobrevive a un reinicio). Desde REQ-F-039, los cuatro digests (la forma de 3, sin `inventory-manager`, se rechaza), `RESTAURANTE_ADMIN_DOMAIN` y la credencial del aviso interno obligatorios (si faltan, 3), ningún router de Traefik hacia el puerto interno 3002, `inventory-manager` solo en las redes `admin` y `traefik` (sin MySQL ni credenciales de la base), `healthy` y sin puertos, el subdominio del admin (200 en `/acceso` con `no-store` y `noindex`, 301 de HTTP a HTTPS, 429 tras la ráfaga de su límite de 60 por minuto, sin enrutar a la `api`), el aviso de la `api` a la app (401 sin credencial) y que un `inventory-manager` roto termina con 16, vuelve al anterior y deja la app como estaba y la `api` nueva en marcha; por último, la prueba de humo de los respaldos (`ops/backup/ci/smoke.sh`, REQ-F-019) |
 | `auditoria`  | Node 24 y `npm run audit:deps` (REQ-F-020; `landing-pages/scripts/audit-deps.ts`), sin `npm ci`: `npm audit` sobre el `package-lock.json` de la raíz por imagen, con la política de [Auditoría de dependencias](#auditoría-de-dependencias) |
 
 La caché de npm se invalida al cambiar `package-lock.json`; la de Docker reutiliza las capas que
 no cambian. El runner usa UTC; la selección de landing depende de `BUSINESS_TIMEZONE`, no de la
 zona del sistema.
+
+### Trabajadores de Vitest en el CI
+
+En `calidad`, `npm test -- --maxWorkers=4` fija 4 trabajadores de Vitest; en local, `npm test`
+usa el valor por defecto de Vitest (los núcleos disponibles menos uno). El runner `ubuntu-24.04`
+de un repositorio público tiene 4 vCPU (con 2 vCPU, Vitest usaba un solo trabajador y las
+pruebas corrían en serie). Medido con la suite en el contenedor `test` limitado a 4 CPU
+(`docker run --cpus=4`): 3 trabajadores, 160 s; 4, 143 y 149 s (dos ejecuciones); 6, 154 s; 8, 175 s. Más trabajadores
+que núcleos no ayuda: la CPU se satura y las pruebas de procesos hijos y de bloqueos tardan más.
+Cada trabajador usa su propia base `restaurante_test_*` (la salvaguarda de
+`landing-pages/tests/setup/` no cambia). El script `test` de la raíz
+(`npm run test --workspaces --if-present --`) pasa a cada workspace los argumentos que siguen a
+`--`: `npm test -- --maxWorkers=4` llega como `vitest run --maxWorkers=4` a `api/`,
+`landing-pages/` e `inventory-manager/`. Sin el `--` final del script, npm tomaría
+`--maxWorkers` como opción propia (aviso `Unknown cli config`) y Vitest no lo recibiría.
+
+Con varios trabajadores, la suite llega a abrir entre 105 y 130 conexiones a MySQL a la vez (de 4 a 8 trabajadores) (pools, procesos hijos
+y bases de cada trabajador), cerca del límite por defecto de MySQL (151; error 1040 *Too many
+connections*). Por eso el MySQL de `compose.yaml` (solo desarrollo, pruebas y CI) arranca con
+`--max-connections=500`. Para aplicarlo a un MySQL local ya creado: `npm run db:up` (recrea el
+contenedor; los datos siguen en su volumen).
 
 ### Reproducirlo en local
 
@@ -613,7 +642,7 @@ política de `scripts/support/audit-policy.ts`:
   hasta corregirlo o aceptarlo con una excepción.
 - Prohibido: `npm audit fix --force` y bajar cualquier dependencia de versión mayor. Las
   correcciones se hacen subiendo la dependencia o con `overrides` que pasen todo el CI
-  (typecheck, lint, pruebas contra MySQL 8.4, `docker` y `despliegue`).
+  (typecheck, lint, pruebas contra MySQL 8.4 y `docker`).
 
 #### Excepciones
 
@@ -714,21 +743,22 @@ activadas en el repositorio (**Settings → Code security**).
 
 ### Comprobaciones obligatorias para el merge
 
-Hoy GitHub **no puede bloquear** el merge con el CI en rojo: el repositorio es privado con el
-plan Free, que no ofrece protección de rama ni rulesets. La regla es de proceso: no se hace
-merge de un PR con `calidad`, `docker`, `despliegue` o `auditoria` en rojo (el agente
-`senior-fullstack` no lo entrega como listo para merge).
+Hoy `main` no tiene protección de rama ni rulesets, así que GitHub **no bloquea** el merge con el
+CI en rojo. La regla es de proceso: no se hace merge de un PR con `calidad`, `docker` o
+`auditoria` en rojo (el agente `senior-fullstack` no lo entrega como listo para merge).
 
-Si el repositorio pasa a GitHub Pro (o se hace público), para hacerlas obligatorias:
+El repositorio es público, así que el plan Free ya permite hacerlas obligatorias:
 
 1. **Settings → Rules → Rulesets → New ruleset → New branch ruleset** (o **Settings → Branches
    → Add branch protection rule**).
 2. Destino: la rama `main`; estado **Active**.
-3. Activa **Require status checks to pass** y agrega `calidad`, `docker`, `despliegue` y
-   `auditoria` (aparecen después de que el CI se haya ejecutado al menos una vez).
-4. Guarda. Desde entonces, el botón de merge queda bloqueado hasta que las cuatro estén en verde.
+3. Activa **Require status checks to pass** y agrega `calidad`, `docker` y `auditoria` (aparecen
+   después de que el CI se haya ejecutado al menos una vez; `despliegue` ya no existe: se unió a
+   `docker`).
+4. Guarda. Desde entonces, el botón de merge queda bloqueado hasta que las tres estén en verde.
    En un PR de solo documentación quedan omitidas (*skipped*), y GitHub cuenta una comprobación
-   omitida como superada.
+   omitida como superada. Un PR en borrador no se puede mergear, y al marcarlo como listo el CI
+   vuelve a correr completo.
 5. Activa también **Require branches to be up to date before merging**: así el CI del PR valida
    siempre la combinación exacta que se despliega y el push a `main` nunca repite las
    validaciones ([Árbol ya validado](#árbol-ya-validado)).

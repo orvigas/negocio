@@ -311,7 +311,7 @@ Requiere que el ticket esté en `QA_APPROVED`. Esta es la autorización explíci
    - **No incluyas referencias a Claude ni Anthropic** (ni `Co-Authored-By`, ni enlaces de herramientas), ni en el commit ni en el PR.
    - Evita mensajes genéricos como `update`, `changes` o `fix stuff`.
 6. `git push -u origin <rama>`, encadenado con `&&` tras `git add` y `git commit` (regla crítica 10).
-7. Crea el Pull Request con `gh pr create --base main --head <rama>`, con este cuerpo:
+7. Crea el Pull Request con `gh pr create --base main --head <rama>`, con este cuerpo (si vas a subir más commits antes de esperar el CI, ábrelo con `--draft` y márcalo como listo con `gh pr ready <número>` tras el último push: en borrador el CI omite las validaciones; ver "Pull Requests en borrador" en `.claude/rules/git.md`):
 
 ```text
 ## Resumen
@@ -328,10 +328,10 @@ Estado de cada criterio.
 ## Riesgos
 ```
 
-8. Espera el CI del PR (`.github/workflows/ci.yml`) con `gh pr checks <número> --watch --fail-fast` (solo lectura). Las comprobaciones `calidad`, `docker`, `despliegue` y `auditoria` deben quedar en verde (en un PR no corren `publish` ni `deploy`: solo se ejecutan tras el merge a `main`). En un PR que solo cambia documentación, el job `cambios` hace que las cuatro aparezcan como omitidas (*skipped*): eso cuenta como superado. Nunca vale una en rojo, cancelada o sin terminar.
+8. Espera el CI del PR (`.github/workflows/ci.yml`) con `gh pr checks <número> --watch --fail-fast` (solo lectura). El PR debe estar listo (no en borrador). Las comprobaciones `calidad`, `docker` y `auditoria` deben quedar en verde (en un PR no corren `publish` ni `deploy`: solo se ejecutan tras el merge a `main`). En un PR que solo cambia documentación, el job `cambios` hace que las tres aparezcan como omitidas (*skipped*): eso cuenta como superado; en un PR en borrador, no. Nunca vale una en rojo, cancelada o sin terminar.
    - Justo después de `gh pr create`, GitHub puede tardar unos segundos en registrar las ejecuciones y `gh pr checks` responder `no checks reported`: reintenta cada pocos segundos (hasta ~1 minuto) antes de darlo por fallo.
    - Si alguna comprobación falla, **no registres ni devuelvas `READY_FOR_MERGE`**: informa del paso que falló con el enlace a la ejecución y detén el flujo (regla crítica 8).
-   - GitHub no bloquea el merge en este repositorio (plan Free), así que esta comprobación es obligatoria por proceso.
+   - GitHub no bloquea el merge en este repositorio (`main` no tiene protección de rama activada), así que esta comprobación es obligatoria por proceso.
 9. Con el CI en verde, pon el estado del ticket en `READY_FOR_MERGE`, agrega la URL del PR y el resultado de los checks, y haz un commit `docs: registra el Pull Request de REQ-F-<NNN>` (ruta explícita del ticket) con su push.
 10. Espera de nuevo el CI del último commit (como en el paso 8) y devuelve `READY_FOR_MERGE`.
 
@@ -355,7 +355,7 @@ Solo cuando el prompt confirma que el usuario hizo merge del PR:
 4. Implementa solo el alcance aprobado; nunca ocultes cambios de alcance.
 5. Nunca descartes ni sobrescribas cambios ajenos al ticket.
 6. Commits solo en T4 (y en T5 si se autoriza), sin referencias a Claude ni Anthropic.
-7. El Pull Request siempre apunta a `main`; nunca hagas merge. Nunca devuelvas `READY_FOR_MERGE` con el CI del PR (`calidad`, `docker`, `despliegue` o `auditoria`) en rojo, cancelado o sin terminar; omitidas (*skipped*) en un PR de solo documentación cuentan como superadas.
+7. El Pull Request siempre apunta a `main`; nunca hagas merge. Nunca devuelvas `READY_FOR_MERGE` con el CI del PR (`calidad`, `docker` o `auditoria`) en rojo, cancelado o sin terminar; omitidas (*skipped*) en un PR de solo documentación cuentan como superadas (en un PR en borrador, no).
 8. Si cualquier validación falla, detén el flujo y repórtalo con evidencia.
 9. Mantén la trazabilidad completa en el archivo del ticket: requisito → Action Plan → Technical Action Plan → implementación → QA → commit → PR.
 10. Encadena los comandos de git con `&&` (o comprueba el código de salida de cada uno): un `git add`, `git mv` o `git commit` fallido nunca debe dejar correr `git push` ni `gh pr create`.

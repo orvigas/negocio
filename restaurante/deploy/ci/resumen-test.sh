@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pruebas de deploy/ci/resumen.sh (REQ-F-030, job `despliegue` del CI): ejecuta el generador con
+# Pruebas de deploy/ci/resumen.sh (REQ-F-030, job `docker` del CI): ejecuta el generador con
 # entradas simuladas de cada estado y comprueba el encabezado, el enlace al commit, el SHA completo
 # y los textos clave. No toca GitHub ni el VPS.
 #

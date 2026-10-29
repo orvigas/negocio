@@ -26,7 +26,7 @@
     "dev:inventory": "npm run dev -w inventory-manager --",
     "build:css": "npm run build:css -w landing-pages -- && npm run build:css -w inventory-manager --",
     "watch:css": "npm run watch:css -w landing-pages -- & npm run watch:css -w inventory-manager -- & wait",
-    "test": "npm run test --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present --",
     "test:watch": "npm run test:watch -w landing-pages --",
     "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.json",
     "db:generate": "npm run db:generate -w @restaurante/db --",

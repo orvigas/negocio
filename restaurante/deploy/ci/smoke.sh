@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prueba de humo del despliegue de producción (REQ-F-016, job `despliegue` del CI). Ejecuta
+# Prueba de humo del despliegue de producción (REQ-F-016, job `docker` del CI). Ejecuta
 # deploy/deploy.sh tal como lo hace el VPS (con SSH_ORIGINAL_COMMAND), contra un registro local, un
 # Traefik v3 fijado por digest y el compose de producción. Nunca toca GHCR ni el VPS.
 #

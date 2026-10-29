@@ -31,6 +31,12 @@ export const adminPaths = Object.freeze({
   product: (business: PublicBusinessId, id: number) => `${ADMIN_API_PREFIX}/${business}/productos/${id}`,
   productRestore: (business: PublicBusinessId, id: number) => `${ADMIN_API_PREFIX}/${business}/productos/${id}/recuperar`,
   productMove: (business: PublicBusinessId, id: number) => `${ADMIN_API_PREFIX}/${business}/productos/${id}/mover`,
+  // Usuarios (solo administradores) y cuenta propia (REQ-F-040).
+  users: `${ADMIN_API_PREFIX}/usuarios`,
+  user: (id: number) => `${ADMIN_API_PREFIX}/usuarios/${id}`,
+  userStatus: (id: number, action: 'desactivar' | 'reactivar') => `${ADMIN_API_PREFIX}/usuarios/${id}/${action}`,
+  userPassword: (id: number) => `${ADMIN_API_PREFIX}/usuarios/${id}/contrasena`,
+  accountPassword: `${ADMIN_API_PREFIX}/cuenta/contrasena`,
 });
 
 const businessId = z.enum(PUBLIC_BUSINESS_IDS);
@@ -140,6 +146,65 @@ export const productFieldsResponseSchema = z.object({
 });
 export type ProductFieldsResponse = z.infer<typeof productFieldsResponseSchema>;
 
+// --- Usuarios y cuenta propia (REQ-F-040) ---------------------------------------------
+
+export const USER_ROLES = Object.freeze(['admin', 'editor'] as const);
+export type UserRole = (typeof USER_ROLES)[number];
+
+/**
+ * Límites de los campos de usuario, solo para los textos de ayuda del admin: la regla está en core
+ * (`validateUserData`, `validatePasswordPair`) y la API responde 422 con `fields`. Las longitudes se
+ * cuentan en caracteres, no en unidades UTF-16 (por eso el admin no usa `minlength` ni `maxlength`).
+ */
+export const USER_LIMITS = Object.freeze({ usernameMax: 60, displayNameMax: 60, passwordMin: 12, passwordMax: 256 });
+
+/** Usuario gestionado. Nunca lleva `sessionVersion`, hashes ni contraseñas. */
+export const managedUserSchema = z.object({
+  id,
+  username: z.string(),
+  displayName: z.string(),
+  role: z.enum(USER_ROLES),
+  /** Negocios asignados (editor); vacío para el administrador, que los tiene todos. */
+  businesses: z.array(businessId),
+  active: z.boolean(),
+  /** ISO con la zona del negocio; null si nunca entró. */
+  lastLoginAt: isoDate.nullable(),
+  createdAt: isoDate,
+  updatedAt: isoDate,
+});
+export type ManagedUser = z.infer<typeof managedUserSchema>;
+
+export const userListResponseSchema = z.object({ users: z.array(managedUserSchema) });
+export const userResponseSchema = z.object({ user: managedUserSchema });
+/**
+ * Respuesta de una escritura sobre un usuario existente. `ownSessionClosed` es true si el usuario
+ * afectado es el de la sesión y sus sesiones se cerraron (se degradó, se desactivó o se restableció la
+ * contraseña): el admin borra su cookie y vuelve al acceso.
+ */
+export const userWriteResponseSchema = z.object({ user: managedUserSchema, meta: z.object({ ownSessionClosed: z.boolean() }) });
+export type UserWriteResponse = z.infer<typeof userWriteResponseSchema>;
+/** 200 de `POST /cuenta/contrasena`: la sesión nueva del navegador actual (las demás se cerraron). */
+export const passwordChangeResponseSchema = loginResponseSchema;
+export type PasswordChangeResponse = LoginResponse;
+
+/** Cuerpos de las peticiones (forma; las reglas las aplica la API con core). Lista cerrada de campos. */
+export interface UserDataRequest {
+  username: string;
+  displayName: string;
+  role: string;
+  businesses: string[];
+}
+export interface PasswordPairRequest {
+  password: string;
+  passwordConfirmation: string;
+}
+export type UserCreateRequest = UserDataRequest & PasswordPairRequest;
+export type UserUpdateRequest = UserDataRequest;
+export type UserPasswordRequest = PasswordPairRequest;
+export interface PasswordChangeRequest extends PasswordPairRequest {
+  currentPassword: string;
+}
+
 // --- Errores --------------------------------------------------------------------------
 
 /** 422: errores por campo (la clave '' es un error general). */
@@ -155,3 +220,6 @@ export const conflictErrorSchema = z.object({
     current: z.object({ id, version: id, updatedAt: isoDate, updatedBy: z.string().nullable() }),
   }),
 });
+
+/** 409: la operación dejaría sin administradores activos (D-7 de REQ-F-007; REQ-F-040). */
+export const lastAdminErrorSchema = z.object({ error: z.object({ code: z.literal('LAST_ADMIN'), message: z.string() }) });

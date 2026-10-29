@@ -1,6 +1,8 @@
 import { BUSINESS_IDS } from '@restaurante/core/shared';
 import {
+  LAST_ADMIN_MESSAGE,
   LastAdminError,
+  USERNAME_TAKEN_MESSAGE,
   UserNotFoundError,
   UsernameTakenError,
   businessField,
@@ -66,8 +68,8 @@ const ID_PATTERN = /^[1-9]\d{0,9}$/;
 
 const adminOnly: Permission = (user) => (isAdmin(user) ? null : 'No tienes permiso para gestionar usuarios.');
 
-const LAST_ADMIN_PROBLEM = 'Debe quedar al menos un administrador activo: no se guardó nada. Crea o reactiva otro administrador antes.';
-const USERNAME_TAKEN = 'Ya existe un usuario con ese nombre de acceso (sin distinguir mayúsculas).';
+const LAST_ADMIN_PROBLEM = LAST_ADMIN_MESSAGE;
+const USERNAME_TAKEN = USERNAME_TAKEN_MESSAGE;
 
 export function createAdminUsersController(deps: AdminDeps): AdminUsersController {
   const { config, renderer, now, sessions, users, hashParams, logger } = deps;

@@ -1,4 +1,4 @@
-import { hashPassword, validatePasswordPair, verifyPassword } from '@restaurante/core/identity';
+import { WRONG_CURRENT_PASSWORD_MESSAGE, hashPassword, validatePasswordPair, verifyPassword } from '@restaurante/core/identity';
 
 import { SESSION_COOKIE, sessionCookieOptions } from '../middleware/admin-guard.ts';
 import { ACCOUNT_PATH } from '../views/admin/index.ts';
@@ -21,7 +21,7 @@ export interface AdminAccountController {
  */
 
 const ACCOUNT_BODY_LIMIT = 16 * 1024;
-const WRONG_CURRENT = 'La contraseña actual no es correcta.';
+const WRONG_CURRENT = WRONG_CURRENT_PASSWORD_MESSAGE;
 /** Campos del formulario (DEF-004): cualquier otro (p. ej. `role`) responde 400. */
 const ACCOUNT_FIELDS = Object.freeze(['currentPassword', 'password', 'passwordConfirmation']);
 

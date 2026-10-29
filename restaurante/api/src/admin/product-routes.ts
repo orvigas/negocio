@@ -34,6 +34,7 @@ import { ApiHttpError } from '../errors.ts';
 import type { LandingNotifier } from '../notifier.ts';
 import type { AdminAccess, AdminAuth } from './access.ts';
 import { IdempotencyKeyReusedError, fingerprintOf, type IdempotencyStore } from './idempotency.ts';
+import { createResponder, isRecord, validationFailed } from './responses.ts';
 
 /**
  * Productos por negocio en `/api/v1/admin` (REQ-F-039, RF-6 a RF-12), con las reglas actuales del
@@ -55,10 +56,6 @@ import { IdempotencyKeyReusedError, fingerprintOf, type IdempotencyStore } from 
  */
 
 type RouteContext = Context & { params: Record<string, string> };
-/** Esquema de respuesta del contrato (solo se usa `safeParse`). */
-interface ResponseSchema {
-  safeParse(value: unknown): { success: true; data: unknown } | { success: false; error: { issues: readonly unknown[] } };
-}
 type Handler = (ctx: RouteContext) => Promise<void>;
 
 export interface ProductRoutes {
@@ -77,7 +74,6 @@ const ID_PATTERN = /^[1-9]\d{0,9}$/;
 /** Cuerpo JSON de un producto (los formularios más grandes, con 6 filas, ocupan pocos KiB). */
 export const PRODUCT_BODY_LIMIT = 64 * 1024;
 
-const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /** Hoja del formulario de core -> descriptor del contrato. */
 function toField(leaf: FormLeaf): ProductFormField {
@@ -114,26 +110,13 @@ export function createProductRoutes({
   const dto = (product: ProductView) => toProductDto(product, timeZone);
   const authorOf = ({ user }: AdminAuth): ProductAuthor => ({ id: user.id, name: user.displayName });
 
-  /** Responde validando con el contrato: una respuesta que no lo cumple es un error interno. */
-  function send(ctx: Context, schema: ResponseSchema, body: unknown, status = 200): void {
-    const parsed = schema.safeParse(body);
-    if (!parsed.success) {
-      logger.error('admin_response_invalid', { path: ctx.path, issues: parsed.error.issues.length });
-      throw new Error('La respuesta no cumple el contrato');
-    }
-    ctx.status = status;
-    ctx.body = parsed.data;
-  }
+  const responder = createResponder(logger);
+  const { send } = responder;
 
   function productId(ctx: RouteContext): number {
     const { id } = ctx.params;
     if (typeof id !== 'string' || !ID_PATTERN.test(id)) throw new ApiHttpError(404, 'PRODUCT_NOT_FOUND', 'Producto no encontrado.');
     return Number(id);
-  }
-
-  function validationFailed(ctx: Context, fields: Record<string, string>, message = 'Los datos no son válidos: no se guardó nada.'): void {
-    ctx.status = 422;
-    ctx.body = { error: { code: 'VALIDATION_FAILED', message, fields } };
   }
 
   /** Errores de dominio -> 404, 422 y 409. El resto sigue al manejador central. */
@@ -168,19 +151,7 @@ export function createProductRoutes({
   const freshness = (business: BusinessId): Promise<Freshness> => notifier.notify(business);
 
   /** Lee un objeto JSON con solo los campos indicados; si no, 422 y null. */
-  async function closedBody(ctx: RouteContext, allowed: readonly string[]): Promise<Record<string, unknown> | null> {
-    const body = await readJsonBody(ctx, { limit: PRODUCT_BODY_LIMIT });
-    if (!isRecord(body)) {
-      validationFailed(ctx, { '': 'El cuerpo debe ser un objeto.' });
-      return null;
-    }
-    const unknownKeys = Object.keys(body).filter((key) => !allowed.includes(key));
-    if (unknownKeys.length > 0) {
-      validationFailed(ctx, Object.fromEntries(unknownKeys.map((key) => [key, 'Campo desconocido.'])));
-      return null;
-    }
-    return body;
-  }
+  const closedBody = (ctx: RouteContext, allowed: readonly string[]) => responder.closedBody(ctx, allowed, PRODUCT_BODY_LIMIT);
 
   return Object.freeze<ProductRoutes>({
     async list(ctx) {

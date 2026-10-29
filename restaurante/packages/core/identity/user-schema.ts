@@ -16,6 +16,14 @@ export const PASSWORD_MIN_LENGTH = 12;
 /** Máximo defensivo: scrypt procesa todo el texto. */
 export const PASSWORD_MAX_LENGTH = 256;
 
+/**
+ * Mensajes de las reglas del repositorio para quien gestiona usuarios (REQ-F-040): los muestran igual
+ * el /admin actual y la API del admin nuevo.
+ */
+export const LAST_ADMIN_MESSAGE = 'Debe quedar al menos un administrador activo: no se guardó nada. Crea o reactiva otro administrador antes.';
+export const USERNAME_TAKEN_MESSAGE = 'Ya existe un usuario con ese nombre de acceso (sin distinguir mayúsculas).';
+export const WRONG_CURRENT_PASSWORD_MESSAGE = 'La contraseña actual no es correcta.';
+
 // Caracteres de control (C0, DEL y C1).
 // eslint-disable-next-line no-control-regex -- se buscan justamente los caracteres de control.
 const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;

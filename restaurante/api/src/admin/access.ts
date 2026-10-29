@@ -3,6 +3,7 @@ import type { Context } from 'koa';
 import { CSRF_HEADER } from '@restaurante/contracts';
 import {
   canEditBusiness,
+  isAdmin,
   resolveSession,
   safeEqualStrings,
   type SessionInfo,
@@ -37,6 +38,11 @@ export interface AdminAccess {
   assertCsrf(ctx: Context, auth: AdminAuth): void;
   /** Sesión, `:business` conocido (404) y permitido (403); en escrituras, además el CSRF. */
   business(ctx: Context & { params: Record<string, string> }, options: { write: boolean }): Promise<AdminAuth & { businessId: BusinessId }>;
+  /**
+   * Gestión de usuarios (REQ-F-040, RF-1): sesión (401) -> rol administrador (403, antes de mirar el
+   * id: un editor recibe 403 también con su propio id) -> en escrituras, el CSRF (403).
+   */
+  adminOnly(ctx: Context, options: { write: boolean }): Promise<AdminAuth>;
 }
 
 const BEARER = /^Bearer ([A-Za-z0-9_-]{1,128})$/;
@@ -83,6 +89,16 @@ export function createAdminAccess({
       }
       if (write) assertCsrf(ctx, auth);
       return { ...auth, businessId: business };
+    },
+
+    async adminOnly(ctx, { write }) {
+      const auth = await authenticate(ctx);
+      if (!isAdmin(auth.user)) {
+        logger.warn('admin_forbidden', { path: ctx.path, method: ctx.method, userId: auth.user.id });
+        throw new ApiHttpError(403, 'FORBIDDEN_ROLE', 'No tienes permiso para gestionar usuarios.');
+      }
+      if (write) assertCsrf(ctx, auth);
+      return auth;
     },
   });
 }

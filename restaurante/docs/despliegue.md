@@ -49,6 +49,8 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
     VPS; sin ella, el router del proyecto responde 301 directamente a la raíz).
   - `https://www.` responde 301 a `https://birriaelmuneco.com`.
   - En los dos casos se conservan la ruta y la query.
+  - Esos 301 son los de una petición GET (la de los navegadores). Con HEAD (`curl -I`), Traefik
+    responde 308 a las mismas redirecciones: compruébalas con GET ([verificación](#verificación-del-primer-despliegue-supuestos-del-ticket)).
   - `/admin` tiene un límite de 10 peticiones por minuto por IP, con ráfaga de 20; después
     responde 429.
   - `https://admin.birriaelmuneco.com` sirve `inventory-manager` (REQ-F-039), con su propio
@@ -212,7 +214,8 @@ rm -rf /tmp/restaurante-deploy
 La última suma debe coincidir con la misma orden ejecutada en `restaurante/deploy/` de tu copia
 local.
 
-**Al llegar a `main` el admin nuevo (REQ-F-039):** `compose.prod.yaml` (servicio
+**Al llegar a `main` el admin nuevo (REQ-F-039)** (aplicado el 2026-10-29 con el #105; se conserva
+como referencia): `compose.prod.yaml` (servicio
 `inventory-manager`, red `admin`, variables nuevas de `app` y `api`) y `deploy.sh` (cuatro digests,
 código 16) cambian, así que su suma cambia. Antes del primer despliegue de ese commit, en este
 orden:
@@ -223,13 +226,18 @@ orden:
 3. Da al token de GHCR acceso a `restaurante-inventory-manager` ([paso 1.4](#14-acceso-a-ghcr-solo-lectura)).
 4. Reinstala `deploy/` con este paso: con el `deploy/` anterior, `deploy.sh` recibe 7 argumentos en
    lugar de 6 y termina con el código 2 sin tocar nada.
-5. Reinstala los scripts de respaldos ([paso 11.5](#115-instalar-en-el-vps)): `verify-backup.sh`
-   pasa ahora la credencial del aviso, obligatoria en producción, a la app que verifica.
+5. Los scripts de respaldos **del VPS** ([paso 11.5](#115-instalar-en-el-vps): `lib.sh`,
+   `backup.sh`, `env-backup.sh`, `restore.sh` y las unidades de systemd) no cambian con REQ-F-039:
+   no hace falta reinstalarlos. Solo cambia `verify-backup.sh`, que pasa ahora la credencial del
+   aviso, obligatoria en producción, a la app que verifica; se ejecuta en tu máquina
+   ([paso 11.8](#118-prueba-mensual-y-simulacro-en-tu-mac)), así que basta con actualizar tu copia
+   local del repositorio.
 
 Después del despliegue, la edición de productos se hace en `https://admin.birriaelmuneco.com`: el
 `/admin` anterior la muestra en solo lectura con un enlace al admin nuevo.
 
-**Al llegar a `main` la épica de arquitectura (REQ-F-038):** `compose.prod.yaml` (servicio `api` y
+**Al llegar a `main` la épica de arquitectura (REQ-F-038)** (aplicado el 2026-10-29 con el #105;
+se conserva como referencia): `compose.prod.yaml` (servicio `api` y
 `API_INTERNAL_URL` de la app) y `deploy.sh` (tres digests) cambian, así que su suma cambia.
 Reinstala `deploy/` con este paso **antes** del primer despliegue de ese commit: con el `deploy/`
 anterior, `deploy.sh` recibe 6 argumentos en lugar de 5 y termina con el código 2 sin tocar nada,
@@ -247,7 +255,8 @@ Apunta esa fecha: al caducar, los despliegues fallan en la descarga sin tocar la
 sudo -u deploy -H docker login ghcr.io -u orvigas    # pega el token cuando lo pida
 ```
 
-**Al llegar a `main` el admin nuevo (REQ-F-039):** el token debe poder leer también
+**Al llegar a `main` el admin nuevo (REQ-F-039)** (aplicado el 2026-10-29 con el #105; se conserva
+como referencia): el token debe poder leer también
 `ghcr.io/orvigas/restaurante-inventory-manager`. Comprueba en GitHub (Packages) que el paquete
 pertenece a la misma cuenta o dale acceso al token antes del despliegue: si no, `deploy.sh`
 termina con el código 10 sin tocar nada.
@@ -381,7 +390,7 @@ rojo y la app se queda como esté ([Diagnóstico](#10-diagnóstico)).
 | Comprobación | Cómo |
 | ------------ | ---- |
 | CA-1: HTTPS y certificado | `curl -sI https://birriaelmuneco.com` → 200, certificado válido en el navegador, landing del día |
-| CA-2: redirecciones | `curl -sI 'http://birriaelmuneco.com/molotes?a=1'` y `http://www.` → `301` hacia `https://` del mismo host (redirección global del entrypoint `web` del Traefik del VPS). `curl -sI 'https://www.birriaelmuneco.com/molotes?a=1'` → `301` con `Location: https://birriaelmuneco.com/molotes?a=1`. Así, `http://www.` llega a la raíz en dos saltos |
+| CA-2: redirecciones | Con GET, como un navegador: `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' 'http://birriaelmuneco.com/molotes?a=1'` (y lo mismo con `http://www.`) → `301` hacia `https://` del mismo host con la ruta y la query (redirección global del entrypoint `web` del Traefik del VPS). Con `'https://www.birriaelmuneco.com/molotes?a=1'` → `301 https://birriaelmuneco.com/molotes?a=1`. Así, `http://www.` llega a la raíz en dos saltos. Con `curl -sI` (HEAD), Traefik responde `308` a las mismas redirecciones: no es un defecto, pero no sirve para esta comprobación |
 | CA-3: puertos cerrados | Desde fuera: `nc -vz <vps> 3000` y `nc -vz <vps> 3306` fallan |
 | CA-4: límite de `/admin` | 30 peticiones seguidas a `https://birriaelmuneco.com/admin/login`: las últimas reciben 429; `/molotes` sigue en 200 |
 | CA-5: IP real | En `docker logs restaurante-app-1`, la línea `request` lleva `"protocol":"https"` y tu IP pública, no una `172.x` de Docker. Si sale una `172.x`, Traefik no ve la IP de origen (proxy de Docker en IPv6, CDN delante): revisa la publicación de puertos de Traefik |
@@ -389,7 +398,7 @@ rojo y la app se queda como esté ([Diagnóstico](#10-diagnóstico)).
 | CA-10 | `stat -c '%a %U' /opt/restaurante/.env` → `600 deploy`; `sudo -l -U deploy` sin sudo |
 | Traefik | Certresolver, entrypoints, versión y que no haya routers con el prefijo `restaurante` de otros sitios |
 | Docker | `docker version` del Engine ≥ 25 (para `start_interval` del healthcheck) |
-| CA-15 de REQ-F-039: admin nuevo | Con el DNS ya propagado: `curl -sI https://admin.birriaelmuneco.com/acceso` → 200 con certificado válido en el navegador, `Cache-Control: no-store` y `X-Robots-Tag: noindex, nofollow`; `curl -sI http://admin.birriaelmuneco.com/acceso` → 301 a `https://`; 75 peticiones seguidas a `https://admin.birriaelmuneco.com/salud` reciben 429 al final; `/molotes` sigue en 200 |
+| CA-15 de REQ-F-039: admin nuevo | Con el DNS ya propagado: `curl -sI https://admin.birriaelmuneco.com/acceso` → 200 con certificado válido en el navegador, `Cache-Control: no-store` y `X-Robots-Tag: noindex, nofollow`; `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' 'http://admin.birriaelmuneco.com/acceso?next=%2F'` → `301` a `https://` con la ruta y la query (con `curl -sI`, HEAD, da `308`); 120 peticiones **en paralelo**, `seq 1 120 \| xargs -P 30 -I{} curl -s -o /dev/null -w '%{http_code}\n' https://admin.birriaelmuneco.com/salud \| sort \| uniq -c`, dan una parte con 200 y el resto con 429 (el 2026-10-29: 62 y 58); `/molotes` sigue en 200. En serie no sirve: con la latencia real la ráfaga se recarga y 75 peticiones seguidas dieron todas 200 |
 | `api` y aviso no expuestos | `curl -s -o /dev/null -w '%{http_code}' https://admin.birriaelmuneco.com/api/v1/admin/sesion` → 404 (lo responde inventory-manager); `curl -s -o /dev/null -w '%{http_code}' -X POST https://birriaelmuneco.com/internal/v1/productos-cambiados` → 404 |
 | Frescura (CA-9) | Marca un producto como no disponible en el admin nuevo: el mensaje dice «La landing y el bot ya muestran el cambio», la landing deja de mostrarlo y en el log de `app` aparece `products_change_notified` con `landing:true` y `bot:true` |
 
@@ -543,6 +552,7 @@ el log del paso `desplegar`.
 | Resumen **Cancelado o interrumpido** | Job cancelado o paso `desplegar` sin terminar (17 min) | Revisa `state/releases.log` y `state/release.env`; vuelve a desplegar la punta de `main` |
 | `vigente` en rojo | La API de GitHub no respondió con el commit de `main` | No se tocó producción; vuelve a ejecutar el job |
 | `Host key verification failed` / `Permission denied (publickey)` | Huella del VPS cambiada o llave revocada | Revisa `VPS_SSH_KNOWN_HOSTS` y `authorized_keys` (paso 1.5) |
+| `ssh: connect to host … Connection timed out`, código 255 | El runner no llegó al VPS (corte de red puntual o firewall); `deploy.sh` no llegó a ejecutarse y producción no se tocó | Comprueba que el VPS responda por SSH (`sshd` activo, sin baneos de fail2ban, ufw con el puerto 22). Si todo está bien, basta con **Re-run failed jobs** en Actions (el 2026-10-29, el primer despliegue de la épica pasó así en el intento 2) |
 | Código 2 `uso: deploy ...` | Argumentos inválidos (o se usó la llave a mano) | — |
 | Código 3 (`.env`, `RESTAURANTE_*`) | `.env` sin permisos 600, con `DATABASE_ALLOW_NEWER_SCHEMA`, con dominio, subdominio del admin o registro inválidos, o sin `RESTAURANTE_INTERNAL_NOTIFY_TOKEN` (32 caracteres como mínimo) | Corrige el `.env` |
 | Código 4 `deploy/ instalado no coincide` | Cambió `restaurante/deploy/` en `main` | Reinstala `deploy/` (paso 1.3) y vuelve a ejecutar el job |

@@ -10,12 +10,15 @@ Cerrado el 2026-10-28. Los tres PR se mergearon en `epic/arquitectura`:
 - PR 2, `inventory-manager`: #95 (https://github.com/orvigas/negocio/pull/95), merge `3c65ad7`, 2026-10-28T20:06:01Z.
 - PR 3, despliegue: #99 (https://github.com/orvigas/negocio/pull/99), merge `0d3de28`, 2026-10-29T03:14:17Z (2026-10-28, 21:14 en Ciudad de México).
 
+**En producción desde el 2026-10-29:** la épica llegó a `main` con el PR #105 (`epic/arquitectura` → `main`, merge `c53f6f3`). En la ejecución `40937656918` del CI de `main`, `publish` publicó las 4 imágenes y `deploy` desplegó en el intento 2 (el intento 1 falló con `ssh: connect to host … Connection timed out`, código 255, sin tocar el VPS; antes del intento 2 se reinstaló `deploy/`, suma `f5df947265750768cb8fcbb6224f0c2a1f0846c1796ccfdb14de0db22c1dacf3`). Log del intento 2: `api healthy`, `inventory-manager healthy` y `desplegado`.
+
 **Pendientes para cuando la épica llegue a `main`:**
 
-- Crear el DNS de `admin.birriaelmuneco.com` hacia el VPS.
-- Comprobar el certificado real del subdominio tras el despliegue.
-- Medir la memoria en el VPS con los cuatro contenedores.
-- Revisar a 375 px la pantalla de acceso en el navegador (no imprescindible; el navegador bloqueó la ventana emergente en el QA del PR 3).
+- [x] Crear el DNS de `admin.birriaelmuneco.com` hacia el VPS. Hecho (2026-10-29): `https://admin.birriaelmuneco.com/acceso` responde 200 con `Cache-Control: no-store` y `X-Robots-Tag: noindex, nofollow`; `http://admin.…/acceso?next=%2F` responde 301 (con GET) a `https://` con la ruta y la query.
+- [x] Comprobar el certificado real del subdominio tras el despliegue. Hecho (2026-10-29): certificado de Let's Encrypt para `admin.birriaelmuneco.com`, válido hasta el 2027-01-27. Además: `/api/v1/admin/sesion` en el subdominio y `POST https://birriaelmuneco.com/internal/v1/productos-cambiados` dan 404; 120 peticiones en paralelo a `/salud` dieron 62 con 200 y 58 con 429, con `/molotes` en 200; las landings `/`, `/birria` y `/molotes` y el `/admin/login` anterior dan 200.
+- [ ] Medir la memoria en el VPS con los cuatro contenedores (pendiente del usuario).
+- [ ] Revisar a 375 px la pantalla de acceso en el navegador (no imprescindible; el navegador bloqueó la ventana emergente en el QA del PR 3; pendiente del usuario).
+- [ ] Probar la edición de un producto en el admin nuevo en producción (pendiente del usuario).
 
 Las demás acciones del usuario antes de mergear la épica a `main` están en "Acciones del usuario pendientes" del Implementation Result del PR 3.
 
@@ -2758,6 +2761,10 @@ Los mismos de la ronda 1:
 QA_APPROVED
 
 ## Historial de cambios
+
+### Despliegue a producción (2026-10-29)
+
+La épica llegó a `main` con el PR #105 (merge `c53f6f3`) y se desplegó en la ejecución `40937656918` (intento 2; el 1 falló por un corte de SSH, código 255, sin tocar el VPS). Se marcan como hechos el DNS y el certificado real de `admin.birriaelmuneco.com` (Let's Encrypt, válido hasta el 2027-01-27), con la evidencia de la sección Estado. Siguen pendientes del usuario la medición de memoria con los cuatro contenedores, la revisión a 375 px del acceso y la prueba de edición de un producto en el admin nuevo. Las guías (`restaurante/docs/despliegue.md` y `arquitectura.md`) se actualizan en el mismo PR de documentación.
 
 ### Cierre (2026-10-28)
 

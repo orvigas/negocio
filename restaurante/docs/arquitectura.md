@@ -8,7 +8,7 @@ necesita desviarse de este documento, lo actualiza en el mismo PR.
 
 | | |
 | --- | --- |
-| Estado | **Aceptada** (estrategia general). Decisiones A (2026-10-24), B y C (2026-10-26) tomadas ([sección 9](#9-decisiones)). Aplicados los pasos 1 (REQ-F-036), 2 (REQ-F-037) y 3 (REQ-F-038) y el ticket 1 del paso 4 (REQ-F-039) |
+| Estado | **Aceptada** (estrategia general). Decisiones A (2026-10-24), B y C (2026-10-26) tomadas ([sección 9](#9-decisiones)). Aplicados los pasos 1 (REQ-F-036), 2 (REQ-F-037) y 3 (REQ-F-038) y el ticket 1 del paso 4 (REQ-F-039). En producción desde el 2026-10-29 (PR #105, `c53f6f3`) |
 | Fecha | 2026-10-24 (última actualización: 2026-10-28) |
 | Alcance | Estructura del código, regla de dependencias, contratos, consumo de la API y orden de la migración. No cambia el stack de `.claude/CLAUDE.md` §2 |
 
@@ -274,6 +274,9 @@ Los PR de los pasos van a la rama intermedia `epic/arquitectura`, que valida sin
 épica llega a `main` con un solo PR cuando está madura (`.claude/rules/git.md` y la sección "Rama
 intermedia" del CI en `restaurante/README.md`).
 
+**En producción:** los pasos 1 a 3 y el ticket 1 del paso 4 llegaron a `main` con el PR #105
+(`epic/arquitectura` → `main`, merge `c53f6f3`) y se desplegaron el 2026-10-29 ([Despliegue](despliegue.md)).
+
 | Paso | Qué hace | Cambia el comportamiento |
 | --- | --- | --- |
 | 1 | **Monorepo sin cambios funcionales** (REQ-F-036). Workspaces en `restaurante/` y la app actual pasa tal cual a `landing-pages/`. Se ajustan el CI (`.github/workflows/ci.yml`, Dependabot), el `Dockerfile`, `compose.yaml` y la documentación. De `deploy/` no se toca ningún archivo de la suma (`compose.prod.yaml`, `deploy.sh`, `mysql/initdb/01-usuarios.sh`): las imágenes y sus nombres no cambian | No |
@@ -347,7 +350,8 @@ Los IDs de los tickets 2 a 6 se asignan al crearlos.
   - smoke, CI y la prueba de extremo a extremo de la frescura;
   - la revisión de memoria (§10).
 - **El DNS de `admin.birriaelmuneco.com` lo crea el usuario** antes de desplegar la épica a `main`
-  ([Despliegue](despliegue.md)).
+  ([Despliegue](despliegue.md)). Hecho: desde el 2026-10-29 (#105) el subdominio responde con su
+  certificado de Let's Encrypt.
 
 ### Paso 3 aplicado (REQ-F-038)
 
@@ -434,9 +438,9 @@ y se registra aquí, con la fecha y lo que respondió el usuario. Las tres está
 
 | Paso | Qué se hace |
 | --- | --- |
-| 1 (REQ-F-036) | La imagen y el contenedor actuales salen del workspace `landing-pages/`, con los mismos nombres (`ghcr.io/orvigas/restaurante`, `restaurante-migrate`, servicio `app` y routers `restaurante*`), el mismo dominio y las mismas rutas. Se mide la memoria del VPS ([sección 10](#10-riesgos)) |
-| 3 | Contenedor e imagen de `api` (**aplicado en REQ-F-038**): solo en la red interna, sin router de Traefik (decisión "Solo red interna"); el subdominio `admin.<dominio>` queda para el paso 4. La revisión de memoria se basó en la estimación del 33,5 % ([sección 10](#10-riesgos)) |
-| 4 | Contenedor `inventory-manager`, `admin.<dominio>`, DNS (a cargo del usuario) y certificado (**aplicado en REQ-F-039** para los productos; desviación D-3: la API sigue sin publicarse). El `/admin` actual se retira en el ticket 6 del paso 4 |
+| 1 (REQ-F-036; en producción desde el 2026-10-29, #105) | La imagen y el contenedor actuales salen del workspace `landing-pages/`, con los mismos nombres (`ghcr.io/orvigas/restaurante`, `restaurante-migrate`, servicio `app` y routers `restaurante*`), el mismo dominio y las mismas rutas. Se mide la memoria del VPS ([sección 10](#10-riesgos)) |
+| 3 | Contenedor e imagen de `api` (**aplicado en REQ-F-038**; en producción desde el 2026-10-29, #105): solo en la red interna, sin router de Traefik (decisión "Solo red interna"); el subdominio `admin.<dominio>` queda para el paso 4. La revisión de memoria se basó en la estimación del 33,5 % ([sección 10](#10-riesgos)) |
+| 4 | Contenedor `inventory-manager`, `admin.<dominio>`, DNS (a cargo del usuario) y certificado (**aplicado en REQ-F-039** para los productos y en producción desde el 2026-10-29, #105; desviación D-3: la API sigue sin publicarse). El `/admin` actual se retira en el ticket 6 del paso 4 |
 
 ### Decisión B: tomada
 
@@ -478,8 +482,8 @@ y se registra aquí, con la fecha y lo que respondió el usuario. Las tres está
 ## 10. Riesgos
 
 - **El paso 1 toca el pipeline de producción.** Se valida con el CI completo (incluido el
-  `smoke.sh`) en el PR hacia `epic/arquitectura`; el despliegue real llega cuando la épica se
-  mergea a `main`.
+  `smoke.sh`) en el PR hacia `epic/arquitectura`; el despliegue real llegó con el merge de la
+  épica a `main` (#105, desplegado el 2026-10-29).
 - **Las landings pasan a depender de la API** (paso 3, aplicado en REQ-F-038). Se mitiga con la
   caché, la última copia buena y la semilla de la [sección 6](#6-cómo-se-consume-la-api). Riesgo
   aceptado: si `landing-pages` se reinicia con la API caída, muestra la semilla (que puede estar
@@ -494,8 +498,8 @@ y se registra aquí, con la fecha y lo que respondió el usuario. Las tres está
 - **Revisión de memoria del paso 3** (REQ-F-038): por decisión del usuario ("Memoria: basta el
   33,5 %"), se basa en la estimación del paso 1 **sin una medición nueva**. El contenedor `api` es
   uno de los dos contenedores Node de esa estimación (1310,2 MiB, el 33,5 % de la RAM total, muy
-  por debajo del umbral del 80 %): **la decisión A se mantiene**. La medición real con `api` en
-  marcha queda para cuando la épica llegue a `main`.
+  por debajo del umbral del 80 %): **la decisión A se mantiene**. La épica ya está en `main` (#105,
+  2026-10-29): la medición real con `api` en marcha está **pendiente**.
 - **Revisión de memoria del paso 4, ticket 1** (REQ-F-039, RF-19): con la misma medición del paso 1
   (pico de 1142 MiB usados en el host y 84,1 MiB del contenedor Node), la estimación con tres
   contenedores Node (`api`, `inventory-manager` y la app medida) es
@@ -504,7 +508,8 @@ y se registra aquí, con la fecha y lo que respondió el usuario. Las tres está
   - La imagen de `inventory-manager` solo instala las dependencias de su workspace (unos 17 MiB de
     `node_modules`, sin Prisma). Medida local (Docker Desktop, `docker stats`, tras arrancar y servir
     unas peticiones): **45,5 MiB**, por debajo de la cota de 84,1 MiB usada en la estimación.
-  - La medición real con los cuatro contenedores queda para cuando la épica llegue a `main`.
+  - La épica ya está en `main` (#105, 2026-10-29): la medición real con los cuatro contenedores
+    está **pendiente** (la hace el usuario en el VPS).
 - **Dos administraciones a la vez** durante el paso 4: el `/admin` actual se mantiene hasta que el
   nuevo tenga lo mismo y se retira en el ticket 6. Desde REQ-F-039 muestra los productos en solo
   lectura y el admin nuevo los edita (un solo escritor). Usuarios, cuenta, bot y menú siguen en el

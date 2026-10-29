@@ -9,7 +9,7 @@ import { createUserRepository } from '@restaurante/db/user-repository';
 import { VALID_ENV } from '../helpers.ts';
 import { ADMIN_ENV, TEST_HASH_PARAMS } from '../support/admin.ts';
 import { makeDatabase, makeTempDir } from '../support/database.ts';
-import { freePort, startServer } from '../support/process.ts';
+import { freePorts, startServer } from '../support/process.ts';
 import { databaseUrl } from '../support/test-database-config.ts';
 
 /**
@@ -43,8 +43,8 @@ async function startStack() {
   cleanups.push(database.cleanup);
   const dataDir = await makeTempDir();
   cleanups.push(dataDir.cleanup);
-  const apiPort = await freePort();
-  const inventoryPort = await freePort();
+  // Distintos entre sí y de los de las landings (freePorts devuelve exactamente dos).
+  const [apiPort, inventoryPort] = (await freePorts(2)) as [number, number];
   // Las landings arrancan sin API (sirven la semilla) y la leen en cuanto responde.
   const landing = await startServer({ DATA_DIR: dataDir.dir, ...ADMIN_ENV, DATABASE_URL: databaseUrl(database.config), API_INTERNAL_URL: `http://127.0.0.1:${apiPort}` }, 60_000);
   cleanups.push(() => landing.stop());

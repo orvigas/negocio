@@ -41,16 +41,51 @@ export function runNode(args: string[], { env, input = '', timeoutMs = 30_000 }:
   });
 }
 
-/** Puerto TCP libre en 127.0.0.1. */
-export function freePort(): Promise<number> {
+/** Abre un servidor en un puerto libre de 127.0.0.1 (sin cerrarlo todavía). */
+function listenFree(): Promise<{ port: number; close: () => Promise<void> }> {
   return new Promise((resolve, reject) => {
     const server = createServer();
     server.once('error', reject);
     server.listen(0, '127.0.0.1', () => {
       const address = server.address();
-      server.close(() => (typeof address === 'object' && address ? resolve(address.port) : reject(new Error('Sin puerto'))));
+      const close = () => new Promise<void>((done) => server.close(() => done()));
+      if (typeof address === 'object' && address) resolve({ port: address.port, close });
+      else void close().then(() => reject(new Error('Sin puerto')));
     });
   });
+}
+
+/**
+ * Puertos ya entregados por este trabajador. Un puerto se elige y se cierra antes de que el proceso
+ * hijo lo abra, así que el sistema podría volver a darlo en la siguiente llamada: entonces dos
+ * procesos (o PORT e INTERNAL_PORT del mismo) chocarían. No se repite ninguno.
+ */
+const handedOut = new Set<number>();
+const MAX_PORT_ATTEMPTS = 20;
+
+/**
+ * `count` puertos TCP libres y distintos en 127.0.0.1: se mantienen abiertos a la vez antes de cerrar
+ * ninguno, y nunca repiten uno ya entregado por este trabajador.
+ */
+export async function freePorts(count: number): Promise<number[]> {
+  const ports: number[] = [];
+  for (let attempt = 0; ports.length < count; attempt += 1) {
+    if (attempt >= MAX_PORT_ATTEMPTS) throw new Error(`No se encontraron ${count} puertos libres distintos`);
+    const servers = await Promise.all(Array.from({ length: count - ports.length }, listenFree));
+    for (const { port } of servers) {
+      if (!handedOut.has(port) && !ports.includes(port)) ports.push(port);
+    }
+    await Promise.all(servers.map(({ close }) => close()));
+  }
+  for (const port of ports) handedOut.add(port);
+  return ports;
+}
+
+/** Puerto TCP libre en 127.0.0.1 (distinto de los ya entregados por este trabajador). */
+export async function freePort(): Promise<number> {
+  const [port] = await freePorts(1);
+  // freePorts(1) devuelve exactamente un puerto.
+  return port as number;
 }
 
 /** Quita las variables con valor undefined (una prueba puede así eliminar una de VALID_ENV). */
@@ -69,9 +104,9 @@ export interface StartOptions {
  * El proceso va en su propio grupo y `stop()` detiene el grupo entero (p. ej. `node --watch` y su hijo).
  */
 export async function startServer(env: Record<string, string | undefined>, timeoutMs = 30_000, { args = ['src/server.ts'] }: StartOptions = {}) {
-  const port = await freePort();
-  // Puerto interno del aviso de la API (REQ-F-039): libre por proceso, para no chocar con otros.
-  const internalPort = await freePort();
+  // PORT y el puerto interno del aviso de la API (REQ-F-039): reservados a la vez, así que son
+  // distintos entre sí y de los de otros procesos de la prueba (freePorts devuelve exactamente dos).
+  const [port, internalPort] = (await freePorts(2)) as [number, number];
   const database = env.DATABASE_URL === undefined && !('DATABASE_URL' in env) ? await makeDatabase() : null;
   const child = spawn(process.execPath, args, {
     cwd: PROJECT_DIR,

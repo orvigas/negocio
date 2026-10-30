@@ -1,12 +1,13 @@
 <header class="admin-header border-b border-rim bg-surface">
       <div class="admin-header__bar mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-8">
         <a class="admin-header__brand font-headline text-lg font-black tracking-tight text-crema uppercase" href="/">Administración</a>
-        <nav class="admin-header__nav" aria-label="Negocios">
+        <nav class="admin-header__nav" aria-label="Secciones">
           <ul class="flex flex-wrap gap-2">{{{ links }}}
           </ul>
         </nav>
         <div class="admin-header__user flex items-center gap-3">
           <p class="text-sm text-masa"><span class="sr-only">Sesión de </span>{{ userName }}</p>
+          <a class="admin-header__account inline-flex min-h-11 items-center rounded-lg px-3 py-2 font-label text-sm font-bold tracking-wider text-maiz uppercase hover:bg-surface-high aria-[current=page]:underline aria-[current=page]:underline-offset-4" href="/cuenta"{{{ accountCurrent }}}>Mi cuenta</a>
           <form class="admin-header__logout" method="post" action="/salir">
             <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
             <button class="button button--ghost inline-flex min-h-11 cursor-pointer items-center rounded-lg px-3 py-2 font-label text-sm font-bold tracking-wider text-maiz uppercase hover:bg-surface-high" type="submit">Salir</button>

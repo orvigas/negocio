@@ -5,8 +5,6 @@ import { toPublished, type ProductStore } from '@restaurante/core/catalog';
 import { isBusinessId, silentLogger, type Logger } from '@restaurante/core/shared';
 
 import { createAdminRouter } from './admin/router.ts';
-import type { ProductRoutes } from './admin/product-routes.ts';
-import type { SessionRoutes } from './admin/session-routes.ts';
 import { ApiHttpError, createErrorHandler } from './errors.ts';
 
 /**
@@ -42,8 +40,8 @@ function createRequestLogger(logger: Logger): Middleware {
 export interface ApiAppOptions {
   /** Store de productos (Prisma en producción, memoria en las pruebas). La parte pública solo lo lee. */
   store: Pick<ProductStore, 'listBusiness'>;
-  /** Rutas de administración (REQ-F-039); sin ellas, /api/v1/admin responde 404. */
-  admin?: { session: SessionRoutes; products: ProductRoutes } | undefined;
+  /** Rutas de administración (REQ-F-039 y REQ-F-040); sin ellas, /api/v1/admin responde 404. */
+  admin?: Parameters<typeof createAdminRouter>[0] | undefined;
   logger?: Logger;
 }
 

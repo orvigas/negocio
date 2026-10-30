@@ -41,8 +41,8 @@ estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md)
 | Workspace | Contenido |
 | --- | --- |
 | `landing-pages/` | La app Koa descrita en este README (las landings, `/admin`, `/admin/api` y el bot de WhatsApp). Las landings leen los productos de `api/` (REQ-F-038) |
-| `api/` | API propia (REQ-F-038 y REQ-F-039): `GET /api/v1/public/{molotes,birria}/productos` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos. Solo en la red interna; ver [API propia](#api-propia-api) |
-| `inventory-manager/` | Admin nuevo (REQ-F-039): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
+| `api/` | API propia (REQ-F-038, REQ-F-039 y REQ-F-040): `GET /api/v1/public/{molotes,birria}/productos` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos y, con `ADMIN_NEW_URL`, la única vía web para gestionar usuarios. Solo en la red interna; ver [API propia](#api-propia-api) |
+| `inventory-manager/` | Admin nuevo (REQ-F-039 y REQ-F-040): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos, los usuarios y "Mi cuenta" con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
 | `packages/web/` (`@restaurante/web`) | Utilidades HTTP y SSR sin dominio que comparten las apps Koa (REQ-F-039): plantillas, lectura de formularios y JSON, mismo origen y logger JSON |
 | `packages/core/` (`@restaurante/core`) | Dominio en TypeScript puro, sin Koa ni Prisma: módulos `catalog`, `schedule`, `identity`, `bot-control` y `shared`. Cada módulo se importa solo por su `index.ts` (`@restaurante/core/catalog`) |
 | `packages/db/` (`@restaurante/db`) | Persistencia: `prisma/` (schema y migraciones), `prisma.config.ts`, el cliente de Prisma generado (`src/generated/prisma`), la conexión, la verificación al arrancar y las implementaciones Prisma de los repositorios de `core` |
@@ -344,6 +344,16 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
   - productos de cada negocio (listar, ver, descriptor del formulario, crear con `Idempotency-Key`,
     editar con `version`, eliminar, recuperar, mover y reordenar), con las mismas reglas que
     `/admin/api`;
+  - usuarios (REQ-F-040), solo para administradores (403 `FORBIDDEN_ROLE` a un editor, antes de mirar
+    el id): `GET|POST /usuarios`, `GET|PUT /usuarios/<id>`, `POST /usuarios/<id>/desactivar` y
+    `…/reactivar`, y `PUT /usuarios/<id>/contrasena`, con las reglas de REQ-F-007 (siempre un
+    administrador activo: 409 `LAST_ADMIN`; cambiar rol, negocios, estado o contraseña cierra las
+    sesiones del usuario en los dos admins, y `meta.ownSessionClosed` avisa si eran las propias;
+    auditoría en `user_audit`);
+  - cuenta propia (REQ-F-040): `POST /cuenta/contrasena` con la contraseña actual; cierra todas las
+    sesiones del usuario y devuelve una sesión nueva para el navegador actual. Un fallo en la actual
+    no cuenta para el límite de intentos;
+  - los cuerpos tienen una lista cerrada de campos (otro campo: 422);
   - las escrituras exigen el token CSRF de la sesión en `X-CSRF-Token`; el límite de intentos cuenta
     el último valor de `X-Forwarded-For`, que escribe el admin.
   - Tras cada escritura, la API avisa a `landing-pages` por su puerto interno (`LANDING_INTERNAL_URL`
@@ -384,14 +394,20 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
 
 ### Admin nuevo (`inventory-manager/`)
 
-El admin nuevo de REQ-F-039 (paso 4 de [Arquitectura](docs/arquitectura.md)), en
+El admin nuevo de REQ-F-039 y REQ-F-040 (paso 4 de [Arquitectura](docs/arquitectura.md)), en
 `https://admin.birriaelmuneco.com` (en local, `http://127.0.0.1:3003`; ver
 [Entorno de desarrollo](docs/desarrollo.md)).
 
 - **Pantallas:** acceso, selector de negocio, productos (lista por categoría, alta, edición,
-  eliminar con confirmación, eliminados con «Recuperar», y subir y bajar) y salir. Todo funciona sin
-  JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el doble envío y reordena sin
-  recargar.
+  eliminar con confirmación, eliminados con «Recuperar», y subir y bajar) y salir. Desde REQ-F-040,
+  también «Usuarios» (solo administradores: lista, alta, edición, desactivar y reactivar, y
+  restablecer la contraseña; `/usuarios`, `/usuarios/nuevo`, `/usuarios/<id>/editar` y
+  `/usuarios/<id>/contrasena`) y «Mi cuenta» (`/cuenta`, cualquier usuario: cambiar la propia
+  contraseña). Todo funciona sin JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el
+  doble envío y reordena sin recargar.
+- **Cambio de la propia contraseña:** la API devuelve una sesión nueva y el admin reescribe su cookie;
+  las demás sesiones del usuario (también las del `/admin` actual) se cierran. Si un administrador
+  se degrada, se desactiva o se restablece la contraseña a sí mismo, vuelve al acceso con un aviso.
 - **Sesión:** la de la API. El admin guarda su id en la cookie `__Host-admin_sid` (en producción;
   `admin_sid` en local), `HttpOnly`, `Secure`, `SameSite=Strict`, sin `Domain`, y la reenvía como
   Bearer. Caduca tras 2 h sin actividad o si la cuenta cambia. Las cuentas son las de `/admin`; la
@@ -409,8 +425,11 @@ El admin nuevo de REQ-F-039 (paso 4 de [Arquitectura](docs/arquitectura.md)), en
   router de Traefik (límite de 60 peticiones por minuto con ráfaga de 60) ([Despliegue](docs/despliegue.md)).
 - **Convivencia:** con `ADMIN_NEW_URL` en `landing-pages`, la edición de productos del `/admin`
   actual queda en solo lectura: sin controles, con un aviso y un enlace al admin nuevo; sus POST
-  responden 410 y `/admin/api` responde 410 `PRODUCTS_MOVED`. Usuarios, cuenta, bot y menú siguen en
-  `/admin`.
+  responden 410 y `/admin/api` responde 410 `PRODUCTS_MOVED`. Desde REQ-F-040, también usuarios y
+  «Mi cuenta»: la lista de usuarios se consulta sin controles, las pantallas de formulario y
+  cualquier POST responden 410 con el aviso y el enlace a la pantalla equivalente del admin nuevo, y
+  nada se escribe. Bot y menú siguen en `/admin`; el primer administrador (`ADMIN_USER`) y
+  `npm run admin:recover` siguen funcionando.
 
 ## CI
 
@@ -1380,6 +1399,10 @@ Cada persona entra con su **cuenta personal** (REQ-F-007), guardada en la base d
 | `POST /admin/usuarios/<id>/desactivar` y `…/reactivar` | Desactivar o reactivar (los usuarios no se eliminan) |
 | `GET` / `POST /admin/usuarios/<id>/contrasena` | Restablecer la contraseña de otro usuario |
 | `GET` / `POST /admin/cuenta` | Mi cuenta: cambiar la propia contraseña (pide la actual) |
+
+Con `ADMIN_NEW_URL` (REQ-F-040), las rutas de usuarios y de "Mi cuenta" quedan en solo lectura: la
+lista sin controles y el resto, GET o POST, con 410 y el enlace a la pantalla equivalente del admin
+nuevo.
 
 ### Productos en la administración
 

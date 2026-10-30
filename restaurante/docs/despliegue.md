@@ -34,12 +34,16 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
       landings siguen respondiendo con su última copia buena (o la semilla, si `app` arrancó sin ella).
   - `inventory-manager` (REQ-F-039): la imagen `inventory-manager`, el admin nuevo (Koa con SSR) en
     `https://admin.birriaelmuneco.com`.
-    - Gestiona los productos llamando a `api` por la red interna `admin`.
+    - Gestiona los productos, los usuarios y "Mi cuenta" (REQ-F-040) llamando a `api` por la red
+      interna `admin`.
     - Está en `traefik-public` y en `admin`: no alcanza MySQL y no tiene credenciales de la base ni
       la del aviso.
-    - Con él desplegado, la edición de productos del `/admin` actual queda en solo lectura
-      (`ADMIN_NEW_URL`) y enlaza al admin nuevo. Usuarios, cuenta, bot y menú siguen en `/admin`
-      hasta los tickets siguientes del paso 4.
+    - Con él desplegado, la edición de productos, la gestión de usuarios y "Mi cuenta" del `/admin`
+      actual quedan en solo lectura (`ADMIN_NEW_URL`) y enlazan al admin nuevo. Bot y menú siguen en
+      `/admin` hasta los tickets siguientes del paso 4.
+    - **Aviso al personal (R-3 de REQ-F-040):** desde ese despliegue, las contraseñas se cambian en
+      "Mi cuenta" de `https://admin.birriaelmuneco.com` (mismo usuario y contraseña), y las altas y
+      cambios de usuarios, en "Usuarios" del admin nuevo. `npm run admin:recover` sigue igual.
   - `mysql`: MySQL 8.4 (utf8mb4, `utf8mb4_es_0900_as_cs`), solo en la red interna `db`, con sus
     datos en el volumen `restaurante_mysql-data`.
   - `migrate`: proceso puntual que aplica las migraciones con un usuario con DDL.
@@ -392,7 +396,7 @@ rojo y la app se queda como esté ([Diagnóstico](#10-diagnóstico)).
 | CA-1: HTTPS y certificado | `curl -sI https://birriaelmuneco.com` → 200, certificado válido en el navegador, landing del día |
 | CA-2: redirecciones | Con GET, como un navegador: `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' 'http://birriaelmuneco.com/molotes?a=1'` (y lo mismo con `http://www.`) → `301` hacia `https://` del mismo host con la ruta y la query (redirección global del entrypoint `web` del Traefik del VPS). Con `'https://www.birriaelmuneco.com/molotes?a=1'` → `301 https://birriaelmuneco.com/molotes?a=1`. Así, `http://www.` llega a la raíz en dos saltos. Con `curl -sI` (HEAD), Traefik responde `308` a las mismas redirecciones: no es un defecto, pero no sirve para esta comprobación |
 | CA-3: puertos cerrados | Desde fuera: `nc -vz <vps> 3000` y `nc -vz <vps> 3306` fallan |
-| CA-4: límite de `/admin` | 30 peticiones seguidas a `https://birriaelmuneco.com/admin/login`: las últimas reciben 429; `/molotes` sigue en 200 |
+| CA-4: límite de `/admin` | 30 peticiones **en paralelo**, `seq 1 30 \| xargs -P 30 -I{} curl -s -o /dev/null -w '%{http_code}\n' https://birriaelmuneco.com/admin/login \| sort \| uniq -c`, dan unas 20 con 200 y el resto con 429 (el 2026-10-29: 20 y 10; 10 por minuto y ráfaga de 20, en `deploy/compose.prod.yaml`); `/molotes` sigue en 200. En serie puede no salir ningún 429: con la latencia real la ráfaga se recarga, como en el admin nuevo |
 | CA-5: IP real | En `docker logs restaurante-app-1`, la línea `request` lleva `"protocol":"https"` y tu IP pública, no una `172.x` de Docker. Si sale una `172.x`, Traefik no ve la IP de origen (proxy de Docker en IPv6, CDN delante): revisa la publicación de puertos de Traefik |
 | CA-6 y CA-9 | Un merge despliega solo; dos merges seguidos se despliegan uno tras otro (Actions → `deploy`) |
 | CA-10 | `stat -c '%a %U' /opt/restaurante/.env` → `600 deploy`; `sudo -l -U deploy` sin sudo |

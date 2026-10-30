@@ -6,6 +6,7 @@ import {
   IDEMPOTENCY_HEADER,
   type AdminProduct,
   type AdminUser,
+  type ManagedUser,
   type ProductFormField,
   type PublicBusinessId,
 } from '@restaurante/contracts';
@@ -17,7 +18,12 @@ import { listenLocal } from './http.ts';
  * Doble de `/api/v1/admin` (REQ-F-039) para las pruebas del admin nuevo: cumple el contrato de
  * packages/contracts (las pruebas de la API real están en api/tests y, de extremo a extremo, en el
  * PR 3). Reglas mínimas: sesión Bearer, token CSRF, permiso por negocio, 422 por nombre vacío,
- * versión (409), máximo de un alta por Idempotency-Key, y modos de fallo (`down`: 503 en todo).
+ * versión (409), máximo de un alta por Idempotency-Key, y modos de fallo (`down`: 503 en todo;
+ * `writes-down`: la sesión responde y todo lo demás da 503).
+ *
+ * Usuarios y cuenta (REQ-F-040): solo administradores (403 `FORBIDDEN_ROLE`), 422 por usuario vacío o
+ * repetido y por contraseñas que no coinciden, 409 `LAST_ADMIN`, cierre de las sesiones del usuario
+ * (D-8) con `meta.ownSessionClosed`, y la sesión nueva al cambiar la propia contraseña.
  */
 
 export interface DoubleUser {
@@ -111,20 +117,39 @@ export interface ApiDouble {
   requests: RecordedRequest[];
   products: AdminProduct[];
   sessions: Map<string, { userId: number; csrfToken: string }>;
-  mode: 'ok' | 'down';
+  mode: 'ok' | 'down' | 'writes-down';
+  /** Usuarios gestionados (REQ-F-040). */
+  managed: ManagedUser[];
+  /** Contraseña vigente de cada usuario (para comprobar los cambios). */
+  passwords: Map<number, string>;
   freshness: 'confirmed' | 'pending';
   /** Cambia un producto "desde otra sesión" (para el 409). */
   touch(id: number, by: string): void;
 }
 
-export async function startApiDouble(users: DoubleUser[], products: AdminProduct[]): Promise<ApiDouble> {
+export async function startApiDouble(initialUsers: DoubleUser[], products: AdminProduct[]): Promise<ApiDouble> {
   let sequence = 1000;
+  // Copias: las pruebas cambian roles y contraseñas sin tocar las constantes compartidas.
+  const users: DoubleUser[] = initialUsers.map((entry) => ({ ...entry, user: { ...entry.user, businesses: [...entry.user.businesses] } }));
+  const managed: ManagedUser[] = users.map(({ username, user }) => ({
+    id: user.id,
+    username,
+    displayName: user.name,
+    role: user.role,
+    businesses: user.role === 'admin' ? [] : [...user.businesses],
+    active: true,
+    lastLoginAt: null,
+    createdAt: '2026-10-28T10:00:00-06:00',
+    updatedAt: '2026-10-28T10:00:00-06:00',
+  }));
   const idempotency = new Map<string, number>();
   const state: Omit<ApiDouble, 'url'> = {
     requests: [],
     products,
     sessions: new Map(),
     mode: 'ok',
+    managed,
+    passwords: new Map(users.map((entry) => [entry.user.id, entry.password])),
     freshness: 'confirmed',
     touch(id, by) {
       const found = state.products.find((candidate) => candidate.id === id);
@@ -133,7 +158,9 @@ export async function startApiDouble(users: DoubleUser[], products: AdminProduct
   };
 
   const app = new Koa();
+  let currentCtx: Ctx;
   app.use(async (ctx) => {
+    currentCtx = ctx;
     const body = ctx.method === 'GET' || ctx.method === 'DELETE' ? undefined : await readJsonBody(ctx).catch(() => undefined);
     state.requests.push({ method: ctx.method, path: ctx.path, headers: { ...ctx.headers } as Record<string, string | undefined>, body });
     const fail = (status: number, code: string, message: string, more: Record<string, unknown> = {}) => {
@@ -145,7 +172,12 @@ export async function startApiDouble(users: DoubleUser[], products: AdminProduct
     const record = body !== null && typeof body === 'object' ? (body as Record<string, unknown>) : {};
 
     if (path === '/sesion' && ctx.method === 'POST') {
-      const found = users.find((candidate) => candidate.username === record.username && candidate.password === record.password);
+      const found = users.find(
+        (candidate) =>
+          candidate.username === record.username &&
+          state.passwords.get(candidate.user.id) === record.password &&
+          state.managed.find((entry) => entry.id === candidate.user.id)?.active !== false,
+      );
       if (!found) return fail(401, 'INVALID_CREDENTIALS', 'Usuario o contraseña incorrectos.');
       const id = `sesion-${++sequence}-abcdefghijklmnop`;
       const csrfToken = `csrf-${sequence}-abcdefghijklmnop`;
@@ -170,6 +202,15 @@ export async function startApiDouble(users: DoubleUser[], products: AdminProduct
       }
       ctx.body = { user, csrfToken: session.csrfToken };
       return undefined;
+    }
+
+    if (state.mode === 'writes-down') return fail(503, 'DATABASE_UNAVAILABLE', 'Servicio no disponible temporalmente.');
+
+    if (path === '/cuenta/contrasena' && ctx.method === 'POST') return changeOwnPassword(user, record, fail);
+    const userMatch = /^\/usuarios(?:\/([^/]+))?(?:\/(desactivar|reactivar|contrasena))?$/.exec(path);
+    if (userMatch) {
+      if (user.role !== 'admin') return fail(403, 'FORBIDDEN_ROLE', 'No tienes permiso para gestionar usuarios.');
+      return handleUsers(user, userMatch[1], userMatch[2], record, fail);
     }
 
     const match = /^\/([^/]+)\/productos(?:\/(campos|orden|\d+))?(?:\/(recuperar|mover))?$/.exec(path);
@@ -250,4 +291,102 @@ export async function startApiDouble(users: DoubleUser[], products: AdminProduct
   });
   const { url } = await listenLocal(app);
   return Object.assign(state, { url });
+
+  type Fail = (status: number, code: string, message: string, more?: Record<string, unknown>) => void;
+  type Ctx = Parameters<Parameters<typeof app.use>[0]>[0];
+
+  function invalid(fail: Fail, fields: Record<string, string>): void {
+    fail(422, 'VALIDATION_FAILED', 'Los datos no son válidos: no se guardó nada.', { fields });
+  }
+
+  /** D-8: cierra las sesiones del usuario; true si era el de la sesión actual. */
+  function closeSessions(targetId: number, actorId: number): boolean {
+    for (const [id, entry] of state.sessions) if (entry.userId === targetId) state.sessions.delete(id);
+    return targetId === actorId;
+  }
+
+  /** D-7: tras el cambio queda al menos un administrador activo. */
+  function leavesAdmin(target: ManagedUser, next: Partial<ManagedUser>): boolean {
+    return state.managed.some((entry) => {
+      const merged = entry.id === target.id ? { ...entry, ...next } : entry;
+      return merged.role === 'admin' && merged.active;
+    });
+  }
+
+  /** Sincroniza el usuario de la sesión (rol, nombre y negocios vigentes) con el gestionado. */
+  function syncSessionUser(target: ManagedUser): void {
+    const entry = users.find((candidate) => candidate.user.id === target.id);
+    if (!entry) return;
+    entry.username = target.username;
+    entry.user = { id: target.id, name: target.displayName, role: target.role, businesses: target.role === 'admin' ? ['molotes', 'birria'] : [...target.businesses] };
+  }
+
+  function respond(status: number, body: unknown): void {
+    currentCtx.status = status;
+    currentCtx.body = body;
+  }
+
+  function handleUsers(actor: AdminUser, rawId: string | undefined, action: string | undefined, record: Record<string, unknown>, fail: Fail): void {
+    const ctx = currentCtx;
+    if (rawId === undefined) {
+      if (ctx.method === 'GET') return respond(200, { users: state.managed });
+      const username = typeof record.username === 'string' ? record.username.trim() : '';
+      if (username === '') return invalid(fail, { username: 'Escribe el usuario de acceso.' });
+      if (state.managed.some((entry) => entry.username.toLowerCase() === username.toLowerCase())) return invalid(fail, { username: 'Ya existe un usuario con ese nombre de acceso (sin distinguir mayúsculas).' });
+      if (record.password !== record.passwordConfirmation) return invalid(fail, { passwordConfirmation: 'Las contraseñas no coinciden.' });
+      const role = record.role === 'admin' ? 'admin' : 'editor';
+      const created: ManagedUser = {
+        id: ++sequence,
+        username,
+        displayName: (typeof record.displayName === 'string' ? record.displayName : ''),
+        role,
+        businesses: role === 'admin' ? [] : ((record.businesses ?? []) as PublicBusinessId[]),
+        active: true,
+        lastLoginAt: null,
+        createdAt: '2026-10-28T11:00:00-06:00',
+        updatedAt: '2026-10-28T11:00:00-06:00',
+      };
+      state.managed.push(created);
+      state.passwords.set(created.id, String(record.password));
+      users.push({ username, password: String(record.password), user: { id: created.id, name: created.displayName, role, businesses: role === 'admin' ? ['molotes', 'birria'] : created.businesses } });
+      return respond(201, { user: created });
+    }
+    const target = /^[1-9]\d{0,9}$/.test(rawId) ? state.managed.find((entry) => entry.id === Number(rawId)) : undefined;
+    if (!target) return fail(404, 'USER_NOT_FOUND', 'Usuario no encontrado.');
+    if (ctx.method === 'GET' && action === undefined) return respond(200, { user: target });
+    if (action === 'desactivar' || action === 'reactivar') {
+      const active = action === 'reactivar';
+      if (target.active === active) return respond(200, { user: target, meta: { ownSessionClosed: false } });
+      if (!leavesAdmin(target, { active })) return fail(409, 'LAST_ADMIN', 'Debe quedar al menos un administrador activo: no se guardó nada. Crea o reactiva otro administrador antes.');
+      target.active = active;
+      return respond(200, { user: target, meta: { ownSessionClosed: closeSessions(target.id, actor.id) } });
+    }
+    if (action === 'contrasena') {
+      if (record.password !== record.passwordConfirmation) return invalid(fail, { passwordConfirmation: 'Las contraseñas no coinciden.' });
+      state.passwords.set(target.id, String(record.password));
+      return respond(200, { user: target, meta: { ownSessionClosed: closeSessions(target.id, actor.id) } });
+    }
+    // Edición.
+    const username = typeof record.username === 'string' ? record.username.trim() : '';
+    if (username === '') return invalid(fail, { username: 'Escribe el usuario de acceso.' });
+    const role = record.role === 'admin' ? 'admin' : 'editor';
+    const businesses = role === 'admin' ? [] : ((record.businesses ?? []) as PublicBusinessId[]);
+    if (role === 'editor' && businesses.length === 0) return invalid(fail, { businesses: 'Asigna al menos un negocio al editor.' });
+    if (!leavesAdmin(target, { role })) return fail(409, 'LAST_ADMIN', 'Debe quedar al menos un administrador activo: no se guardó nada. Crea o reactiva otro administrador antes.');
+    const closes = role !== target.role || businesses.join() !== target.businesses.join();
+    Object.assign(target, { username, displayName: (typeof record.displayName === 'string' ? record.displayName : ''), role, businesses });
+    syncSessionUser(target);
+    return respond(200, { user: target, meta: { ownSessionClosed: closes ? closeSessions(target.id, actor.id) : false } });
+  }
+
+  function changeOwnPassword(actor: AdminUser, record: Record<string, unknown>, fail: Fail): void {
+    if (record.currentPassword !== state.passwords.get(actor.id)) return invalid(fail, { currentPassword: 'La contraseña actual no es correcta.' });
+    if (record.password !== record.passwordConfirmation) return invalid(fail, { passwordConfirmation: 'Las contraseñas no coinciden.' });
+    state.passwords.set(actor.id, String(record.password));
+    closeSessions(actor.id, actor.id);
+    const id = `sesion-${++sequence}-abcdefghijklmnop`;
+    const csrfToken = `csrf-${sequence}-abcdefghijklmnop`;
+    state.sessions.set(id, { userId: actor.id, csrfToken });
+    return respond(200, { session: { id, csrfToken }, user: actor });
+  }
 }

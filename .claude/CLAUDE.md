@@ -176,8 +176,8 @@ No hardcodear repetidamente información de negocio dentro de HTML o JavaScript.
 `restaurante/` es un monorepo de npm workspaces con tres apps Koa y paquetes compartidos:
 
 - **`landing-pages`**: las landings de Molotes y Birria (SSR). En transición, contiene también `/admin` y el bot de WhatsApp.
-- **`api`**: la API JSON propia (productos públicos y su administración), solo en la red interna.
-- **`inventory-manager`**: el admin nuevo de productos (SSR), que solo habla con la `api`.
+- **`api`**: la API JSON propia (productos públicos y la administración de productos y usuarios), solo en la red interna.
+- **`inventory-manager`**: el admin nuevo (SSR) de productos, usuarios y cuenta propia, que solo habla con la `api`.
 - **Paquetes**: `core` (dominio), `db` (MySQL con Prisma), `contracts` (contratos de la API) y `web` (utilidades HTTP y SSR).
 
 La regla de dependencias entre paquetes y apps la impone `npm run lint` (`restaurante/eslint.config.ts`), no la convención. La referencia completa (capas, regla de dependencias, contratos y plan de migración) está en [`restaurante/docs/arquitectura.md`](../restaurante/docs/arquitectura.md).

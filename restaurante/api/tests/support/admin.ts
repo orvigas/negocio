@@ -1,13 +1,17 @@
 import { CSRF_HEADER, type Freshness } from '@restaurante/contracts';
 import { createProductRepository, type MemoryProductStore } from '@restaurante/core/catalog';
 import {
+  LastAdminError,
   SCRYPT_DEFAULTS,
+  UserNotFoundError,
+  UsernameTakenError,
   hashPassword,
+  type Actor,
   type Role,
   type UserRecord,
   type UserRepository,
 } from '@restaurante/core/identity';
-import type { BusinessId, Logger } from '@restaurante/core/shared';
+import { DatabaseUnavailableError, type BusinessId, type Logger } from '@restaurante/core/shared';
 import { createImageChecker, createLogger } from '@restaurante/web';
 
 import { createAdminRoutes } from '../../src/admin/index.ts';
@@ -18,8 +22,8 @@ import { makeStore } from './fixtures.ts';
 import { listenLocal } from './http.ts';
 
 /**
- * Soporte de las pruebas de `/api/v1/admin` (REQ-F-039), en proceso: store de productos en memoria,
- * un doble del repositorio de usuarios (las reglas de usuarios se prueban con MySQL en landing-pages)
+ * Soporte de las pruebas de `/api/v1/admin` (REQ-F-039 y REQ-F-040), en proceso: store de productos en
+ * memoria, un doble del repositorio de usuarios (las reglas de usuarios se prueban con MySQL en landing-pages)
  * y un doble del aviso interno.
  */
 
@@ -38,28 +42,105 @@ export interface TestUser {
 export const ADMIN: TestUser = { username: 'ana', displayName: 'Ana Admin', role: 'admin', businesses: [] };
 export const MOLOTES_EDITOR: TestUser = { username: 'eli', displayName: 'Eli Molotes', role: 'editor', businesses: ['molotes'] };
 
-/** Doble del repositorio de usuarios: solo lo que usa la API (y `findCredentials` contado). */
+/** Entrada de auditoría del doble (misma forma que la de `user_audit`, sin hashes). */
+export interface FakeAudit {
+  action: string;
+  actorId: number | null;
+  targetId: number;
+  changes?: Record<string, { from: unknown; to: unknown }>;
+}
+
+/**
+ * Doble del repositorio de usuarios con las reglas mínimas del real (REQ-F-040): usuario de acceso
+ * único sin distinguir mayúsculas, D-7 (siempre un administrador activo), D-8 (`sessionVersion`) y
+ * auditoría. Las reglas reales se prueban con MySQL en landing-pages (users-api-process.test.ts y
+ * user-repository.test.ts); aquí se prueba el HTTP de la API.
+ */
 export function createFakeUsers(records: UserRecord[], hashes: Map<number, string>) {
-  const calls = { findCredentials: 0, recordLogin: 0 };
+  const calls = { findCredentials: 0, recordLogin: 0, writes: 0 };
+  const audit: FakeAudit[] = [];
+  const failing = { list: false };
   const byId = new Map(records.map((user) => [user.id, user]));
+  let nextId = Math.max(0, ...records.map((user) => user.id)) + 1;
+  const copy = (user: UserRecord): UserRecord => ({ ...user, businesses: [...user.businesses] });
+  const actorId = (actor: Actor) => (actor.kind === 'user' ? actor.id : null);
+  const load = (id: number) => {
+    const user = byId.get(id);
+    if (!user) throw new UserNotFoundError();
+    return user;
+  };
+  const assertUnique = (username: string, exceptId?: number) => {
+    if ([...byId.values()].some((user) => user.id !== exceptId && user.username.toLowerCase() === username.toLowerCase())) throw new UsernameTakenError();
+  };
+  /** Aplica el cambio solo si queda un administrador activo (D-7). */
+  const commit = (next: UserRecord) => {
+    const after = new Map(byId).set(next.id, next);
+    if (![...after.values()].some((user) => user.role === 'admin' && user.active)) throw new LastAdminError();
+    byId.set(next.id, next);
+    calls.writes += 1;
+  };
   const users: UserRepository = {
     hasUsers: async () => byId.size > 0,
-    findById: async (id) => byId.get(id) ?? null,
+    findById: async (id) => {
+      const user = byId.get(id);
+      return user ? copy(user) : null;
+    },
     async findCredentials(username) {
       calls.findCredentials += 1;
       const user = [...byId.values()].find((candidate) => candidate.username.toLowerCase() === username.trim().toLowerCase());
       const passwordHash = user ? hashes.get(user.id) : undefined;
-      return user && passwordHash ? { user, passwordHash } : null;
+      return user && passwordHash ? { user: copy(user), passwordHash } : null;
     },
-    async recordLogin() {
+    async recordLogin(id, at) {
       calls.recordLogin += 1;
+      const user = byId.get(id);
+      if (user) byId.set(id, { ...user, lastLoginAt: at });
     },
-    findPasswordHash: async () => null,
-    list: async () => [...byId.values()],
-    create: () => Promise.reject(new Error('no se usa')),
-    update: () => Promise.reject(new Error('no se usa')),
-    setActive: () => Promise.reject(new Error('no se usa')),
-    setPassword: () => Promise.reject(new Error('no se usa')),
+    findPasswordHash: async (id) => hashes.get(id) ?? null,
+    async list() {
+      if (failing.list) {
+        failing.list = false;
+        throw new DatabaseUnavailableError({ name: 'PrismaClientKnownRequestError', code: 'P1001', originalCode: undefined });
+      }
+      return [...byId.values()].sort((a, b) => Number(b.active) - Number(a.active) || a.username.toLowerCase().localeCompare(b.username.toLowerCase())).map(copy);
+    },
+    async create({ passwordHash, ...data }, actor) {
+      assertUnique(data.username);
+      const at = new Date('2026-10-26T18:00:00Z');
+      const user: UserRecord = { id: nextId++, ...data, businesses: data.role === 'admin' ? [] : [...data.businesses], active: true, sessionVersion: 1, createdAt: at, updatedAt: at, lastLoginAt: null };
+      commit(user);
+      hashes.set(user.id, passwordHash);
+      audit.push({ action: 'create', actorId: actorId(actor), targetId: user.id });
+      return copy(user);
+    },
+    async update(id, data, actor) {
+      const before = load(id);
+      assertUnique(data.username, id);
+      const businesses = data.role === 'admin' ? [] : [...data.businesses];
+      const changes: Record<string, { from: unknown; to: unknown }> = {};
+      if (before.username !== data.username) changes.username = { from: before.username, to: data.username };
+      if (before.displayName !== data.displayName) changes.displayName = { from: before.displayName, to: data.displayName };
+      if (before.role !== data.role) changes.role = { from: before.role, to: data.role };
+      if (before.businesses.join() !== businesses.join()) changes.businesses = { from: before.businesses, to: businesses };
+      const closes = 'role' in changes || 'businesses' in changes;
+      commit({ ...before, ...data, businesses, sessionVersion: before.sessionVersion + (closes ? 1 : 0) });
+      if (Object.keys(changes).length > 0) audit.push({ action: 'update', actorId: actorId(actor), targetId: id, changes });
+      return copy(load(id));
+    },
+    async setActive(id, active, actor) {
+      const before = load(id);
+      if (before.active === active) return copy(before);
+      commit({ ...before, active, sessionVersion: before.sessionVersion + 1 });
+      audit.push({ action: active ? 'reactivate' : 'deactivate', actorId: actorId(actor), targetId: id });
+      return copy(load(id));
+    },
+    async setPassword(id, passwordHash, actor, action) {
+      const before = load(id);
+      commit({ ...before, sessionVersion: before.sessionVersion + 1 });
+      hashes.set(id, passwordHash);
+      audit.push({ action, actorId: actorId(actor), targetId: id });
+      return copy(load(id));
+    },
     bootstrap: () => Promise.reject(new Error('no se usa')),
     recover: () => Promise.reject(new Error('no se usa')),
   };
@@ -68,7 +149,11 @@ export function createFakeUsers(records: UserRecord[], hashes: Map<number, strin
     const user = byId.get(id);
     if (user) byId.set(id, { ...user, ...patch });
   };
-  return { users, calls, change };
+  /** Falla la próxima llamada a `list` como una base caída (503). */
+  const failNext = () => {
+    failing.list = true;
+  };
+  return { users, calls, change, audit, hashes, failNext };
 }
 
 /** Doble del aviso interno: registra los negocios avisados y responde la frescura indicada. */
@@ -92,8 +177,11 @@ export function recordingLogger(): Logger & { lines: string[] } {
 export interface AdminHarness {
   url: string;
   store: MemoryProductStore;
-  calls: { findCredentials: number; recordLogin: number };
+  calls: { findCredentials: number; recordLogin: number; writes: number };
   change: (id: number, patch: Partial<UserRecord>) => void;
+  audit: FakeAudit[];
+  hashes: Map<number, string>;
+  failNext: () => void;
   notified: BusinessId[];
   notifier: LandingNotifier & { freshness: Freshness };
   logger: Logger & { lines: string[] };
@@ -117,7 +205,7 @@ export async function startAdmin({ users: testUsers = [ADMIN, MOLOTES_EDITOR] }:
     updatedAt: clock.now,
     lastLoginAt: null,
   }));
-  const { users, calls, change } = createFakeUsers(records, new Map(records.map((user) => [user.id, passwordHash])));
+  const { users, calls, change, audit, hashes, failNext } = createFakeUsers(records, new Map(records.map((user) => [user.id, passwordHash])));
   const store = await makeStore();
   const products = createProductRepository({ store, imageExists: createImageChecker(API_DEFAULTS.PRODUCT_IMAGES_DIR), now });
   await products.init();
@@ -125,7 +213,7 @@ export async function startAdmin({ users: testUsers = [ADMIN, MOLOTES_EDITOR] }:
   const logger = recordingLogger();
   const admin = createAdminRoutes({ users, products, notifier, timeZone: 'America/Mexico_City', hashParams: TEST_HASH_PARAMS, now, logger });
   const { url } = await listenLocal(createApiApp({ store, admin, logger }));
-  return { url, store, calls, change, notified, notifier, logger, clock, ids: Object.fromEntries(records.map((user) => [user.username, user.id])) };
+  return { url, store, calls, change, audit, hashes, failNext, notified, notifier, logger, clock, ids: Object.fromEntries(records.map((user) => [user.username, user.id])) };
 }
 
 export interface Session {

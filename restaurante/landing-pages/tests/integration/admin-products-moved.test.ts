@@ -7,7 +7,8 @@ import { createUser, csrfFrom, login, loginAs, openForm, setupAdmin, submitForm,
  * Modo de solo lectura de los productos en el /admin actual (REQ-F-039, RF-15 y CA-13): con
  * ADMIN_NEW_URL, la edición de productos se hace en el admin nuevo. Las páginas muestran los
  * productos sin controles de edición, con un aviso y el enlace; ninguna escritura cambia nada (HTML:
- * 410 con el aviso; /admin/api: 410 PRODUCTS_MOVED). Usuarios, cuenta, bot y menú funcionan igual.
+ * 410 con el aviso; /admin/api: 410 PRODUCTS_MOVED). Bot y menú funcionan igual; usuarios y cuenta
+ * pasan también a solo lectura desde REQ-F-040 (admin-users-moved.test.ts).
  * Sin la variable, el comportamiento es el de siempre (lo cubren admin-products.test.ts y
  * admin-products-api.test.ts).
  */
@@ -133,11 +134,12 @@ describe('ninguna escritura de productos cambia nada (CA-13)', () => {
 });
 
 describe('el resto del /admin funciona igual', () => {
-  it('menú (hero y promociones), usuarios, cuenta y bot', async () => {
+  it('menú (hero y promociones) y bot; usuarios en consulta y "Mi cuenta" en el admin nuevo (REQ-F-040)', async () => {
     const { browser } = await movedAdmin();
     const { fields } = await openForm(browser, 'molotes');
     expect((await submitForm(browser, 'molotes', fields, { 'menu.highlight': 'Destacado de prueba' })).status).toBe(303);
-    for (const path of ['/admin/usuarios', '/admin/cuenta']) expect((await browser.get(path)).status, path).toBe(200);
+    expect((await browser.get('/admin/usuarios')).status).toBe(200);
+    expect((await browser.get('/admin/cuenta')).status).toBe(410);
     expect([200, 503]).toContain((await browser.get('/admin/bot')).status);
   });
 });

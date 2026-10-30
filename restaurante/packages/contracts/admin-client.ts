@@ -5,24 +5,36 @@ import {
   IDEMPOTENCY_HEADER,
   adminPaths,
   loginResponseSchema,
+  passwordChangeResponseSchema,
   productFieldsResponseSchema,
   productListResponseSchema,
   productListWriteResponseSchema,
   productResponseSchema,
   productWriteResponseSchema,
   sessionResponseSchema,
+  userListResponseSchema,
+  userResponseSchema,
+  userWriteResponseSchema,
   type AdminProduct,
   type Freshness,
   type LoginRequest,
   type LoginResponse,
+  type ManagedUser,
+  type PasswordChangeRequest,
+  type PasswordChangeResponse,
   type ProductFieldsResponse,
   type SessionResponse,
+  type UserCreateRequest,
+  type UserPasswordRequest,
+  type UserUpdateRequest,
+  type UserWriteResponse,
 } from './admin.ts';
 import { isJson, isTimeout, readLimited } from './http.ts';
 import type { PublicBusinessId } from './products.ts';
 
 /**
- * Cliente HTTP tipado de `/api/v1/admin` (REQ-F-039, D-1 y D-2) para el admin (inventory-manager).
+ * Cliente HTTP tipado de `/api/v1/admin` (REQ-F-039, D-1 y D-2; usuarios y cuenta, REQ-F-040) para el
+ * admin (inventory-manager).
  *
  * - Nunca lanza: devuelve los datos validados con el contrato, el error de la API
  *   (`{ error: { code, message, fields?, current? } }`) o el motivo de un fallo de transporte.
@@ -80,6 +92,15 @@ export interface AdminApiClient {
   removeProduct(auth: AdminCredentials, business: PublicBusinessId, id: number, version: number): Promise<WriteResult<{ product: AdminProduct }>>;
   restoreProduct(auth: AdminCredentials, business: PublicBusinessId, id: number, version: number): Promise<WriteResult<{ product: AdminProduct }>>;
   moveProduct(auth: AdminCredentials, business: PublicBusinessId, id: number, direction: 'up' | 'down', version: number): Promise<WriteResult<{ products: AdminProduct[] }>>;
+  // Usuarios (solo administradores) y cuenta propia (REQ-F-040).
+  listUsers(auth: AdminCredentials): Promise<AdminApiResult<{ users: ManagedUser[] }>>;
+  getUser(auth: AdminCredentials, id: number): Promise<AdminApiResult<{ user: ManagedUser }>>;
+  createUser(auth: AdminCredentials, input: UserCreateRequest): Promise<AdminApiResult<{ user: ManagedUser }>>;
+  updateUser(auth: AdminCredentials, id: number, input: UserUpdateRequest): Promise<AdminApiResult<UserWriteResponse>>;
+  setUserActive(auth: AdminCredentials, id: number, active: boolean): Promise<AdminApiResult<UserWriteResponse>>;
+  resetUserPassword(auth: AdminCredentials, id: number, input: UserPasswordRequest): Promise<AdminApiResult<UserWriteResponse>>;
+  /** Cambia la propia contraseña; devuelve la sesión nueva (la de `auth` deja de valer). */
+  changeOwnPassword(auth: AdminCredentials, input: PasswordChangeRequest): Promise<AdminApiResult<PasswordChangeResponse>>;
 }
 
 interface Schema<T> {
@@ -160,5 +181,13 @@ export function createAdminApiClient({ baseUrl, timeoutMs, fetch: fetchFn = (inp
     restoreProduct: (auth, business, id, version) => request('POST', adminPaths.productRestore(business, id), { auth, body: { version }, schema: productWriteResponseSchema }),
     moveProduct: (auth, business, id, direction, version) =>
       request('POST', adminPaths.productMove(business, id), { auth, body: { direction, version }, schema: productListWriteResponseSchema }),
+    listUsers: (auth) => request('GET', adminPaths.users, { auth, schema: userListResponseSchema }),
+    getUser: (auth, id) => request('GET', adminPaths.user(id), { auth, schema: userResponseSchema }),
+    createUser: (auth, input) => request('POST', adminPaths.users, { auth, body: input, schema: userResponseSchema, expect: 201 }),
+    updateUser: (auth, id, input) => request('PUT', adminPaths.user(id), { auth, body: input, schema: userWriteResponseSchema }),
+    setUserActive: (auth, id, active) =>
+      request('POST', adminPaths.userStatus(id, active ? 'reactivar' : 'desactivar'), { auth, body: {}, schema: userWriteResponseSchema }),
+    resetUserPassword: (auth, id, input) => request('PUT', adminPaths.userPassword(id), { auth, body: input, schema: userWriteResponseSchema }),
+    changeOwnPassword: (auth, input) => request('POST', adminPaths.accountPassword, { auth, body: input, schema: passwordChangeResponseSchema }),
   });
 }

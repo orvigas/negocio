@@ -1,6 +1,8 @@
 import { BUSINESS_IDS } from '@restaurante/core/shared';
 import {
+  LAST_ADMIN_MESSAGE,
   LastAdminError,
+  USERNAME_TAKEN_MESSAGE,
   UserNotFoundError,
   UsernameTakenError,
   businessField,
@@ -22,6 +24,7 @@ import {
   renderUserForm,
   renderUserPasswordForm,
   renderUsersList,
+  renderUsersMoved,
   userFormValues,
 } from '../views/admin/users.ts';
 import { createAdminAccess, type AdminRouterContext, type Authenticated, type Permission } from './admin-access.ts';
@@ -66,8 +69,8 @@ const ID_PATTERN = /^[1-9]\d{0,9}$/;
 
 const adminOnly: Permission = (user) => (isAdmin(user) ? null : 'No tienes permiso para gestionar usuarios.');
 
-const LAST_ADMIN_PROBLEM = 'Debe quedar al menos un administrador activo: no se guardó nada. Crea o reactiva otro administrador antes.';
-const USERNAME_TAKEN = 'Ya existe un usuario con ese nombre de acceso (sin distinguir mayúsculas).';
+const LAST_ADMIN_PROBLEM = LAST_ADMIN_MESSAGE;
+const USERNAME_TAKEN = USERNAME_TAKEN_MESSAGE;
 
 export function createAdminUsersController(deps: AdminDeps): AdminUsersController {
   const { config, renderer, now, sessions, users, hashParams, logger } = deps;
@@ -113,7 +116,7 @@ export function createAdminUsersController(deps: AdminDeps): AdminUsersControlle
     return seeOther(ctx, `${USERS_PATH}?ok=${active ? 'reactivated' : 'deactivated'}`);
   }
 
-  return Object.freeze<AdminUsersController>({
+  const controller: AdminUsersController = {
     list(ctx) {
       return access.page(ctx, { returnTo: USERS_PATH, permission: adminOnly }, (auth) => {
         const { ok } = ctx.query;
@@ -199,6 +202,40 @@ export function createAdminUsersController(deps: AdminDeps): AdminUsersControlle
       logger.info('admin_user_password_reset', { userId: target.id, by: auth.user.id });
       return seeOther(ctx, `${USERS_PATH}?ok=password_reset`);
     },
+  };
+
+  // Modo de solo lectura (REQ-F-040, RF-19; P-2 "Como productos (Recomendado)"): con el admin nuevo
+  // activo (ADMIN_NEW_URL), los usuarios se gestionan allí. La lista se consulta sin controles de
+  // escritura; cualquier otra pantalla o POST: sesión -> permiso de administrador -> id (404) -> 410
+  // con el aviso y el enlace a la pantalla equivalente. Un POST no lee el formulario ni escribe nada.
+  const movedTo = config.adminNewUrl;
+  if (movedTo === undefined) return Object.freeze(controller);
+  const moved = (equivalent: (id: string) => string, needsId: boolean) => (ctx: AdminRouterContext) =>
+    access.page(ctx, { returnTo: USERS_PATH, permission: adminOnly }, (auth) => {
+      const { id } = ctx.params;
+      if (needsId && (typeof id !== 'string' || !ID_PATTERN.test(id))) ctx.throw(404);
+      logger.info('admin_users_moved', { path: ctx.path, method: ctx.method, userId: auth.user.id });
+      sendHtml(ctx, 410, renderUsersMoved(renderer, { ...access.pageContext(auth), href: `${movedTo}${equivalent(String(id))}`, account: false }));
+    });
+  const toNew = moved(() => '/usuarios/nuevo', false);
+  const toEdit = moved((id) => `/usuarios/${id}/editar`, true);
+  const toList = moved(() => '/usuarios', true);
+  const toPassword = moved((id) => `/usuarios/${id}/contrasena`, true);
+  return Object.freeze<AdminUsersController>({
+    list(ctx) {
+      return access.page(ctx, { returnTo: USERS_PATH, permission: adminOnly }, async (auth) => {
+        const list = await users.list();
+        sendHtml(ctx, 200, renderUsersList(renderer, { ...access.pageContext(auth), users: list, timezone: config.timezone, movedTo }));
+      });
+    },
+    newPage: toNew,
+    create: toNew,
+    editPage: toEdit,
+    update: toEdit,
+    deactivate: toList,
+    reactivate: toList,
+    passwordPage: toPassword,
+    resetPassword: toPassword,
   });
 }
 

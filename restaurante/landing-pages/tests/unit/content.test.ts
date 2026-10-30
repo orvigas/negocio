@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
+import { BUSINESS_IDS, isHttpsUrl, type BusinessId } from '@restaurante/core/shared';
 import {
   validateMenuDocument,
   type BirriaChip,
@@ -15,7 +15,6 @@ import { DEFAULT_PUBLIC_DIR } from '../../src/app.ts';
 import type { ImageDescriptor } from '../../src/content/images.ts';
 import { commonContent, getBusinessContent } from '../../src/content/index.ts';
 import { loadSeedDocument } from '../../src/content/seeds.ts';
-import { isHttpsUrl } from '../../src/services/whatsapp.ts';
 
 // Diseño fuente en la raíz del repositorio (landing-pages/tests/unit → cuatro niveles; REQ-F-036).
 const STITCH = join(import.meta.dirname, '..', '..', '..', '..', '_stich_source_');

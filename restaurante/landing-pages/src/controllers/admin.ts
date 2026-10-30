@@ -9,6 +9,7 @@ import type {
 } from '@restaurante/core/identity';
 import { pickPageData, type ImageExists, type ProductRepository } from '@restaurante/core/catalog';
 import { readFormBody, type Renderer } from '@restaurante/web';
+import { type BotControl } from '@restaurante/core/bot-control';
 
 import type { Config } from '../config/env.ts';
 import { LOGIN_PATH, SESSION_COOKIE, assertSameOrigin, sessionCookieOptions } from '../middleware/admin-guard.ts';
@@ -21,7 +22,6 @@ import {
   type MenuRepository,
 } from '../repositories/menu-repository.ts';
 import { parseAdminForm } from '../services/admin-form.ts';
-import type { BotControl } from '../services/bot-control.ts';
 import type { BotProvider } from '../services/whatsapp-bot/chat-bot.ts';
 import {
   ACCOUNT_PATH,

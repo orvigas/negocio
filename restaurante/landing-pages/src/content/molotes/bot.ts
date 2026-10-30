@@ -1,11 +1,11 @@
-import { molotesContent } from './index.ts';
+import { BUSINESS_NAMES } from '@restaurante/core/shared';
 
 /**
  * Textos propios de Moloteando en el bot de WhatsApp (REQ-F-009). Los textos del flujo están en
- * src/content/common/bot.ts; el horario sale de ./hours.ts.
+ * src/content/common/bot.ts; el horario sale de @restaurante/core/schedule (business-hours.ts).
  */
 export const molotesBot = Object.freeze({
-  name: molotesContent.name,
+  name: BUSINESS_NAMES.molotes,
   /** Prefijo del código de referencia del pedido (D-19). */
   codePrefix: 'M',
   tagline: 'Molotes artesanales recién fritos 🔥, con crema, queso y salsas caseras.',

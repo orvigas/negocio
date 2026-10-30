@@ -1,9 +1,7 @@
-import { createMemoryBotControlStore, type BotControlStore } from '@restaurante/core/bot-control';
 import { silentLogger, type Logger } from '@restaurante/core/shared';
+import { createBotControl, createMemoryBotControlStore, type BotControl, type BotControlStore, type BotLimits } from '@restaurante/core/bot-control';
 
 import type { Config } from '../../src/config/env.ts';
-import { createBotControl, type BotControl } from '../../src/services/bot-control.ts';
-import type { BotLimits } from '../../src/services/whatsapp-bot/protection/limits.ts';
 
 /**
  * Protección del bot para las pruebas (REQ-F-025): store en memoria salvo que se pase otro (p. ej.

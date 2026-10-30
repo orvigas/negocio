@@ -2,9 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
 import { silentLogger } from '@restaurante/core/shared';
+import { createBotControl, DEFAULT_BOT_LIMITS } from '@restaurante/core/bot-control';
 
-import { createBotControl } from '../../src/services/bot-control.ts';
-import { DEFAULT_BOT_LIMITS } from '../../src/services/whatsapp-bot/protection/limits.ts';
 import { BOT_ENV } from '../helpers.ts';
 import { ADMIN_PASSWORD, ADMIN_USER, TEST_BOT_KEYS, createUser, csrfFrom, loginAs, setupAdmin, textOf, type Browser } from '../support/admin.ts';
 import { createCloudApiDouble } from '../support/cloud-api-double.ts';

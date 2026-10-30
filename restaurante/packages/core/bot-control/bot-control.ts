@@ -1,5 +1,7 @@
 import { createHmac, randomBytes } from 'node:crypto';
 
+import { errorProp, type Logger } from '../shared/index.ts';
+import type { BotKeys } from './bot-config.ts';
 import {
   isActiveBlock,
   maskedFromLast4,
@@ -12,16 +14,14 @@ import {
   type UsageDelta,
   type UsagePeriodType,
   NOT_PAUSED,
-} from '@restaurante/core/bot-control';
-import { errorProp, type Logger } from '@restaurante/core/shared';
-
-import type { BotKeys } from '../config/env.ts';
+} from './bot-control-store.ts';
 import { createUsageMeter, periodsOf, type UsageMeter, type UsageSnapshot } from './bot-usage.ts';
-import { MS, USAGE_DAY_RETENTION_MONTHS, type BotLimits } from './whatsapp-bot/protection/limits.ts';
-import { canonicalPhone, maskPhone, parsePhoneInput } from './whatsapp-bot/phone.ts';
+import { MS, USAGE_DAY_RETENTION_MONTHS, type BotLimits } from './limits.ts';
+import { canonicalPhone, maskPhone, parsePhoneInput } from './phone.ts';
 
 /**
- * Estado compartido de la protección del bot (REQ-F-025) entre el bot y la página "Bot" de /admin:
+ * Estado compartido de la protección del bot (REQ-F-025) entre el bot y la página "Bot" de /admin
+ * (en core desde REQ-F-042, H-4: lo usan los dos procesos):
  * lista negra seudonimizada, interruptor, contadores globales y "alcanzaron un tope hoy".
  *
  * - **Seudónimo (D-T1, RF-3.6):** HMAC-SHA256 del número canónico (CA-9) con una clave que no está

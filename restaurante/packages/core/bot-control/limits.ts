@@ -1,6 +1,6 @@
 /**
  * Umbrales de la protección del bot (REQ-F-025, RF-5). Los valores por defecto son los del
- * requisito; cada uno se puede cambiar con su variable de entorno (src/config/env.ts). Los importes
+ * requisito; cada uno se puede cambiar con su variable de entorno (bot-config.ts). Los importes
  * van en micro-USD enteros (1 USD = 1 000 000) para no acumular errores de coma flotante.
  */
 

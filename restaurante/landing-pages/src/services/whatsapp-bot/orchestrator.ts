@@ -1,10 +1,10 @@
 import { createHmac, randomBytes, randomInt } from 'node:crypto';
 
-import { errorProp, silentLogger, type BusinessId, type Logger } from '@restaurante/core/shared';
+import { buildWhatsAppLink, errorProp, silentLogger, type BusinessId, type Logger } from '@restaurante/core/shared';
 import { getActiveBusinessId } from '@restaurante/core/schedule';
 
 import type { ProductRepository } from '@restaurante/core/catalog';
-import { buildWhatsAppLink } from '../whatsapp.ts';
+import { maskPhone } from '@restaurante/core/bot-control';
 import { buildCatalog } from './catalog.ts';
 import type { ChatBot, InboundDelivery, InboundMessage } from './chat-bot.ts';
 import { handleTurn, type Conversation, type TurnContext, type TurnInput } from './conversation.ts';
@@ -21,7 +21,6 @@ import {
   type FixedNotice,
   type OrderDetails,
 } from './messages.ts';
-import { maskPhone } from './phone.ts';
 import type { BotProtection } from './protection/protection.ts';
 import {
   CONVERSATION_IDLE_MS,

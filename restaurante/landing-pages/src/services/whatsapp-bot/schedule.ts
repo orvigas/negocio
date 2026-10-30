@@ -1,11 +1,9 @@
 import { getLocalMinutes, type BusinessId } from '@restaurante/core/shared';
-import { getWeekday, type Weekday } from '@restaurante/core/schedule';
-
-import { getBusinessHours, type BusinessHours, type ClockTime } from '../../content/hours.ts';
+import { getBusinessHours, getWeekday, type BusinessHours, type ClockTime, type Weekday } from '@restaurante/core/schedule';
 
 /**
  * Horario del bot (REQ-F-009, RF-6 y D-16) sobre la fuente única de REQ-F-010
- * (src/content/hours.ts). Funciones puras: `now` y la zona horaria llegan como argumentos.
+ * (packages/core/schedule/business-hours.ts). Funciones puras: `now` y la zona horaria llegan como argumentos.
  */
 
 const WEEK: readonly Weekday[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

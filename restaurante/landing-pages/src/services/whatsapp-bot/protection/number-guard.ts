@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto';
+import { periodsOf, type BotLimits } from '@restaurante/core/bot-control';
 
-import { periodsOf } from '../../bot-usage.ts';
 import { createExpiringMap, createRateLimiter } from '../store.ts';
-import type { BotLimits } from './limits.ts';
 
 /**
  * Controles por número en memoria (REQ-F-025; D-2): se pierden al reiniciar, y eso se acepta.

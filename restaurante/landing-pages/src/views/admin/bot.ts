@@ -1,9 +1,7 @@
-import type { BlockOrigin } from '@restaurante/core/bot-control';
 import { formatDisplayDate } from '@restaurante/core/shared';
 import type { Renderer, SafeHtml } from '@restaurante/web';
+import { DEFAULT_MANUAL_DURATION, MANUAL_DURATIONS, REASON_MAX_LENGTH, type BlockOrigin, type BotControlSnapshot, type ManualDuration, type ReachedCap, type UsageBlock } from '@restaurante/core/bot-control';
 
-import { DEFAULT_MANUAL_DURATION, MANUAL_DURATIONS, REASON_MAX_LENGTH, type BotControlSnapshot, type ManualDuration, type ReachedCap } from '../../services/bot-control.ts';
-import type { UsageBlock } from '../../services/bot-usage.ts';
 import type { BotProvider } from '../../services/whatsapp-bot/chat-bot.ts';
 import { ADMIN_CLASSES, BOT_ADMIN_PATH, adminAttrs, adminFieldError, adminInvalidAttrs, adminPage, renderAdminNotice, type AdminPageContext } from './index.ts';
 

@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { canonicalPhone, createMemoryBotControlStore, MS } from '@restaurante/core/bot-control';
 
-import { createMemoryBotControlStore } from '@restaurante/core/bot-control';
 
-import { canonicalPhone } from '../../src/services/whatsapp-bot/phone.ts';
-import { MS } from '../../src/services/whatsapp-bot/protection/limits.ts';
 import { createBotProtection } from '../../src/services/whatsapp-bot/protection/protection.ts';
 import { parseDelivery } from '../../src/services/whatsapp-bot/providers/meta/webhook.ts';
 import { BOT_ENV } from '../helpers.ts';

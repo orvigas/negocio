@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { canonicalPhone, MS } from '@restaurante/core/bot-control';
 
-import { canonicalPhone } from '../../src/services/whatsapp-bot/phone.ts';
-import { MS } from '../../src/services/whatsapp-bot/protection/limits.ts';
 import { BOT_ENV } from '../helpers.ts';
 import { ADMIN_PASSWORD, ADMIN_USER, createUser, csrfFrom, loginAs, setupAdmin, textOf, type Browser } from '../support/admin.ts';
 import { createCloudApiDouble } from '../support/cloud-api-double.ts';

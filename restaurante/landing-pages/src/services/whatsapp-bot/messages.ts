@@ -1,9 +1,8 @@
-import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
+import { BRANCH_LOCATION, BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
 import { formatPesos } from '@restaurante/core/catalog';
+import { getBusinessHours } from '@restaurante/core/schedule';
 
-import { commonContent } from '../../content/index.ts';
 import { botText, getBankAccount, getBotContent, getBotVocabulary, type BankAccount } from '../../content/bot.ts';
-import { getBusinessHours } from '../../content/hours.ts';
 import type { BotCatalog, CatalogOption } from './catalog.ts';
 import { PAYMENT_OPTIONS, type PaymentMethod } from './payment.ts';
 import { acceptsOrders, describeHours, describeOpening, isOpen, nextOpening } from './schedule.ts';
@@ -112,7 +111,7 @@ export const otherBusinessNote = (business: BusinessId): string => {
 };
 
 export const hoursAndLocation = (business: BusinessId): string =>
-  fill(botText.hoursAndLocation, { negocio: nameOf(business), horario: describeHours(getBusinessHours(business)), mapa: commonContent.location.mapsUrl });
+  fill(botText.hoursAndLocation, { negocio: nameOf(business), horario: describeHours(getBusinessHours(business)), mapa: BRANCH_LOCATION.mapsUrl });
 
 /** D-16: el negocio no toma pedidos; cuándo abre y cuándo abre el otro. */
 export function ordersClosed(business: BusinessId, now: Date, timeZone: string): string {

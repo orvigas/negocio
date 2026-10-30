@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { getLocalMinutes } from '@restaurante/core/shared';
 
-import { BUSINESS_HOURS } from '../../src/content/hours.ts';
+import { BUSINESS_HOURS } from '@restaurante/core/schedule';
+import { maskPhone } from '@restaurante/core/bot-control';
 import { createCloudApiClient, toCloudApiRecipient } from '../../src/services/whatsapp-bot/providers/meta/cloud-api.ts';
 import { staffTemplateParams, type OrderDetails } from '../../src/services/whatsapp-bot/messages.ts';
-import { maskPhone } from '../../src/services/whatsapp-bot/phone.ts';
 import { acceptsOrders, describeHours, describeOpening, isOpen, nextOpening } from '../../src/services/whatsapp-bot/schedule.ts';
 import { createConversationStore, createExpiringMap, createRateLimiter } from '../../src/services/whatsapp-bot/store.ts';
 import { chunkText, codePointLength, normalizeInput, parseNumber } from '../../src/services/whatsapp-bot/text.ts';

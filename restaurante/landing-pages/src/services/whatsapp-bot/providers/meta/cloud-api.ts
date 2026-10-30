@@ -1,7 +1,7 @@
 import type { Logger } from '@restaurante/core/shared';
+import { withoutMxMobilePrefix } from '@restaurante/core/bot-control';
 
 import type { SendFailure } from '../../chat-bot.ts';
-import { withoutMxMobilePrefix } from '../../phone.ts';
 import { postWithRetry, type FetchLike } from '../http-send.ts';
 
 /**

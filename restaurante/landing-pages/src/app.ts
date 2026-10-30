@@ -17,6 +17,7 @@ import {
 import { getActiveBusinessId } from '@restaurante/core/schedule';
 import { silentLogger, type Logger } from '@restaurante/core/shared';
 import { createImageChecker, createRenderer } from '@restaurante/web';
+import { type BotControl } from '@restaurante/core/bot-control';
 
 import type { Config } from './config/env.ts';
 import { createAdminGate } from './middleware/admin-guard.ts';
@@ -24,7 +25,6 @@ import { createErrorHandler } from './middleware/error-handler.ts';
 import { createRequestLogger } from './middleware/request-logger.ts';
 import { assertMenuRepository } from './repositories/menu-repository.ts';
 import { createRouter } from './routes/index.ts';
-import type { BotControl } from './services/bot-control.ts';
 import type { LandingProducts } from './services/landing-products.ts';
 import { createBotOrchestrator, type BotOrchestrator } from './services/whatsapp-bot/orchestrator.ts';
 import { createBotProtection } from './services/whatsapp-bot/protection/protection.ts';

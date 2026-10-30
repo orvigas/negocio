@@ -27,16 +27,15 @@ import { stdin, stdout } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
 
-import { createMemoryBotControlStore } from '@restaurante/core/bot-control';
 import { createMemoryProductStore, createProductRepository, type ImportSource, type MenuDocument } from '@restaurante/core/catalog';
 import { createLogger } from '@restaurante/web';
 import { toZonedIsoString } from '@restaurante/core/shared';
+import { createBotControl, createMemoryBotControlStore } from '@restaurante/core/bot-control';
 
 import { createApp } from '../src/app.ts';
 import { DEFAULTS, isValidTimeZone, loadConfig } from '../src/config/env.ts';
 import { loadSeedDocument } from '../src/content/seeds.ts';
 import { createMemoryMenuRepository } from '../src/repositories/memory-menu-repository.ts';
-import { createBotControl } from '../src/services/bot-control.ts';
 import { createBotOrchestrator } from '../src/services/whatsapp-bot/orchestrator.ts';
 import { createBotProtection } from '../src/services/whatsapp-bot/protection/protection.ts';
 import { createChatBot } from '../src/services/whatsapp-bot/providers/select.ts';

@@ -1,9 +1,9 @@
-import { BUSINESS } from '@restaurante/core/shared';
+import { BUSINESS, BUSINESS_NAMES } from '@restaurante/core/shared';
 
 import { image } from '../images.ts';
 
 /**
- * Contenido de Moloteando (landing de lunes a viernes; su horario de servicio está en ./hours.ts).
+ * Contenido de Moloteando (landing de lunes a viernes; su horario de servicio está en packages/core/schedule/business-hours.ts).
  * Fuente: _stich_source_/moloteando_aut_nticos_molotes_artesanales/code.html
  *
  * Solo datos estáticos (textos, horarios, contacto, imágenes). Los datos editables desde
@@ -14,7 +14,7 @@ import { image } from '../images.ts';
  */
 export const molotesContent = Object.freeze({
   id: 'molotes',
-  name: 'Moloteando',
+  name: BUSINESS_NAMES.molotes,
   seo: Object.freeze({
     title: 'Moloteando | Auténticos Molotes Artesanales',
     description:

@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
-import type { Weekday } from '@restaurante/core/schedule';
+import { BUSINESS_HOURS, getBusinessHours, type BusinessHours, type Weekday } from '@restaurante/core/schedule';
 import type { MenuDocument } from '@restaurante/core/catalog';
 import { createRenderer } from '@restaurante/web';
 
 import { DEFAULT_VIEWS_DIR } from '../../src/app.ts';
-import { BUSINESS_HOURS, getBusinessHours, type BusinessHours } from '../../src/content/hours.ts';
 import { getBusinessContent } from '../../src/content/index.ts';
 import { loadSeedDocument } from '../../src/content/seeds.ts';
 import { renderLandingPage } from '../../src/views/landings/index.ts';
@@ -15,7 +14,7 @@ import { findDayGroups, findTimes, sortDays } from '../support/schedule-text.ts'
 
 /**
  * REQ-F-010 (D-6, RN-2, CA-4): los textos de horario de las landings coinciden con la fuente
- * estructurada de src/content/hours.ts. Si se cambia la fuente sin cambiar los textos (o al revés),
+ * estructurada de packages/core/schedule/business-hours.ts (REQ-F-042, RF-7). Si se cambia la fuente sin cambiar los textos (o al revés),
  * estas pruebas fallan.
  */
 

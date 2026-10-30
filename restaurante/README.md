@@ -945,7 +945,7 @@ arrancar queda `bot_provider_selected` con el proveedor en el log.
   (beneficiario, banco y CLABE, una sola cuenta para los dos negocios) se editan solo en
   `src/content/common/payment.ts` y se leen con `getBankAccount()`; los textos, en
   `src/content/common/bot.ts`. Nunca van al log.
-- **Horario:** sale de `src/content/hours.ts` (REQ-F-010). Fuera de horario avisa cuándo abre,
+- **Horario:** sale de `packages/core/schedule/business-hours.ts` (REQ-F-010; en `core` desde REQ-F-042). Fuera de horario avisa cuándo abre,
   deja pedir y marca el resumen "FUERA DE HORARIO". El lunes atiende como Molotes (cerrado; abre
   el martes). Si el negocio no abre ni ese día ni el siguiente (Molotes el viernes después de las
   15:00; Birria el domingo después de las 15:00), muestra el menú pero **no toma el pedido** e
@@ -1689,7 +1689,7 @@ restaurante/                  # Raíz de los npm workspaces (REQ-F-036, REQ-F-03
 │   │   │                         # product-form, bot-control, bot-usage, landing-products (productos de las landings desde la API; REQ-F-038),
 │   │   │                         # whatsapp-bot/ (bot de WhatsApp: chat-bot (interfaz ChatBot), orchestrator, conversation, catalog,
 │   │   │                         #   schedule, messages, store, text; providers/: select, http-send, meta/ (WhatsAppBot), twilio/ (TwilioBot))
-│   │   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), textos del bot (bot.ts), horarios (hours.ts), semillas seed.json e icons.ts
+│   │   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), textos del bot (bot.ts), semillas seed.json e icons.ts
 │   │   ├── utils/                # datetime.ts (zona del negocio), form-body.ts, json-body.ts
 │   │   ├── views/                # render.ts + plantillas HTML
 │   │   │   ├── layouts/base.html # <head> común (SEO, fuentes, CSS/JS por negocio) y skip link
@@ -1776,15 +1776,16 @@ combinan con ese contenido en `src/views/landings/`. Los tonos de color son clav
 
 ### Horario de servicio
 
-El horario real de cada negocio tiene una sola fuente estructurada: `src/content/<negocio>/hours.ts`
-(días de servicio, apertura y cierre en `HH:MM` de 24 h), validada y expuesta por
-`src/content/hours.ts` (`BUSINESS_HOURS`, `getBusinessHours(id)`). Las horas son locales en
-`BUSINESS_TIMEZONE`; la fuente no guarda la zona. Esta fuente no decide qué landing se muestra
-(eso sigue en `core/schedule/business-schedule.ts`) y la usará el bot de WhatsApp.
+El horario real de cada negocio tiene una sola fuente estructurada:
+`packages/core/schedule/business-hours.ts` (días de servicio, apertura y cierre en `HH:MM` de 24 h,
+validados al cargar; `BUSINESS_HOURS` y `getBusinessHours(id)` de `@restaurante/core/schedule`).
+Está en `core` desde REQ-F-042 (RF-7) porque la comparten las landings y el bot de WhatsApp. Las
+horas son locales en `BUSINESS_TIMEZONE`; la fuente no guarda la zona. Esta fuente no decide qué
+aviso se muestra (eso sigue en `core/schedule/business-schedule.ts`).
 
 Los textos de horario de las landings son literales en `src/content/<negocio>/index.ts`, porque
 cada lugar tiene su propio estilo. `tests/unit/business-hours.test.ts` comprueba que coinciden con
-la fuente: **para cambiar un horario, edita `hours.ts` y todos sus textos**; si solo se cambia uno
+la fuente: **para cambiar un horario, edita `business-hours.ts` y todos sus textos**; si solo se cambia uno
 de los dos, la prueba falla.
 
 ## Assets por landing

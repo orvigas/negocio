@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { canonicalPhone, createUsageMeter, DEFAULT_BOT_LIMITS, estimateMicros, maskPhone, MS, parsePhoneInput } from '@restaurante/core/bot-control';
 
 import { ConfigError, loadConfig, type Env } from '../../src/config/env.ts';
 import { botText } from '../../src/content/bot.ts';
-import { createUsageMeter, estimateMicros } from '../../src/services/bot-usage.ts';
 import { fixedNoticeMessage } from '../../src/services/whatsapp-bot/messages.ts';
-import { DEFAULT_BOT_LIMITS, MS } from '../../src/services/whatsapp-bot/protection/limits.ts';
-import { canonicalPhone, maskPhone, parsePhoneInput } from '../../src/services/whatsapp-bot/phone.ts';
 import { toCloudApiRecipient } from '../../src/services/whatsapp-bot/providers/meta/cloud-api.ts';
 import { BOT_ENV, VALID_ENV, makeRecordingLogger } from '../helpers.ts';
 import { mx } from '../support/whatsapp.ts';

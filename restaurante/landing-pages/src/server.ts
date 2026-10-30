@@ -10,12 +10,12 @@ import { errorProp } from '@restaurante/core/shared';
 import { createImageChecker, createLogger, serializeError } from '@restaurante/web';
 
 import { createProductRepository } from '@restaurante/core/catalog';
+import { createBotControl } from '@restaurante/core/bot-control';
 
 import { DEFAULT_PUBLIC_DIR, createApp } from './app.ts';
 import { ConfigError, loadConfig } from './config/env.ts';
 import { createInternalApp } from './internal-app.ts';
 import { bootstrapAdmin } from './services/admin-bootstrap.ts';
-import { createBotControl } from './services/bot-control.ts';
 import { startCatalogReload } from './services/catalog-reload.ts';
 import { LANDING_PRODUCTS_DEFAULTS, createLandingProducts, loadSeedProducts } from './services/landing-products.ts';
 import { createFileMenuRepository } from './repositories/file-menu-repository.ts';

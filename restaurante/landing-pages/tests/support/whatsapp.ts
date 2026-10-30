@@ -3,12 +3,10 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createMemoryBotControlStore, type MemoryBotControlStore } from '@restaurante/core/bot-control';
 import type { ProductRepository } from '@restaurante/core/catalog';
+import { createBotControl, createMemoryBotControlStore, DEFAULT_BOT_LIMITS, type BotControl, type BotLimits, type MemoryBotControlStore } from '@restaurante/core/bot-control';
 
 import type { MetaBotConfig } from '../../src/config/env.ts';
-import { createBotControl, type BotControl } from '../../src/services/bot-control.ts';
-import { DEFAULT_BOT_LIMITS, type BotLimits } from '../../src/services/whatsapp-bot/protection/limits.ts';
 import { createBotProtection } from '../../src/services/whatsapp-bot/protection/protection.ts';
 import { createBotOrchestrator } from '../../src/services/whatsapp-bot/orchestrator.ts';
 import { parseDelivery } from '../../src/services/whatsapp-bot/providers/meta/webhook.ts';

@@ -1,7 +1,7 @@
-import type { UsageCap, UsageDelta, UsagePeriodType, UsageRecord } from '@restaurante/core/bot-control';
-import { toZonedIsoString, type Logger } from '@restaurante/core/shared';
+import { toZonedIsoString, type Logger } from '../shared/index.ts';
+import type { UsageCap, UsageDelta, UsagePeriodType, UsageRecord } from './bot-control-store.ts';
 
-import type { BotLimits } from './whatsapp-bot/protection/limits.ts';
+import type { BotLimits } from './limits.ts';
 
 /**
  * Contadores globales del bot (REQ-F-025, RF-2): plantillas al personal y mensajes salientes, por

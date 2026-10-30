@@ -1,5 +1,6 @@
 /**
- * Construcción del enlace de pedido por WhatsApp.
+ * Construcción del enlace de pedido por WhatsApp. Lo usan los CTA de las landings (y la validación de
+ * su configuración) y el bot (contacto del personal); vive en core para no duplicarlo (REQ-F-042, H-5).
  *
  * Prioridad:
  *   1. `url` explícita (debe ser https).

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildWhatsAppLink, isHttpsUrl } from '../../src/services/whatsapp.ts';
+import { buildWhatsAppLink, isHttpsUrl } from '@restaurante/core/shared';
 
 describe('buildWhatsAppLink', () => {
   it('da prioridad a la URL explícita sobre número y mensaje', () => {

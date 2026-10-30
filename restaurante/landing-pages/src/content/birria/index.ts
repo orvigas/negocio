@@ -1,9 +1,9 @@
-import { BUSINESS } from '@restaurante/core/shared';
+import { BUSINESS, BUSINESS_NAMES } from '@restaurante/core/shared';
 
 import { image } from '../images.ts';
 
 /**
- * Contenido de Birria El Muñeco (landing de sábado y domingo; su horario de servicio está en ./hours.ts).
+ * Contenido de Birria El Muñeco (landing de sábado y domingo; su horario de servicio está en packages/core/schedule/business-hours.ts).
  * Fuente: _stich_source_/birrier_a_el_mu_eco_aut_ntica_birria_de_res_color_adobo/code.html
  * Textos: tabla editorial aprobada de REQ-F-032 (solo afirmaciones confirmadas).
  *
@@ -16,7 +16,7 @@ import { image } from '../images.ts';
  */
 export const birriaContent = Object.freeze({
   id: 'birria',
-  name: 'Birria El Muñeco',
+  name: BUSINESS_NAMES.birria,
   seo: Object.freeze({
     title: 'Birria El Muñeco | Birria de Res Estilo Los Altos de Jalisco',
     description:

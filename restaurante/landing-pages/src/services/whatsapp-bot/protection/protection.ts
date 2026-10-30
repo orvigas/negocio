@@ -1,14 +1,11 @@
 import { createHmac, randomBytes } from 'node:crypto';
 
 import type { BusinessId, Logger } from '@restaurante/core/shared';
+import { canonicalPhone, maskPhone, type BotControl, type BotLimits, type UsageTicket } from '@restaurante/core/bot-control';
 
-import type { BotControl } from '../../bot-control.ts';
-import type { UsageTicket } from '../../bot-usage.ts';
 import type { SendFailureKind } from '../chat-bot.ts';
-import { canonicalPhone, maskPhone } from '../phone.ts';
 import { createExpiringMap } from '../store.ts';
 import { normalizeInput } from '../text.ts';
-import type { BotLimits } from './limits.ts';
 import { createNumberGuard, textKeyOf } from './number-guard.ts';
 
 /**

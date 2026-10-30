@@ -1,11 +1,11 @@
-import { birriaContent } from './index.ts';
+import { BUSINESS_NAMES } from '@restaurante/core/shared';
 
 /**
  * Textos propios de Birria El Muñeco en el bot de WhatsApp (REQ-F-009). Los textos del flujo
- * están en src/content/common/bot.ts; el horario sale de ./hours.ts.
+ * están en src/content/common/bot.ts; el horario sale de @restaurante/core/schedule (business-hours.ts).
  */
 export const birriaBot = Object.freeze({
-  name: birriaContent.name,
+  name: BUSINESS_NAMES.birria,
   /** Prefijo del código de referencia del pedido (D-19). */
   codePrefix: 'B',
   tagline: 'Birria de res al estilo tradicional, quesabirrias y consomé 🍲.',

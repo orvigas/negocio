@@ -117,11 +117,33 @@ export async function schemaFingerprint(name: string): Promise<string | null> {
   return `${String(row.columns_hash)}/${String(row.indexes_hash)}/${String(row.triggers)}/${applied}`;
 }
 
-/** Vacía todas las tablas de la app (TRUNCATE: también reinicia los autoincrementos). */
+/**
+ * Vacía todas las tablas de la app y reinicia sus autoincrementos, con el mismo resultado que un
+ * TRUNCATE de todas. REQ-F-041: solo se vacían las que lo necesitan (con filas, o con el
+ * autoincremento ya usado): TRUNCATE es DDL y era el coste fijo de cada base reutilizada. Con
+ * `information_schema_stats_expiry = 0`, AUTO_INCREMENT es el valor actual, no el de la caché de
+ * estadísticas. Todo en una sola conexión.
+ */
 export async function truncateAll(name: string): Promise<void> {
-  const rows = (await adminSql(undefined, {
-    sql: 'SELECT TABLE_NAME AS name FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME <> ?',
-    values: [name, PRISMA_MIGRATIONS_TABLE],
-  })) as { name: string }[];
-  await adminSql(name, 'SET FOREIGN_KEY_CHECKS = 0', ...rows.map((row) => `TRUNCATE TABLE \`${row.name}\``), 'SET FOREIGN_KEY_CHECKS = 1');
+  const { admin } = testDatabaseConfigs();
+  const connection = await createConnection({ ...poolConfig(withDatabase(admin, name)), connectTimeout: 5000 });
+  try {
+    await connection.query('SET SESSION information_schema_stats_expiry = 0');
+    const tables = await connection.query<{ name: string; next: number | bigint | null }[]>(
+      'SELECT TABLE_NAME AS name, AUTO_INCREMENT AS next FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME <> ?',
+      [name, PRISMA_MIGRATIONS_TABLE],
+    );
+    if (tables.length === 0) return;
+    const filled = await connection.query<{ name: string; used: number | bigint }[]>(
+      tables.map((table) => `SELECT ${connection.escape(table.name)} AS name, EXISTS(SELECT 1 FROM \`${table.name}\`) AS used`).join(' UNION ALL '),
+    );
+    const withRows = new Set(filled.filter((row) => Number(row.used) === 1).map((row) => row.name));
+    const dirty = tables.filter((table) => withRows.has(table.name) || (table.next !== null && Number(table.next) > 1));
+    if (dirty.length === 0) return;
+    await connection.query('SET FOREIGN_KEY_CHECKS = 0');
+    for (const table of dirty) await connection.query(`TRUNCATE TABLE \`${table.name}\``);
+    await connection.query('SET FOREIGN_KEY_CHECKS = 1');
+  } finally {
+    await connection.end();
+  }
 }

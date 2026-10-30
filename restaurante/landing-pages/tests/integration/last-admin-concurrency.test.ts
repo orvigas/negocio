@@ -5,7 +5,7 @@ import { DatabaseUnavailableError } from '@restaurante/core/shared';
 import { LastAdminError, type UserRepository } from '@restaurante/core/identity';
 import { MAX_ATTEMPTS, createUserRepository } from '@restaurante/db/user-repository';
 
-import { ADMIN_PASSWORD_HASH, ADMIN_USER, USER_PASSWORD, createUser, csrfFrom, loginAs, setupAdmin, type Browser } from '../support/admin.ts';
+import { ADMIN_PASSWORD_HASH, ADMIN_USER, createUser, deactivateUser, setupAdmin, loginAs } from '../support/admin.ts';
 import { appDatabaseUrl, makeDatabase } from '../support/database.ts';
 import { runNode } from '../support/process.ts';
 
@@ -13,6 +13,8 @@ import { runNode } from '../support/process.ts';
  * RN-1 con concurrencia real sobre MySQL (REQ-F-014, RF-7 y CA-5): ninguna combinación de
  * operaciones simultáneas deja cero administradores activos. Las escrituras de usuarios son
  * SERIALIZABLE: el interbloqueo revierte una de las dos, que se reintenta y ve el estado confirmado.
+ * El caso de dos administradores que se desactivan a sí mismos por HTTP está en
+ * last-admin-concurrency-http.test.ts (REQ-F-041).
  * Cada caso se repite 50 veces con dos clientes de Prisma (dos pools, como dos procesos).
  */
 
@@ -112,28 +114,6 @@ describe('último administrador con concurrencia (CA-5)', () => {
 });
 
 describe('último administrador con concurrencia por HTTP (CA-5)', () => {
-  const deactivate = async (browser: Browser, id: number) => {
-    const page = await browser.get('/admin/usuarios');
-    return browser.post(`/admin/usuarios/${id}/desactivar`).type('form').send({ _csrf: csrfFrom(page.text) });
-  };
-
-  it(`dos administradores se desactivan a sí mismos a la vez, ${REPETITIONS} veces: uno recibe el éxito y el otro el 409`, async () => {
-    const context = await setupAdmin();
-    const owner = (await context.users.findCredentials(ADMIN_USER))!.user;
-    const other = await createUser(context.users, { username: 'beto', role: 'admin' });
-
-    for (let round = 0; round < REPETITIONS; round += 1) {
-      const sessions = [await loginAs(context.browser(), ADMIN_USER, 'clave-de-prueba-SECRETA-123'), await loginAs(context.browser(), 'beto', USER_PASSWORD)];
-      const responses = await Promise.all([deactivate(sessions[0]!, owner.id), deactivate(sessions[1]!, other.id)]);
-      const statuses = responses.map((res) => res.status).sort();
-      expect([[303, 409], [303, 503]]).toContainEqual(statuses);
-      const conflict = responses.find((res) => res.status === 409);
-      if (conflict) expect(conflict.text).toContain('Debe quedar al menos un administrador activo');
-      expect(await context.prisma.user.count({ where: { role: 'admin', active: true } })).toBe(1);
-      for (const id of [owner.id, other.id]) await context.users.setActive(id, true, SYSTEM);
-    }
-  }, 180_000);
-
   it('desactivación por HTTP en paralelo con `npm run admin:recover` real (5 veces): nunca cero administradores', async () => {
     const context = await setupAdmin();
     const owner = (await context.users.findCredentials(ADMIN_USER))!.user;
@@ -142,7 +122,7 @@ describe('último administrador con concurrencia por HTTP (CA-5)', () => {
     for (let round = 0; round < 5; round += 1) {
       const session = await loginAs(context.browser(), ADMIN_USER, 'clave-de-prueba-SECRETA-123');
       const [res, recovered] = await Promise.all([
-        deactivate(session, owner.id),
+        deactivateUser(session, owner.id),
         runNode(['scripts/admin-recover.ts', '--usuario', 'eva'], {
           env: { NODE_ENV: 'test', DATABASE_URL: appDatabaseUrl(context.database.name) },
           input: 'clave-recuperada-por-consola\n',

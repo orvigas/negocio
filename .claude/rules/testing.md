@@ -33,5 +33,10 @@ Las pruebas que usan la base de datos corren contra MySQL 8.4 real (REQ-F-014), 
 - `TEST_DATABASE_URL` (usuario solo DML, el de la app) y `TEST_ADMIN_DATABASE_URL` (DDL, solo el soporte de pruebas) apuntan únicamente a `127.0.0.1`, `localhost`, `::1` o `mysql-dev` y a bases con prefijo `restaurante_test`. La salvaguarda de `tests/setup/` rechaza cualquier otra antes de conectar. No la relajes.
 - Sin MySQL, la suite falla con el mensaje de cómo levantarlo (`npm run db:up`). Ninguna prueba se salta por falta de base.
 - El store de productos en memoria sigue siendo el doble de las pruebas unitarias.
+- El MySQL de pruebas corta una espera de bloqueo a los 5 s (`--innodb-lock-wait-timeout=5` en `compose.yaml`; producción, 10 s). Si cambias ese valor, revisa `tests/support/lock-wait.ts`.
+
+## Duración por archivo
+
+El CI reparte los archivos de prueba en shards por número, no por duración (REQ-F-041). Ningún archivo debe pasar de unos 15 s: uno más largo se parte por sus `describe`, con la preparación común en `tests/support/` y sin cambiar los casos. No acortes una espera por condición con una espera fija ni agregues `retry`, y no subas `testTimeout` ni `hookTimeout` para que un archivo quepa.
 
 Ejecuta las pruebas relevantes antes de considerar terminado el trabajo.

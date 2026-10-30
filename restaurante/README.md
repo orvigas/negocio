@@ -210,12 +210,21 @@ producción. Antes de `npm test`: `npm run db:up` (el MySQL local de `compose.ya
 - Sin MySQL, la suite falla con el mensaje de cómo levantarlo. Ninguna prueba se salta.
 - Cada ejecución tiene su id y cada trabajador de Vitest sus bases
   (`restaurante_test_<id>_<trabajador>`), migradas con el CLI real de Prisma la primera vez y
-  vaciadas (`TRUNCATE`) antes de cada uso: dos ejecuciones en paralelo no se pisan. Si una prueba
+  vaciadas antes de cada uso (`TRUNCATE` de las tablas con filas o con el autoincremento usado;
+  el resultado es el de vaciarlas todas, REQ-F-041): dos ejecuciones en paralelo no se pisan. Si una prueba
   altera el esquema (DROP, ALTER, triggers), la base se vuelve a crear (se compara con la base de
   referencia `restaurante_test_<id>_ref`). Al terminar se borran.
 - Usa `makeDatabase()`, `setupAdmin()` o `makeScratchDatabase()` de `tests/support/` (y
   `adminSql()` para el DDL de una prueba); nunca conexiones propias ni `DATABASE_URL`.
-- La suite tarda unos 55 s (antes, con SQLite, unos 16 s).
+- Esperas de bloqueo: el MySQL de `compose.yaml` (solo desarrollo, pruebas y CI) corta una
+  espera de bloqueo a los 5 s (`--innodb-lock-wait-timeout=5`; en producción, 10 s). Las pruebas
+  `db-lock-wait-*.test.ts` retienen el bloqueo 6 s y fallan con un mensaje claro si el servidor
+  tiene otro valor: para aplicarlo a un MySQL local ya creado, `npm run db:up` (recrea el
+  contenedor; los datos siguen en su volumen).
+- Ningún archivo de prueba debería pasar de unos 15 s (REQ-F-041): el CI reparte los archivos
+  entre sus shards por número, no por duración. Uno más largo se parte por sus `describe`, con la
+  preparación común en `tests/support/`.
+- La suite tarda unos 90 s en local (REQ-F-041; antes, con SQLite, unos 16 s).
 
 ## Docker
 
@@ -561,14 +570,18 @@ aparece y los demás estados distintos de Desplegado quedan como fallidos, nunca
 ### Qué comprueba
 
 Tres comprobaciones independientes, que aparecen por separado en el PR (`CI / calidad`,
-`CI / docker` y `CI / auditoria`). Si un paso falla, la comprobación queda en rojo y sus pasos
+`CI / docker` y `CI / auditoria`). `calidad` agrega a su vez dos jobs (REQ-F-041):
+`verificacion` y `pruebas`, este repartido en 2 shards paralelos (`pruebas (1/2)` y
+`pruebas (2/2)`). `calidad` solo queda en verde si `verificacion` y los dos shards terminaron en
+verde (uno en rojo, cancelado u omitido la deja en rojo), así que la protección de `main` y
+`validado` siguen exigiendo solo `calidad`, `docker` y `auditoria`. Si un paso falla, la comprobación queda en rojo y sus pasos
 siguientes no se ejecutan; un fallo en una no afecta a las otras. `docker` reúne las imágenes y
 el despliegue (antes, `docker` y `despliegue`, que volvía a construir las imágenes): construye
 cada imagen una sola vez y las reutiliza en todas sus comprobaciones.
 
 | Comprobación | Pasos, en orden |
 | ------------ | --------------- |
-| `calidad`    | Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run build:css` (las pruebas leen el CSS generado), `npm run db:up` (MySQL 8.4 de `compose.yaml`), `prisma migrate diff` (el esquema y las migraciones no divergen) y `npm test -- --maxWorkers=4` (contra MySQL; el argumento llega a cada workspace; ver [Trabajadores de Vitest en el CI](#trabajadores-de-vitest-en-el-ci)) |
+| `calidad`    | Agrega `verificacion` y `pruebas` (REQ-F-041). `verificacion`: Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run db:up` (MySQL 8.4 de `compose.yaml`) y `prisma migrate diff` (el esquema y las migraciones no divergen). `pruebas (1/2)` y `pruebas (2/2)`, en paralelo, cada uno en su runner y con su MySQL: Node 24, `npm ci --strict-allow-scripts`, `npm run db:generate`, `npm run build:css` (las pruebas leen el CSS generado), `npm run db:up` y `npm test -- --maxWorkers=4 --shard=<n>/2` (contra MySQL; los argumentos llegan a cada workspace; ver [Trabajadores de Vitest en el CI](#trabajadores-de-vitest-en-el-ci)) |
 | `docker`     | 1) Imágenes: build de los targets `production`, `migrate`, `api` e `inventory-manager` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64`, con la caché `gha` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite, que `production` y `api` llevan el código de `contracts` (REQ-F-038) y de `packages/web` (y `api`, la copia de las imágenes de las landings), que `inventory-manager` (REQ-F-039) no lleva `packages/db` ni `packages/core`, ni Prisma ni mariadb, y sí `contracts`, `web`, su CSS compilado y los iconos de las landings, y que `migrate` aplica el esquema sobre una base vacía con código 0; arranca la `api` en la red interna hasta que queda `healthy` (con la credencial del aviso interno) y `production` sin `HOST` con `API_INTERNAL_URL` hacia ella, y comprueba que escucha en `0.0.0.0`, queda `healthy`, responde por el puerto publicado (REQ-F-015) y carga los productos de la API; después, `inventory-manager` queda `healthy` con su `HEALTHCHECK` (`/salud`), y se retira el MySQL de estas comprobaciones (`docker compose down --volumes`). 2) Despliegue, con las mismas imágenes: `shellcheck` de los scripts de `deploy/` y de `ops/backup/`, `deploy/ci/resumen-test.sh` (cada estado del resumen de `deploy`, con entradas simuladas; REQ-F-030), las unidades de systemd de los respaldos y la prueba de humo del despliegue, `deploy/ci/smoke.sh` (REQ-F-016), con las cuatro imágenes: el compose de producción no publica puertos y MySQL solo está en la red interna; con un registro local y un Traefik v3 ejecuta `deploy.sh` como el comando forzado de SSH y comprueba los rechazos (argumentos, suma de `deploy/`, permisos del `.env`), el primer despliegue, las redirecciones 301, el 429 en `/admin`, la IP y el esquema en el log, la retención de 7 volcados, la migración fallida (la app no se toca), la vuelta atrás ante una imagen rota (también tras una migración nueva) y dos despliegues a la vez. Desde REQ-F-038, también los tres digests (la forma de 2 se rechaza), la `api` solo en la red interna (sin puertos ni labels), la llamada de la app a la `api`, que las landings muestran lo que sirve la `api` y siguen en 200 con la `api` parada, y que una `api` rota termina con 15 sin tocar la app (o, si hubo migraciones nuevas, con la app recreada con `DATABASE_ALLOW_NEWER_SCHEMA=true`, que sobrevive a un reinicio). Desde REQ-F-039, los cuatro digests (la forma de 3, sin `inventory-manager`, se rechaza), `RESTAURANTE_ADMIN_DOMAIN` y la credencial del aviso interno obligatorios (si faltan, 3), ningún router de Traefik hacia el puerto interno 3002, `inventory-manager` solo en las redes `admin` y `traefik` (sin MySQL ni credenciales de la base), `healthy` y sin puertos, el subdominio del admin (200 en `/acceso` con `no-store` y `noindex`, 301 de HTTP a HTTPS, 429 tras la ráfaga de su límite de 60 por minuto, sin enrutar a la `api`), el aviso de la `api` a la app (401 sin credencial) y que un `inventory-manager` roto termina con 16, vuelve al anterior y deja la app como estaba y la `api` nueva en marcha; por último, la prueba de humo de los respaldos (`ops/backup/ci/smoke.sh`, REQ-F-019) |
 | `auditoria`  | Node 24 y `npm run audit:deps` (REQ-F-020; `landing-pages/scripts/audit-deps.ts`), sin `npm ci`: `npm audit` sobre el `package-lock.json` de la raíz por imagen, con la política de [Auditoría de dependencias](#auditoría-de-dependencias) |
 
@@ -578,7 +591,8 @@ zona del sistema.
 
 ### Trabajadores de Vitest en el CI
 
-En `calidad`, `npm test -- --maxWorkers=4` fija 4 trabajadores de Vitest; en local, `npm test`
+En cada shard de `pruebas`, `npm test -- --maxWorkers=4 --shard=<n>/2` fija 4 trabajadores de
+Vitest; en local, `npm test`
 usa el valor por defecto de Vitest (los núcleos disponibles menos uno). El runner `ubuntu-24.04`
 de un repositorio público tiene 4 vCPU (con 2 vCPU, Vitest usaba un solo trabajador y las
 pruebas corrían en serie). Medido con la suite en el contenedor `test` limitado a 4 CPU
@@ -590,6 +604,14 @@ Cada trabajador usa su propia base `restaurante_test_*` (la salvaguarda de
 `--`: `npm test -- --maxWorkers=4` llega como `vitest run --maxWorkers=4` a `api/`,
 `landing-pages/` e `inventory-manager/`. Sin el `--` final del script, npm tomaría
 `--maxWorkers` como opción propia (aviso `Unknown cli config`) y Vitest no lo recibiría.
+
+**Shards (REQ-F-041).** Con 4 vCPU, más trabajadores no aceleran la suite: está limitada por el
+trabajo de cada runner. Por eso el job `pruebas` la reparte en 2 runners con `--shard=1/2` y
+`--shard=2/2`, que también llega a los tres workspaces. Vitest reparte los archivos por número
+(ordenados por un hash de su ruta), no por duración: por eso ningún archivo debe pasar de unos
+15 s. Cada archivo está en exactamente un shard, así que cada PR corre la suite completa. Para
+cambiar el número de shards: la lista `matrix.shard` y el `/2` del nombre y del paso `test` en
+`.github/workflows/ci.yml`. Para reproducir un shard en local: `npm test -- --shard=1/2`.
 
 Con varios trabajadores, la suite llega a abrir entre 105 y 130 conexiones a MySQL a la vez (de 4 a 8 trabajadores) (pools, procesos hijos
 y bases de cada trabajador), cerca del límite por defecto de MySQL (151; error 1040 *Too many

@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE (PR 2 de 2: https://github.com/orvigas/negocio/pull/111, hacia `epic/arquitectura`; 2026-10-29). El PR 1 (#110) se mergeó en `epic/arquitectura` (`0bfa50a`).
+DONE (2026-10-30). Los dos PR están mergeados en `epic/arquitectura`: #110 (PR 1, merge `0bfa50a`) y #111 (PR 2, merge `d5f5393`, 2026-10-30T01:21:04Z). Llegará a producción con el siguiente merge de la épica a `main`.
 
 ## Aprobación
 
@@ -1639,3 +1639,12 @@ Sin defectos. Estado: `QA_APPROVED`.
 ### Pull Request del PR 2 (2026-10-29)
 
 Commit `ec19892` y PR #111 (https://github.com/orvigas/negocio/pull/111) hacia `epic/arquitectura`, con la sonda de QA incluida. Estado: `READY_FOR_MERGE` (PR 2 de 2), sujeto a que el CI termine en verde. El ticket pasa a `done/` en T5, tras el merge.
+
+### Cierre (2026-10-30)
+
+El usuario confirmó el merge del PR #111 ("Ya está mergeado"): merge `d5f5393` en `epic/arquitectura`, el 2026-10-30T01:21:04Z. El PR #110 se había mergeado antes (`0bfa50a`). Ticket movido a `done/`, estado `DONE`.
+
+Pendientes antes de llevar la épica a `main`:
+
+- **Avisar al personal (R-3):** tras el despliegue, "Mi cuenta" y la gestión de usuarios del `/admin` actual dejan de funcionar. Las contraseñas se cambian en "Mi cuenta" de `https://admin.birriaelmuneco.com` y las altas y cambios de usuarios, en "Usuarios" del admin nuevo (`docs/despliegue.md`).
+- **Comprobación manual del autorrelleno (D-2 del QA):** comprobar en un navegador real que el gestor de contraseñas no rellena el usuario del administrador en el alta ni en la edición de usuarios, y que sí propone guardar la contraseña nueva en "Mi cuenta".

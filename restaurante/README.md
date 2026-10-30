@@ -221,7 +221,7 @@ producción. Antes de `npm test`: `npm run db:up` (el MySQL local de `compose.ya
   `db-lock-wait-*.test.ts` retienen el bloqueo 6 s y fallan con un mensaje claro si el servidor
   tiene otro valor: para aplicarlo a un MySQL local ya creado, `npm run db:up` (recrea el
   contenedor; los datos siguen en su volumen).
-- Ningún archivo de prueba debería pasar de unos 15 s (REQ-F-041): el CI reparte los archivos
+- Ningún archivo de prueba debería pasar de 20 s en el CI (REQ-F-041): el CI reparte los archivos
   entre sus shards por número, no por duración. Uno más largo se parte por sus `describe`, con la
   preparación común en `tests/support/`.
 - La suite tarda unos 90 s en local (REQ-F-041; antes, con SQLite, unos 16 s).
@@ -608,8 +608,8 @@ Cada trabajador usa su propia base `restaurante_test_*` (la salvaguarda de
 **Shards (REQ-F-041).** Con 4 vCPU, más trabajadores no aceleran la suite: está limitada por el
 trabajo de cada runner. Por eso el job `pruebas` la reparte en 2 runners con `--shard=1/2` y
 `--shard=2/2`, que también llega a los tres workspaces. Vitest reparte los archivos por número
-(ordenados por un hash de su ruta), no por duración: por eso ningún archivo debe pasar de unos
-15 s. Cada archivo está en exactamente un shard, así que cada PR corre la suite completa. Para
+(ordenados por un hash de su ruta), no por duración: por eso ningún archivo debe pasar de
+20 s en el CI. Cada archivo está en exactamente un shard, así que cada PR corre la suite completa. Para
 cambiar el número de shards: la lista `matrix.shard` y el `/2` del nombre y del paso `test` en
 `.github/workflows/ci.yml`. Para reproducir un shard en local: `npm test -- --shard=1/2`.
 

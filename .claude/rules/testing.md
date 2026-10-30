@@ -37,6 +37,6 @@ Las pruebas que usan la base de datos corren contra MySQL 8.4 real (REQ-F-014), 
 
 ## Duración por archivo
 
-El CI reparte los archivos de prueba en shards por número, no por duración (REQ-F-041). Ningún archivo debe pasar de unos 15 s: uno más largo se parte por sus `describe`, con la preparación común en `tests/support/` y sin cambiar los casos. No acortes una espera por condición con una espera fija ni agregues `retry`, y no subas `testTimeout` ni `hookTimeout` para que un archivo quepa.
+El CI reparte los archivos de prueba en shards por número, no por duración (REQ-F-041). Ningún archivo debe pasar de 20 s en el CI: uno más largo se parte por sus `describe`, con la preparación común en `tests/support/` y sin cambiar los casos. No acortes una espera por condición con una espera fija ni agregues `retry`, y no subas `testTimeout` ni `hookTimeout` para que un archivo quepa.
 
 Ejecuta las pruebas relevantes antes de considerar terminado el trabajo.

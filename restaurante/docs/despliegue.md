@@ -34,12 +34,16 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
       landings siguen respondiendo con su última copia buena (o la semilla, si `app` arrancó sin ella).
   - `inventory-manager` (REQ-F-039): la imagen `inventory-manager`, el admin nuevo (Koa con SSR) en
     `https://admin.birriaelmuneco.com`.
-    - Gestiona los productos llamando a `api` por la red interna `admin`.
+    - Gestiona los productos, los usuarios y "Mi cuenta" (REQ-F-040) llamando a `api` por la red
+      interna `admin`.
     - Está en `traefik-public` y en `admin`: no alcanza MySQL y no tiene credenciales de la base ni
       la del aviso.
-    - Con él desplegado, la edición de productos del `/admin` actual queda en solo lectura
-      (`ADMIN_NEW_URL`) y enlaza al admin nuevo. Usuarios, cuenta, bot y menú siguen en `/admin`
-      hasta los tickets siguientes del paso 4.
+    - Con él desplegado, la edición de productos, la gestión de usuarios y "Mi cuenta" del `/admin`
+      actual quedan en solo lectura (`ADMIN_NEW_URL`) y enlazan al admin nuevo. Bot y menú siguen en
+      `/admin` hasta los tickets siguientes del paso 4.
+    - **Aviso al personal (R-3 de REQ-F-040):** desde ese despliegue, las contraseñas se cambian en
+      "Mi cuenta" de `https://admin.birriaelmuneco.com` (mismo usuario y contraseña), y las altas y
+      cambios de usuarios, en "Usuarios" del admin nuevo. `npm run admin:recover` sigue igual.
   - `mysql`: MySQL 8.4 (utf8mb4, `utf8mb4_es_0900_as_cs`), solo en la red interna `db`, con sus
     datos en el volumen `restaurante_mysql-data`.
   - `migrate`: proceso puntual que aplica las migraciones con un usuario con DDL.

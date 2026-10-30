@@ -11,7 +11,9 @@ import type { AdminApiClient } from '@restaurante/contracts';
 import { createRenderer, type Logger } from '@restaurante/web';
 
 import type { InventoryConfig } from './config.ts';
+import { createAccountController } from './controllers/account.ts';
 import { createAdminController } from './controllers/admin.ts';
+import { createUsersController } from './controllers/users.ts';
 import { createErrorHandler } from './middleware/error-handler.ts';
 import { createRequestLogger } from './middleware/request-logger.ts';
 import { createSecurityHeaders } from './middleware/security.ts';
@@ -43,7 +45,7 @@ export interface InventoryAppOptions {
 }
 
 /**
- * App del admin nuevo (REQ-F-039), construida sin abrir puertos (testeable). CSP estricta: solo
+ * App del admin nuevo (REQ-F-039; usuarios y "Mi cuenta", REQ-F-040), construida sin abrir puertos (testeable). CSP estricta: solo
  * recursos propios y las fuentes de Google (como las landings); ningún script en línea.
  */
 export function createInventoryApp({
@@ -62,7 +64,8 @@ export function createInventoryApp({
   app.silent = true;
 
   const views = createViews(createRenderer({ viewsDir }));
-  const router = createRouter(createAdminController({ config, api, views, logger }));
+  const deps = { config, api, views, logger };
+  const router = createRouter({ admin: createAdminController(deps), users: createUsersController(deps), account: createAccountController(deps) });
 
   app.use(createRequestLogger(logger));
   app.use(createSecurityHeaders({ isProduction: config.isProduction, logger }));

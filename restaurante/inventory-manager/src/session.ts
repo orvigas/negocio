@@ -42,6 +42,10 @@ const RETURN_PATTERNS: readonly RegExp[] = [
   /^\/(?:molotes|birria)\/productos$/,
   /^\/(?:molotes|birria)\/productos\/(?:nuevo|eliminados)$/,
   /^\/(?:molotes|birria)\/productos\/[1-9]\d{0,9}\/(?:editar|eliminar)$/,
+  // Usuarios y "Mi cuenta" (REQ-F-040, RF-14).
+  /^\/usuarios(?:\/nuevo)?$/,
+  /^\/usuarios\/[1-9]\d{0,9}\/(?:editar|contrasena)$/,
+  /^\/cuenta$/,
 ];
 
 export function sanitizeNext(value: unknown): string {

@@ -1,6 +1,8 @@
 import type { AdminProduct, AdminUser, ProductFormField, PublicBusinessId } from '@restaurante/contracts';
 import type { Renderer, SafeHtml } from '@restaurante/web';
 
+import { ACCOUNT_PATH, USERS_PATH, createUserViews } from './users.ts';
+
 /**
  * Vistas del admin nuevo (REQ-F-039, RF-16; sistema visual P-4). HTML semántico, BEM y Tailwind; todo
  * funciona sin JavaScript (formularios con POST/redirect/GET) y el JS de public/js solo mejora. Los
@@ -45,6 +47,17 @@ export interface NoticeOptions {
   urgent?: boolean;
 }
 
+/** Sección de la cabecera fuera de un negocio (REQ-F-040): usuarios o "Mi cuenta". */
+export type HeaderSection = 'users' | 'account';
+
+export interface PageOptions {
+  title: string;
+  body: SafeHtml;
+  context?: PageContext | undefined;
+  business?: PublicBusinessId | undefined;
+  section?: HeaderSection | undefined;
+}
+
 const fieldId = (name: string): string => `f-${name.replaceAll('.', '-')}`;
 
 export function createViews(renderer: Renderer) {
@@ -74,29 +87,29 @@ export function createViews(renderer: Renderer) {
     });
   }
 
-  function header(context: PageContext, current: PublicBusinessId | undefined): SafeHtml {
+  function header(context: PageContext, current: PublicBusinessId | undefined, section: HeaderSection | undefined): SafeHtml {
+    const ariaCurrent = (active: boolean) => (active ? render('partials/aria-current') : join([]));
     return render('partials/header', {
       userName: context.user.name,
       csrfToken: context.csrfToken,
-      links: join(
-        context.user.businesses.map((business) =>
-          render('partials/nav-link', {
-            href: productsPath(business),
-            label: BUSINESS_NAMES[business],
-            current: business === current ? render('partials/aria-current') : join([]),
-          }),
+      accountCurrent: ariaCurrent(section === 'account'),
+      links: join([
+        ...context.user.businesses.map((business) =>
+          render('partials/nav-link', { href: productsPath(business), label: BUSINESS_NAMES[business], current: ariaCurrent(business === current) }),
         ),
-      ),
+        // "Usuarios" solo para administradores (REQ-F-040, RF-1).
+        ...(context.user.role === 'admin' ? [render('partials/nav-link', { href: USERS_PATH, label: 'Usuarios', current: ariaCurrent(section === 'users') })] : []),
+      ]),
     });
   }
 
-  function page({ title, body, context, business }: { title: string; body: SafeHtml; context?: PageContext; business?: PublicBusinessId }): SafeHtml {
+  function page({ title, body, context, business, section }: PageOptions): SafeHtml {
     return render('layout', {
       title,
       theme: business ?? 'neutral',
       // Favicon del negocio que se edita; fuera de un negocio, el de la marca de inicio (Birria).
       favicon: business ?? 'birria',
-      header: context ? header(context, business) : join([]),
+      header: context ? header(context, business, section) : join([]),
       body,
     });
   }
@@ -104,13 +117,16 @@ export function createViews(renderer: Renderer) {
   return {
     notice,
     page,
+    ...createUserViews({ render, join, attrs, page, notice, displayDate }),
 
-    login({ next, problem }: { next: string; problem?: 'invalid' | 'locked' | 'expired' | 'unavailable' | undefined }): SafeHtml {
+    login({ next, problem }: { next: string; problem?: 'invalid' | 'locked' | 'expired' | 'unavailable' | 'closed' | undefined }): SafeHtml {
       const notices: Record<string, NoticeOptions> = {
         invalid: { tone: 'error', title: 'Usuario o contraseña incorrectos.' },
         locked: { tone: 'error', title: 'Acceso bloqueado temporalmente.', paragraphs: ['Hubo demasiados intentos fallidos. Vuelve a intentarlo en 15 minutos.'] },
         expired: { tone: 'warning', title: 'Tu sesión caducó.', paragraphs: ['Vuelve a entrar. Si estabas guardando algo, no se guardó.'] },
         unavailable: { tone: 'error', title: 'Servicio no disponible.', paragraphs: ['No se pudo conectar con el sistema. Inténtalo de nuevo en unos minutos.'] },
+        // REQ-F-040: el propio usuario cambió su rol, su estado o su contraseña desde "Usuarios".
+        closed: { tone: 'info', title: 'Tu sesión se cerró.', paragraphs: ['Cambiaste tu propio rol, estado o contraseña. Si tu cuenta sigue activa, vuelve a entrar.'] },
       };
       const chosen = problem ? notices[problem] : undefined;
       return page({ title: 'Acceso', body: render('pages/login', { next, notice: chosen ? notice(chosen) : join([]) }) });
@@ -319,8 +335,8 @@ export function createViews(renderer: Renderer) {
       });
     },
 
-    message({ title, notice: options, context, business, backHref = '/', backLabel = 'Volver al inicio' }: MessageView): SafeHtml {
-      return page({ title, context, business, body: render('pages/message', { title, notice: notice(options), backHref, backLabel }) });
+    message({ title, notice: options, context, business, section, backHref = '/', backLabel = 'Volver al inicio' }: MessageView): SafeHtml {
+      return page({ title, context, business, section, body: render('pages/message', { title, notice: notice(options), backHref, backLabel }) });
     },
   };
 
@@ -423,9 +439,10 @@ export interface MessageView {
   notice: NoticeOptions;
   context?: PageContext | undefined;
   business?: PublicBusinessId | undefined;
+  section?: HeaderSection | undefined;
   backHref?: string;
   backLabel?: string;
 }
 
 export type Views = ReturnType<typeof createViews>;
-export { NEW_TITLES, CATEGORY_SINGULAR };
+export { NEW_TITLES, CATEGORY_SINGULAR, ACCOUNT_PATH, USERS_PATH };

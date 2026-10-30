@@ -1,0 +1,20 @@
+
+            <li class="user-row flex flex-col gap-3 rounded-lg border border-rim bg-surface p-4 md:flex-row md:items-center md:justify-between" data-user-row="{{ id }}">
+              <div class="user-row__info min-w-0">
+                <p class="user-row__name font-bold break-words">{{ displayName }} <span class="user-row__username font-label text-sm font-normal break-all text-masa">({{ username }})</span></p>
+                <dl class="user-row__meta mt-1 grid grid-cols-[auto_1fr] gap-x-2 text-sm text-masa">
+                  <dt class="font-semibold">Rol:</dt>
+                  <dd>{{ role }}</dd>
+                  <dt class="font-semibold">Negocios:</dt>
+                  <dd>{{ businesses }}</dd>
+                  <dt class="font-semibold">Estado:</dt>
+                  <dd class="user-row__state user-row__state--{{ stateModifier }} font-semibold {{ stateClass }}">{{ state }}</dd>
+                  <dt class="font-semibold">Último acceso:</dt>
+                  <dd>{{ lastLogin }}</dd>
+                </dl>
+              </div>
+              <div class="user-row__actions flex flex-wrap items-center gap-2">
+                <a class="button button--secondary inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border-[1.5px] border-adobo px-4 py-2 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-adobo/15" href="{{ editHref }}">Editar<span class="sr-only"> a {{ displayName }}</span></a>
+                <a class="button button--ghost inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg px-3 py-2 font-label text-sm font-bold tracking-wider text-maiz uppercase hover:bg-surface-high" href="{{ passwordHref }}">Contraseña<span class="sr-only"> de {{ displayName }}</span></a>{{{ statusForm }}}
+              </div>
+            </li>

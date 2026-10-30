@@ -86,8 +86,10 @@ INTERNAL_NOTIFY_TOKEN=<la misma credencial>
 ```
 
 Sin ellas todo funciona igual, pero la landing y el bot ven el cambio como mucho en 60 s. En
-producción las dos son obligatorias. Si además quieres probar el modo de solo lectura de productos
-del `/admin` actual, pon `ADMIN_NEW_URL=http://127.0.0.1:3003` en `landing-pages/.env`.
+producción las dos son obligatorias. Si además quieres probar el modo de solo lectura de productos,
+usuarios y "Mi cuenta" del `/admin` actual (REQ-F-039 y REQ-F-040), pon
+`ADMIN_NEW_URL=http://127.0.0.1:3003` en `landing-pages/.env`. "Usuarios" del admin nuevo solo
+aparece para un administrador (por ejemplo, el primero, el de `ADMIN_USER`).
 
 y, en `packages/db/.env` (solo las lee el CLI de Prisma; la app no las usa):
 

@@ -1,0 +1,5 @@
+
+                <form class="user-status" method="post" action="{{ action }}" data-submit-guard>
+                  <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+                  <button class="button {{ buttonModifier }} inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg border-[1.5px] px-4 py-2 font-label text-sm font-bold tracking-wider uppercase {{ buttonClass }}" type="submit" data-busy-text="{{ busyText }}">{{ label }}<span class="sr-only"> a {{ displayName }}</span></button>
+                </form>

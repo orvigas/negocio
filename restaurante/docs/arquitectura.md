@@ -311,13 +311,39 @@ Decisión del usuario: "Sí, 6 tickets en ese orden". Cada ticket es su propio P
 | # | Ticket | Notas |
 | --- | --- | --- |
 | 1 | **REQ-F-039**: base del admin nuevo y productos | Terminado en tres PR (#94, #95 y #99), detalle abajo |
-| 2 | Usuarios y cuenta propia | En `api` y en `inventory-manager` |
+| 2 | **REQ-F-040**: usuarios y cuenta propia | En `api` y en `inventory-manager`, en dos PR (#110 y el PR 2), detalle abajo |
 | 3 | Mover el bot a `api` | Publica una entrada de `api` para el webhook (su router de Traefik solo para esa ruta) y cambia la URL en Meta (acción del usuario). Activa la regla de lint para el bot |
 | 4 | Control del bot en el admin nuevo | Pausa, bloqueos y topes |
 | 5 | Menú y página | Antes se decide si el menú queda en archivos o pasa a MySQL |
 | 6 | Retirada del `/admin` actual | Mover la importación de semillas y el menú, quitar las credenciales de la base de `landing-pages`, quitar el router `restaurante-admin` y activar la regla de lint para `/admin` |
 
-Los IDs de los tickets 2 a 6 se asignan al crearlos.
+Los IDs de los tickets 3 a 6 se asignan al crearlos.
+
+### Paso 4, ticket 2 aplicado (REQ-F-040)
+
+Decisiones del usuario: "Dos PR (Recomendado)" y "Como productos (Recomendado)" para la solo lectura.
+
+- **PR 1 (#110), `api` y `contracts`:**
+  - usuarios en `/api/v1/admin/usuarios` (solo administradores: 403 `FORBIDDEN_ROLE` antes de mirar
+    el id) y la cuenta propia en `POST /api/v1/admin/cuenta/contrasena`;
+  - las reglas de REQ-F-007 sin cambios, desde `core/identity` y `db/user-repository`: D-7 (409
+    `LAST_ADMIN`), D-8 (las sesiones de los dos admins caen en su siguiente petición porque sube
+    `sessionVersion`; la API además libera las suyas) y la auditoría;
+  - `meta.ownSessionClosed` cuando un administrador se cierra la sesión a sí mismo, y una sesión nueva
+    al cambiar la propia contraseña;
+  - en `contracts`: `ManagedUser`, las respuestas, `USER_LIMITS` (solo para los textos de ayuda; la
+    regla sigue en `core`) y el cliente del admin;
+  - tres mensajes pasan a `core/identity` para que los dos admins digan lo mismo.
+- **PR 2, `inventory-manager` y `landing-pages`:**
+  - pantallas "Usuarios" (solo administradores) y "Mi cuenta", sin JavaScript, con el sistema visual
+    P-4 de REQ-F-039; `controllers/common.ts` reúne lo común de los controladores;
+  - tras cambiar la propia contraseña, el admin reescribe su cookie con la sesión nueva;
+  - con `ADMIN_NEW_URL`, usuarios y "Mi cuenta" del `/admin` actual quedan en solo lectura: la lista
+    sin controles; el resto, GET o POST, con 410 y el enlace a la pantalla equivalente;
+  - la prueba de extremo a extremo con los tres procesos y MySQL.
+- La concurrencia de D-7 entre los dos admins se prueba con el proceso real de la API y el `/admin`
+  actual sobre la misma base (`landing-pages/tests/integration/users-api-process.test.ts`).
+- No añade contenedores: la medición de memoria de §10 no cambia.
 
 ### Paso 4, ticket 1 aplicado (REQ-F-039)
 

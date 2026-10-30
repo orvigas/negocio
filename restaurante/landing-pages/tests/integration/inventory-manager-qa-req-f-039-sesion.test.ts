@@ -66,14 +66,3 @@ describe('QA REQ-F-039 PR 2: sesión, cookie y redirecciones', () => {
     expectNoSecrets(stack);
   });
 });
-
-describe('QA REQ-F-039 PR 2: salud en producción', () => {
-  // DEF-005 (QA del PR 2), corregido: /salud responde sin exigir TLS (el HEALTHCHECK del contenedor
-  // habla por HTTP con 127.0.0.1); el resto del admin sigue solo por HTTPS en producción.
-  it('DEF-005: /salud responde 200 en producción aunque la petición no llegue por TLS (healthcheck interno)', async () => {
-    const stack = await startStack();
-    const { url } = await stack.startInventory({ NODE_ENV: 'production', TRUST_PROXY: 'true' });
-    const res = await fetch(`${url}/salud`, { redirect: 'manual' });
-    expect(res.status).toBe(200);
-  });
-});

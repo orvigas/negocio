@@ -1,7 +1,5 @@
 import { randomBytes } from 'node:crypto';
 
-import type { RouterContext } from '@koa/router';
-
 import {
   IDEMPOTENCY_KEY_PATTERN,
   emptyProductFormValues,
@@ -10,7 +8,6 @@ import {
   productFormValues,
   type AdminApiClient,
   type AdminApiResult,
-  type AdminCredentials,
   type Freshness,
   type ProductFieldsResponse,
   type ProductFormField,
@@ -20,6 +17,7 @@ import { assertSameOrigin, readFormBody, type Logger, type SafeHtml } from '@res
 
 import type { InventoryConfig } from '../config.ts';
 import { clearSessionId, readSessionId, sanitizeNext, writeSessionId } from '../session.ts';
+import { createControllerKit, type Ctx, type Session } from './common.ts';
 import { BUSINESS_NAMES, NEW_TITLES, displayDate, productPath, productsPath, type PageContext, type Views } from '../views/index.ts';
 
 /**
@@ -34,7 +32,6 @@ import { BUSINESS_NAMES, NEW_TITLES, displayDate, productPath, productsPath, typ
  * Nunca se registran cookies, ids de sesión, tokens ni contraseñas.
  */
 
-type Ctx = RouterContext;
 type Handler = (ctx: Ctx) => Promise<void>;
 
 export interface AdminController {
@@ -55,10 +52,6 @@ export interface AdminController {
   moveDown: Handler;
 }
 
-interface Session extends PageContext {
-  sessionId: string;
-}
-
 /** Mensajes de éxito (`?ok=`, lista cerrada) y si dependen de la frescura (`&pendiente=1`). */
 const SUCCESS: Readonly<Record<string, string>> = Object.freeze({
   created: 'Producto creado como no disponible y al final de su categoría. Edítalo para mostrarlo en la landing.',
@@ -74,7 +67,6 @@ const PROBLEMS: Readonly<Record<string, string>> = Object.freeze({
 });
 const UNAVAILABLE = { tone: 'error' as const, title: 'Servicio no disponible.', paragraphs: ['No se pudo conectar con el sistema: no se guardó nada. Lo que escribiste sigue en el formulario; inténtalo de nuevo en unos minutos.'] };
 const BUSINESSES: readonly PublicBusinessId[] = ['molotes', 'birria'];
-const ID_PATTERN = /^[1-9]\d{0,9}$/;
 const LOGIN_BODY_LIMIT = 4 * 1024;
 const SMALL_BODY_LIMIT = 4 * 1024;
 
@@ -90,57 +82,13 @@ export function createAdminController({
   logger: Logger;
 }): AdminController {
   const { isProduction } = config;
+  const kit = createControllerKit({ config, api, views, logger });
+  const { send, seeOther, unavailable, failureReason, isUnavailable, idOf, credentials, toLogin } = kit;
 
-  function send(ctx: Ctx, status: number, html: SafeHtml): void {
-    ctx.status = status;
-    ctx.type = 'html';
-    ctx.body = html.toString();
-  }
-
-  function seeOther(ctx: Ctx, url: string): void {
-    ctx.status = 303;
-    ctx.redirect(url);
-  }
-
-  /** Al acceso; en un POST, con el aviso de sesión caducada y la pantalla a la que volver. */
-  function toLogin(ctx: Ctx, returnTo: string): void {
-    const query = new URLSearchParams();
-    const next = sanitizeNext(returnTo);
-    if (next !== '/') query.set('next', next);
-    if (ctx.method === 'POST') query.set('expirada', '1');
-    const search = query.toString();
-    seeOther(ctx, search ? `/acceso?${search}` : '/acceso');
-  }
-
-  function unavailable(ctx: Ctx, reason: string, context?: PageContext, business?: PublicBusinessId): void {
-    logger.warn('api_unavailable', { path: ctx.path, reason });
-    send(ctx, 503, views.message({ title: 'Servicio no disponible', notice: { tone: 'error', title: 'Servicio no disponible.', paragraphs: ['No se pudo conectar con el sistema. Inténtalo de nuevo en unos minutos.'] }, context, business }));
-  }
-
-  const failureReason = (result: AdminApiResult<unknown>): string => (result.ok ? 'ok' : result.kind === 'http' ? `http_${result.status}` : result.kind);
-  const isUnavailable = (result: AdminApiResult<unknown>): boolean => !result.ok && (result.kind !== 'http' || result.status >= 500);
-
-  /** Sesión de la API (D-1). null si ya respondió (acceso o 503). */
-  async function session(ctx: Ctx, returnTo: string, onUnavailable?: (business: PublicBusinessId) => boolean): Promise<Session | null> {
-    const sessionId = readSessionId(ctx, isProduction);
-    if (!sessionId) {
-      toLogin(ctx, returnTo);
-      return null;
-    }
-    const result = await api.session({ sessionId });
-    if (result.ok) return { sessionId, user: result.data.user, csrfToken: result.data.csrfToken };
-    if (!result.ok && result.kind === 'http' && result.status === 401) {
-      clearSessionId(ctx, isProduction);
-      toLogin(ctx, returnTo);
-      return null;
-    }
+  /** Sesión de la API (D-1). Con `onUnavailable`, si la API no responde se vuelve a pintar lo escrito del negocio. */
+  function session(ctx: Ctx, returnTo: string, onUnavailable?: (business: PublicBusinessId) => boolean): Promise<Session | null> {
     const known = BUSINESSES.find((candidate) => candidate === ctx.params.business);
-    if (known && onUnavailable?.(known)) {
-      logger.warn('api_unavailable', { path: ctx.path, reason: failureReason(result) });
-      return null;
-    }
-    unavailable(ctx, failureReason(result));
-    return null;
+    return kit.session(ctx, returnTo, onUnavailable && known ? () => onUnavailable(known) : undefined);
   }
 
   /** `:negocio` conocido (404) y permitido (403, sin datos; RF-6 y CA-4). */
@@ -160,12 +108,7 @@ export function createAdminController({
   }
 
   function notFound(ctx: Ctx, context?: PageContext, business?: PublicBusinessId): void {
-    send(ctx, 404, views.message({ title: 'No encontrado', notice: { tone: 'warning', title: 'No encontramos lo que buscas.' }, context, business, ...(business ? { backHref: productsPath(business), backLabel: 'Volver a productos' } : {}) }));
-  }
-
-  function idOf(ctx: Ctx): number | null {
-    const { id } = ctx.params;
-    return typeof id === 'string' && ID_PATTERN.test(id) ? Number(id) : null;
+    kit.notFound(ctx, { context, business, ...(business ? { backHref: productsPath(business), backLabel: 'Volver a productos' } : {}) });
   }
 
   /** Respuestas de la API que no son de dominio: 401 -> acceso, 403 CSRF, 404 y el resto -> 503. */
@@ -183,7 +126,6 @@ export function createAdminController({
     return unavailable(ctx, failureReason(result), auth, business);
   }
 
-  const credentials = (auth: Session, fields?: Map<string, string>): AdminCredentials => ({ sessionId: auth.sessionId, csrfToken: fields?.get('_csrf') ?? '' });
   const okUrl = (business: PublicBusinessId, key: keyof typeof SUCCESS, freshness?: Freshness): string =>
     `${productsPath(business)}?ok=${key}${freshness === 'pending' ? '&pendiente=1' : ''}`;
 
@@ -269,7 +211,8 @@ export function createAdminController({
   return Object.freeze<AdminController>({
     async loginPage(ctx) {
       const next = sanitizeNext(ctx.query.next);
-      send(ctx, 200, views.login({ next, problem: ctx.query.expirada === '1' ? 'expired' : undefined }));
+      const problem = ctx.query.expirada === '1' ? 'expired' : ctx.query.ok === 'sesion_cerrada' ? 'closed' : undefined;
+      send(ctx, 200, views.login({ next, problem }));
     },
 
     async login(ctx) {

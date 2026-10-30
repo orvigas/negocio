@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE (PR 1 de 2: `api` y contratos, https://github.com/orvigas/negocio/pull/110, hacia `epic/arquitectura`; 2026-10-29). El ticket sigue en `in-progress/` hasta el PR 2.
+READY_FOR_MERGE (PR 2 de 2: https://github.com/orvigas/negocio/pull/111, hacia `epic/arquitectura`; 2026-10-29). El PR 1 (#110) se mergeó en `epic/arquitectura` (`0bfa50a`).
 
 ## Aprobación
 
@@ -984,6 +984,349 @@ Respuestas textuales del usuario:
 - **Prueba de QA:** se incluye `landing-pages/tests/integration/users-api-qa-req-f-040.test.ts`, que el usuario decidió conservar ("Conservarlas en el PR").
 - **Estado:** `READY_FOR_MERGE` se registra en este commit para que entre en el merge, como se pidió tras lo ocurrido en el #99. El PR se marca como listo después de subirlo, y el resultado del CI (`calidad`, `docker` y `auditoria`) se informa al usuario. Si el CI fallara, el estado volvería a corregirse antes del merge.
 
+### PR 2 de 2: `inventory-manager`, solo lectura y documentación (2026-10-29)
+
+#### Rama
+
+`feature/REQ-F-040-admin-usuarios-2-inventory`, creada desde `origin/epic/arquitectura` (`0bfa50a`, con el PR 1 mergeado), sin upstream. No hay commit ni PR todavía.
+
+#### Cambios realizados
+
+- **`inventory-manager/src/controllers/common.ts` (nuevo):**
+  - reúne lo común de los controladores, extraído sin cambios de `controllers/admin.ts`: `send`, `seeOther`, `toLogin`, `unavailable`, `failureReason`, `isUnavailable`, `session`, `notFound`, `idOf` y `credentials`;
+  - añade `toLoginClosed`, que borra la cookie y lleva a `/acceso?ok=sesion_cerrada`.
+  - `controllers/admin.ts` (productos) usa ahora estas funciones. Las 71 pruebas anteriores de `inventory-manager` pasan sin cambios.
+- **`inventory-manager/src/controllers/users.ts` (nuevo):** lista, alta, edición, desactivar y reactivar, y restablecer la contraseña.
+  - GET: sesión → rol administrador (403 "Sin permiso" sin pedir usuarios a la API) → datos.
+  - POST: mismo origen → lista cerrada de campos (400) → sesión → rol → la API.
+  - Errores:
+    - 422 por campo, conservando lo escrito salvo las contraseñas;
+    - 409 `LAST_ADMIN` con aviso urgente;
+    - 503 conservando lo escrito, también si la API cae al comprobar la sesión;
+    - 401 al acceso;
+    - 403 "Petición no válida";
+    - 404.
+  - Tras guardar, PRG con `?ok=` de lista cerrada.
+  - Con `meta.ownSessionClosed`, al acceso con el aviso "Tu sesión se cerró".
+- **`inventory-manager/src/controllers/account.ts` (nuevo):** "Mi cuenta".
+  - Lista cerrada de campos: `role`, `businesses`, `id` o `business-birria` dan 400 sin llamar a la API.
+  - Con 200, `writeSessionId` reescribe la cookie con la sesión nueva (mismo nombre y atributos) y redirige a `/cuenta?ok=password_change`.
+  - Con 422, error en el campo, sin contraseñas. Con 401, al acceso con `expirada=1`. Con 503, el aviso.
+- **`inventory-manager/src/views/users.ts` (nuevo) y plantillas nuevas:**
+  - páginas `pages/users.html`, `user-form.html`, `user-password.html` y `account.html`;
+  - parciales `user-row`, `status-form`, `user-status-panel`, `user-fieldset`, `field-password` y `form-submit`.
+  - Bloques BEM `user-list`, `user-row`, `user-form`, `user-status` y `account-panel`. Reutilizan `field`, `notice`, `button` y los tokens de P-4; no hay CSS nuevo.
+  - Las contraseñas no llevan `value`, `minlength` ni `maxlength`. El texto de ayuda sale de `USER_LIMITS`.
+  - `autocomplete`: `new-password` en la contraseña nueva, `current-password` en la actual y `off` en el usuario de acceso.
+  - Desactivar y reactivar son botones dentro de un formulario POST.
+- **Cabecera (`views/index.ts` y `partials/header.html`):**
+  - "Usuarios" en la navegación, solo para administradores;
+  - "Mi cuenta" junto al nombre, con `aria-current` en la sección activa;
+  - la navegación pasa de `aria-label="Negocios"` a `aria-label="Secciones"`.
+- **Acceso:** la pantalla muestra el aviso "Tu sesión se cerró" con `?ok=sesion_cerrada`.
+- **`inventory-manager/src/session.ts`:** el retorno tras entrar acepta `/usuarios`, `/usuarios/nuevo`, `/usuarios/<id>/editar`, `/usuarios/<id>/contrasena` y `/cuenta` (RF-14).
+- **`routes.ts` y `app.ts`:** rutas nuevas, registradas antes de las de productos.
+- **`noindex`:** lo pone ya en todas las respuestas el middleware de seguridad (`X-Robots-Tag: noindex, nofollow`), y el layout lleva `<meta name="robots">`. Las pruebas lo comprueban en las pantallas nuevas.
+- **JavaScript:** no hay JS nuevo. Los formularios llevan `data-submit-guard`: el `submit-guard.js` actual evita el doble envío y muestra "Guardando…".
+- **`landing-pages`, solo lectura con `ADMIN_NEW_URL` (P-2 A):**
+  - `controllers/admin-users.ts`: la lista, en consulta y sin controles, con el aviso y el enlace a `${ADMIN_NEW_URL}/usuarios`.
+  - Nuevo, editar, contraseña, desactivar, reactivar y sus POST siguen el orden sesión → permiso de administrador → id (404) → 410, con el enlace a la pantalla equivalente. No leen el formulario ni escriben.
+  - `controllers/admin-account.ts`: GET y POST de `/admin/cuenta` siguen el orden sesión → 410, con el enlace a `${ADMIN_NEW_URL}/cuenta`.
+  - Se registra `admin_users_moved`.
+  - Vistas nuevas: `users-list-readonly.html`, `users-moved.html`, `partials/user-row-readonly.html` y `partials/users-moved-link.html`.
+- **Documentación:**
+  - `restaurante/docs/arquitectura.md` §8: tabla del plan y "Paso 4, ticket 2 aplicado (REQ-F-040)";
+  - `.claude/CLAUDE.md` §8: descripción de `api` e `inventory-manager`;
+  - `restaurante/README.md`: tabla de apps, API, admin nuevo, convivencia y nota en las rutas de `/admin`;
+  - `docs/despliegue.md`: efecto ampliado de `ADMIN_NEW_URL` y aviso al personal (R-3);
+  - `docs/desarrollo.md`: cómo probar la solo lectura;
+  - `landing-pages/.env.example`.
+- **Pruebas:** ver "Validaciones ejecutadas".
+
+#### Desviaciones del plan
+
+- **Lista de usuarios:** en `inventory-manager` es una lista de tarjetas (`<ul>` con un `<dl>` por usuario), como las filas de productos, en lugar de una tabla desde `md`. Así no hay desplazamiento horizontal a 375 px y se reutiliza el patrón ya validado de P-4.
+- **`autocomplete` del usuario de acceso:** es `off` en el alta y la edición, no `username`. En esos formularios, `username` haría que el navegador rellenara el usuario del administrador que está creando la cuenta. Es lo mismo que hace el `/admin` actual.
+- **Estado al volver a pintar la edición:** tras un 422, un 409 o un 503, el formulario no vuelve a mostrar el panel "Estado y contraseña" (necesitaría otra llamada a la API). Sí lo muestra al abrir la edición.
+- **Regresión intencionada en `landing-pages/tests/integration/admin-products-moved.test.ts`:** su prueba "el resto del /admin funciona igual" esperaba `/admin/cuenta` en 200 con `ADMIN_NEW_URL`. Ahora espera 410, como pide RF-19. `/admin/usuarios` sigue en 200, en consulta.
+- **Cabecera:** la navegación del admin nuevo se llama "Secciones" en vez de "Negocios", porque ahora incluye "Usuarios".
+- **Número de POST de la solo lectura:** la prueba recorre los 6 POST de usuarios y cuenta más un POST sin token CSRF, 7 en total.
+
+#### Criterios de aceptación
+
+| CA | Estado | Evidencia |
+| --- | --- | --- |
+| CA-1 | Cumplido | Un editor no ve "Usuarios" y recibe 403 en 5 GET y 5 POST sin llamar a los endpoints de usuarios (`inventory-manager/tests/integration/users.test.ts`). La API ya daba 401 y 403 (PR 1). Sin sesión, al acceso |
+| CA-2 | Cumplido | Lista con usuario, nombre, rol, "Todos", estado en texto y último acceso (`28/10/2026 13:45`, la hora del negocio de la API) o "Nunca" |
+| CA-3 | Cumplido | Alta sin JS con PRG; en el e2e, el usuario nuevo entra en los dos admins; 422 que conserva lo escrito sin contraseñas, con error asociado y resumen enlazado; repetido con otras mayúsculas (doble y e2e); `create` en la auditoría |
+| CA-4 | Cumplido | e2e: cambiar los negocios en el admin nuevo cierra las dos sesiones. PR 1: solo el nombre no las cierra |
+| CA-5 | Cumplido | e2e: desactivar cierra las dos sesiones y no puede entrar en ninguno (401 y 401); reactivar le deja entrar. `deactivate` y `reactivate` en la auditoría |
+| CA-6 | Cumplido | 409 con aviso urgente en edición y en desactivar, sin cambios. Al degradarse a sí mismo, al acceso con el aviso y sin "Usuarios". Concurrencia entre los dos admins en `users-api-process.test.ts` (PR 1) |
+| CA-7 | Cumplido | e2e: restablecer cierra las dos sesiones, la contraseña anterior falla (401 y 401) y la nueva sirve. `password_reset`. Restablecerse la propia desde "Usuarios" también cierra la sesión actual |
+| CA-8 | Cumplido | "Mi cuenta": cookie nueva (`HttpOnly` y `SameSite=Strict`), la sesión anterior y la del otro navegador caen, la del `/admin` actual también (e2e). Con la actual incorrecta, 422 en ese campo; los campos ajenos dan 400 |
+| CA-9 | Cumplido | `Origin` ajeno o `Sec-Fetch-Site` distinto: 403 sin llamar a la API. Sin token o con el de otra sesión: 403 "Petición no válida", sin cambios |
+| CA-10 | Cumplido | Con la API en `writes-down` y en `down`: 503 "Servicio no disponible", lo escrito conservado sin contraseñas y sin trazas, en el alta y en "Mi cuenta" |
+| CA-11 | Cumplido | 404 en ids inexistentes o mal formados; PRG con 303 tras cada escritura |
+| CA-12 | Cumplido | `no-store`, `X-Robots-Tag: noindex, nofollow` y `<meta name="robots">` en las pantallas nuevas. Los logs de `inventory-manager` (en proceso) y de los tres procesos (e2e) no tienen contraseñas, hashes, ids de sesión, cookies ni tokens CSRF |
+| CA-13 | Cumplido en pruebas automáticas | En las 5 pantallas: un `h1`, cada campo con su `label`, salto al contenido, contraseñas sin `value`, errores con `aria-describedby` y `aria-invalid` y texto "Error:", y sin anchos fijos. Falta la revisión visual a 375 px en navegador (QA) |
+| CA-14 | Cumplido | `admin-users-moved.test.ts`: lista sin controles con el enlace; 4 GET con 410 y el enlace equivalente; 7 POST con 410 y la tabla de usuarios y `user_audit` idénticas; un editor sigue con 403; menú, bot y `admin:recover` con `ADMIN_NEW_URL`. Sin la variable, `admin-users.test.ts` y `admin-account.test.ts` pasan sin cambios |
+| CA-15 | Cumplido | `next` vale para las 5 pantallas nuevas y se vuelve a ellas tras entrar; `//evil…`, ids mal formados y acciones POST vuelven a `/` |
+| CA-16 | Cumplido | `npm run lint` (regla de `inventory-manager`) en 0: solo importa `contracts` y `web` |
+| CA-17 | Cumplido en local | `typecheck`, `lint` y `test` en 0. El CI se comprobará en T4 |
+| CA-18 | Cumplido | Documentación actualizada (ver "Cambios realizados") |
+
+#### Validaciones ejecutadas (desde `restaurante/`)
+
+- `npm run typecheck`: 0.
+- `npm run lint`: 0, sin errores ni avisos.
+- `npm run build:css`: 0.
+- `npm test -- --maxWorkers=4`: 0.
+  - `api`: 7 archivos y 144 pruebas, todas pasan.
+  - `landing-pages`: 111 archivos y 2225 pruebas: 2224 pasan y 1 es un fallo esperado que ya existía.
+  - `inventory-manager`: 8 archivos y 111 pruebas, todas pasan.
+- 5 ejecuciones aisladas seguidas de `admin-users-e2e.test.ts`, `users-api-process.test.ts` y `admin-users-moved.test.ts`: 18 de 18 en las 5.
+- Sin procesos en segundo plano al terminar.
+
+#### Archivos afectados
+
+Nuevos:
+- `inventory-manager/src/controllers/{common,users,account}.ts`
+- `inventory-manager/src/views/users.ts`
+- `inventory-manager/src/views/pages/{users,user-form,user-password,account}.html`
+- `inventory-manager/src/views/partials/{user-row,status-form,user-status-panel,user-fieldset,field-password,form-submit}.html`
+- `inventory-manager/tests/integration/users.test.ts`
+- `landing-pages/src/views/admin/{users-list-readonly,users-moved}.html`
+- `landing-pages/src/views/admin/partials/{user-row-readonly,users-moved-link}.html`
+- `landing-pages/tests/integration/{admin-users-moved,admin-users-e2e}.test.ts`
+
+Modificados:
+- `inventory-manager/src/{app,routes,session}.ts`
+- `inventory-manager/src/controllers/admin.ts`
+- `inventory-manager/src/views/index.ts`
+- `inventory-manager/src/views/partials/header.html`
+- `inventory-manager/tests/support/api-double.ts`
+- `inventory-manager/tests/unit/config-session.test.ts`
+- `landing-pages/src/controllers/{admin-users,admin-account}.ts`
+- `landing-pages/src/views/admin/users.ts`
+- `landing-pages/tests/integration/admin-products-moved.test.ts`
+- `landing-pages/.env.example`
+- `README.md`
+- `docs/{arquitectura,despliegue,desarrollo}.md`
+- `.claude/CLAUDE.md`
+- este ticket
+
+#### Cómo probarlo en local
+
+1. `npm run db:up` y `npm run db:generate` si hace falta.
+2. En `landing-pages/.env`, `ADMIN_NEW_URL=http://127.0.0.1:3003`.
+3. `npm run dev`: API en 3001, landings en 3000 y admin nuevo en 3003.
+4. En `http://127.0.0.1:3003/acceso`, entra con el primer administrador (`ADMIN_USER`). "Usuarios" aparece en la cabecera; "Mi cuenta", junto a tu nombre.
+5. Crea un editor y entra con él en una ventana privada, en el admin nuevo y en `http://127.0.0.1:3000/admin/login`. Desde el administrador, cámbiale los negocios, desactívalo, reactívalo o restablécele la contraseña, y comprueba que sus dos sesiones caen.
+6. Con el editor, cambia la contraseña en "Mi cuenta": sigue con sesión en el admin nuevo y su sesión del `/admin` actual cae.
+7. En `http://127.0.0.1:3000/admin/usuarios`, la lista sale sin controles y con el enlace; `/admin/cuenta` responde 410 con el enlace.
+8. Sin `ADMIN_NEW_URL`, el `/admin` actual funciona como antes.
+
+#### Riesgos o pendientes
+
+- **R-5:** la solo lectura y las pantallas nuevas van en este mismo PR. Al mergear la épica a `main`, el personal cambia de hábito (R-3, documentado en `docs/despliegue.md`).
+- **Duración:** el e2e con tres procesos tarda unos 10 s en local, y `admin-users-moved.test.ts` unos 7 s.
+- **Revisión visual en navegador** (375 px y escritorio, teclado): pendiente de QA.
+
+### QA Action Plan del PR 2 de 2: `inventory-manager`, solo lectura y documentación (Q1, 2026-10-29)
+
+El usuario aprobó la implementación del PR 2 ("Si lo apruebo"), con sus seis desviaciones. Este plan las valida como parte del alcance. Nota de estructura: el Implementation Result del PR 2 quedó bajo `## QA Action Plan` (desde "PR 2 de 2: `inventory-manager`, solo lectura y documentación"); QA no lo mueve.
+
+NotebookLM: el servidor MCP `notebooklm` no está disponible en esta sesión de QA, así que no se consultó. Las fuentes son el ticket, el código (CodeGraph), `CLAUDE.md` y `.claude/rules/`.
+
+#### Objetivo
+
+Comprobar con evidencia que el PR 2:
+
+- cumple CA-1 a CA-18 en su parte de la interfaz, y sobre todo CA-13 (accesibilidad y responsive en navegador), CA-14 (solo lectura) y CA-15 (retorno tras entrar);
+- es seguro: mismo origen, CSRF, sesión, cookie reescrita, sin secretos en los logs y con `noindex`;
+- no rompe los productos (REQ-F-039) en ninguno de los dos admins, ni el bot, el menú o la recuperación por consola del `/admin` actual.
+
+#### Requisito bajo prueba
+
+- RF-1, RF-2, RF-3 a RF-10 y RF-14 a RF-17 en `inventory-manager`; RF-11 a RF-13 en su parte de la interfaz; RF-18; RF-19 en `landing-pages`.
+- Las desviaciones aprobadas, que se verifican así:
+
+| Desviación | Cómo se verifica |
+| --- | --- |
+| D-1. Tarjetas (`<ul>` con un `<dl>` por usuario) en lugar de tabla | En navegador, a 375, 768 y 1440 px: se leen los 6 datos de RF-3 por usuario, con su término (`dt`), sin desplazamiento horizontal |
+| D-2. `autocomplete="off"` en el usuario de acceso del alta y la edición | DOM; en Chrome con credenciales guardadas, el campo no se rellena con el usuario del administrador. "Mi cuenta" y las contraseñas mantienen `current-password` y `new-password` |
+| D-3. El panel "Estado y contraseña" solo en la carga inicial | Tras un 422, un 409 y un 503 en la edición: el formulario sigue siendo usable, sin enlaces rotos, y la ausencia del panel no confunde (hay "Volver a usuarios") |
+| D-4. Navegación "Secciones" | `aria-label="Secciones"` en el `nav`, con un solo `nav` con ese nombre y `aria-current="page"` en la sección activa |
+| D-5. `admin-products-moved.test.ts`: `/admin/cuenta` pasa a 410 | Revisión del diff: solo cambia esa expectativa; el resto de la prueba sigue igual y pasa |
+| D-6. `.claude/CLAUDE.md` §8 | Diff: solo cambian las descripciones de `api` e `inventory-manager`, coherentes con CA-18 |
+
+#### Criterios de aceptación y pruebas que los cubren
+
+| CA | Qué se valida en el PR 2 | Pruebas |
+| --- | --- | --- |
+| CA-1 | Un editor no ve "Usuarios"; 403 "Sin permiso" sin datos en cada `/usuarios*` (GET y POST, también con su id); sin sesión, al acceso | `users.test.ts`, B-6, Q-3 |
+| CA-2 | Lista con los campos de RF-3, "Todos", "Nunca", fecha en la zona del negocio y orden de la API | `users.test.ts`, B-2 |
+| CA-3 | Alta sin JS y con JS (PRG y aviso); 422 por campo conservando lo escrito sin contraseñas; repetido con otras mayúsculas; el usuario entra en los dos admins | `users.test.ts`, `admin-users-e2e.test.ts`, B-3 |
+| CA-4, CA-5, CA-7 | Cambiar negocios, desactivar, reactivar y restablecer desde el admin nuevo cierran las sesiones de los dos admins | `admin-users-e2e.test.ts`, B-7 |
+| CA-6 | 409 del último administrador con aviso urgente que recibe el foco y no cambia nada; autodegradación al acceso con el aviso "Tu sesión se cerró" | `users.test.ts`, B-5 |
+| CA-8 | "Mi cuenta": cookie reescrita, la sesión sigue en este navegador y cae en el otro admin; actual incorrecta en su campo; campos ajenos con 400 | `users.test.ts`, `admin-users-e2e.test.ts`, B-7 |
+| CA-9 | `Origin` ajeno o `Sec-Fetch-Site` distinto: 403 sin llamar a la API; sin token o con el de otra sesión: "Petición no válida" | `users.test.ts`, Q-2 |
+| CA-10 | API caída (`down` y `writes-down`): 503 "Servicio no disponible", lo escrito conservado sin contraseñas, sin trazas | `users.test.ts`, B-4 |
+| CA-11 | 404 en ids inexistentes o mal formados; PRG: el botón atrás no reenvía | `users.test.ts`, B-3 |
+| CA-12 | `no-store`, `X-Robots-Tag: noindex, nofollow` y `<meta name="robots">`; logs de los tres procesos sin secretos | `users.test.ts`, `admin-users-e2e.test.ts`, B-8 |
+| CA-13 | Teclado, foco visible, etiquetas, errores asociados y no solo por color; sin desplazamiento horizontal a 375 px y en escritorio | `users.test.ts` (jsdom), B-1 a B-6 |
+| CA-14 | `/admin` actual con `ADMIN_NEW_URL`: lista sin controles con aviso y enlace; 410 en 4 GET y 7 POST sin escribir en `user` ni en `user_audit`; editor con 403; bot, menú y `admin:recover` intactos; sin la variable, como hoy | `admin-users-moved.test.ts`, `admin-users.test.ts`, `admin-account.test.ts`, B-9, Q-1 |
+| CA-15 | `next` hacia las 5 pantallas nuevas; destinos externos o mal formados vuelven a `/` | `users.test.ts`, `config-session.test.ts`, Q-4 |
+| CA-16 | `inventory-manager` solo importa `contracts` y `web` | G-1 (lint), `dependency-rule.test.ts` |
+| CA-17 | `typecheck`, `lint` y `test` en 0 en local. El CI real queda para T4 | G-1, G-2 |
+| CA-18 | `arquitectura.md` §8, `.claude/CLAUDE.md` §8, `README.md`, `docs/despliegue.md`, `docs/desarrollo.md` y `.env.example` describen lo implementado, sin funcionalidades inexistentes | Revisión del diff (DOC-1) |
+
+#### Riesgos identificados
+
+- **Cabecera a 375 px:** con "Usuarios", "Mi cuenta" y "Salir" puede desbordar o dejar áreas táctiles por debajo de 44 px.
+- **Foco y avisos:** el aviso del 409 debe recibir el foco y anunciarse; el resumen de errores debe enlazar a cada campo.
+- **Autorrelleno del navegador:** con `autocomplete="off"` Chrome puede seguir rellenando el usuario o la contraseña del administrador en el alta.
+- **Cookie reescrita:** si la cookie nueva no sustituye a la anterior (nombre, ruta o atributos distintos), el usuario quedaría fuera tras cambiar su contraseña.
+- **Solo lectura incompleta:** una ruta POST o GET de usuarios o cuenta del `/admin` actual que siga escribiendo, o que lea el cuerpo antes del 410; el orden sesión → permiso → id → 410.
+- **XSS:** el nombre visible y el usuario de acceso se pintan en la lista, la edición, la cabecera y la lista de solo lectura.
+- **Regresión de productos** por la extracción de `controllers/common.ts` y por la cabecera nueva.
+- **Datos de la revisión en navegador:** la pila de `npm run dev` usa la base local de desarrollo (`restaurante` en `127.0.0.1:3307`, contenedor `mysql-dev`), no una `restaurante_test*`. Ver la pregunta 2 de "Decisiones para el usuario".
+- **Entorno:** pruebas con tres procesos, sensibles a puertos y tiempos; `mysql-dev` compartido (un 1040 es de entorno).
+
+#### Pruebas en navegador (Claude in Chrome)
+
+**Preparación (P-0):**
+
+1. Desde `restaurante/`: `npm run db:up` y `npm run build:css`.
+2. Una cuenta de QA: `npm run admin:recover -- --usuario qa040-admin`, con la contraseña por la entrada estándar. Así no hace falta la contraseña del administrador real. Si la decisión 2 es B, se hace sobre la base de QA.
+3. `ADMIN_NEW_URL=http://127.0.0.1:3003` solo en el entorno del proceso (`ADMIN_NEW_URL=… npm run dev`), sin editar `landing-pages/.env`. Si `npm run dev` no la toma del entorno, se añade al `.env` y se retira al terminar, dejando `git status` igual.
+4. Servicios: API en 3001, landings en 3000 y admin nuevo en 3003. Si alguno no arranca por configuración, se registra como bloqueo de entorno.
+5. Una pestaña nueva tras `tabs_context_mcp`; se cierra al terminar. Los servidores se detienen al final y se comprueba con `ps` que no queda ninguno.
+
+**Recorridos (viewports 375×812, 768×1024 y 1440×900, salvo que se diga otra cosa):**
+
+- **B-1. Responsive (CA-13):** en `/usuarios`, `/usuarios/nuevo`, `/usuarios/:id/editar`, `/usuarios/:id/contrasena`, `/cuenta` y `/acceso?ok=sesion_cerrada`:
+  - `document.documentElement.scrollWidth <= innerWidth` en los tres tamaños;
+  - la cabecera hace salto de línea sin cortar textos;
+  - las áreas táctiles de enlaces y botones miden al menos 44 px de alto (`getBoundingClientRect`);
+  - con un nombre visible y un usuario de 60 caracteres sin espacios, la tarjeta no desborda.
+  - Capturas a 375 y 1440 px de cada pantalla.
+- **B-2. Lista (CA-2, D-1):** con al menos un administrador, un editor de un negocio y un desactivado: los 6 datos de RF-3 por tarjeta, "Todos", "Nunca", fecha con la hora del negocio, activos primero, y el estado en texto, no solo en color.
+- **B-3. Alta y edición (CA-3, CA-11):**
+  - alta válida → aviso de éxito en la lista; el botón atrás no reenvía el formulario;
+  - alta con errores (nombre vacío, contraseña corta, confirmación distinta): cada error junto a su campo con el texto "Error:", `aria-invalid` y `aria-describedby`, resumen con enlaces que llevan el foco al campo; usuario y nombre conservados, contraseñas vacías;
+  - usuario repetido con otras mayúsculas: error en ese campo;
+  - con JS: "Guardando…" y sin doble envío (doble clic rápido). Sin JS (JavaScript desactivado en la pestaña, o con `submit-guard` ausente si la extensión no lo permite): el alta funciona igual;
+  - edición: cambiar el rol a administrador oculta o ignora los negocios, sin perder lo escrito;
+  - D-3: provocar un 422 en la edición y comprobar que el formulario sigue usable.
+- **B-4. Servicio no disponible (CA-10):** con el admin nuevo arrancado y la API detenida, enviar el alta y "Mi cuenta": aviso "Servicio no disponible", lo escrito conservado sin contraseñas y sin trazas en la página. Después se vuelve a arrancar la API.
+- **B-5. Último administrador (CA-6):** con `qa040-admin` como único administrador activo de la base de la revisión (o la decisión 2), intentar desactivarse y pasarse a editor: aviso con `role="alert"` y el foco en él (`document.activeElement`), lo escrito conservado y nada cambia. Si hay otros administradores activos en la base local, este caso solo se cubre por pruebas automáticas y se indica.
+- **B-6. Editor (CA-1):** entrar como el editor creado: la cabecera no muestra "Usuarios"; `/usuarios` y `/usuarios/<id>/editar` por URL directa muestran "Sin permiso" sin datos; "Mi cuenta" sí.
+- **B-7. Sesiones entre los dos admins (CA-4, CA-5, CA-7, CA-8):** el editor con sesión en `127.0.0.1:3003` y en `127.0.0.1:3000/admin/login`; el administrador le cambia los negocios → las dos sesiones caen en su siguiente petición. Después el editor cambia su contraseña en "Mi cuenta": sigue con sesión en el admin nuevo (navega a otra pantalla), su sesión del `/admin` actual cae. Con un administrador que no es el último, degradarse a sí mismo lleva a `/acceso?ok=sesion_cerrada` con el aviso.
+- **B-8. Teclado y foco (CA-13):** recorrido completo solo con el teclado en las 5 pantallas: el salto al contenido es el primer tabulado y lleva a `main`; el orden sigue la lectura; el foco es visible (contorno `#eab308` de 2 px, comprobado con `getComputedStyle` en enlaces, botones, campos y casillas); "Desactivar" y "Reactivar" son `<button>` dentro de un `<form method="post">` y se activan con Intro y Espacio; ninguna trampa de foco. Además: un solo `h1` y `h2` por bloque, `lang="es"`, `meta robots` `noindex`, y sin errores en la consola.
+- **B-9. Solo lectura del `/admin` actual (CA-14):** en `127.0.0.1:3000/admin/usuarios` como administrador: la lista con los datos, sin botones ni enlaces de crear, editar, contraseña, desactivar o reactivar, con el aviso y el enlace a `http://127.0.0.1:3003/usuarios`; `/admin/usuarios/nuevo`, `/admin/usuarios/<id>`, `/admin/usuarios/<id>/contrasena` y `/admin/cuenta` muestran el aviso y el enlace equivalente (410 comprobado con `read_network_requests` o `fetch`). La navegación del `/admin` actual sigue llevando a "Usuarios" y "Mi cuenta", y el bot y el menú abren. Responsive a 375 px de la lista de solo lectura y del aviso.
+- **B-10. Productos (REQ-F-039) en el admin nuevo:** la lista, el alta y la edición de un producto de Molotes y de Birria con la cabecera nueva, a 375 px y en escritorio, y "Usuarios" sin `aria-current` en esas pantallas.
+
+`_stich_source_/` no tiene diseño del admin (Technical Action Plan, "Frontend"): la referencia visual es el sistema P-4 de REQ-F-039 (tokens, `field`, `notice`, `button`, `admin-header`). Se comprueba que las pantallas nuevas usan esos mismos componentes y tokens, sin colores, tipografías ni espaciados nuevos.
+
+Si la extensión no responde tras 2 o 3 intentos, B-1 a B-10 quedan pendientes de revisión manual del usuario. Como CA-13 depende de la revisión en navegador, en ese caso el resultado sería `NEEDS_USER_DECISION`.
+
+No se pulsa nada que abra diálogos del navegador.
+
+#### Pruebas de seguridad
+
+- **S-1. CSRF y mismo origen (CA-9):** las pruebas existentes de `users.test.ts` y, en la sonda Q-2, un POST a `/usuarios`, `/usuarios/:id/desactivar` y `/cuenta` con `Origin` ajeno, sin `Origin` con `Sec-Fetch-Site: cross-site` y sin `_csrf`: 403 y nada cambia en MySQL (sonda contra la API real, ver Q-2).
+- **S-2. Sesión:** cookie `__Host-admin_sid` (en modo producción, en `config-session.test.ts`), `HttpOnly` y `SameSite=Strict`, con el mismo nombre y atributos tras reescribirse; la anterior deja de valer (e2e).
+- **S-3. Secretos (CA-12):** búsqueda en los logs capturados de los tres procesos (e2e, Q-1 y Q-2) de las contraseñas usadas, `scrypt$`, ids de sesión, cookies y tokens CSRF. En la revisión en navegador, la consola de los tres procesos de `npm run dev` se revisa igual.
+- **S-4. `noindex` y `no-store`:** en todas las respuestas nuevas, también en los 403, 404, 410 y 503.
+- **S-5. XSS:** un nombre visible `<img src=x onerror=alert(1)>` y un usuario con `"` y `<`: se pintan escapados en la lista y la edición del admin nuevo, la cabecera y la lista de solo lectura del `/admin` actual (Q-1 y B-2, sin ejecutar el script).
+
+#### Pruebas negativas y casos límite
+
+- Un administrador se restablece su propia contraseña desde "Usuarios": cierra también la sesión actual (`users.test.ts`).
+- Sesión caducada a mitad de un formulario: al acceso con `expirada=1` y sin contraseñas conservadas (`users.test.ts`).
+- Doble envío del alta: un único usuario (e2e y B-3).
+- Contraseña multibyte de 12 caracteres: se acepta por la interfaz (B-3).
+- `?ok=` con una clave fuera de la lista: no se muestra ningún aviso (Q-3).
+- POST de solo lectura sin sesión: 303 al acceso; de un editor a usuarios: 403; en ambos casos sin cambios en `user` ni `user_audit` (Q-1).
+
+#### Pruebas de regresión
+
+- **R-1. Productos en el admin nuevo:** `inventory-manager/tests/integration/products.test.ts`, `access.test.ts` y `js-server.test.ts`, sin cambios en las pruebas (la extracción de `common.ts` no debe cambiar comportamiento), más B-10.
+- **R-2. Productos en el `/admin` actual:** `admin-products-moved.test.ts` (solo cambia la expectativa de D-5) y las pruebas de productos de `landing-pages` sin la variable.
+- **R-3. `/admin` actual sin `ADMIN_NEW_URL`:** `admin-users.test.ts`, `admin-account.test.ts` y `admin-authorization-matrix.test.ts`, que no deben haber cambiado (`git diff`).
+- **R-4. Bot, menú y recuperación por consola:** `admin-users-moved.test.ts` ("el resto del /admin funciona igual") y sus pruebas propias en la suite.
+- **R-5. API:** las 144 pruebas de `api` y `users-api-process.test.ts` y `users-api-qa-req-f-040.test.ts` (PR 1).
+- **R-6. Landings públicas:** la suite de `landing-pages` (HTML, SEO y avisos), sin cambios en ellas.
+- **R-7. Repositorio de usuarios:** `user-repository.test.ts` y `last-admin-concurrency.test.ts` sin cambios (`git diff`), y pasan.
+- **R-8. Alcance del diff:** ningún cambio en `deploy/`, `packages/core`, `packages/db` ni en las pruebas anteriores salvo D-5 y `config-session.test.ts`.
+
+#### Pruebas automatizadas
+
+**Comandos generales (desde `restaurante/`):**
+
+- **G-1.** `npm run typecheck` y `npm run lint` (0, sin avisos). No se ejecuta `lint:fix`.
+- **G-2.** `npm run build:css` y `npm test -- --maxWorkers=4` completo (`api`, `landing-pages`, `inventory-manager` y paquetes). El fallo esperado que ya existía (`local-server.test.ts`, `it.fails`) se identifica por su nombre.
+- **G-3. Estabilidad:** 5 ejecuciones aisladas seguidas de las pruebas con procesos: `admin-users-e2e.test.ts`, `admin-users-moved.test.ts`, `users-api-process.test.ts`, `users-api-qa-req-f-040.test.ts`, `admin-e2e.test.ts` e `inventory-manager-qa-req-f-039.test.ts`, más `inventory-manager/tests/integration/users.test.ts`. Además, 2 ejecuciones completas de la suite con `--maxWorkers=4`.
+- **G-4.** `git status` y `git diff --stat` antes y después: QA solo añade la sonda (si se aprueba) y edita este ticket. `build:css` genera archivos ignorados por git.
+
+**Sonda nueva propuesta (sujeta a la decisión 1):** `landing-pages/tests/integration/inventory-manager-qa-req-f-040.test.ts`, con la convención de `inventory-manager-qa-req-f-039.test.ts`: MySQL real (`setupAdmin()`/`makeDatabase()`, solo `restaurante_test*`), la API e `inventory-manager` como procesos con `freePorts`, y `expect.poll` sobre los logs.
+
+- **Q-1. Solo lectura completa:** con `ADMIN_NEW_URL`, recuento y contenido de `user` y `user_audit` antes y después de: los 7 POST sin sesión (303), de un editor (403) y de un administrador con cuerpo malicioso (`role=admin`, 20 KiB); la lista de solo lectura escapa un nombre con HTML (S-5).
+- **Q-2. Mismo origen y CSRF contra la API real:** los POST de S-1 en el admin nuevo dejan `user` y `user_audit` sin cambios.
+- **Q-3. Avisos y permisos:** `?ok=` desconocido no pinta nada; un editor con un formulario POST forjado a `/usuarios/<su id>` con `role=admin` recibe 403 y sigue siendo editor en la base.
+- **Q-4. Retorno (CA-15):** tras entrar con `next=/cuenta` y `next=/usuarios/<id>/contrasena` se vuelve a ellas; con `next=/usuarios/0/editar`, `next=/%2F%2Fevil.example` y `next=https://evil.example`, a `/`.
+
+#### Pruebas de performance
+
+- Duración de `admin-users-e2e.test.ts`, `admin-users-moved.test.ts`, `users.test.ts` y de la suite completa con `--maxWorkers=4`.
+- En navegador (B-8): número de peticiones por pantalla nueva, sin JS nuevo (solo `submit-guard.js` y los módulos que ya había) y sin errores en la consola. Ningún proceso queda en segundo plano al terminar.
+
+#### Pruebas SEO
+
+Solo aplica `noindex`: el admin no se indexa (S-4 y B-8). Las landings públicas no cambian (R-6).
+
+#### Evidencia requerida
+
+- Salida resumida (archivos, pruebas y código de salida) de G-1 a G-3.
+- Capturas a 375 y 1440 px de las pantallas de B-1 y de la lista de solo lectura (B-9), y los valores medidos de `scrollWidth`, alturas de áreas táctiles, foco (`outline`) y `document.activeElement` en el 409.
+- Peticiones de red con los códigos 303, 403, 410 y 503 de los recorridos.
+- Resultado de cada sonda Q con su aserción principal (recuentos de `user` y `user_audit`).
+- `git status` y `git diff --stat` frente a `0bfa50a`.
+
+#### Criterios de aprobación
+
+- Los CA de la tabla pasan con evidencia, y CA-13 con la revisión en navegador.
+- Las seis desviaciones se comprueban como se describe.
+- No hay defectos `BLOCKER` ni `CRITICAL`; cualquier `MAJOR` se lleva al usuario.
+- `typecheck`, `lint` y `npm test` terminan con 0, G-3 pasa en todas las repeticiones y la regresión R-1 a R-8 no presenta fallos.
+
+#### Decisiones para el usuario
+
+1. **Sonda Q-1 a Q-4:** ¿se crea `landing-pages/tests/integration/inventory-manager-qa-req-f-040.test.ts` y se conserva en el PR, como en el PR 1 (recomendado), se crea solo durante el QA y se borra al terminar, o no se crea (Q-1 a Q-4 se cubren solo en navegador y con `curl`)?
+2. **Base de la revisión en navegador:** (A, recomendado) la base local de desarrollo de `npm run dev` (`restaurante` en `mysql-dev`, no producción), donde quedarán `qa040-admin` y los usuarios de QA con el prefijo `qa040-`, desactivados al terminar (no se pueden eliminar), más sus entradas de `user_audit`; o (B) una base aparte `restaurante_test_qa040`, migrada para la revisión y borrada al final, con `DATABASE_URL` sustituida solo en el entorno de los procesos.
+3. **`ADMIN_NEW_URL` local:** ¿se permite, si `npm run dev` no la toma del entorno, añadirla temporalmente a `landing-pages/.env` y retirarla al terminar?
+
+#### Aprobación del QA Action Plan del PR 2 (2026-10-29)
+
+Respuestas textuales del usuario:
+
+1. Plan: "Sí, apruebo el plan".
+2. Sonda Q-1 a Q-4: "Conservarla en el PR (Recomendado)".
+3. Base de la revisión en navegador: "Base aparte temporal" (opción B, `restaurante_test_qa040`, borrada al terminar; la base local de desarrollo no se toca; intentar B-5 en el navegador).
+4. `ADMIN_NEW_URL`: "Sí, temporalmente" (no hizo falta: `npm run dev` la tomó del entorno).
+
+#### Pull Request del PR 2
+
+- **PR:** https://github.com/orvigas/negocio/pull/111, de `feature/REQ-F-040-admin-usuarios-2-inventory` hacia `epic/arquitectura`.
+- **Commits:**
+  - `ec19892`: `feat: gestiona los usuarios y la cuenta propia en el admin nuevo y deja el /admin actual en solo lectura (REQ-F-040, PR 2 de 2)`;
+  - y este commit, `docs: registra el Pull Request del PR 2 de REQ-F-040`.
+- **Base:** `origin/epic/arquitectura` seguía en `0bfa50a`, así que no hizo falta integrar nada.
+- **Sonda de QA:** se incluye `landing-pages/tests/integration/inventory-manager-qa-req-f-040.test.ts`, que el usuario decidió conservar ("Conservarla en el PR (Recomendado)").
+- **Estado:** `READY_FOR_MERGE` se registra en este commit para que entre en el merge, antes de marcar el PR como listo. El resultado del CI (`calidad`, `docker` y `auditoria`) se informa al usuario. Si el CI fallara, el estado se corregiría antes del merge.
+- **Antes de llevar la épica a `main`:** avisar al personal de que "Mi cuenta" y los usuarios del `/admin` actual dejarán de funcionar (R-3; `docs/despliegue.md`). Queda pendiente la comprobación manual del autorrelleno de contraseñas en el navegador (D-2 del QA).
+
 ## QA Report
 
 ### PR 1 de 2: `api` y contratos
@@ -1077,6 +1420,163 @@ No aplican al PR 1: no cambia HTML, CSS ni vistas. Las landings pasan sus prueba
 
 QA_APPROVED
 
+### PR 2 de 2: `inventory-manager`, solo lectura y documentación
+
+#### Ronda
+
+1 (2026-10-29), en `feature/REQ-F-040-admin-usuarios-2-inventory`, sin commit, frente a `0bfa50a`.
+
+#### Pruebas ejecutadas (desde `restaurante/`)
+
+| Prueba | Resultado |
+| --- | --- |
+| G-1. `npm run typecheck` | 0 (antes y después de añadir la sonda) |
+| G-1. `npm run lint` | 0, sin avisos (antes y después de añadir la sonda). No se ejecutó `lint:fix` |
+| G-2. `npm run build:css` | 0 (los CSS generados están ignorados por git) |
+| G-2. `npm test -- --maxWorkers=4`, ejecución 1 (sin la sonda) | 0. `api`: 7 archivos, 144 pruebas. `landing-pages`: 111 archivos, 2224 pasan y 1 fallo esperado (`local-server.test.ts`, `it.fails` que ya existía). `inventory-manager`: 8 archivos, 111 pruebas |
+| G-2. `npm test -- --maxWorkers=4`, ejecución 2 (con la sonda) | 0. `api`: 7 archivos, 144 pruebas. `landing-pages`: 112 archivos, 2225 pasan y 1 fallo esperado (el mismo). `inventory-manager`: 8 archivos, 111 pruebas |
+| G-3. 5 ejecuciones aisladas seguidas de `admin-users-e2e`, `admin-users-moved`, `users-api-process`, `users-api-qa-req-f-040`, `admin-e2e`, `inventory-manager-qa-req-f-039` e `inventory-manager-qa-req-f-040`, más `inventory-manager/tests/integration/users.test.ts` | 37 de 37 y 30 de 30 en las 5 (unos 24 s por ronda) |
+| Sonda nueva `landing-pages/tests/integration/inventory-manager-qa-req-f-040.test.ts` (Q-1 a Q-4, MySQL real y los tres procesos) | Pasa en 7 ejecuciones (1 aislada y 5 en G-3, además de la ejecución 2 de la suite) |
+| G-4. `git status` | Solo se añadió la sonda y se editó este ticket. `landing-pages/.env` sin cambios (`shasum` `aebc195c…` antes y después). La base `restaurante_test_qa040` se creó, se migró y se borró al final |
+| Navegador | Ver "Revisión en navegador" |
+
+**Primera versión de la sonda:** falló por un error de la propia prueba, no del producto. La instantánea de `user` incluía `lastLoginAt` y `updatedAt`, que cambian cuando la sonda inicia sesión con el editor. Se excluyeron esos dos campos. Las escrituras reales (rol, estado, `sessionVersion`, hash y negocios) y `user_audit` siguen comparándose completas.
+
+**Contenido de la sonda (Q-1 a Q-4):**
+
+- **Q-1, solo lectura:** los 6 POST de usuarios y de "Mi cuenta" del `/admin` actual con `ADMIN_NEW_URL`:
+  - sin sesión: 303 a `/admin/login`;
+  - como administrador, con `role=admin` y un cuerpo de 20 KiB: 410 con `no-store`;
+  - como editor: 403 en los de usuarios y 410 en `/admin/cuenta`;
+  - `user` y `user_audit` quedan idénticas.
+- **S-5, XSS:** un nombre visible `<img src=x onerror=alert(1)>` y un usuario `qa"<editor` se pintan escapados en la lista y la edición del admin nuevo y en la lista de solo lectura, sin ningún `img` en `main`.
+- **Q-2, mismo origen y CSRF:** `POST /usuarios`, `/usuarios/:id/desactivar` y `/cuenta` con `Origin` ajeno, con `Sec-Fetch-Site: cross-site` sin `Origin` y sin `_csrf` dan 403 ("Petición no válida" sin token). La base no cambia.
+- **Q-3, avisos y escalada:**
+  - `?ok=desconocido`, `?ok=__proto__` y `/cuenta?ok=created` no pintan ningún aviso; `?ok=created` sí;
+  - un editor que envía `role=admin` a `/usuarios/<su id>` recibe 403, sigue siendo editor y nada cambia.
+- **Q-4, retorno tras entrar:**
+  - se vuelve a `/cuenta`, `/usuarios`, `/usuarios/nuevo`, `/usuarios/<id>/editar` y `/usuarios/<id>/contrasena`;
+  - vuelven a `/`: `/usuarios/0/editar`, `/usuarios/<id>/desactivar`, `//evil.example`, `/%2F%2Fevil.example`, `https://evil.example/usuarios` y `/usuarios?x=1`;
+  - lo mismo ocurre en el campo oculto `next` del formulario.
+- **CA-12:** los logs de los tres procesos no contienen las contraseñas usadas, `scrypt$`, los tokens CSRF ni los ids de sesión.
+
+#### Revisión en navegador
+
+**Entorno:**
+
+- `npm run dev` con `DATABASE_URL` hacia `restaurante_test_qa040` y `ADMIN_NEW_URL=http://127.0.0.1:3003`, ambas solo en el entorno de los procesos. También `API_INTERNAL_URL`, `DATA_DIR` temporal y `ADMIN_USER=qa040-admin` con un hash generado.
+- Así `qa040-admin` fue el único administrador (`adminStatus: created`).
+- No hizo falta tocar `landing-pages/.env`.
+
+**Claude in Chrome:**
+
+- Se usó para entrar, ver la lista, desactivar a un usuario y comprobar la cabecera.
+- `resize_window` no cambió el tamaño de la ventana (`innerWidth` siguió en 1064 tras dos intentos), y los marcos y las ventanas emergentes están bloqueados.
+- Por eso las medidas por viewport se hicieron con Chrome real en modo headless, controlado por DevTools Protocol (`Emulation.setDeviceMetricsOverride` a 375×812, 768×1024 y 1440×900, y teclado con `Input.dispatchKeyEvent`), con un perfil temporal.
+- Las capturas están en `/private/tmp/claude-501/-Users-orvigas-Desktop-Negocio/295b6757-f3b3-4ee4-bf01-daa30ac9bc18/scratchpad/qa/shots/`.
+
+| Recorrido | Resultado |
+| --- | --- |
+| B-1. Responsive | `scrollWidth` igual a `innerWidth` (375, 768 y 1440) en `/usuarios`, `/usuarios/nuevo`, `/usuarios/3/editar`, `/usuarios/3/contrasena`, `/cuenta`, `/acceso?ok=sesion_cerrada`, `/molotes/productos` y `/birria/productos`, y en `/admin/usuarios`, `/admin/cuenta` y `/admin/usuarios/nuevo` del `/admin` actual. Ningún elemento del admin nuevo sobresale. Un nombre visible de 60 caracteres y un usuario de 52, ambos sin espacios, se parten dentro de la tarjeta. Botones y enlaces de las pantallas nuevas de al menos 44 px, salvo el enlace de marca "Administración" (28 px, de REQ-F-039); los campos miden 42 px, igual que en productos |
+| B-2. Lista (CA-2, D-1) | Tarjetas con usuario, nombre, rol, negocios ("Todos" para el administrador), estado en texto ("Activo" o "Desactivado", además del color) y último acceso (`29/10/2026 19:04`, la hora de Ciudad de México para 01:04 UTC) o "Nunca". Los activos van primero |
+| B-3. Alta y edición (CA-3, CA-11) | Repetido con otras mayúsculas (`QA040-EDITOR`): error junto al campo con "Error:", lo escrito se conserva y las contraseñas quedan vacías. Varios errores: resumen `role="alert"` con enlaces a `#f-displayName` y `#f-password`; el enlace lleva el foco al campo, que tiene `aria-invalid` y `aria-describedby` hacia su ayuda y su error. `submit-guard`: "Guardando…" y, con dos `requestSubmit` y un clic seguidos, un solo usuario (`qa040-guard`). PRG: atrás vuelve al GET `/usuarios/nuevo` sin reenviar. La contraseña multibyte (`ñandú-12345á`) se aceptó como válida (el único error fue el usuario repetido). D-3: tras un 422 o un 409 en la edición no aparece el panel "Estado y contraseña", pero quedan "Volver a usuarios" y "Cancelar" y el formulario sigue usable |
+| B-4. API detenida (CA-10) | Alta: 503 "Servicio no disponible", con usuario, nombre y negocio conservados, contraseñas vacías, sin trazas y sin la contraseña en el HTML. "Mi cuenta" (con la página ya abierta): aviso "no se cambió la contraseña", contraseñas vacías y sin trazas. `GET /cuenta` con la API caída: página "Servicio no disponible" |
+| B-5. Último administrador (CA-6) | Con `qa040-admin` como único administrador. Pasarse a editor: 409, aviso `role="alert"` con el foco, nombre, rol y negocio conservados, y sigue siendo administrador. Desactivarse desde la lista: 409 con el aviso y el foco en él |
+| B-6. Editor (CA-1) | La cabecera muestra Molotes, "Mi cuenta" y "Salir", sin "Usuarios". `/usuarios`, `/usuarios/3/editar`, `/usuarios/nuevo` y `/usuarios/2/contrasena` muestran "Sin permiso" sin filas ni datos |
+| B-7. Sesiones (CA-4, CA-5, CA-7, CA-8) | Con la contraseña actual incorrecta: error en `currentPassword` y nada se repinta. Con la correcta: `/cuenta?ok=password_change` y la cookie `admin_sid` cambia de valor (`HttpOnly`, `SameSite=Strict`, `Path=/`). El editor sigue con sesión en el admin nuevo (`/molotes/productos`) y su sesión del `/admin` actual cae (`/admin` lleva a `/admin/login`). Un segundo administrador que se degrada a sí mismo termina en `/acceso?ok=sesion_cerrada` con el aviso "Tu sesión se cerró…", y al volver a entrar ya no ve "Usuarios" |
+| B-8. Teclado y foco (CA-13) | En las 5 pantallas, el primer tabulado es "Saltar al contenido" y con Intro el foco va a `main#contenido`. El orden sigue la lectura y no hay trampas. Enlaces y botones: contorno sólido de 2 px `rgb(234, 179, 8)` (`#eab308`). Campos: el foco cambia el borde a `rgb(194, 65, 12)`, igual que en el formulario de productos de REQ-F-039. Espacio sobre "Desactivar" da `?ok=deactivated` e Intro sobre "Reactivar" da `?ok=reactivated`; los dos son `<button>` dentro de un `<form method="post">` con nombre accesible ("Desactivar a …"). Un `h1` por página, `lang="es"`, `meta robots` `noindex, nofollow`, todas las entradas con su `label` y `autocomplete` `off`, `new-password` y `current-password`. Ninguna contraseña lleva `value`. Solo se carga `/js/main.js`. 0 errores de JS en la consola (solo los avisos de red de los 4xx esperados) |
+| B-9. Solo lectura del `/admin` actual (CA-14) | Como administrador: `/admin/usuarios` responde 200 con 6 filas, sin formularios, con el aviso y un solo enlace a `http://127.0.0.1:3003/usuarios`. Responden 410: `/admin/usuarios/nuevo`, `/admin/usuarios/2` (enlace a `/usuarios/2/editar`), `/admin/usuarios/2/contrasena` y `/admin/cuenta`. Responden 200: `/admin`, `/admin/molotes`, `/admin/birria` y `/admin/bot`. Todas con `no-store` y `X-Robots-Tag: noindex, nofollow`. Como editor, `/admin/usuarios` da 403 y `/admin/cuenta` da 410, con el enlace a "Mi cuenta" del admin nuevo |
+| B-10. Productos en el admin nuevo | Listas de Molotes y Birria sin desplazamiento horizontal a 375, 768 y 1440 px; "Usuarios" sin `aria-current` en esas pantallas |
+
+Logs de `npm run dev` y de la API reiniciada (989 líneas): 0 apariciones de las contraseñas usadas, `scrypt$`, `admin_sid` o `csrf`.
+
+#### Criterios de aceptación
+
+| CA | Resultado | Evidencia |
+| --- | --- | --- |
+| CA-1 | PASS | `users.test.ts`, B-6 y Q-3 (escalada forzada: 403 y sigue siendo editor) |
+| CA-2 | PASS | `users.test.ts` y B-2 (campos, "Todos", "Nunca", hora del negocio y orden) |
+| CA-3 | PASS | `users.test.ts`, `admin-users-e2e.test.ts` y B-3 (PRG, 422 conservando lo escrito sin contraseñas, repetido con otras mayúsculas, doble envío con un solo usuario) |
+| CA-4 | PASS | `admin-users-e2e.test.ts` (cambio de negocios: caen las dos sesiones); PR 1 (solo el nombre no las cierra) |
+| CA-5 | PASS | `admin-users-e2e.test.ts`; B-3 y B-8 (desactivar y reactivar con PRG y teclado) |
+| CA-6 | PASS | B-5 en navegador con un único administrador (degradarse y desactivarse: 409 con el foco en el aviso y sin cambios); autodegradación con dos (B-7); concurrencia en G-3 (`users-api-process`, `users-api-qa-req-f-040`) |
+| CA-7 | PASS | `admin-users-e2e.test.ts` y `users.test.ts` (también restablecerse la propia contraseña) |
+| CA-8 | PASS | B-7 (cookie nueva, sigue la sesión aquí y cae en el `/admin` actual; actual incorrecta en su campo); `users.test.ts` (campos ajenos: 400) |
+| CA-9 | PASS | `users.test.ts` y Q-2 contra la API real, sin cambios en la base |
+| CA-10 | PASS | B-4 en navegador y `users.test.ts` (`down` y `writes-down`) |
+| CA-11 | PASS | `users.test.ts` (404); B-3 (atrás no reenvía) |
+| CA-12 | PASS | `no-store` y `noindex` (B-8, B-9 y Q-1); logs sin secretos en `admin-users-e2e`, la sonda y `npm run dev` |
+| CA-13 | PASS | B-1 y B-8 en Chrome real a 375, 768 y 1440 px, más jsdom en `users.test.ts` |
+| CA-14 | PASS | `admin-users-moved.test.ts`, Q-1 (sin sesión, editor y cuerpo malicioso) y B-9; sin la variable, `admin-users.test.ts`, `admin-account.test.ts` y la matriz de autorización no cambiaron (`git diff 0bfa50a`) y pasan |
+| CA-15 | PASS | `users.test.ts`, `config-session.test.ts` y Q-4 |
+| CA-16 | PASS | `npm run lint` en 0 (regla de dependencias de `inventory-manager`) |
+| CA-17 | PASS en local | `typecheck`, `lint` y `test` en 0. El CI real queda para T4 |
+| CA-18 | PASS | Diff de `arquitectura.md` §8 (tabla y "Paso 4, ticket 2 aplicado"), `.claude/CLAUDE.md` §8 (solo las dos descripciones), `README.md`, `docs/despliegue.md` (efecto de `ADMIN_NEW_URL` y aviso al personal), `docs/desarrollo.md` y `.env.example`, coherentes con lo implementado |
+
+**Desviaciones:**
+
+| Desviación | Resultado |
+| --- | --- |
+| D-1. Tarjetas | Correcta (B-1 y B-2) |
+| D-2. `autocomplete="off"` | Correcto en el DOM (B-8). El autorrelleno real con credenciales guardadas no se pudo probar: el perfil headless no tiene contraseñas guardadas (ver pendientes) |
+| D-3. Panel solo en la carga inicial | Correcta (B-3 y B-5): el formulario sigue usable |
+| D-4. "Secciones" | Correcta: `aria-label="Secciones"` y `aria-current="page"` en la sección activa |
+| D-5. `admin-products-moved.test.ts` | Correcta: solo cambian el comentario, el título de la prueba y la expectativa de `/admin/cuenta` (410) |
+| D-6. `.claude/CLAUDE.md` §8 | Correcta: solo cambian las descripciones de `api` e `inventory-manager` |
+
+#### Defectos encontrados
+
+Ninguno.
+
+**Observaciones sin defecto** (comportamientos que ya existían o que siguen el patrón aprobado):
+
+- **OBS-1. Foco de los campos:** el anillo es un cambio de color del borde (`#ab8985` a `#c2410c`) con el contorno transparente. Es el componente `field` de P-4, igual que en productos (REQ-F-039). En enlaces y botones el contorno es el de `#eab308`.
+- **OBS-2. Lista de solo lectura del `/admin` actual a 375 px:** la tabla se desplaza dentro de su contenedor (`overflow-x-auto`), como la lista de usuarios que ya existía. La página no se desplaza en horizontal.
+- **OBS-3. Áreas táctiles heredadas:** el enlace de marca "Administración" del admin nuevo mide 28 px y los enlaces de la cabecera del `/admin` actual, 36 px. No son de este PR.
+
+#### Regresión
+
+- **R-1. Productos del admin nuevo:** `products.test.ts`, `access.test.ts` y `js-server.test.ts` sin cambios y en verde; B-10.
+- **R-2. Productos del `/admin` actual:** `admin-products-moved.test.ts` (solo D-5) y las pruebas de productos en verde.
+- **R-3:** `admin-users.test.ts`, `admin-account.test.ts` y `admin-authorization-matrix.test.ts` sin cambios (`git diff 0bfa50a`) y en verde.
+- **R-4:** bot, menú y `admin:recover` con `ADMIN_NEW_URL` (`admin-users-moved.test.ts`); `/admin/bot`, `/admin/molotes` y `/admin/birria` con 200 en B-9.
+- **R-5:** API con 144 de 144; `users-api-process` y `users-api-qa-req-f-040` estables en G-3.
+- **R-6:** landings en verde en la suite.
+- **R-7:** `user-repository.test.ts` y `last-admin-concurrency.test.ts` sin cambios y en verde.
+- **R-8:** ningún cambio en `deploy/` ni en `packages/`.
+
+#### Responsive
+
+Sin desplazamiento horizontal a 375, 768 y 1440 px en todas las pantallas nuevas y en las de productos (B-1). Las capturas a 375 y 1440 px están en la carpeta indicada.
+
+#### Accesibilidad
+
+B-8 y B-3: teclado completo, salto al contenido, foco visible, etiquetas, errores asociados con "Error:" y no solo con color, resumen con enlaces, aviso urgente con el foco, botones POST y un `h1` por página. Ver OBS-1.
+
+#### UX/UI
+
+`_stich_source_/` no tiene diseño del admin. Las pantallas usan el sistema P-4 de REQ-F-039 (tokens, `field`, `notice`, `button` y `admin-header`), sin colores ni tipografías nuevos (capturas). El `/admin` actual conserva su estilo.
+
+#### Performance
+
+- Las pantallas nuevas solo cargan `/js/main.js` (no hay JS nuevo) y no tienen errores de JS.
+- G-3 tarda unos 24 s por ronda con 7 archivos de procesos; la sonda nueva, unos 4 s.
+- No quedó ningún proceso de `npm run dev`, de Chrome headless ni de pruebas al terminar.
+
+#### SEO
+
+`noindex, nofollow` en `X-Robots-Tag` y en `<meta name="robots">` en todas las pantallas revisadas. Las landings públicas no cambian.
+
+#### Pendientes de revisión manual
+
+- **D-2:** con contraseñas guardadas en el Chrome del usuario, comprobar que el alta y la edición no rellenan el usuario del administrador. No es un CA: la desviación ya está aprobada y el atributo es correcto.
+- El CI real (`calidad`, `docker` y `auditoria`) se comprueba en T4.
+- La sonda `landing-pages/tests/integration/inventory-manager-qa-req-f-040.test.ts` debe entrar en el commit del PR 2 ("Conservarla en el PR (Recomendado)").
+
+#### Resultado final
+
+QA_APPROVED
+
 ## Historial de cambios
 
 ### Versión 1 (2026-10-29)
@@ -1111,3 +1611,31 @@ El usuario aprobó el QA Action Plan ("Sí, apruebo el plan"), decidió conserva
 ### Pull Request del PR 1 (2026-10-29)
 
 Commit `29dad31` y PR #110 (https://github.com/orvigas/negocio/pull/110) hacia `epic/arquitectura`, con la prueba de QA incluida. Estado: `READY_FOR_MERGE` (PR 1 de 2), sujeto a que el CI termine en verde.
+
+### Merge del PR 1 e inicio del PR 2 (2026-10-29)
+
+El usuario mergeó el PR #110 ("pr 110 mergeado"; merge `0bfa50a` en `epic/arquitectura`, con el CI en verde). Empieza el PR 2 en `feature/REQ-F-040-admin-usuarios-2-inventory`. Estado: `IN_PROGRESS`.
+
+### Implementación del PR 2 (2026-10-29)
+
+PR 2 de 2 (pantallas de `inventory-manager`, solo lectura del `/admin` actual con `ADMIN_NEW_URL`, e2e y documentación) implementado en `feature/REQ-F-040-admin-usuarios-2-inventory`, con `typecheck`, `lint`, `build:css` y `test` en 0, y las pruebas con procesos estables en 5 ejecuciones. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`. Sin commit.
+
+### QA Action Plan del PR 2 (2026-10-29)
+
+El usuario aprobó la implementación del PR 2 ("Si lo apruebo"), con sus seis desviaciones. Fase Q1 (senior-qa): QA Action Plan del PR 2, con la revisión en navegador de CA-13 (375, 768 y 1440 px, teclado, foco, errores, último administrador y editor), la solo lectura del `/admin` actual, seguridad, regresión de productos en los dos admins, estabilidad de las pruebas con procesos y tres decisiones pendientes (sonda de QA, base de la revisión en navegador y `ADMIN_NEW_URL` local). Estado: `NEEDS_QA_PLAN_APPROVAL`.
+
+### QA del PR 2 (2026-10-29)
+
+El usuario aprobó el QA Action Plan del PR 2 ("Sí, apruebo el plan"), decidió conservar la sonda ("Conservarla en el PR (Recomendado)"), pidió una base aparte ("Base aparte temporal") y permitió `ADMIN_NEW_URL` temporal ("Sí, temporalmente"; no hizo falta). Fase Q2 (senior-qa), ronda 1:
+
+- sonda nueva `landing-pages/tests/integration/inventory-manager-qa-req-f-040.test.ts`, estable en 7 ejecuciones;
+- 2 ejecuciones completas de la suite en 0;
+- las pruebas con procesos, estables en 5 rondas;
+- revisión en Chrome real (headless por DevTools Protocol, porque `resize_window` no funcionó) a 375, 768 y 1440 px, con B-5 reproducido con un único administrador;
+- base `restaurante_test_qa040` borrada y `landing-pages/.env` sin cambios.
+
+Sin defectos. Estado: `QA_APPROVED`.
+
+### Pull Request del PR 2 (2026-10-29)
+
+Commit `ec19892` y PR #111 (https://github.com/orvigas/negocio/pull/111) hacia `epic/arquitectura`, con la sonda de QA incluida. Estado: `READY_FOR_MERGE` (PR 2 de 2), sujeto a que el CI termine en verde. El ticket pasa a `done/` en T5, tras el merge.

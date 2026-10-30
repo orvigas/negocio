@@ -2,7 +2,7 @@ import { WRONG_CURRENT_PASSWORD_MESSAGE, hashPassword, validatePasswordPair, ver
 
 import { SESSION_COOKIE, sessionCookieOptions } from '../middleware/admin-guard.ts';
 import { ACCOUNT_PATH } from '../views/admin/index.ts';
-import { ACCOUNT_SUCCESS_MESSAGES, renderAccount, type FieldErrors } from '../views/admin/users.ts';
+import { ACCOUNT_SUCCESS_MESSAGES, renderAccount, renderUsersMoved, type FieldErrors } from '../views/admin/users.ts';
 import { createAdminAccess, type AdminRouterContext } from './admin-access.ts';
 import type { AdminDeps } from './admin.ts';
 
@@ -28,6 +28,19 @@ const ACCOUNT_FIELDS = Object.freeze(['currentPassword', 'password', 'passwordCo
 export function createAdminAccountController(deps: AdminDeps): AdminAccountController {
   const { config, renderer, now, sessions, users, hashParams, logger } = deps;
   const access = createAdminAccess({ config, sessions, users, renderer, now, logger });
+
+  // Modo de solo lectura (REQ-F-040, RF-19): con el admin nuevo activo (ADMIN_NEW_URL), la propia
+  // contraseña se cambia allí. GET y POST: sesión -> 410 con el aviso y el enlace a "Mi cuenta" del admin
+  // nuevo, sin leer el formulario ni escribir nada.
+  const movedTo = config.adminNewUrl;
+  if (movedTo !== undefined) {
+    const moved = (ctx: AdminRouterContext) =>
+      access.page(ctx, { returnTo: ACCOUNT_PATH }, (auth) => {
+        logger.info('admin_users_moved', { path: ctx.path, method: ctx.method, userId: auth.user.id });
+        access.sendHtml(ctx, 410, renderUsersMoved(renderer, { ...access.pageContext(auth), href: `${movedTo}/cuenta`, account: true }));
+      });
+    return Object.freeze<AdminAccountController>({ page: moved, changePassword: moved });
+  }
 
   return Object.freeze<AdminAccountController>({
     page(ctx) {

@@ -1,0 +1,12 @@
+<div class="users-page__head flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <h1 class="font-headline text-3xl font-black tracking-tight uppercase">Usuarios</h1>
+        <ul class="users-page__actions flex flex-wrap gap-2">{{{ actions }}}
+        </ul>
+      </div>
+      {{{ notices }}}
+      <p class="mt-4 text-sm text-masa">El administrador gestiona todo, incluidos los usuarios; el editor, solo sus negocios. Los usuarios no se eliminan: se desactivan.</p>
+      <section class="user-list mt-6" aria-labelledby="user-list-title">
+        <h2 id="user-list-title" class="sr-only">Lista de usuarios</h2>
+        <ul class="user-list__items space-y-3">{{{ rows }}}
+        </ul>
+      </section>

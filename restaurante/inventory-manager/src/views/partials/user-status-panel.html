@@ -1,0 +1,8 @@
+
+      <section class="user-form__status mt-8 rounded-2xl border border-rim bg-surface p-4 md:p-6" aria-labelledby="user-status-title">
+        <h2 id="user-status-title" class="font-headline text-lg font-bold">Estado y contraseña</h2>
+        <p class="mt-2 text-masa">Estado: <span class="user-row__state user-row__state--{{ stateModifier }} font-semibold {{ stateClass }}">{{ state }}</span>. {{ hint }}</p>
+        <div class="mt-4 flex flex-wrap items-center gap-3">{{{ statusForm }}}
+          <a class="button button--ghost inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg px-3 py-2 font-label text-sm font-bold tracking-wider text-maiz uppercase hover:bg-surface-high" href="{{ passwordHref }}">Restablecer la contraseña</a>
+        </div>
+      </section>

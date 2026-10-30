@@ -138,12 +138,46 @@ function renderNotices(
 const businessesText = (user: UserRecord): string =>
   user.role === 'admin' ? 'Todos' : user.businesses.map((businessId) => businessName(businessId)).join(', ');
 
-/** Lista de usuarios (R-8). */
+/**
+ * Aviso del modo de solo lectura (REQ-F-040, RF-19; P-2 "Como productos (Recomendado)"): usuarios y
+ * "Mi cuenta" se gestionan en el admin nuevo (`ADMIN_NEW_URL`). Texto, no solo color, y un enlace con
+ * nombre a la pantalla equivalente.
+ */
+export function renderUsersMovedNotice(renderer: Renderer, { href, account = false }: { href: string; account?: boolean }): SafeHtml {
+  return renderAdminNotice(renderer, {
+    tone: 'warning',
+    role: 'status',
+    title: account ? 'Tu contraseña ahora se cambia en el admin nuevo.' : 'Los usuarios ahora se gestionan en el admin nuevo.',
+    paragraphs: [account ? 'Aquí ya no se puede cambiar: entra al admin nuevo con tu mismo usuario y contraseña y abre «Mi cuenta».' : 'Aquí solo puedes consultarlos: altas, cambios, desactivaciones y contraseñas se hacen en el admin nuevo.'],
+    extra: renderer.render('admin/partials/users-moved-link', { href, label: account ? 'Ir a «Mi cuenta» en el admin nuevo' : 'Ir a la pantalla equivalente del admin nuevo' }),
+  });
+}
+
+/**
+ * Página 410 del modo de solo lectura (REQ-F-040, RF-19): formularios y acciones de usuarios o de "Mi
+ * cuenta" del /admin actual con el admin nuevo activo. No muestra ni cambia nada.
+ */
+export function renderUsersMoved(renderer: Renderer, context: AdminPageContext & { href: string; account: boolean }): SafeHtml {
+  const title = context.account ? 'Mi cuenta' : 'Usuarios';
+  return adminPage(renderer, {
+    ...context,
+    title,
+    current: context.account ? 'account' : 'users',
+    body: renderer.render('admin/users-moved', {
+      title,
+      backHref: context.account ? '/admin' : USERS_PATH,
+      backLabel: context.account ? 'Volver al inicio' : 'Volver a usuarios',
+      notice: renderUsersMovedNotice(renderer, { href: context.href, account: context.account }),
+    }),
+  });
+}
+
+/** Lista de usuarios (R-8); con `movedTo`, en solo lectura (REQ-F-040, RF-19). */
 export function renderUsersList(
   renderer: Renderer,
-  context: AdminPageContext & { users: UserRecord[]; timezone: string; success?: string | undefined; problem?: string | undefined },
+  context: AdminPageContext & { users: UserRecord[]; timezone: string; success?: string | undefined; problem?: string | undefined; movedTo?: string | undefined },
 ): SafeHtml {
-  const { users, timezone, csrfToken } = context;
+  const { users, timezone, csrfToken, movedTo } = context;
   const rows = users.map((user) => ({
     username: user.username,
     displayName: user.displayName,
@@ -158,6 +192,17 @@ export function renderUsersList(
     csrfToken,
     secondaryButtonClass: ADMIN_CLASSES.secondaryButton,
   }));
+  if (movedTo) {
+    return adminPage(renderer, {
+      ...context,
+      title: 'Usuarios',
+      current: 'users',
+      body: renderer.render('admin/users-list-readonly', {
+        notices: renderUsersMovedNotice(renderer, { href: `${movedTo}/usuarios` }),
+        rows: renderer.renderEach('admin/partials/user-row-readonly', rows),
+      }),
+    });
+  }
   return adminPage(renderer, {
     ...context,
     title: 'Usuarios',

@@ -1,0 +1,21 @@
+<div class="mb-6">
+        <h1 class="text-2xl font-bold text-slate-900">Usuarios</h1>
+      </div>
+      {{{ notices }}}
+      <div class="admin-users relative overflow-x-auto rounded-lg border border-slate-300 bg-white shadow-xs">
+        <table class="admin-users__table w-full text-left text-sm">
+          <caption class="sr-only">Usuarios de la administración (solo consulta)</caption>
+          <thead class="bg-slate-50 text-slate-800">
+            <tr>
+              <th scope="col" class="px-3 py-2 font-semibold">Usuario</th>
+              <th scope="col" class="px-3 py-2 font-semibold">Nombre</th>
+              <th scope="col" class="px-3 py-2 font-semibold">Rol</th>
+              <th scope="col" class="px-3 py-2 font-semibold">Negocios</th>
+              <th scope="col" class="px-3 py-2 font-semibold">Estado</th>
+              <th scope="col" class="px-3 py-2 font-semibold">Último acceso</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200">{{{ rows }}}
+          </tbody>
+        </table>
+      </div>

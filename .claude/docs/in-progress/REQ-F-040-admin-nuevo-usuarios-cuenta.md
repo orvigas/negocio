@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 2 de 2: `inventory-manager`, solo lectura y documentación; 2026-10-29). El PR 1 (#110) se mergeó en `epic/arquitectura` (`0bfa50a`).
+READY_FOR_MERGE (PR 2 de 2: https://github.com/orvigas/negocio/pull/111, hacia `epic/arquitectura`; 2026-10-29). El PR 1 (#110) se mergeó en `epic/arquitectura` (`0bfa50a`).
 
 ## Aprobación
 
@@ -1316,6 +1316,17 @@ Respuestas textuales del usuario:
 3. Base de la revisión en navegador: "Base aparte temporal" (opción B, `restaurante_test_qa040`, borrada al terminar; la base local de desarrollo no se toca; intentar B-5 en el navegador).
 4. `ADMIN_NEW_URL`: "Sí, temporalmente" (no hizo falta: `npm run dev` la tomó del entorno).
 
+#### Pull Request del PR 2
+
+- **PR:** https://github.com/orvigas/negocio/pull/111, de `feature/REQ-F-040-admin-usuarios-2-inventory` hacia `epic/arquitectura`.
+- **Commits:**
+  - `ec19892`: `feat: gestiona los usuarios y la cuenta propia en el admin nuevo y deja el /admin actual en solo lectura (REQ-F-040, PR 2 de 2)`;
+  - y este commit, `docs: registra el Pull Request del PR 2 de REQ-F-040`.
+- **Base:** `origin/epic/arquitectura` seguía en `0bfa50a`, así que no hizo falta integrar nada.
+- **Sonda de QA:** se incluye `landing-pages/tests/integration/inventory-manager-qa-req-f-040.test.ts`, que el usuario decidió conservar ("Conservarla en el PR (Recomendado)").
+- **Estado:** `READY_FOR_MERGE` se registra en este commit para que entre en el merge, antes de marcar el PR como listo. El resultado del CI (`calidad`, `docker` y `auditoria`) se informa al usuario. Si el CI fallara, el estado se corregiría antes del merge.
+- **Antes de llevar la épica a `main`:** avisar al personal de que "Mi cuenta" y los usuarios del `/admin` actual dejarán de funcionar (R-3; `docs/despliegue.md`). Queda pendiente la comprobación manual del autorrelleno de contraseñas en el navegador (D-2 del QA).
+
 ## QA Report
 
 ### PR 1 de 2: `api` y contratos
@@ -1624,3 +1635,7 @@ El usuario aprobó el QA Action Plan del PR 2 ("Sí, apruebo el plan"), decidió
 - base `restaurante_test_qa040` borrada y `landing-pages/.env` sin cambios.
 
 Sin defectos. Estado: `QA_APPROVED`.
+
+### Pull Request del PR 2 (2026-10-29)
+
+Commit `ec19892` y PR #111 (https://github.com/orvigas/negocio/pull/111) hacia `epic/arquitectura`, con la sonda de QA incluida. Estado: `READY_FOR_MERGE` (PR 2 de 2), sujeto a que el CI termine en verde. El ticket pasa a `done/` en T5, tras el merge.

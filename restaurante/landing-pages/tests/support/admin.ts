@@ -251,3 +251,9 @@ export async function loginAs(browser: Browser, username: string, password = USE
   if (res.status !== 303) throw new Error(`El acceso de ${username} respondió ${res.status}`);
   return browser;
 }
+
+/** Desactiva un usuario desde /admin/usuarios con el token CSRF de la página (como el formulario). */
+export async function deactivateUser(browser: Browser, id: number) {
+  const page = await browser.get('/admin/usuarios');
+  return browser.post(`/admin/usuarios/${id}/desactivar`).type('form').send({ _csrf: csrfFrom(page.text) });
+}

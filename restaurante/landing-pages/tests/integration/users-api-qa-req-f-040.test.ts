@@ -1,12 +1,9 @@
-import { join } from 'node:path';
-
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { CSRF_HEADER, userResponseSchema } from '@restaurante/contracts';
+import { userResponseSchema } from '@restaurante/contracts';
 
-import { ADMIN_PASSWORD, ADMIN_USER, USER_PASSWORD, createUser, setupAdmin } from '../support/admin.ts';
-import { startServer } from '../support/process.ts';
-import { databaseUrl } from '../support/test-database-config.ts';
+import { USER_PASSWORD, createUser } from '../support/admin.ts';
+import { P, REPETITIONS, startStack, ownerSession, errorOf, runCleanups } from '../support/users-api-qa-req-f-040.ts';
 
 /**
  * QA de REQ-F-040 (PR 1): usuarios y cuenta propia de `/api/v1/admin` con el proceso real de la API
@@ -20,60 +17,12 @@ import { databaseUrl } from '../support/test-database-config.ts';
  *
  * Como `users-api-process.test.ts`, arranca la API como proceso hijo (puertos con `freePorts`) sin
  * importar código de `api/`, sobre la base de `setupAdmin()`.
+ *
+ * REQ-F-041: parte de users-api-qa-req-f-040.test.ts (preparación en
+ * tests/support/users-api-qa-req-f-040.ts).
  */
 
-const API_ENTRY = join('..', 'api', 'src', 'server.ts');
-const P = '/api/v1/admin';
-const REPETITIONS = 10;
-
-const cleanups: (() => Promise<unknown>)[] = [];
-afterEach(async () => {
-  while (cleanups.length > 0) await cleanups.pop()?.();
-});
-
-interface ApiSession {
-  id: string;
-  csrfToken: string;
-}
-
-let ipCounter = 0;
-const nextIp = () => `203.0.113.${(ipCounter++ % 250) + 1}`;
-
-async function startStack() {
-  const context = await setupAdmin();
-  const api = await startServer({ DATABASE_URL: databaseUrl(context.database.config), INTERNAL_NOTIFY_TOKEN: undefined }, 60_000, { args: [API_ENTRY] });
-  cleanups.push(() => api.stop());
-  expect(api.started, api.output().stderr).toBe(true);
-
-  async function apiSession(username: string, password = USER_PASSWORD): Promise<ApiSession> {
-    const res = await fetch(`${api.url}${P}/sesion`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-forwarded-for': nextIp() },
-      body: JSON.stringify({ username, password }),
-    });
-    if (res.status !== 201) throw new Error(`El acceso de ${username} a la API respondió ${res.status}`);
-    return ((await res.json()) as { session: ApiSession }).session;
-  }
-  /** Petición con la sesión y el CSRF; `raw` envía el texto tal cual (claves que JSON.stringify no conserva). */
-  function apiCall(path: string, auth: ApiSession, { method = 'GET', body, raw }: { method?: string; body?: unknown; raw?: string } = {}): Promise<Response> {
-    const headers: Record<string, string> = { authorization: `Bearer ${auth.id}` };
-    if (method !== 'GET' && method !== 'HEAD') headers[CSRF_HEADER] = auth.csrfToken;
-    const payload = raw ?? (body === undefined ? undefined : JSON.stringify(body));
-    if (payload !== undefined) headers['content-type'] = 'application/json';
-    return fetch(`${api.url}${path}`, { method, headers, ...(payload === undefined ? {} : { body: payload }) });
-  }
-  const snapshot = async () => ({
-    users: await context.prisma.user.findMany({ include: { businesses: true }, orderBy: { id: 'asc' } }),
-    audit: await context.prisma.userAudit.findMany({ orderBy: { id: 'asc' } }),
-  });
-  const activeAdmins = () => context.prisma.user.findMany({ where: { role: 'admin', active: true }, select: { username: true } });
-  return { context, api, apiSession, apiCall, snapshot, activeAdmins };
-}
-
-type Stack = Awaited<ReturnType<typeof startStack>>;
-
-const ownerSession = (stack: Stack) => stack.apiSession(ADMIN_USER, ADMIN_PASSWORD);
-const errorOf = async (res: Response) => ((await res.json()) as { error: { code: string; fields?: Record<string, string> } }).error;
+afterEach(runCleanups);
 
 describe('seguridad (R-2, CA-1 y CA-8)', () => {
   it('un editor no se da privilegios: ni por usuarios (403) ni por "Mi cuenta" (422), tampoco con __proto__ o constructor', async () => {
@@ -229,61 +178,6 @@ describe('validación y edición simultánea (RF-4, RF-7 y RF-9)', () => {
       const stored = (await stack.context.prisma.user.findUnique({ where: { id: eli.id } }))?.displayName;
       expect(names).toContain(stored);
       expect(await stack.context.prisma.userAudit.count({ where: { targetId: eli.id, action: 'update' } })).toBe(auditBefore + 2);
-    }
-  }, 180_000);
-});
-
-describe('último administrador por caminos distintos de dos desactivaciones (D-7, CA-6)', () => {
-  async function twoAdmins(stack: Stack) {
-    const owner = (await stack.context.users.findCredentials(ADMIN_USER))?.user;
-    if (!owner) throw new Error('Falta el primer administrador');
-    const beto = await createUser(stack.context.users, { username: 'beto', role: 'admin' });
-    const restore = async () => {
-      for (const user of [owner, beto]) {
-        await stack.context.users.update(user.id, { username: user.username, displayName: user.displayName, role: 'admin', businesses: [] }, { kind: 'system' });
-        await stack.context.users.setActive(user.id, true, { kind: 'system' });
-      }
-    };
-    const demote = (target: { id: number; username: string; displayName: string }, auth: ApiSession) =>
-      stack.apiCall(`${P}/usuarios/${target.id}`, auth, {
-        method: 'PUT',
-        body: { username: target.username, displayName: target.displayName, role: 'editor', businesses: ['molotes'] },
-      });
-    return { owner, beto, restore, demote };
-  }
-
-  /** Como mucho una gana; las demás reciben 409, 401 (su sesión cayó) o 503 sin cambios. */
-  async function expectOneAdminLeft(stack: Stack, responses: Response[]) {
-    const statuses = responses.map((res) => res.status);
-    for (const status of statuses) expect([200, 401, 409, 503], String(statuses)).toContain(status);
-    const wins = statuses.filter((status) => status === 200).length;
-    expect(wins, String(statuses)).toBeLessThanOrEqual(1);
-    const admins = await stack.activeAdmins();
-    expect(admins.length, String(statuses)).toBeGreaterThanOrEqual(1);
-    expect(admins.length, String(statuses)).toBe(2 - wins);
-    return statuses;
-  }
-
-  it(`dos administradores se degradan entre sí a la vez, ${REPETITIONS} veces: siempre queda uno`, async () => {
-    const stack = await startStack();
-    const { owner, beto, restore, demote } = await twoAdmins(stack);
-    for (let round = 0; round < REPETITIONS; round += 1) {
-      const [ownerApi, betoApi] = await Promise.all([ownerSession(stack), stack.apiSession('beto')]);
-      await expectOneAdminLeft(stack, await Promise.all([demote(beto, ownerApi), demote(owner, betoApi)]));
-      await restore();
-    }
-  }, 180_000);
-
-  it(`uno se degrada a sí mismo mientras el otro se desactiva a sí mismo, ${REPETITIONS} veces: siempre queda uno`, async () => {
-    const stack = await startStack();
-    const { owner, beto, restore, demote } = await twoAdmins(stack);
-    for (let round = 0; round < REPETITIONS; round += 1) {
-      const [ownerApi, betoApi] = await Promise.all([ownerSession(stack), stack.apiSession('beto')]);
-      await expectOneAdminLeft(
-        stack,
-        await Promise.all([demote(owner, ownerApi), stack.apiCall(`${P}/usuarios/${beto.id}/desactivar`, betoApi, { method: 'POST', body: {} })]),
-      );
-      await restore();
     }
   }, 180_000);
 });

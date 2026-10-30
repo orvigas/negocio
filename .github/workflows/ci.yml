@@ -216,14 +216,21 @@ jobs:
   # Las validaciones corren en los PR y en las ejecuciones manuales con cambios de código, y en un
   # push a main solo si `validado` no confirmó el árbol (validado != 'true', también si falló).
   # `!cancelled()` porque `validado` queda omitido (skipped) fuera del push.
-  calidad:
-    name: calidad
+  #
+  # Calidad en tres jobs (REQ-F-041): `verificacion` (tipos, lint y divergencia de migraciones),
+  # `pruebas` (la suite de Vitest repartida en 2 shards paralelos, cada uno en su runner y con su
+  # MySQL) y `calidad`, que los agrega. `calidad` es la comprobación que exige la protección de
+  # main y la que busca `validado`: solo queda en verde si `verificacion` y todos los shards de
+  # `pruebas` terminaron en success (un shard en rojo, cancelado u omitido la deja en rojo). Cada PR
+  # corre la suite completa: cada archivo de prueba está en exactamente un shard.
+  verificacion:
+    name: verificacion
     needs: [cambios, validado]
     if: >-
       !cancelled() && needs.cambios.result == 'success' && needs.cambios.outputs.codigo == 'true'
       && (github.event_name != 'push' || needs.validado.outputs.validado != 'true')
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: restaurante
@@ -246,17 +253,14 @@ jobs:
       - name: install
         run: npm ci --strict-allow-scripts --no-audit --no-fund
       # Cliente de Prisma (packages/db/src/generated/prisma, no versionado; REQ-F-037): lo necesitan
-      # typecheck, lint y test.
+      # typecheck y lint.
       - name: db:generate
         run: npm run db:generate
       - name: typecheck
         run: npm run typecheck
       - name: lint
         run: npm run lint
-      # Las pruebas leen el CSS generado (public/css/<negocio>/main.css), que no se versiona.
-      - name: build:css
-        run: npm run build:css
-      # MySQL 8.4 local (utf8mb4 + utf8mb4_es_0900_as_cs) para la divergencia y las pruebas.
+      # MySQL 8.4 local (utf8mb4 + utf8mb4_es_0900_as_cs) para la divergencia.
       - name: db:up
         run: npm run db:up
       # El esquema y las migraciones no divergen (base sombra del MySQL local).
@@ -266,12 +270,76 @@ jobs:
         env:
           SHADOW_DATABASE_URL: mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/restaurante_shadow
         run: ../../node_modules/.bin/prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
+
+  pruebas:
+    name: pruebas (${{ matrix.shard }}/2)
+    needs: [cambios, validado]
+    if: >-
+      !cancelled() && needs.cambios.result == 'success' && needs.cambios.outputs.codigo == 'true'
+      && (github.event_name != 'push' || needs.validado.outputs.validado != 'true')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      # Todos los shards terminan aunque uno falle (se ven todos los fallos de una vez).
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    defaults:
+      run:
+        working-directory: restaurante
+    env:
+      CHECKPOINT_DISABLE: '1'
+      PRISMA_HIDE_UPDATE_MESSAGE: '1'
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: setup-node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: restaurante/.nvmrc
+          cache: npm
+          cache-dependency-path: restaurante/package-lock.json
+      - name: install
+        run: npm ci --strict-allow-scripts --no-audit --no-fund
+      - name: db:generate
+        run: npm run db:generate
+      # Las pruebas leen el CSS generado (public/css/<negocio>/main.css), que no se versiona.
+      - name: build:css
+        run: npm run build:css
+      # MySQL 8.4 local (utf8mb4 + utf8mb4_es_0900_as_cs) para las pruebas: uno por shard.
+      - name: db:up
+        run: npm run db:up
       # Usa las URL de prueba por defecto (TEST_DATABASE_URL/TEST_ADMIN_DATABASE_URL hacia 127.0.0.1:3307).
       # 4 trabajadores de Vitest, solo en el CI (en local, el valor por defecto de Vitest): el runner
       # tiene 4 vCPU y las pruebas esperan sobre todo a MySQL y a procesos hijos. Cada trabajador usa
-      # su propia base restaurante_test_*; ver la sección "CI" de restaurante/README.md.
+      # su propia base restaurante_test_*. `--shard` llega a los tres workspaces (api, landing-pages
+      # e inventory-manager), igual que `--maxWorkers`; ver la sección "CI" de restaurante/README.md.
       - name: test
-        run: npm test -- --maxWorkers=4
+        env:
+          SHARD: ${{ matrix.shard }}/2
+        run: npm test -- --maxWorkers=4 --shard="$SHARD"
+
+  calidad:
+    name: calidad
+    needs: [cambios, validado, verificacion, pruebas]
+    if: >-
+      !cancelled() && needs.cambios.result == 'success' && needs.cambios.outputs.codigo == 'true'
+      && (github.event_name != 'push' || needs.validado.outputs.validado != 'true')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: verificacion y pruebas en verde
+        env:
+          VERIFICACION: ${{ needs.verificacion.result }}
+          PRUEBAS: ${{ needs.pruebas.result }}
+        run: |
+          echo "verificacion: $VERIFICACION; pruebas (todos los shards): $PRUEBAS"
+          if [ "$VERIFICACION" != success ] || [ "$PRUEBAS" != success ]; then
+            echo "::error::calidad exige verificacion y todos los shards de pruebas en success (verificacion: $VERIFICACION; pruebas: $PRUEBAS)."
+            exit 1
+          fi
 
   # Auditoría de dependencias por imagen (REQ-F-020): npm audit sobre package-lock.json en los cortes
   # production (--omit=dev --omit=optional), migrate (--omit=dev) y desarrollo. Rompe con un aviso

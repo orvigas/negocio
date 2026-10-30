@@ -8,7 +8,7 @@ necesita desviarse de este documento, lo actualiza en el mismo PR.
 
 | | |
 | --- | --- |
-| Estado | **Aceptada** (estrategia general). Decisiones A (2026-10-24), B y C (2026-10-26) tomadas ([sección 9](#9-decisiones)). Aplicados los pasos 1 (REQ-F-036), 2 (REQ-F-037) y 3 (REQ-F-038) y el ticket 1 del paso 4 (REQ-F-039). En producción desde el 2026-10-29 (PR #105, `c53f6f3`) |
+| Estado | **Aceptada** (estrategia general). Decisiones A (2026-10-24), B y C (2026-10-26) tomadas ([sección 9](#9-decisiones)). Aplicados los pasos 1 (REQ-F-036), 2 (REQ-F-037) y 3 (REQ-F-038) y los tickets 1 (REQ-F-039) y 2 (REQ-F-040) del paso 4. En producción desde el 2026-10-29 (PR #105, `c53f6f3`; REQ-F-040 con el PR #114, `3715486`) |
 | Fecha | 2026-10-24 (última actualización: 2026-10-28) |
 | Alcance | Estructura del código, regla de dependencias, contratos, consumo de la API y orden de la migración. No cambia el stack de `.claude/CLAUDE.md` §2 |
 
@@ -276,6 +276,7 @@ intermedia" del CI en `restaurante/README.md`).
 
 **En producción:** los pasos 1 a 3 y el ticket 1 del paso 4 llegaron a `main` con el PR #105
 (`epic/arquitectura` → `main`, merge `c53f6f3`) y se desplegaron el 2026-10-29 ([Despliegue](despliegue.md)).
+El ticket 2 del paso 4 (REQ-F-040) llegó con el PR #114 (merge `3715486`) y se desplegó el mismo día.
 
 | Paso | Qué hace | Cambia el comportamiento |
 | --- | --- | --- |
@@ -311,7 +312,7 @@ Decisión del usuario: "Sí, 6 tickets en ese orden". Cada ticket es su propio P
 | # | Ticket | Notas |
 | --- | --- | --- |
 | 1 | **REQ-F-039**: base del admin nuevo y productos | Terminado en tres PR (#94, #95 y #99), detalle abajo |
-| 2 | **REQ-F-040**: usuarios y cuenta propia | En `api` y en `inventory-manager`, en dos PR (#110 y el PR 2), detalle abajo |
+| 2 | **REQ-F-040**: usuarios y cuenta propia | Terminado en dos PR (#110 y #111) y en producción desde el 2026-10-29 (#114), detalle abajo |
 | 3 | Mover el bot a `api` | Publica una entrada de `api` para el webhook (su router de Traefik solo para esa ruta) y cambia la URL en Meta (acción del usuario). Activa la regla de lint para el bot |
 | 4 | Control del bot en el admin nuevo | Pausa, bloqueos y topes |
 | 5 | Menú y página | Antes se decide si el menú queda en archivos o pasa a MySQL |

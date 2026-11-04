@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 2 de 3, QA ronda 2, condicionado al CI verde en el PR). PR 1 mergeado en `epic/arquitectura` (#121). PR 2 en `feature/REQ-F-042-bot-whatsapp-en-api-2-bot`, sin commit. Falta el PR 3.
+READY_FOR_MERGE (PR 2 de 3). PR 1 mergeado en `epic/arquitectura` (#121). PR 2 en #124, desde `feature/REQ-F-042-bot-whatsapp-en-api-2-bot`, con el CI en verde; el merge lo hace el usuario. Falta el PR 3.
 
 ## Aprobación
 
@@ -898,6 +898,33 @@ QA_APPROVED
   - `verificacion` y `pruebas` (1/2 y 2/2): pass.
   - `publish`, `deploy`, `vigente` y `validado`: omitidos, como corresponde a un PR.
 
+### Pull Request del PR 2
+
+- **PR:** https://github.com/orvigas/negocio/pull/124 (`feature/REQ-F-042-bot-whatsapp-en-api-2-bot` → `epic/arquitectura`).
+- **Commits:**
+  - `0db70c5` refactor: mueve el bot de WhatsApp de landing-pages a api (REQ-F-042, PR 2 de 3).
+  - `4c03d85` test: parte la prueba de procesos del bot por duración (REQ-F-042, PR 2 de 3).
+- **CI** (ejecución 41883988101, sobre `4c03d85`): en verde.
+  - `calidad` y `auditoria`: pass. `docker` (7 min 9 s): pass.
+  - `cambios`, `verificacion` y `pruebas` (1/2 y 2/2): pass.
+  - `publish`, `deploy`, `vigente` y `validado`: omitidos, como corresponde a un PR.
+- **Duración máxima por archivo en el CI:** 14,5 s (`inventory-manager-qa-req-f-039-csrf.test.ts`), de los 173 archivos del log. Ninguno pasa de 20 s.
+- **Pruebas en el CI:** `landing-pages` 129 archivos y 1455 pruebas (1454 y 1 `it.fails` previa). Total de los tres workspaces: 2550.
+
+**Corrección de la duración.** El QA Report dice que ningún archivo pasaba de 20 s; esa medición era local, en condiciones del CI. El CI real sobre `0db70c5` (ejecución 41878055457) estaba en verde, pero `bot-procesos-qa-req-f-042.test.ts` tardó 21,9 s en `pruebas (2/2)`, por encima del límite de CA-15. Se partió por sus `describe`, con la preparación en `tests/support/bot-procesos-qa-req-f-042.ts`, y conserva los 12 casos, sus títulos y lo que comprueban, sin tocar esperas, reintentos ni timeouts:
+
+| Archivo | Casos | Duración en el CI |
+| --- | --- | --- |
+| `bot-procesos-qa-req-f-042.test.ts` | 10 | 12,5 s |
+| `bot-procesos-qa-req-f-042-mantenimiento.test.ts` | 1 | 3,8 s |
+| `bot-procesos-qa-req-f-042-desactivado.test.ts` | 1 | 2,4 s |
+
+El primer archivo no se dividió más: queda lejos de 20 s, y T-10 y N-03 dependen de lo que los casos anteriores dejan en los mismos procesos.
+
+**CA-15:** cumplido para este PR, con `typecheck`, `lint` y `npm test` en verde, ningún archivo de más de 20 s en el CI y `calidad`, `docker` y `auditoria` en verde. Queda por repetir en el PR 3.
+
+**Revisión manual:** los pendientes que QA dejó para revisión manual (responsive de `/admin/bot` y de las landings, y editar un producto desde `inventory-manager`) los revisó el usuario, que lo comunicó así: "ya hice las validaciones continua donde nos quedamos". No dio resultados por ancho ni por pantalla y no reportó defectos.
+
 ### PR 2 de 3: el bot pasa a `api`
 
 #### Ronda
@@ -1205,3 +1232,7 @@ Correcciones de QA ronda 1 del PR 2: DEF-001, A-1 y A-2, según las decisiones d
 ### Versión 12
 
 QA ronda 2 del PR 2: DEF-001, A-1 y A-2 verificados, DEF-002 aceptado y foco visible comprobado. Responsive sigue sin verificar, para revisión manual. Estado: `QA_APPROVED` (PR 2), condicionado al CI.
+
+### Versión 13
+
+CI del PR 2 en #124: la primera ejecución dio 21,9 s en `bot-procesos-qa-req-f-042.test.ts`, que se parte por sus `describe` (`4c03d85`) sin cambiar casos. CI en verde con un máximo de 14,5 s por archivo: CA-15 cumplido para este PR. Revisión manual hecha por el usuario, sin defectos reportados. Estado: `READY_FOR_MERGE` (PR 2 de 3).

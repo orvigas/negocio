@@ -77,8 +77,8 @@ jobs:
   # Detección de cambios con git, sin acciones de terceros. Es documentación: todo lo de .claude/,
   # restaurante/docs/**.md y cualquier *.md fuera de restaurante/. Cualquier otro archivo (también
   # un borrado o el origen de un renombrado) cuenta como código. Los *.md de restaurante/ fuera de
-  # docs/ cuentan como código: landing-pages/tests/unit/whatsapp-bot-free-text.test.ts lee el
-  # README.md de la raíz y landing-pages/tests/fixtures/ forma parte de las pruebas. packages/**
+  # docs/ cuentan como código: api/tests/unit/whatsapp-bot-free-text.test.ts lee el README.md de
+  # la raíz y los tests/fixtures/ de las apps forman parte de las pruebas. packages/**
   # (REQ-F-037) cuenta como código como cualquier otro archivo que no sea documentación. En un PR
   # compara el commit de merge que prueba GitHub (refs/pull/N/merge) con su primer padre, la punta
   # de su rama base (main o epic/arquitectura): lo que el PR agrega a su base, y deja el tree de

@@ -148,7 +148,14 @@ export function createProductRoutes({
   }
 
   const versionFrom = (body: unknown): unknown => (isRecord(body) ? body.version : undefined);
-  const freshness = (business: BusinessId): Promise<Freshness> => notifier.notify(business);
+  /**
+   * Confirmada solo si la landing lo confirma y la caché de este proceso, que es la que lee el bot,
+   * quedó al día (REQ-F-042, RF-10). El aviso sale siempre: la landing no depende de esa caché.
+   */
+  const freshness = async (business: BusinessId): Promise<Freshness> => {
+    const landing = await notifier.notify(business);
+    return landing === 'confirmed' && products.isCacheFresh(business) ? 'confirmed' : 'pending';
+  };
 
   /** Lee un objeto JSON con solo los campos indicados; si no, 422 y null. */
   const closedBody = (ctx: RouteContext, allowed: readonly string[]) => responder.closedBody(ctx, allowed, PRODUCT_BODY_LIMIT);

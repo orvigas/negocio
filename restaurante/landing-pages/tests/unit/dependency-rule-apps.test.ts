@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { AS, violations, use } from '../support/dependency-rule.ts';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { AS, ROOT, forbiddenByLocation, violations, use } from '../support/dependency-rule.ts';
 
 /**
  * Regla de dependencias entre paquetes (REQ-F-037, RF-6 y CA-6; restaurante/docs/arquitectura.md §4):
@@ -137,17 +140,54 @@ describe('regla de dependencias entre paquetes (REQ-F-037, CA-6; REQ-F-038, CA-9
     });
   });
 
-  // Regla de transición (temporal, REQ-F-037; limitada en REQ-F-038): /admin y el bot, hasta el paso 4.
-  describe('landing-pages: regla de transición para /admin y el bot', () => {
+  // Regla de transición (temporal, REQ-F-037; limitada en REQ-F-038 y en REQ-F-042): solo /admin, hasta el ticket 6.
+  describe('landing-pages: regla de transición para /admin', () => {
     it.each([
       ['/admin importa core', AS.admin, "import { BUSINESS } from '@restaurante/core/shared';" + use('BUSINESS')],
       ['/admin importa db', AS.admin, "import { poolConfig } from '@restaurante/db/client';" + use('poolConfig')],
       ['/admin importa core/identity', AS.admin, "import { isAdmin } from '@restaurante/core/identity';" + use('isAdmin')],
-      ['el bot importa core/catalog', AS.bot, "import { createMemoryProductStore } from '@restaurante/core/catalog';" + use('createMemoryProductStore')],
-      ['el bot importa db', AS.bot, "import { poolConfig } from '@restaurante/db/client';" + use('poolConfig')],
+      ['/admin importa core/bot-control (página "Bot")', AS.admin, "import { createBotControl } from '@restaurante/core/bot-control';" + use('createBotControl')],
       ['la composición (app.ts) importa contracts', AS.landing, "import * as contracts from '@restaurante/contracts';" + use('contracts')],
     ])('permite: %s', async (_name, filePath, code) => {
       expect(await violations(code, filePath)).toEqual([]);
+    });
+  });
+
+  // REQ-F-042 (RF-12 y CA-10): el bot de WhatsApp vive en api; no puede volver a landing-pages.
+  describe('landing-pages: sin el bot de WhatsApp (REQ-F-042, CA-10)', () => {
+    it.each([
+      ['src importa el bot de la api', AS.landing, "import { createBotWebhookApp } from '../../api/src/bot/webhook-app.ts';" + use('createBotWebhookApp')],
+      ['/admin importa el bot de la api', AS.admin, "import { createBotFromConfig } from '../../../api/src/bot/webhook-app.ts';" + use('createBotFromConfig')],
+      ['las pruebas importan el soporte del bot de la api', AS.landingTest, "import { mx } from '../../../api/tests/support/whatsapp.ts';" + use('mx')],
+      ['src importa inventory-manager', AS.landing, "import { createInventoryApp } from '../../inventory-manager/src/app.ts';" + use('createInventoryApp')],
+      ['import() del bot de la api', AS.landing, "export const later = import('../../api/src/bot/orchestrator.ts');\n"],
+      ['import() del soporte del bot en las pruebas', AS.landingTest, "export const later = import('../../../api/tests/support/whatsapp.ts');\n"],
+    ])('rechaza: %s', async (_name, filePath, code) => {
+      expect((await violations(code, filePath)).length).toBeGreaterThan(0);
+    });
+
+    it.each([
+      ['el bot', ['src', 'services', 'whatsapp-bot', 'orchestrator.ts']],
+      ['un proveedor del bot', ['src', 'services', 'whatsapp-bot', 'providers', 'meta', 'webhook.ts']],
+      ['el webhook', ['src', 'controllers', 'whatsapp-webhook.ts']],
+      ['la recarga del catálogo del bot', ['src', 'services', 'catalog-reload.ts']],
+      ['los textos del bot', ['src', 'content', 'molotes', 'bot.ts']],
+      ['el simulador', ['scripts', 'bot-chat.ts']],
+    ])('un archivo con %s en landing-pages falla el lint', async (_name, parts) => {
+      expect(await forbiddenByLocation(join(ROOT, 'landing-pages', ...parts))).toMatch(/El bot de WhatsApp vive en api/);
+    });
+
+    it('los archivos de las landings y de /admin no están afectados', async () => {
+      for (const parts of [['src', 'app.ts'], ['src', 'controllers', 'admin-bot.ts'], ['src', 'views', 'admin', 'bot.ts'], ['src', 'content', 'molotes', 'index.ts']]) {
+        expect(await forbiddenByLocation(join(ROOT, 'landing-pages', ...parts))).toBeNull();
+      }
+    });
+
+    it('la regla de transición de eslint.config.ts ya no menciona el bot', async () => {
+      const config = await readFile(join(ROOT, 'eslint.config.ts'), 'utf8');
+      const transition = config.slice(config.indexOf('// REGLA DE TRANSICIÓN'), config.indexOf('\n\n', config.indexOf('// REGLA DE TRANSICIÓN')));
+      expect(transition).toContain('/admin');
+      expect(transition).not.toMatch(/bot/i);
     });
   });
 });

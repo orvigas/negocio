@@ -1,14 +1,21 @@
+import { join } from 'node:path';
+
 import { expect } from 'vitest';
 
 import { BOT_ENV, TWILIO_BOT_ENV } from '../helpers.ts';
-import { makeTempDir } from './database.ts';
-import { startServer } from './process.ts';
+import { freePort, startServer } from './process.ts';
 
 /**
  * Arranque real según el proveedor del bot (QA de REQ-F-012) en los archivos
  * server-startup-provider-qa*.test.ts. REQ-F-041: preparación compartida por los archivos en que
  * se partió server-startup-provider-qa.test.ts, sin cambios.
+ *
+ * REQ-F-042: el bot vive en la api. Se arranca el proceso real de la api (`node ../api/src/server.ts`,
+ * sin importar su código) contra una base de pruebas, y `url` es la de su puerto del webhook
+ * (WEBHOOK_PORT), el único que publica Traefik.
  */
+
+const API_ENTRY = join('..', 'api', 'src', 'server.ts');
 
 export const cleanups: (() => Promise<unknown>)[] = [];
 /** Limpieza de la prueba (procesos, bases, proxies): cada archivo la registra con afterEach. */
@@ -32,11 +39,11 @@ export const SECRET_VALUES = [
 ];
 
 export async function boot(env: Record<string, string>) {
-  const temp = await makeTempDir();
-  cleanups.push(() => temp.cleanup());
-  const server = await startServer({ DATA_DIR: temp.dir, ...env }, 20_000);
+  const webhookPort = await freePort();
+  // Sin el aviso interno (VALID_ENV trae INTERNAL_NOTIFY_TOKEN, que va con LANDING_INTERNAL_URL).
+  const server = await startServer({ INTERNAL_NOTIFY_TOKEN: undefined, WEBHOOK_PORT: String(webhookPort), ...env }, 20_000, { args: [API_ENTRY] });
   cleanups.push(() => server.stop());
-  return server;
+  return { ...server, apiUrl: server.url, url: `http://127.0.0.1:${webhookPort}` };
 }
 
 export async function expectFailure(env: Record<string, string>, expected: (string | RegExp)[]) {

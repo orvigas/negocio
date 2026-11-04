@@ -1,9 +1,11 @@
+import { BUSINESS, PHONE_PATTERN, type BusinessId } from '../shared/index.ts';
 import { DEFAULT_BOT_LIMITS, MS, type BotLimits } from './limits.ts';
 
 /**
- * Lectura y validación de la configuración de la protección del bot (REQ-F-025): claves de la lista
- * negra y umbrales. En core desde REQ-F-042 (H-4) porque la usan el bot y la página "Bot" de /admin
- * con los mismos mensajes. Funciones puras sobre las variables de entorno: reúnen los problemas en
+ * Lectura y validación de la configuración común del bot (REQ-F-025; REQ-F-012): proveedor,
+ * personal, claves de la lista negra y umbrales. En core desde REQ-F-042 (H-4, RF-6) porque la usan
+ * el bot (en api, con el resto de su configuración) y la página "Bot" de /admin (en landing-pages,
+ * solo esta parte; D-4), con los mismos mensajes. Funciones puras sobre las variables de entorno: reúnen los problemas en
  * `issues` (fallo rápido en el arranque de cada app) y nunca incluyen los valores recibidos.
  */
 
@@ -16,6 +18,118 @@ function readVar(env: BotEnv, name: string): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed === '' ? undefined : trimmed;
+}
+
+export const BOT_PROVIDERS = Object.freeze(['meta', 'twilio'] as const);
+export type BotProvider = (typeof BOT_PROVIDERS)[number];
+
+/**
+ * Variables del bot (REQ-F-009; REQ-F-012 RF-2). Definir cualquiera de ellas habilita el bot;
+ * `WHATSAPP_BOT_PROVIDER` no lo habilita por sí sola (D-2). Un valor vacío cuenta como no definido.
+ */
+export const BOT_VARS = Object.freeze({
+  provider: 'WHATSAPP_BOT_PROVIDER',
+  accountId: 'WHATSAPP_BOT_ACCOUNT_ID',
+  accessToken: 'WHATSAPP_BOT_ACCESS_TOKEN',
+  appSecret: 'WHATSAPP_BOT_APP_SECRET',
+  verifyToken: 'WHATSAPP_BOT_VERIFY_TOKEN',
+  staffMolotes: 'WHATSAPP_BOT_STAFF_MOLOTES',
+  staffBirria: 'WHATSAPP_BOT_STAFF_BIRRIA',
+  template: 'WHATSAPP_BOT_STAFF_TEMPLATE',
+  language: 'WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE',
+  webhookUrl: 'WHATSAPP_BOT_WEBHOOK_URL',
+  graphApiVersion: 'WHATSAPP_GRAPH_API_VERSION',
+});
+/** Nombre anterior de WHATSAPP_BOT_ACCOUNT_ID (D-1): sin compatibilidad, falla con un aviso claro. */
+export const LEGACY_PHONE_NUMBER_ID = 'WHATSAPP_BOT_PHONE_NUMBER_ID';
+const ENABLING_VARS = Object.values(BOT_VARS).filter((name) => name !== BOT_VARS.provider);
+
+/** Regla de formato de una variable: nombre, patrón y ayuda (sin el valor). */
+export type BotVarRule = Readonly<{ name: string; pattern: RegExp; hint: string }>;
+
+const STAFF_HINT = 'solo dígitos en formato internacional (8 a 15)';
+export const STAFF_RULES = Object.freeze({
+  molotes: { name: BOT_VARS.staffMolotes, pattern: PHONE_PATTERN, hint: STAFF_HINT },
+  birria: { name: BOT_VARS.staffBirria, pattern: PHONE_PATTERN, hint: STAFF_HINT },
+} satisfies Record<BusinessId, BotVarRule>);
+
+const isBotProvider = (value: string): value is BotProvider => (BOT_PROVIDERS as readonly string[]).includes(value);
+
+/** ¿Se definió alguna variable de datos del bot? (el proveedor solo no lo habilita; D-2). */
+export const isBotConfigured = (env: BotEnv): boolean => ENABLING_VARS.some((name) => readVar(env, name) !== undefined);
+
+/** Lectores de variables que acumulan los problemas en `issues` (mismos textos en las dos apps). */
+export function botVarReaders(env: BotEnv, issues: string[]) {
+  const required = (name: string): string | undefined => {
+    const value = readVar(env, name);
+    if (value === undefined) issues.push(`${name} es obligatoria si se configura el bot de WhatsApp (o no definas ninguna WHATSAPP_BOT_*)`);
+    return value;
+  };
+  const check = ({ name, pattern, hint }: BotVarRule, value: string | undefined): string | undefined => {
+    if (value === undefined) return undefined;
+    if (pattern.test(value)) return value;
+    issues.push(`${name} no es válida: ${hint}`);
+    return undefined;
+  };
+  const optional = (rule: BotVarRule): string | undefined => check(rule, readVar(env, rule.name));
+  const requiredRule = (rule: BotVarRule): string | undefined => check(rule, required(rule.name));
+  return { read: (name: string) => readVar(env, name), required, check, optional, requiredRule };
+}
+
+/**
+ * Proveedor del bot (D-4, D-5, D-12): sin distinguir mayúsculas; si está definido se valida
+ * siempre, y con NODE_ENV=production nunca puede ser twilio, esté o no habilitado el bot.
+ */
+export function parseBotProvider(env: BotEnv, nodeEnv: string | undefined, issues: string[]): BotProvider | undefined {
+  const raw = readVar(env, BOT_VARS.provider);
+  if (raw === undefined) return undefined;
+  const provider = raw.toLowerCase();
+  if (!isBotProvider(provider)) {
+    issues.push(`${BOT_VARS.provider} debe ser uno de: ${BOT_PROVIDERS.join(', ')}`);
+    return undefined;
+  }
+  if (provider === 'twilio' && nodeEnv === 'production') {
+    issues.push(`${BOT_VARS.provider}=twilio no se permite con NODE_ENV=production: en producción el bot usa meta`);
+    return undefined;
+  }
+  return provider;
+}
+
+/** Aviso común: el nombre anterior del ID (D-1), definido o no el resto del bot. */
+export function checkBotBasics(env: BotEnv, issues: string[]): void {
+  if (readVar(env, LEGACY_PHONE_NUMBER_ID) !== undefined) {
+    issues.push(`${LEGACY_PHONE_NUMBER_ID} ya no se usa: renómbrala a ${BOT_VARS.accountId}`);
+  }
+}
+
+/** Personal de cada negocio (obligatorio con el bot): números con el formato de PHONE_PATTERN. */
+export function parseBotStaff(env: BotEnv, issues: string[]): Readonly<Record<BusinessId, string>> | undefined {
+  const { requiredRule } = botVarReaders(env, issues);
+  const molotes = requiredRule(STAFF_RULES.molotes);
+  const birria = requiredRule(STAFF_RULES.birria);
+  return molotes === undefined || birria === undefined ? undefined : Object.freeze({ [BUSINESS.MOLOTES]: molotes, [BUSINESS.BIRRIA]: birria });
+}
+
+/**
+ * Lo que necesita la página "Bot" del /admin actual mientras el bot vive en api (REQ-F-042, RF-6 y
+ * D-4): si el bot está configurado, su proveedor y el personal (que no se puede bloquear). Mismas
+ * reglas y textos que la configuración completa del bot, sin exigir ni leer sus secretos (CA-12).
+ * null sin bot; undefined si hay problemas (ya en `issues`).
+ */
+export interface BotPanelConfig {
+  readonly provider: BotProvider;
+  readonly staff: Readonly<Record<BusinessId, string>>;
+}
+
+export function parseBotPanel(env: BotEnv, nodeEnv: string | undefined, issues: string[]): BotPanelConfig | null | undefined {
+  const before = issues.length;
+  checkBotBasics(env, issues);
+  const provider = parseBotProvider(env, nodeEnv, issues);
+  if (!isBotConfigured(env)) return issues.length > before ? undefined : null;
+  if (readVar(env, BOT_VARS.provider) === undefined) issues.push(`${BOT_VARS.provider} es obligatoria si se configura el bot de WhatsApp (meta o twilio)`);
+  const staff = parseBotStaff(env, issues);
+  if (issues.length > before || provider === undefined || staff === undefined) return undefined;
+  return Object.freeze({ provider, staff });
 }
 
 /**

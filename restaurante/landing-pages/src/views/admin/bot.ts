@@ -1,8 +1,7 @@
 import { formatDisplayDate } from '@restaurante/core/shared';
 import type { Renderer, SafeHtml } from '@restaurante/web';
-import { DEFAULT_MANUAL_DURATION, MANUAL_DURATIONS, REASON_MAX_LENGTH, type BlockOrigin, type BotControlSnapshot, type ManualDuration, type ReachedCap, type UsageBlock } from '@restaurante/core/bot-control';
+import { DEFAULT_MANUAL_DURATION, MANUAL_DURATIONS, REASON_MAX_LENGTH, type BlockOrigin, type BotControlSnapshot, type BotProvider, type ManualDuration, type UsageBlock } from '@restaurante/core/bot-control';
 
-import type { BotProvider } from '../../services/whatsapp-bot/chat-bot.ts';
 import { ADMIN_CLASSES, BOT_ADMIN_PATH, adminAttrs, adminFieldError, adminInvalidAttrs, adminPage, renderAdminNotice, type AdminPageContext } from './index.ts';
 
 /**
@@ -12,11 +11,13 @@ import { ADMIN_CLASSES, BOT_ADMIN_PATH, adminAttrs, adminFieldError, adminInvali
  * de un solo uso. El teléfono escrito nunca se vuelve a pintar.
  */
 
+/** Aviso que sustituye a la lista "Números que alcanzaron un tope hoy" (REQ-F-042, RF-8 y D-2). */
+export const REACHED_MOVED_MESSAGE = 'La lista de números que alcanzaron un tope hoy vuelve con el control del bot en el admin nuevo.';
+
 export const BOT_PATH = BOT_ADMIN_PATH;
 export const BOT_SWITCH_PATH = `${BOT_PATH}/interruptor`;
 export const BOT_BLOCKS_PATH = `${BOT_PATH}/bloqueos`;
 export const botUnblockPath = (id: number): string => `${BOT_BLOCKS_PATH}/${id}/quitar`;
-export const botReachedBlockPath = (token: string): string => `${BOT_PATH}/topes/${token}/bloquear`;
 
 export const BOT_SUCCESS_MESSAGES = Object.freeze({
   paused: 'Bot pausado: no se envía ningún mensaje y los mensajes que lleguen se descartan.',
@@ -31,14 +32,6 @@ const USAGE_LABELS: Readonly<Record<UsageBlock, string>> = Object.freeze({
   outbound_day: 'Mensajes del bot (hoy)',
   outbound_month: 'Mensajes del bot (mes)',
   budget: 'Gasto estimado del mes (USD)',
-});
-
-const CAP_LABELS: Readonly<Record<ReachedCap, string>> = Object.freeze({
-  orders: 'Pedidos del día',
-  messages: 'Mensajes del día',
-  cooldown: 'Mensajes repetidos',
-  burst: 'Ráfaga de mensajes',
-  minute: 'Mensajes por minuto',
 });
 
 const ORIGIN_LABELS: Readonly<Record<BlockOrigin, string>> = Object.freeze({
@@ -213,28 +206,14 @@ export function renderBotPage(renderer: Renderer, options: BotPageOptions): Safe
     })),
   );
 
-  const reached =
-    snapshot.reached.length === 0
-      ? renderer.render('admin/partials/bot-empty', { text: 'Ningún número alcanzó un tope hoy.' })
-      : renderTable(
-          renderer,
-          'Números que alcanzaron un tope hoy',
-          ['Número', 'Tope', 'Hora', 'Acción'],
-          renderer.renderEach(
-            'admin/partials/bot-reached-row',
-            snapshot.reached.map((entry, index) => ({
-              masked: entry.masked,
-              cap: CAP_LABELS[entry.cap],
-              at: date(entry.at),
-              action: botReachedBlockPath(entry.token),
-              csrfToken,
-              selectId: `b-tope-${index + 1}`,
-              options: durationOptions(renderer, DEFAULT_MANUAL_DURATION),
-              inputClass: ADMIN_CLASSES.input,
-              buttonClass: ADMIN_CLASSES.secondaryButton,
-            })),
-          ),
-        );
+  // REQ-F-042 (D-2): la lista vivía en la memoria del proceso del bot, que ahora es la api. Vuelve
+  // con el control del bot en el admin nuevo (ticket 4).
+  const reached = renderAdminNotice(renderer, {
+    tone: 'warning',
+    role: 'status',
+    title: REACHED_MOVED_MESSAGE,
+    paragraphs: ['Mientras tanto, puedes bloquear un número con el formulario "Bloquear un número".'],
+  });
 
   const blocks =
     snapshot.blocks.length === 0

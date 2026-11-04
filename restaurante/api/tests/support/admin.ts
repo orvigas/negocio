@@ -1,5 +1,5 @@
 import { CSRF_HEADER, type Freshness } from '@restaurante/contracts';
-import { createProductRepository, type MemoryProductStore } from '@restaurante/core/catalog';
+import { createProductRepository, type MemoryProductStore, type ProductRepository } from '@restaurante/core/catalog';
 import {
   LastAdminError,
   SCRYPT_DEFAULTS,
@@ -177,6 +177,8 @@ export function recordingLogger(): Logger & { lines: string[] } {
 export interface AdminHarness {
   url: string;
   store: MemoryProductStore;
+  /** El repositorio de productos de /api/v1/admin: el mismo que usa el bot en la api (REQ-F-042, RF-10). */
+  products: ProductRepository;
   calls: { findCredentials: number; recordLogin: number; writes: number };
   change: (id: number, patch: Partial<UserRecord>) => void;
   audit: FakeAudit[];
@@ -189,7 +191,14 @@ export interface AdminHarness {
   ids: Record<string, number>;
 }
 
-export async function startAdmin({ users: testUsers = [ADMIN, MOLOTES_EDITOR] }: { users?: TestUser[] } = {}): Promise<AdminHarness> {
+export async function startAdmin({
+  users: testUsers = [ADMIN, MOLOTES_EDITOR],
+  realNotifier,
+}: {
+  users?: TestUser[];
+  /** Aviso interno real, para las pruebas de punta a punta; sin él, el doble `notifier`. */
+  realNotifier?: LandingNotifier;
+} = {}): Promise<AdminHarness> {
   const clock = { now: new Date('2026-10-26T18:00:00Z') };
   const now = () => clock.now;
   const passwordHash = await hashPassword(PASSWORD, TEST_HASH_PARAMS);
@@ -211,9 +220,9 @@ export async function startAdmin({ users: testUsers = [ADMIN, MOLOTES_EDITOR] }:
   await products.init();
   const { notifier, notified } = createFakeNotifier();
   const logger = recordingLogger();
-  const admin = createAdminRoutes({ users, products, notifier, timeZone: 'America/Mexico_City', hashParams: TEST_HASH_PARAMS, now, logger });
+  const admin = createAdminRoutes({ users, products, notifier: realNotifier ?? notifier, timeZone: 'America/Mexico_City', hashParams: TEST_HASH_PARAMS, now, logger });
   const { url } = await listenLocal(createApiApp({ store, admin, logger }));
-  return { url, store, calls, change, audit, hashes, failNext, notified, notifier, logger, clock, ids: Object.fromEntries(records.map((user) => [user.username, user.id])) };
+  return { url, store, products, calls, change, audit, hashes, failNext, notified, notifier, logger, clock, ids: Object.fromEntries(records.map((user) => [user.username, user.id])) };
 }
 
 export interface Session {

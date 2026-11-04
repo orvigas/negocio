@@ -74,7 +74,12 @@ const PACKAGE_INTERNAL_PATTERNS = [
   { regex: String.raw`^\.{1,2}/(?:.*/)?packages/`, message: `Los paquetes se importan por su nombre (@restaurante/<paquete>), nunca por ruta relativa (O-2). ${DEPENDENCY_HINT}` },
   { regex: '^@restaurante/core/[^/]+/', message: `De core solo se importa el index.ts de cada módulo (@restaurante/core/<módulo>). ${DEPENDENCY_HINT}` },
 ];
-const LANDING_APP_PATTERNS = [...RELATIVE_JS_IMPORT_PATTERNS, ...PACKAGE_INTERNAL_PATTERNS];
+// REQ-F-042 (RF-12, CA-10): landing-pages nunca importa otra app. El bot de WhatsApp vive en api.
+const BOT_IN_API_HINT = 'El bot de WhatsApp vive en api (REQ-F-042): landing-pages no contiene su código ni lo importa.';
+const OTHER_APPS_FROM_LANDING_PATTERNS = [
+  { regex: String.raw`(?:^|/)(?:api|inventory-manager)/(?:src|tests|scripts)(?:/|$)`, message: `Una app nunca importa otra app. ${BOT_IN_API_HINT} ${DEPENDENCY_HINT}` },
+];
+const LANDING_APP_PATTERNS = [...RELATIVE_JS_IMPORT_PATTERNS, ...PACKAGE_INTERNAL_PATTERNS, ...OTHER_APPS_FROM_LANDING_PATTERNS];
 
 // Código de las landings (REQ-F-038, RF-8; decisión P-1 A): obtiene los productos solo de la API
 // (cliente de contracts). Nunca la base de datos, la identidad, el control del bot ni el repositorio
@@ -106,6 +111,16 @@ const LANDING_CODE_PATHS = [
   },
 ];
 
+// Archivos del bot en landing-pages (REQ-F-042, CA-10): su sola presencia hace fallar el lint.
+const BOT_FILES_IN_LANDING = [
+  'landing-pages/src/services/whatsapp-bot/**/*.ts',
+  'landing-pages/src/bot/**/*.ts',
+  'landing-pages/src/**/whatsapp-webhook*.ts',
+  'landing-pages/src/**/catalog-reload*.ts',
+  'landing-pages/src/content/**/bot.ts',
+  'landing-pages/scripts/bot-chat*.ts',
+];
+
 // api (REQ-F-038): core (por el index.ts de cada módulo), db, contracts y Koa; nunca una app.
 const API_RESTRICTED_PATTERNS = [...RELATIVE_JS_IMPORT_PATTERNS, ...LANDING_PATTERNS, ...PACKAGE_INTERNAL_PATTERNS];
 
@@ -124,6 +139,10 @@ const INVENTORY_RESTRICTED_PATTERNS = [
 // no-restricted-imports no revisa import() (DEF-004 de QA, REQ-F-039): las apps api e inventory-manager
 // repiten su regla de dependencias para los import() dinámicos con no-restricted-syntax.
 const dynamicImport = (pattern: string, message: string) => ({ selector: `ImportExpression > Literal.source[value=/${pattern}/]`, message });
+// import() dinámico de otra app desde landing-pages (no-restricted-imports no lo revisa).
+const LANDING_DYNAMIC_IMPORTS = [
+  dynamicImport(String.raw`(^|\/)(api|inventory-manager)\/(src|tests|scripts)(\/|$)`, `Una app nunca importa otra app. ${BOT_IN_API_HINT} ${DEPENDENCY_HINT}`),
+];
 const API_DYNAMIC_IMPORTS = [
   dynamicImport(String.raw`(^|\/)landing-pages(\/|$)`, `Una app nunca importa otra app. ${DEPENDENCY_HINT}`),
   dynamicImport(String.raw`(^|\/)inventory-manager(\/|$)`, `Una app nunca importa otra app. ${DEPENDENCY_HINT}`),
@@ -220,11 +239,13 @@ export default defineConfig([
     },
   },
 
-  // O-2 (REQ-F-038): en todo landing-pages, sin imports relativos a archivos de packages/.
+  // O-2 (REQ-F-038): en todo landing-pages, sin imports relativos a archivos de packages/; y nunca
+  // otra app (REQ-F-042, CA-10), tampoco con import().
   {
     files: ['landing-pages/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', { patterns: LANDING_APP_PATTERNS }],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...LANDING_DYNAMIC_IMPORTS],
     },
   },
 
@@ -234,7 +255,7 @@ export default defineConfig([
     files: ['landing-pages/tests/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', { paths: TEST_HTTP_RESTRICTED_IMPORTS, patterns: LANDING_APP_PATTERNS }],
-      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...TEST_HTTP_RESTRICTED_SYNTAX],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...LANDING_DYNAMIC_IMPORTS, ...TEST_HTTP_RESTRICTED_SYNTAX],
     },
   },
   // Única excepción: el módulo que crea los clientes de supertest.
@@ -312,11 +333,18 @@ export default defineConfig([
       'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...API_DYNAMIC_IMPORTS, ...TEST_HTTP_RESTRICTED_SYNTAX],
     },
   },
-  // REGLA DE TRANSICIÓN — TEMPORAL (REQ-F-037, limitada en REQ-F-038): /admin y el bot de WhatsApp,
-  // que siguen en landing-pages hasta el paso 4, pueden importar core, db y contracts (desviación
+  // El bot de WhatsApp vive en api (REQ-F-042, RF-12 y CA-10): un archivo del bot en landing-pages
+  // hace fallar el lint, además de la regla de imports de arriba.
+  {
+    files: BOT_FILES_IN_LANDING,
+    rules: {
+      'no-restricted-syntax': ['error', { selector: 'Program', message: BOT_IN_API_HINT }],
+    },
+  },
+  // REGLA DE TRANSICIÓN — TEMPORAL (REQ-F-037, limitada en REQ-F-038 y en REQ-F-042): /admin, que sigue
+  // en landing-pages hasta el ticket 6 del paso 4, puede importar core, db y contracts (desviación
   // registrada en restaurante/docs/arquitectura.md §4). El código de las landings ya tiene su
-  // restricción (bloque de arriba); la de /admin se activa en el paso 4, cuando pase a
-  // inventory-manager.
+  // restricción (bloque de arriba); la de /admin se activa cuando pase a inventory-manager.
 
   // Frontend en JavaScript Vanilla (módulos ES del navegador), sin información de tipos.
   {

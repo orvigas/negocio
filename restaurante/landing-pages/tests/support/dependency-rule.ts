@@ -24,7 +24,6 @@ export const AS = {
   landingView: join(ROOT, 'landing-pages', 'src', 'views', 'landings', 'index.ts'),
   landingTest: join(ROOT, 'landing-pages', 'tests', 'unit', 'price.test.ts'),
   admin: join(ROOT, 'landing-pages', 'src', 'controllers', 'admin.ts'),
-  bot: join(ROOT, 'landing-pages', 'src', 'services', 'whatsapp-bot', 'catalog.ts'),
   api: join(ROOT, 'api', 'src', 'app.ts'),
   inventory: join(ROOT, 'inventory-manager', 'src', 'app.ts'),
   inventoryTest: join(ROOT, 'inventory-manager', 'tests', 'unit', 'product-form.test.ts'),
@@ -41,3 +40,12 @@ export async function violations(code: string, filePath: string): Promise<string
 }
 
 export const use = (name: string) => `\nexport const used = ${name};\n`;
+
+/** ¿El lint marca este archivo por su sola ruta? (REQ-F-042, CA-10: archivos del bot en landing-pages). */
+export async function forbiddenByLocation(filePath: string): Promise<string | null> {
+  const config = (await eslint.calculateConfigForFile(filePath)) as { rules?: Record<string, unknown> };
+  const rule = config.rules?.['no-restricted-syntax'];
+  if (!Array.isArray(rule)) return null;
+  const program = rule.slice(1).find((entry): entry is { selector: string; message: string } => typeof entry === 'object' && entry !== null && (entry as { selector?: unknown }).selector === 'Program');
+  return program?.message ?? null;
+}

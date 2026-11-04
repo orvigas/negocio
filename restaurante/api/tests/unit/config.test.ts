@@ -3,6 +3,8 @@ import { join, sep } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { DEFAULT_BOT_LIMITS } from '@restaurante/core/bot-control';
+
 import { API_DEFAULTS, ApiConfigError, loadApiConfig } from '../../src/config.ts';
 
 /** Configuración de la API (REQ-F-038 y REQ-F-039): validada al arrancar, sin repetir valores en los errores. */
@@ -26,6 +28,11 @@ describe('loadApiConfig', () => {
       timezone: 'America/Mexico_City',
       productImagesDir: API_DEFAULTS.PRODUCT_IMAGES_DIR,
       landingNotify: { url: 'http://app:3002', token: TOKEN },
+      // REQ-F-042: el webhook en su puerto (3004) y, sin variables del bot, sin bot.
+      webhookPort: 3004,
+      whatsappBot: null,
+      botLimits: DEFAULT_BOT_LIMITS,
+      botKeys: null,
     });
   });
 
@@ -43,12 +50,20 @@ describe('loadApiConfig', () => {
     expect(loadApiConfig({ ...VALID, HOST: '0.0.0.0', PORT: '3101', DATABASE_ALLOW_NEWER_SCHEMA: 'true' })).toMatchObject({ host: '0.0.0.0', port: 3101, allowNewerSchema: true });
   });
 
+  it('acepta WEBHOOK_PORT (REQ-F-042, P-1)', () => {
+    expect(loadApiConfig({ ...VALID, WEBHOOK_PORT: '3104' }).webhookPort).toBe(3104);
+  });
+
   it.each([
     [{ NODE_ENV: undefined }, 'NODE_ENV'],
     [{ NODE_ENV: 'staging' }, 'NODE_ENV'],
     [{ HOST: 'localhost' }, 'HOST'],
     [{ PORT: '70000' }, 'PORT'],
     [{ PORT: 'abc' }, 'PORT'],
+    [{ WEBHOOK_PORT: '0' }, 'WEBHOOK_PORT'],
+    [{ WEBHOOK_PORT: '70000' }, 'WEBHOOK_PORT'],
+    [{ WEBHOOK_PORT: 'abc' }, 'WEBHOOK_PORT'],
+    [{ WEBHOOK_PORT: '3001' }, 'WEBHOOK_PORT debe ser distinto de PORT'],
     [{ DATABASE_URL: undefined }, 'DATABASE_URL'],
     [{ DATABASE_URL: 'postgres://u:s3cr3t0@h/db' }, 'DATABASE_URL'],
     [{ DATABASE_ALLOW_NEWER_SCHEMA: 'yes' }, 'DATABASE_ALLOW_NEWER_SCHEMA'],

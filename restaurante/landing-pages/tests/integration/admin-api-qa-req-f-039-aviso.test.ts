@@ -26,7 +26,7 @@ import { EDITOR, sleep, startStack, session, call, molotesInput, type ProductBod
 afterEach(runCleanups);
 
 describe('QA REQ-F-039 PR 1: aviso interno con los procesos reales', () => {
-  it('F-13: tras una escritura confirmada, la landing muestra el cambio sin reiniciar y el bot recarga (CA-9 en proceso)', async () => {
+  it('F-13: tras una escritura confirmada, la landing muestra el cambio sin reiniciar (CA-9 en proceso; el bot, en la api desde REQ-F-042)', async () => {
     const stack = await startStack();
     const eli = await session(stack, EDITOR.username, EDITOR.password);
     expect(await landingHas(stack, 'Molote Avisado QA')).toBe(false);
@@ -36,7 +36,7 @@ describe('QA REQ-F-039 PR 1: aviso interno con los procesos reales', () => {
     // La línea de log llega por la tubería de stdout del hijo y puede hacerlo después de la respuesta.
     const notifiedLines = () => logLines(stack.landing.output().stdout).filter((line) => line.msg === 'products_change_notified');
     await expect.poll(() => notifiedLines().length).toBeGreaterThan(0);
-    expect(notifiedLines().at(-1)).toMatchObject({ business: 'molotes', landing: true, bot: true });
+    expect(notifiedLines().at(-1)).toMatchObject({ business: 'molotes', landing: true });
     expectNoSecrets(stack);
   });
 

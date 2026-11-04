@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BUSINESS_IDS, type BusinessId, type Logger } from '@restaurante/core/shared';
+import { BRANCH_LOCATION, type BusinessId, type Logger } from '@restaurante/core/shared';
 import type { MenuDocument } from '@restaurante/core/catalog';
 
 import { createApp } from '../../src/app.ts';
@@ -13,7 +13,6 @@ import type { Config } from '../../src/config/env.ts';
 import { commonContent, getBusinessContent } from '../../src/content/index.ts';
 import { loadSeedDocument } from '../../src/content/seeds.ts';
 import { createFileMenuRepository } from '../../src/repositories/file-menu-repository.ts';
-import { hoursAndLocation } from '../../src/services/whatsapp-bot/messages.ts';
 import { makeConfig, makeRepository, type CorruptibleData } from '../helpers.ts';
 import { listenLocal } from '../support/http.ts';
 import { makeProductRepository, makeProductsFor, seedSources } from '../support/products.ts';
@@ -521,7 +520,8 @@ describe('GET /molotes: textos y datos comerciales reales (REQ-F-031)', () => {
       expect(document.querySelector('iframe')!.getAttribute('src'), path).toBe(EMBED_SRC);
       expect(text, path).not.toContain('maps.app.goo.gl');
     }
-    for (const businessId of BUSINESS_IDS) expect(hoursAndLocation(businessId)).toContain(MAPS_URL);
+    // El bot (api) lee el mismo enlace de core (REQ-F-042): api/tests/unit/whatsapp-bot-format.test.ts.
+    expect(BRANCH_LOCATION.mapsUrl).toBe(MAPS_URL);
   });
 
   it('CA-8: casillas de plataformas: WhatsApp (enlace al bot), Motomandados (informativa) y Recoger en sucursal (REQ-F-032, R-8)', async () => {
@@ -638,11 +638,9 @@ describe('REQ-F-032: contacto, ubicación y plataformas de la única sucursal', 
     expect(html).not.toContain('maps.app.goo.gl');
   });
 
-  it('CA-4 y R-10: "Horario y ubicación" del bot envía la ubicación única para ambos negocios', () => {
-    for (const businessId of BUSINESS_IDS) {
-      expect(hoursAndLocation(businessId)).toContain(MAPS_URL);
-      expect(hoursAndLocation(businessId)).not.toContain('maps.app.goo.gl');
-    }
+  it('CA-4 y R-10: la ubicación única de la sucursal es la misma fuente que usa el bot ("Horario y ubicación", en la api)', () => {
+    expect(commonContent.location.mapsUrl).toBe(BRANCH_LOCATION.mapsUrl);
+    expect(BRANCH_LOCATION.mapsUrl).toBe(MAPS_URL);
   });
 
   it.each([

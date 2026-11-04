@@ -4,7 +4,8 @@ import { BOT_ENV, TWILIO_BOT_ENV } from '../helpers.ts';
 import { without, expectFailure, expectStart, providerLines, runCleanups } from '../support/server-startup-provider-qa.ts';
 
 /**
- * QA de REQ-F-012, ronda 1 (C-P del QA Action Plan): arranque real de `node src/server.ts` con
+ * QA de REQ-F-012, ronda 1 (C-P del QA Action Plan): arranque real del proceso del bot (la api desde
+ * REQ-F-042, `node ../api/src/server.ts`) con
  * cada combinación de proveedor de CA-8 a CA-12b y CA-20. Se comprueba el código de salida, el
  * mensaje y que ningún valor de las variables aparezca en la salida. Valores ficticios.
  *
@@ -33,11 +34,11 @@ describe('QA REQ-F-012: arranque real según el proveedor', () => {
     await expectFailure({ NODE_ENV: 'production', WHATSAPP_BOT_PROVIDER: 'twilio' }, [/WHATSAPP_BOT_PROVIDER=twilio no se permite con NODE_ENV=production/]);
   }, 60_000);
 
-  it('CA-12: twilio sin datos de cuenta arranca: webhook 503 y landings 200', async () => {
+  it('CA-12: twilio sin datos de cuenta arranca: webhook 503 y la API en su puerto (RF-5, CA-4 de REQ-F-042)', async () => {
     const server = await expectStart({ WHATSAPP_BOT_PROVIDER: 'twilio', WHATSAPP_BOT_ACCOUNT_ID: '', WHATSAPP_BOT_ACCESS_TOKEN: '', WHATSAPP_BOT_WEBHOOK_URL: '' });
     expect((await fetch(`${server.url}/webhooks/whatsapp`, { method: 'POST', body: 'a=1' })).status).toBe(503);
     expect((await fetch(`${server.url}/webhooks/whatsapp`)).status).toBe(503);
-    for (const path of ['/', '/molotes', '/birria']) expect((await fetch(`${server.url}${path}`)).status).toBe(200);
+    expect((await fetch(`${server.apiUrl}/api/v1/public/birria/productos`)).status).toBe(200);
     expect(server.output().stdout).toContain('"whatsappBot":"disabled"');
     expect(providerLines(server.output().stdout)).toEqual([]);
   }, 60_000);

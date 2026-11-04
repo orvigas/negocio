@@ -9,7 +9,7 @@ import type {
 } from '@restaurante/core/identity';
 import { pickPageData, type ImageExists, type ProductRepository } from '@restaurante/core/catalog';
 import { readFormBody, type Renderer } from '@restaurante/web';
-import { type BotControl } from '@restaurante/core/bot-control';
+import { type BotControl, type BotProvider } from '@restaurante/core/bot-control';
 
 import type { Config } from '../config/env.ts';
 import { LOGIN_PATH, SESSION_COOKIE, assertSameOrigin, sessionCookieOptions } from '../middleware/admin-guard.ts';
@@ -22,7 +22,6 @@ import {
   type MenuRepository,
 } from '../repositories/menu-repository.ts';
 import { parseAdminForm } from '../services/admin-form.ts';
-import type { BotProvider } from '../services/whatsapp-bot/chat-bot.ts';
 import {
   ACCOUNT_PATH,
   BOT_ADMIN_PATH,
@@ -73,7 +72,7 @@ export interface AdminDeps {
   logger: Logger;
   /** Protección del bot (REQ-F-025); sin ella, la página "Bot" responde 503. */
   botControl?: BotControl | undefined;
-  /** Proveedor del bot en uso, o undefined si el bot está desactivado (webhook en 503). */
+  /** Proveedor del bot configurado (el bot vive en la api), o undefined si está desactivado. */
   botProvider?: BotProvider | undefined;
 }
 

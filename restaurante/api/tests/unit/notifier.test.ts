@@ -38,8 +38,8 @@ function setup(replies: Reply[], { firstWaitMs = FIRST_WAIT }: { firstWaitMs?: n
 const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
 describe('aviso interno a landing-pages', () => {
-  it('confirmed si landing-pages confirma la landing y el bot; envía el negocio con la credencial', async () => {
-    const { notifier, requests } = setup([ok({ landing: true, bot: true })]);
+  it('confirmed si landing-pages confirma la landing (el bot está en la api, REQ-F-042); envía el negocio con la credencial', async () => {
+    const { notifier, requests } = setup([ok({ landing: true })]);
     expect(await notifier.notify('birria')).toBe('confirmed');
     expect(requests).toHaveLength(1);
     const [request] = requests;
@@ -51,7 +51,7 @@ describe('aviso interno a landing-pages', () => {
   });
 
   it('entregado sin confirmar la landing: pending y sin reintentos', async () => {
-    const { notifier, requests, delays } = setup([ok({ landing: false, bot: true })]);
+    const { notifier, requests, delays } = setup([ok({ landing: false })]);
     expect(await notifier.notify('molotes')).toBe('pending');
     expect(requests).toHaveLength(1);
     expect(delays).toEqual([]);
@@ -69,7 +69,7 @@ describe('aviso interno a landing-pages', () => {
   });
 
   it('se recupera en un reintento: products_notify_recovered', async () => {
-    const { notifier, events } = setup([new TypeError('x'), ok({ landing: true, bot: true })]);
+    const { notifier, events } = setup([new TypeError('x'), ok({ landing: true })]);
     expect(await notifier.notify('molotes')).toBe('pending');
     await vi.waitFor(() => expect(events().some((event) => event.msg === 'products_notify_recovered')).toBe(true));
   });
@@ -88,18 +88,18 @@ describe('aviso interno a landing-pages', () => {
     const { notifier, requests } = setup([slow]);
     expect(await notifier.notify('birria')).toBe('pending');
     expect(requests).toHaveLength(1);
-    release(ok({ landing: true, bot: true }));
+    release(ok({ landing: true }));
   });
 
   it('una escritura con un intento en vuelo no lanza otro en paralelo; otro negocio sí', async () => {
     let release: (response: Response) => void = () => {};
     const slow = () => new Promise<Response>((resolve) => (release = resolve));
-    const { notifier, requests } = setup([slow, ok({ landing: true, bot: true }), ok({ landing: true, bot: true })]);
+    const { notifier, requests } = setup([slow, ok({ landing: true }), ok({ landing: true })]);
     const first = notifier.notify('molotes');
     const second = notifier.notify('molotes');
     expect(await notifier.notify('birria')).toBe('confirmed');
     expect(requests.map((request) => request.init.body)).toEqual([JSON.stringify({ business: 'molotes' }), JSON.stringify({ business: 'birria' })]);
-    release(ok({ landing: true, bot: true }));
+    release(ok({ landing: true }));
     expect(await first).toBe('confirmed');
     expect(await second).toBe('confirmed');
   });
@@ -107,11 +107,11 @@ describe('aviso interno a landing-pages', () => {
   it('DEF-001: si el intento en vuelo termina bien, la escritura que llegó durante él recibe otro aviso (y su frescura es la de ese aviso)', async () => {
     let release: (response: Response) => void = () => {};
     const slow = () => new Promise<Response>((resolve) => (release = resolve));
-    const { notifier, requests } = setup([slow, ok({ landing: false, bot: true })]);
+    const { notifier, requests } = setup([slow, ok({ landing: false })]);
     const first = notifier.notify('molotes');
     const second = notifier.notify('molotes');
     expect(requests).toHaveLength(1);
-    release(ok({ landing: true, bot: true }));
+    release(ok({ landing: true }));
     expect(await first).toBe('confirmed');
     // El segundo aviso empezó después de la segunda escritura: su resultado (landing aún sin datos) es el que cuenta.
     expect(await second).toBe('pending');
@@ -121,15 +121,15 @@ describe('aviso interno a landing-pages', () => {
   it('DEF-001: una escritura que espera más que firstWaitMs responde pending, pero su aviso se envía igual', async () => {
     let release: (response: Response) => void = () => {};
     const slow = () => new Promise<Response>((resolve) => (release = resolve));
-    const { notifier, requests } = setup([slow, ok({ landing: true, bot: true })]);
+    const { notifier, requests } = setup([slow, ok({ landing: true })]);
     void notifier.notify('molotes');
     expect(await notifier.notify('molotes')).toBe('pending');
-    release(ok({ landing: true, bot: true }));
+    release(ok({ landing: true }));
     await vi.waitFor(() => expect(requests).toHaveLength(2));
   });
 
   it('una escritura llegada durante los reintentos la cubre el siguiente intento, sin avisos extra', async () => {
-    const { notifier, requests, events } = setup([new TypeError('x'), ok({ landing: true, bot: true })]);
+    const { notifier, requests, events } = setup([new TypeError('x'), ok({ landing: true })]);
     const [first, second] = await Promise.all([notifier.notify('molotes'), notifier.notify('molotes')]);
     // La primera esperaba el intento que falló; la segunda, el reintento (inmediato en la prueba), que confirmó.
     expect([first, second]).toEqual(['pending', 'confirmed']);

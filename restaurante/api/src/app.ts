@@ -1,4 +1,4 @@
-import Koa, { type Middleware } from 'koa';
+import Koa, { type Context, type Middleware } from 'koa';
 
 import { ADMIN_API_PREFIX, isPublicBusinessId, productsResponseSchemas } from '@restaurante/contracts';
 import { toPublished, type ProductStore } from '@restaurante/core/catalog';
@@ -26,13 +26,14 @@ import { ApiHttpError, createErrorHandler } from './errors.ts';
 const PRODUCTS_PATH = /^\/api\/v1\/public\/([^/]+)\/productos$/;
 const ALLOWED_METHODS = 'GET, HEAD';
 
-function createRequestLogger(logger: Logger): Middleware {
+/** `extra`: campos adicionales de la petición (el puerto del webhook añade la IP y el protocolo). */
+export function createRequestLogger(logger: Logger, extra: (ctx: Context) => Record<string, unknown> = () => ({})): Middleware {
   return async function requestLogger(ctx, next) {
     const start = performance.now();
     try {
       await next();
     } finally {
-      logger.info('request', { method: ctx.method, path: ctx.path, status: ctx.status, durationMs: Math.round((performance.now() - start) * 100) / 100 });
+      logger.info('request', { method: ctx.method, path: ctx.path, status: ctx.status, durationMs: Math.round((performance.now() - start) * 100) / 100, ...extra(ctx) });
     }
   };
 }

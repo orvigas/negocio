@@ -18,7 +18,8 @@ import { databaseUrl } from '../support/test-database-config.ts';
  * (LANDING_INTERNAL_URL -> INTERNAL_PORT de landing-pages, con la misma credencial).
  *
  * Un producto marcado como no disponible en el admin nuevo deja de verse en la siguiente visita a la
- * landing y el catálogo del bot se recarga, sin reiniciar nada. Un aviso con una credencial incorrecta
+ * landing, sin reiniciar nada. El bot vive en la api desde REQ-F-042 y usa la caché de la propia API
+ * (api/tests/integration/bot-catalog-freshness.test.ts). Un aviso con una credencial incorrecta
  * no invalida nada.
  */
 
@@ -103,8 +104,8 @@ function formFields(html: string, selector: string): Record<string, string> {
 
 const landingHtml = async (url: string) => (await fetch(`${url}/molotes`)).text();
 
-describe('admin nuevo -> api -> aviso -> landing y bot (CA-9 y CA-10)', () => {
-  it('un producto marcado como no disponible desaparece en la siguiente visita a la landing y el bot recarga, sin reiniciar', async () => {
+describe('admin nuevo -> api -> aviso -> landing (CA-9 y CA-10)', () => {
+  it('un producto marcado como no disponible desaparece en la siguiente visita a la landing, sin reiniciar', async () => {
     const stack = await startStack();
     const admin = browser(stack.adminUrl);
     expect((await admin.post('/acceso', { username: EDITOR.username, password: EDITOR.password })).status).toBe(303);
@@ -129,7 +130,7 @@ describe('admin nuevo -> api -> aviso -> landing y bot (CA-9 y CA-10)', () => {
     delete fields.available;
     const saved = await admin.post(`/molotes/productos/${id}`, { ...fields, action: 'update' });
     expect(saved.status).toBe(303);
-    // La landing y el bot confirmaron el aviso antes de responder (sin "pendiente").
+    // La landing confirmó el aviso antes de responder (sin "pendiente").
     expect(saved.headers.get('location')).toBe('/molotes/productos?ok=saved');
 
     // La siguiente visita ya no lo muestra, sin reiniciar ningún proceso.
@@ -138,7 +139,7 @@ describe('admin nuevo -> api -> aviso -> landing y bot (CA-9 y CA-10)', () => {
     // respuesta HTTP: se espera a que esté antes de comprobarla.
     const notifiedLines = () => logLines(stack.landing.output().stdout).filter((line) => line.msg === 'products_change_notified');
     await expect.poll(() => notifiedLines().length).toBeGreaterThan(0);
-    expect(notifiedLines().at(-1)).toMatchObject({ business: 'molotes', landing: true, bot: true });
+    expect(notifiedLines().at(-1)).toMatchObject({ business: 'molotes', landing: true });
 
     // Ningún log de los tres procesos lleva la contraseña ni la credencial del aviso (CA-16).
     const all = [stack.landing, stack.api, stack.inventory].flatMap((proc) => [proc.output().stdout, proc.output().stderr]).join('\n');

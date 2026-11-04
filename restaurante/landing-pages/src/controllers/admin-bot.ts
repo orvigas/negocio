@@ -2,7 +2,7 @@ import { isAdmin } from '@restaurante/core/identity';
 import { DEFAULT_MANUAL_DURATION, isManualDuration, maskedFromLast4, parsePhoneInput, validateReason, type BotControl } from '@restaurante/core/bot-control';
 
 import { renderAdminUnavailable } from '../views/admin/index.ts';
-import { BOT_PATH, BOT_SUCCESS_MESSAGES, renderBotPage, type BotFormErrors, type BotPageOptions } from '../views/admin/bot.ts';
+import { BOT_PATH, BOT_SUCCESS_MESSAGES, REACHED_MOVED_MESSAGE, renderBotPage, type BotFormErrors, type BotPageOptions } from '../views/admin/bot.ts';
 import { createAdminAccess, type AdminRouterContext, type Authenticated, type Permission } from './admin-access.ts';
 import type { AdminDeps } from './admin.ts';
 
@@ -27,7 +27,6 @@ export interface AdminBotController {
 
 const BODY_LIMIT = 4 * 1024;
 const ID_PATTERN = /^[1-9]\d{0,9}$/;
-const TOKEN_PATTERN = /^[0-9a-f]{32}$/;
 const SWITCH_FIELDS = Object.freeze(['accion', 'motivo']);
 const BLOCK_FIELDS = Object.freeze(['telefono', 'duracion', 'motivo']);
 const REACHED_FIELDS = Object.freeze(['duracion', 'motivo']);
@@ -133,22 +132,16 @@ export function createAdminBotController(deps: AdminDeps): AdminBotController {
       return seeOther(ctx, successPath('unblocked', last4));
     },
 
-    /** Bloqueo desde "alcanzaron un tope hoy" (RF-6; D-T11). */
+    /**
+     * Bloqueo desde "alcanzaron un tope hoy" (RF-6; D-T11). Desde REQ-F-042 (RF-8, D-2, CA-7) la lista
+     * vive en el proceso del bot (la api) y vuelve en el admin nuevo: tras la sesión, el permiso y el
+     * CSRF, responde 410 con el aviso y no bloquea nada.
+     */
     async blockReached(ctx) {
       const auth = await access.post(ctx, { returnTo: BOT_PATH, limit: BODY_LIMIT, permission: adminOnly, allowedFields: REACHED_FIELDS });
       if (!auth) return undefined;
       if (!botControl) return unavailable(ctx);
-      const token = ctx.params.token;
-      if (typeof token !== 'string' || !TOKEN_PATTERN.test(token)) return ctx.throw(404);
-      const duration = auth.fields.get('duracion') ?? DEFAULT_MANUAL_DURATION;
-      if (!isManualDuration(duration)) return ctx.throw(400, 'Duración desconocida.', { code: 'INVALID_FORM' });
-      const reason = validateReason(auth.fields.get('motivo'));
-      if ('error' in reason) return renderPage(ctx, botControl, auth, 422, { problem: reason.error });
-      const last4 = botControl.reachedLast4(token);
-      const outcome = await botControl.blockReached(token, duration, reason.value, actorOf(auth));
-      if (outcome === 'blocked') return seeOther(ctx, successPath('blocked', last4));
-      if (outcome === 'already_blocked') return renderPage(ctx, botControl, auth, 409, { problem: PROBLEMS.alreadyBlocked });
-      return ctx.throw(404);
+      return renderPage(ctx, botControl, auth, 410, { problem: REACHED_MOVED_MESSAGE });
     },
   });
 }

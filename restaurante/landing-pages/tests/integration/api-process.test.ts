@@ -153,7 +153,8 @@ describe('CA-10 (O-1): arranque simultáneo de api y landing-pages', () => {
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
       const source = await readFile(join(API_SRC, file), 'utf8');
-      expect(source, file).not.toMatch(/products\.init\([^)]|importBusiness|productsFromMenuData|seeds|content\/|markImported/);
+      // El bot (REQ-F-042) tiene su contenido en src/bot/content/; las semillas siguen fuera de la API.
+      expect(source, file).not.toMatch(/products\.init\([^)]|importBusiness|productsFromMenuData|seeds|seed\.json|markImported/);
     }
   });
 });

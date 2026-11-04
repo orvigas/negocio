@@ -2,24 +2,42 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
 import { silentLogger } from '@restaurante/core/shared';
-import { createBotControl, DEFAULT_BOT_LIMITS } from '@restaurante/core/bot-control';
+import { canonicalPhone, createBotControl, DEFAULT_BOT_LIMITS } from '@restaurante/core/bot-control';
 
 import { BOT_ENV } from '../helpers.ts';
 import { ADMIN_PASSWORD, ADMIN_USER, TEST_BOT_KEYS, createUser, csrfFrom, loginAs, setupAdmin, textOf, type Browser } from '../support/admin.ts';
-import { createCloudApiDouble } from '../support/cloud-api-double.ts';
 import { startTcpProxy } from '../support/tcp-proxy.ts';
 import { testDatabaseConfigs } from '../support/test-database-config.ts';
-import { CUSTOMER, inboundPayload, sign } from '../support/whatsapp.ts';
 
 /**
  * Página "Bot" de /admin (REQ-F-025, RF-6, RF-3, RF-9): permisos (CA-7), lista negra con auditoría,
- * lista blanca (CA-8), interruptor de punta a punta con el webhook (CA-12), base caída (CA-13) y
- * ningún número completo en el HTML (CA-15). MySQL real y servidor en 127.0.0.1.
+ * lista blanca (CA-8), interruptor de punta a punta (CA-12), base caída (CA-13) y ningún número
+ * completo en el HTML (CA-15). MySQL real y servidor en 127.0.0.1.
+ *
+ * Desde REQ-F-042 el bot vive en la api: el proceso del bot se representa con su control (modo 'bot')
+ * sobre la misma base. Lo que /admin cambia llega al bot en su siguiente refresco (RF-9, CA-5) y el
+ * uso que guarda el bot se ve en /admin al recargar (RF-8, CA-6). El webhook ya no está aquí (404).
  */
 
 const PATH = '/admin/bot';
 const WEBHOOK = '/webhooks/whatsapp';
+const CUSTOMER = '5215512345678';
 const FULL = ['5215500001234', '525500001234', '5500001234'];
+
+/** El control del proceso del bot (la api) sobre la base de la prueba, con la misma clave y personal (RN-5). */
+async function botProcess({ prisma, clock, logger = silentLogger }: { prisma: Parameters<typeof createPrismaBotControlStore>[0]['prisma']; clock: { now: () => Date }; logger?: typeof silentLogger }) {
+  const control = createBotControl({
+    store: createPrismaBotControlStore({ prisma }),
+    keys: TEST_BOT_KEYS,
+    limits: DEFAULT_BOT_LIMITS,
+    timeZone: 'America/Mexico_City',
+    staff: [BOT_ENV.WHATSAPP_BOT_STAFF_MOLOTES, BOT_ENV.WHATSAPP_BOT_STAFF_BIRRIA],
+    logger,
+    now: clock.now,
+  });
+  await control.init();
+  return control;
+}
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -123,17 +141,18 @@ describe('lista negra desde el panel (RF-3, CA-7, CA-8, CA-15)', () => {
     expect(await prisma.botBlock.count()).toBe(1);
   });
 
-  it('bloquea desde "alcanzaron un tope hoy" con un token de un solo uso', async () => {
-    const { admin, botControl, prisma } = await asAdmin();
-    botControl.recordReached('525500001234', 'messages');
-    const page = await admin.get(PATH);
-    expect(textOf(page.text)).toMatch(/\*{9}1234 Mensajes del día/);
-    expectNoFullNumber(page.text);
-    const action = page.text.match(/action="(\/admin\/bot\/topes\/[0-9a-f]{32}\/bloquear)"/)?.[1] ?? '';
-    const blocked = await post(admin, action, { duracion: '24h', motivo: '' });
-    expect(blocked.headers.location).toBe(`${PATH}?ok=blocked&n=1234`);
-    expect((await post(admin, action, { duracion: '24h', motivo: '' })).status).toBe(404);
-    expect(await prisma.botBlock.findFirst()).toMatchObject({ origin: 'manual', last4: '1234' });
+  it('CA-6: el uso y el gasto del día y del mes salen de la base, tal como los guardó el bot', async () => {
+    const { admin, prisma, clock } = await asAdmin({ env: BOT_ENV, botKeys: TEST_BOT_KEYS });
+    const used = (html: string, label: string): number => Number(new RegExp(`${label.replace(/[()]/g, '\\$&')} (\\d+)`).exec(textOf(html))?.[1]);
+    expect(used((await admin.get(PATH)).text, 'Mensajes del bot (hoy)')).toBe(0);
+    const bot = await botProcess({ prisma, clock });
+    for (let i = 0; i < 3; i += 1) bot.usage.reserve('outbound', clock.now());
+    bot.usage.reserve('template', clock.now());
+    await bot.flush();
+    const page = (await admin.get(PATH)).text;
+    expect(used(page, 'Mensajes del bot (hoy)')).toBe(3);
+    expect(used(page, 'Mensajes del bot (mes)')).toBe(3);
+    expect(used(page, 'Avisos al personal (hoy)')).toBe(1);
   });
 
   it('con el bot desactivado muestra un estado coherente y no permite altas sin clave', async () => {
@@ -148,38 +167,38 @@ describe('lista negra desde el panel (RF-3, CA-7, CA-8, CA-15)', () => {
   });
 });
 
-describe('interruptor de emergencia de punta a punta (CA-12)', () => {
-  it('pausado: el webhook responde 200 sin enviar nada, las landings siguen en 200, se audita y sobrevive a un reinicio', async () => {
-    const double = createCloudApiDouble();
-    const { admin, prisma, clock, request } = await asAdmin({ env: BOT_ENV, botKeys: undefined, providerFetch: double.fetch });
-    const deliver = async (text: string) => {
-      const body = JSON.stringify(inboundPayload('text', { text, at: clock.now() }));
-      return request().post(WEBHOOK).set('Content-Type', 'application/json').set('X-Hub-Signature-256', sign(body)).send(body);
-    };
+describe('interruptor y lista negra de punta a punta con el bot en la api (CA-12; REQ-F-042, RF-9, CA-5 y CA-8)', () => {
+  it('pausa, bloqueo y desbloqueo en /admin llegan al bot pasados BOT_CONTROL_REFRESH_SECONDS; el webhook ya no está aquí', async () => {
+    const { admin, prisma, clock, request } = await asAdmin({ env: BOT_ENV, botKeys: TEST_BOT_KEYS });
+    const bot = await botProcess({ prisma, clock });
+    expect(bot.isPaused()).toBe(false);
 
     expect((await post(admin, `${PATH}/interruptor`, { accion: 'pausar', motivo: 'Incidente' })).headers.location).toBe(`${PATH}?ok=paused`);
-    expect((await deliver('Hola')).status).toBe(200);
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(double.requests).toHaveLength(0);
-    for (const path of ['/', '/molotes', '/birria']) expect((await request().get(path)).status).toBe(200);
-    expect(textOf((await admin.get(PATH)).text)).toContain('Bot pausado');
     expect(await prisma.botAudit.findFirst({ where: { action: 'bot_paused' } })).toMatchObject({ actorKind: 'user', reason: 'Incidente' });
-
-    // Un proceso nuevo sobre la misma base arranca pausado.
-    const restarted = createBotControl({
-      store: createPrismaBotControlStore({ prisma }),
-      keys: TEST_BOT_KEYS,
-      limits: DEFAULT_BOT_LIMITS,
-      timeZone: 'America/Mexico_City',
-      staff: [],
-      logger: silentLogger,
-    });
-    await restarted.init();
-    expect(restarted.isPaused()).toBe(true);
+    // Lo que hace la api cada refreshMs (api/src/bot/control-timers.ts).
+    clock.advance(DEFAULT_BOT_LIMITS.refreshMs);
+    await bot.refresh();
+    expect(bot.isPaused()).toBe(true);
+    expect(textOf((await admin.get(PATH)).text)).toContain('Bot pausado');
 
     expect((await post(admin, `${PATH}/interruptor`, { accion: 'reanudar', motivo: '' })).headers.location).toBe(`${PATH}?ok=resumed`);
-    expect((await deliver('Hola de nuevo')).status).toBe(200);
-    await vi.waitFor(() => expect(double.textsTo(CUSTOMER)).toHaveLength(1));
+    expect((await post(admin, `${PATH}/bloqueos`, { telefono: CUSTOMER, duracion: '7d', motivo: '' })).status).toBe(303);
+    clock.advance(DEFAULT_BOT_LIMITS.refreshMs);
+    await bot.refresh();
+    expect(bot.isPaused()).toBe(false);
+    expect(bot.isBlocked(canonicalPhone(CUSTOMER))).toBe(true);
+    expect(bot.isBlocked(canonicalPhone('5215500005678'))).toBe(false);
+
+    const id = (await prisma.botBlock.findFirst({ where: { removedAt: null } }))?.id;
+    expect((await post(admin, `${PATH}/bloqueos/${String(id)}/quitar`, {})).status).toBe(303);
+    clock.advance(DEFAULT_BOT_LIMITS.refreshMs);
+    await bot.refresh();
+    expect(bot.isBlocked(canonicalPhone(CUSTOMER))).toBe(false);
+
+    // El webhook lo atiende la api: landing-pages responde 404 y las landings siguen en 200.
+    expect((await request().get(WEBHOOK)).status).toBe(404);
+    expect((await request().post(WEBHOOK).set('Content-Type', 'application/json').send('{}')).status).toBe(404);
+    for (const path of ['/', '/molotes', '/birria']) expect((await request().get(path)).status).toBe(200);
   });
 });
 
@@ -188,20 +207,16 @@ describe('base de datos caída (CA-13)', () => {
     const { app: target } = testDatabaseConfigs();
     const proxy = await startTcpProxy(target);
     cleanups.push(() => proxy.down());
-    const double = createCloudApiDouble();
-    const context = await asAdmin({ env: BOT_ENV, botKeys: undefined, providerFetch: double.fetch, routeDatabase: (config) => ({ ...config, host: proxy.host, port: proxy.port }) });
+    const context = await asAdmin({ env: BOT_ENV, botKeys: TEST_BOT_KEYS, routeDatabase: (config) => ({ ...config, host: proxy.host, port: proxy.port }) });
     expect((await post(context.admin, `${PATH}/bloqueos`, { telefono: CUSTOMER, duracion: '7d', motivo: '' })).status).toBe(303);
+    const bot = await botProcess({ prisma: context.prisma, clock: context.clock, logger: context.logger });
+    expect(bot.isBlocked(canonicalPhone(CUSTOMER))).toBe(true);
 
     await proxy.down();
     context.clock.advance(11_000);
-    const deliver = async (from: string) => {
-      const body = JSON.stringify(inboundPayload('text', { from, text: 'Hola', at: context.clock.now() }));
-      return context.request().post(WEBHOOK).set('Content-Type', 'application/json').set('X-Hub-Signature-256', sign(body)).send(body);
-    };
-    expect((await deliver(CUSTOMER)).status).toBe(200);
-    expect((await deliver('5215500005678')).status).toBe(200);
-    await vi.waitFor(() => expect(double.textsTo('5215500005678')).toHaveLength(1), { timeout: 15_000 });
-    expect(double.textsTo(CUSTOMER)).toHaveLength(0);
+    await bot.refresh();
+    expect(bot.isBlocked(canonicalPhone(CUSTOMER))).toBe(true);
+    expect(bot.isBlocked(canonicalPhone('5215500005678'))).toBe(false);
     await vi.waitFor(() => expect(context.logger.lines.some((line) => line.msg === 'bot_control_store_failed')).toBe(true), { timeout: 15_000 });
     const failure = JSON.stringify(context.logger.lines.filter((line) => line.msg === 'bot_control_store_failed'));
     expect(failure).not.toMatch(/mysql:\/\/|127\.0\.0\.1|SELECT/i);

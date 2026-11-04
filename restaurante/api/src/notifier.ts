@@ -7,13 +7,16 @@ import { silentLogger, type BusinessId, type Logger } from '@restaurante/core/sh
  * Aviso interno a landing-pages tras cada escritura confirmada de productos (REQ-F-039, RF-12 a
  * RF-14). `POST <LANDING_INTERNAL_URL>/internal/v1/productos-cambiados` con `{ business }` y la
  * credencial compartida en `Authorization: Bearer <INTERNAL_NOTIFY_TOKEN>`. landing-pages invalida la
- * caché de la landing, recarga el catálogo del bot y responde `{ landing, bot }`.
+ * caché de la landing y responde `{ landing }`.
  *
+ * - El bot vive en la api desde REQ-F-042 y usa la misma caché de productos, que la escritura ya
+ *   recargó antes de avisar (RF-10): el aviso solo tiene que confirmar la landing. Si esa recarga
+ *   falló, la ruta de productos deja la frescura en `pending` (product-routes.ts).
  * - La escritura espera como mucho `firstWaitMs` (2 s) al primer intento para decir la verdad sobre
- *   la frescura: `confirmed` solo si landing-pages confirmó la landing y el bot; si no, `pending`.
+ *   la frescura: `confirmed` solo si landing-pages confirmó la landing; si no, `pending`.
  * - Un fallo nunca afecta a la escritura: se registra (`products_notify_failed`) y se reintenta en
  *   segundo plano tras 1 s, 5 s y 30 s; al agotarlos, `products_notify_gave_up` y queda la red de
- *   seguridad de 60 s (caché de las landings y recarga del bot).
+ *   seguridad de 60 s (caché de las landings).
  * - Una escritura del mismo negocio con un intento en vuelo o reintentos pendientes no lanza un aviso
  *   en paralelo: la cubre el siguiente intento que empiece después de ella (el aviso solo lleva el
  *   negocio). Si el intento en vuelo termina bien, se lanza uno nuevo para ella (DEF-001 de QA).
@@ -83,7 +86,7 @@ export function createLandingNotifier({
       return { kind: 'rejected', status: response.status };
     }
     const body: unknown = await response.json().catch(() => null);
-    return isRecord(body) && body.landing === true && body.bot === true ? { kind: 'confirmed' } : { kind: 'delivered' };
+    return isRecord(body) && body.landing === true ? { kind: 'confirmed' } : { kind: 'delivered' };
   }
 
   /**

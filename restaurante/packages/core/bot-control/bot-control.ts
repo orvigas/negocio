@@ -35,6 +35,11 @@ import { canonicalPhone, maskPhone, parsePhoneInput } from './phone.ts';
  *   reintentan en el siguiente refresco (como mucho `MAX_PENDING_BLOCKS`).
  * - **Contadores:** bot-usage.ts; sus deltas se persisten en una cola serie que acumula lo pendiente
  *   si la base falla y lo reintenta con la siguiente escritura, el mantenimiento o el apagado.
+ * - **Dos papeles (REQ-F-042):** `mode: 'bot'` (por defecto) es el del proceso que ejecuta el bot (la
+ *   api): sus contadores son la verdad y ejecuta el mantenimiento. `mode: 'panel'` es el de la página
+ *   "Bot" del /admin actual (landing-pages), que no envía nada: cada `snapshot()` lee el uso del día y
+ *   del mes de la base (CA-6) y `maintenance()` solo refresca la copia, sin auditar caducidades ni
+ *   purgar (RF-11: el mantenimiento corre en un solo proceso, CA-13).
  * - Nunca registra el número completo, el seudónimo ni las claves.
  */
 
@@ -94,6 +99,8 @@ export interface BotControlOptions {
   staff: readonly string[];
   logger: Logger;
   now?: () => Date;
+  /** Papel del proceso (REQ-F-042): 'bot' (por defecto) o 'panel'. */
+  mode?: 'bot' | 'panel';
 }
 
 const hmacHex = (key: Buffer, value: string): string => createHmac('sha256', key).update(value).digest('hex');
@@ -111,7 +118,7 @@ const monthsBefore = (date: Date, months: number): Date => {
   return result;
 };
 
-export function createBotControl({ store, keys, limits, timeZone, staff, logger, now = () => new Date() }: BotControlOptions) {
+export function createBotControl({ store, keys, limits, timeZone, staff, logger, now = () => new Date(), mode = 'bot' }: BotControlOptions) {
   const staffNumbers = new Set(staff.map(canonicalPhone));
   const currentKey = keys ? { key: keys.current, id: keyIdOf(keys.current) } : null;
   const previousKey = keys?.previous ? { key: keys.previous, id: keyIdOf(keys.previous) } : null;
@@ -316,6 +323,27 @@ export function createBotControl({ store, keys, limits, timeZone, staff, logger,
     return 'blocked';
   }
 
+  /**
+   * Modo 'panel' (REQ-F-042, CA-6): el uso del día y del mes, tal como lo guardó el proceso del bot.
+   * Si la base falla, se conserva el último leído (y queda el aviso de base no disponible).
+   */
+  async function loadUsageFromStore(): Promise<void> {
+    const at = now();
+    const periods = usage.periods(at);
+    try {
+      usage.load(
+        await store.readUsage([
+          { periodType: 'day', period: periods.day },
+          { periodType: 'month', period: periods.month },
+        ]),
+        at,
+      );
+      storeOk();
+    } catch (err) {
+      storeFailed('read_usage', err);
+    }
+  }
+
   return {
     limits,
     usage,
@@ -408,6 +436,7 @@ export function createBotControl({ store, keys, limits, timeZone, staff, logger,
     /** Estado para el panel. Refresca antes la copia si está vieja (sin esperar si la base falla). */
     async snapshot(): Promise<BotControlSnapshot> {
       if (now().getTime() - lastRefresh >= limits.refreshMs) await (refreshing ?? refresh());
+      if (mode === 'panel') await loadUsageFromStore();
       const at = now();
       resetReachedIfNewDay(at);
       const active = blocks.filter((block) => isActiveBlock(block, at));
@@ -479,8 +508,12 @@ export function createBotControl({ store, keys, limits, timeZone, staff, logger,
       logger.info(paused ? 'bot_control_paused' : 'bot_control_resumed', { actorId: actor.id });
     },
 
-    /** Mantenimiento (D-T5): caducidades, retención (RF-10, D-T9) y reintentos. Nunca lanza. */
+    /**
+     * Mantenimiento (D-T5): caducidades, retención (RF-10, D-T9) y reintentos. Nunca lanza. En el
+     * modo 'panel' solo refresca la copia: el mantenimiento es del proceso del bot (RF-11).
+     */
     async maintenance(): Promise<void> {
+      if (mode === 'panel') return refresh();
       const at = now();
       try {
         const expired = await store.auditExpired(at);

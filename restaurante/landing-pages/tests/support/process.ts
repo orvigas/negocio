@@ -104,13 +104,14 @@ export interface StartOptions {
  * El proceso va en su propio grupo y `stop()` detiene el grupo entero (p. ej. `node --watch` y su hijo).
  */
 export async function startServer(env: Record<string, string | undefined>, timeoutMs = 30_000, { args = ['src/server.ts'] }: StartOptions = {}) {
-  // PORT y el puerto interno del aviso de la API (REQ-F-039): reservados a la vez, así que son
-  // distintos entre sí y de los de otros procesos de la prueba (freePorts devuelve exactamente dos).
-  const [port, internalPort] = (await freePorts(2)) as [number, number];
+  // PORT, el puerto interno del aviso de la API (REQ-F-039) y el del webhook de la api (REQ-F-042,
+  // WEBHOOK_PORT; landing-pages lo ignora): reservados a la vez, así que son distintos entre sí y de
+  // los de otros procesos de la prueba (freePorts devuelve exactamente tres).
+  const [port, internalPort, webhookPort] = (await freePorts(3)) as [number, number, number];
   const database = env.DATABASE_URL === undefined && !('DATABASE_URL' in env) ? await makeDatabase() : null;
   const child = spawn(process.execPath, args, {
     cwd: PROJECT_DIR,
-    env: baseEnv(definedOnly({ ...VALID_ENV, PORT: String(port), INTERNAL_PORT: String(internalPort), ...(database ? { DATABASE_URL: appDatabaseUrl(database.name) } : {}), ...env })),
+    env: baseEnv(definedOnly({ ...VALID_ENV, PORT: String(port), INTERNAL_PORT: String(internalPort), WEBHOOK_PORT: String(webhookPort), ...(database ? { DATABASE_URL: appDatabaseUrl(database.name) } : {}), ...env })),
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: true,
   });

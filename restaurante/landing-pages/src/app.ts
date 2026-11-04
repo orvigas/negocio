@@ -26,9 +26,6 @@ import { createRequestLogger } from './middleware/request-logger.ts';
 import { assertMenuRepository } from './repositories/menu-repository.ts';
 import { createRouter } from './routes/index.ts';
 import type { LandingProducts } from './services/landing-products.ts';
-import { createBotOrchestrator, type BotOrchestrator } from './services/whatsapp-bot/orchestrator.ts';
-import { createBotProtection } from './services/whatsapp-bot/protection/protection.ts';
-import { createChatBot, type FetchLike } from './services/whatsapp-bot/providers/select.ts';
 import { renderAdminUnavailable } from './views/admin/index.ts';
 
 const SRC_DIR = dirname(fileURLToPath(import.meta.url));
@@ -39,7 +36,7 @@ export interface AppOptions {
   config: Config;
   /** Repositorio de menús ya inicializado (src/repositories/; REQ-F-001, RF-9). Se valida al crear la app. */
   repository: unknown;
-  /** Productos (REQ-F-008), ya inicializados: importación hecha y caché cargada. Para /admin y el bot. */
+  /** Productos (REQ-F-008), ya inicializados: importación hecha y caché cargada. Para /admin. */
   products: ProductRepository;
   /**
    * Productos de las landings, de la API propia (REQ-F-038). La app suscribe su invalidación a las
@@ -56,17 +53,10 @@ export interface AppOptions {
   logger?: Logger;
   now?: () => Date;
   /**
-   * Bot de WhatsApp ya construido (REQ-F-009; las pruebas lo crean con el doble del proveedor).
-   * Sin él, si `config.whatsappBot` existe, se crea con el proveedor configurado (REQ-F-012) y
-   * `providerFetch` (por defecto, `fetch`).
-   */
-  bot?: BotOrchestrator | undefined;
-  /**
-   * Protección del bot y página "Bot" de /admin (REQ-F-025). Obligatoria si el bot se crea desde
-   * la configuración; sin ella, /admin/bot responde 503.
+   * Página "Bot" de /admin (REQ-F-025; modo panel desde REQ-F-042: el bot vive en la api). Sin ella,
+   * /admin/bot responde 503.
    */
   botControl?: BotControl | undefined;
-  providerFetch?: FetchLike;
   viewsDir?: string;
   publicDir?: string;
 }
@@ -81,9 +71,7 @@ export function createApp({
   hashParams = SCRYPT_DEFAULTS,
   logger = silentLogger,
   now = () => new Date(),
-  bot: injectedBot,
   botControl,
-  providerFetch = (url, init) => fetch(url, init),
   viewsDir = DEFAULT_VIEWS_DIR,
   publicDir = DEFAULT_PUBLIC_DIR,
 }: AppOptions): Koa {
@@ -110,7 +98,6 @@ export function createApp({
   // Plantillas cargadas una sola vez al construir la app.
   const renderer = createRenderer({ viewsDir });
   // Administración: cuentas personales en la base de datos (REQ-F-007).
-  if (!injectedBot && config.whatsappBot && !botControl) throw new TypeError('createApp requiere botControl para crear el bot (REQ-F-025)');
   const admin = users
     ? {
         logger,
@@ -121,31 +108,13 @@ export function createApp({
         authenticator: createUserAuthenticator({ users, hashParams }),
         imageExists: createImageChecker(publicDir),
         botControl,
-        botProvider: injectedBot?.chatBot.provider ?? config.whatsappBot?.provider,
+        botProvider: config.botPanel?.provider,
         landingProducts,
       }
     : undefined;
   const renderUnavailable = () =>
     renderAdminUnavailable(renderer, { faviconBusinessId: getActiveBusinessId({ now: now(), timeZone: config.timezone }) }).toString();
-  // Bot de WhatsApp (REQ-F-009): solo con su configuración; sin ella, el webhook responde 503.
-  // El proveedor (Meta o Twilio) se elige en providers/select.ts (REQ-F-012, RF-1.3).
-  const bot =
-    injectedBot ??
-    (config.whatsappBot
-      ? createBotOrchestrator({
-          chatBot: createChatBot(config.whatsappBot, { fetch: providerFetch, logger }),
-          staff: config.whatsappBot.staff,
-          timeZone: config.timezone,
-          products,
-          logger,
-          now,
-          // REQ-F-025 (D-T10): el bot creado desde la configuración siempre lleva la protección.
-          protection: botControl ? createBotProtection({ control: botControl, limits: config.botLimits, timeZone: config.timezone, logger }) : undefined,
-        })
-      : undefined);
-  // D-13 (REQ-F-012): solo el proveedor, ningún otro valor.
-  if (bot) logger.info('bot_provider_selected', { provider: bot.chatBot.provider });
-  const router = createRouter({ config, renderer, now, repository: menuRepository, products, landingProducts, publicDir, admin, bot, logger });
+  const router = createRouter({ config, renderer, now, repository: menuRepository, products, landingProducts, publicDir, admin, logger });
 
   app.use(createRequestLogger({ logger }));
   app.use(createErrorHandler({ logger, exposeStack: config.nodeEnv === 'development' }));

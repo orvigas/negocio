@@ -6,5 +6,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     env: { NODE_ENV: 'test' },
+    // Ninguna prueba llama a Meta ni a Twilio (REQ-F-009, RF-11.1; REQ-F-012, RF-8.1): el bot vive
+    // en la api desde REQ-F-042.
+    setupFiles: ['tests/setup/no-meta.ts'],
   },
 });

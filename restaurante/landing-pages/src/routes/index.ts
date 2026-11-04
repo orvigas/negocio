@@ -10,7 +10,6 @@ import { manifestPath } from '../content/icons.ts';
 import type { AdminDeps } from '../controllers/admin.ts';
 import { createIconsController } from '../controllers/icons.ts';
 import { createLandingController } from '../controllers/landing.ts';
-import { WEBHOOK_PATH, createWhatsAppWebhook, type WebhookBot } from '../controllers/whatsapp-webhook.ts';
 import type { MenuRepository } from '../repositories/menu-repository.ts';
 import type { LandingProducts } from '../services/landing-products.ts';
 import { createAdminRouter } from './admin.ts';
@@ -27,7 +26,7 @@ export type AdminRouteDeps = Omit<AdminDeps, 'config' | 'renderer' | 'now' | 're
  *                 -> iconos de Birria (los de `/`; REQ-F-028), con revalidación (REQ-F-002).
  * GET /molotes.webmanifest, /birria.webmanifest -> manifest de cada negocio.
  * /admin/...      -> administración de menús (src/routes/admin.ts), solo si `admin` existe.
- * GET/POST /webhooks/whatsapp -> webhook del bot de WhatsApp (REQ-F-009); 503 sin `bot`.
+ * El webhook del bot de WhatsApp (/webhooks/whatsapp) lo atiende la api desde REQ-F-042: aquí, 404.
  *
  * `admin`: dependencias de la administración (sesiones, límite de intentos, autenticador...);
  * sin ella (credenciales no configuradas) no se montan sus rutas.
@@ -35,8 +34,6 @@ export type AdminRouteDeps = Omit<AdminDeps, 'config' | 'renderer' | 'now' | 're
 export function createRouter({
   admin,
   publicDir,
-  bot,
-  logger,
   landingProducts,
   ...deps
 }: {
@@ -45,11 +42,10 @@ export function createRouter({
   now: () => Date;
   repository: MenuRepository;
   products: ProductRepository;
-  /** Productos de las landings, de la API (REQ-F-038). /admin y el bot usan `products`. */
+  /** Productos de las landings, de la API (REQ-F-038). /admin usa `products`. */
   landingProducts: LandingProducts;
   publicDir: string;
   admin?: AdminRouteDeps | undefined;
-  bot?: WebhookBot | undefined;
   logger: Logger;
 }): Router {
   const router = new Router();
@@ -61,9 +57,6 @@ export function createRouter({
   }
   router.get('/favicon.ico', icons.favicon);
   router.get(['/apple-touch-icon.png', '/apple-touch-icon-precomposed.png'], icons.appleTouchIcon);
-  const webhook = createWhatsAppWebhook({ bot, logger });
-  router.get(WEBHOOK_PATH, webhook.verify);
-  router.post(WEBHOOK_PATH, webhook.receive);
   if (admin) {
     const adminRouter = createAdminRouter({ ...deps, ...admin });
     router.use(adminRouter.routes(), adminRouter.allowedMethods());

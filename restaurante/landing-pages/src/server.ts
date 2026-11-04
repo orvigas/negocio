@@ -16,7 +16,6 @@ import { DEFAULT_PUBLIC_DIR, createApp } from './app.ts';
 import { ConfigError, loadConfig } from './config/env.ts';
 import { createInternalApp } from './internal-app.ts';
 import { bootstrapAdmin } from './services/admin-bootstrap.ts';
-import { startCatalogReload } from './services/catalog-reload.ts';
 import { LANDING_PRODUCTS_DEFAULTS, createLandingProducts, loadSeedProducts } from './services/landing-products.ts';
 import { createFileMenuRepository } from './repositories/file-menu-repository.ts';
 
@@ -92,16 +91,18 @@ try {
   process.exit(1);
 }
 
-// Protección del bot (REQ-F-025): lista negra, interruptor y contadores desde la base de datos. Se
-// prepara aunque el bot esté desactivado (la página "Bot" de /admin la muestra). Si la carga
-// inicial falla, el servidor no arranca; después, el bot sigue con la última copia conocida.
+// Página "Bot" de /admin (REQ-F-025; modo panel desde REQ-F-042): el bot vive en la api. Aquí solo
+// se gestionan la pausa y los bloqueos (en la base, que la api refresca cada BOT_CONTROL_REFRESH_SECONDS)
+// y se leen de la base el uso y el gasto. Sin mantenimiento: lo ejecuta la api (RF-11). Si la carga
+// inicial falla, el servidor no arranca.
 const botControl = createBotControl({
   store: createPrismaBotControlStore({ prisma }),
   keys: config.botKeys,
   limits: config.botLimits,
   timeZone: config.timezone,
-  staff: config.whatsappBot ? Object.values(config.whatsappBot.staff) : [],
+  staff: config.botPanel ? Object.values(config.botPanel.staff) : [],
   logger,
+  mode: 'panel',
 });
 try {
   await botControl.init();
@@ -111,11 +112,6 @@ try {
   await prisma.$disconnect();
   process.exit(1);
 }
-// Mantenimiento (D-T5): caducidades y retención al arrancar y cada hora (nunca lanza).
-await botControl.maintenance();
-const BOT_MAINTENANCE_MS = 60 * 60 * 1000;
-const maintenanceTimer = setInterval(() => void botControl.maintenance(), BOT_MAINTENANCE_MS);
-maintenanceTimer.unref();
 
 // Productos de las landings (REQ-F-038): de la API propia (API_INTERNAL_URL), con caché en memoria,
 // última copia buena y, sin ninguna, la semilla de content/seeds.ts. La primera carga nunca impide
@@ -146,7 +142,7 @@ try {
 // producción), en su propio puerto, que Traefik no enruta. Escucha en la misma dirección que la app.
 let internalServer: ReturnType<typeof app.listen> | null = null;
 if (config.internalNotify) {
-  internalServer = createInternalApp({ token: config.internalNotify.token, products, landingProducts, logger }).listen(config.internalNotify.port, config.host);
+  internalServer = createInternalApp({ token: config.internalNotify.token, landingProducts, logger }).listen(config.internalNotify.port, config.host);
   try {
     await once(internalServer, 'listening');
   } catch (err) {
@@ -157,8 +153,6 @@ if (config.internalNotify) {
     process.exit(1);
   }
 }
-// Red de seguridad del catálogo del bot (REQ-F-039, RF-13): recarga cada 60 s.
-const stopCatalogReload = startCatalogReload({ products });
 
 logger.info('server_started', {
   host: config.host,
@@ -166,7 +160,7 @@ logger.info('server_started', {
   nodeEnv: config.nodeEnv,
   timezone: config.timezone,
   adminStatus,
-  whatsappBot: config.whatsappBot ? 'enabled' : 'disabled',
+  botPanel: config.botPanel ? config.botPanel.provider : 'disabled',
   trustProxy: config.trustProxy,
   allowNewerSchema: config.allowNewerSchema,
   internalPort: config.internalNotify?.port ?? null,
@@ -175,8 +169,6 @@ logger.info('server_started', {
 
 function shutdown(signal: NodeJS.Signals): void {
   logger.info('server_stopping', { signal });
-  clearInterval(maintenanceTimer);
-  stopCatalogReload();
   internalServer?.close();
   server.close((err) => {
     // REQ-F-025: los contadores pendientes se guardan antes de cerrar la conexión.

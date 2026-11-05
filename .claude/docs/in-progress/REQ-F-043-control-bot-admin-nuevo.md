@@ -2,9 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
-PR 1 de 3 (contratos y `api`) aprobado por QA, sin commit. Quedan el PR 2 y el PR 3.
+PR 1 de 3 (contratos y `api`): [PR #130](https://github.com/orvigas/negocio/pull/130) hacia `epic/arquitectura`, con el CI en verde. Quedan el PR 2 y el PR 3.
 
 ## Aprobación
 
@@ -1023,3 +1023,5 @@ Plan aprobado por el usuario (cita textual: "Si", en respuesta a "¿Apruebas el 
 ### Pull Request del PR 1
 
 PR #130 hacia `epic/arquitectura`, commit `9f88402` (2026-11-05). El CI quedó en verde, pero `admin-bot-qa-req-f-043-acceso` tardó 31,3 s y `-proceso` 30,3 s, por encima del límite de 20 s por archivo. Se parten por `describe`, sin cambiar los casos, en `-acceso`, `-validacion`, `-estado`, `-proceso`, `-proceso-reinicio` y `-convivencia`, con la preparación en `tests/support/`. Siguen las 33 pruebas de las sondas. Sin cambios en código de producción.
+
+Tras la partición, el CI del commit `7a9d565` queda en verde (ejecución 41999823830): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion`. Duraciones en el CI: `-acceso` 8,2 s, `-validacion` 7,8 s, `-estado` 7,7 s, `-proceso` 8,8 s, `-proceso-reinicio` 8,0 s y `-convivencia` 9,3 s. El archivo más largo de toda la suite tarda 17,0 s. Estado: `READY_FOR_MERGE`.

@@ -37,6 +37,12 @@ export const adminPaths = Object.freeze({
   userStatus: (id: number, action: 'desactivar' | 'reactivar') => `${ADMIN_API_PREFIX}/usuarios/${id}/${action}`,
   userPassword: (id: number) => `${ADMIN_API_PREFIX}/usuarios/${id}/contrasena`,
   accountPassword: `${ADMIN_API_PREFIX}/cuenta/contrasena`,
+  // Control del bot (solo administradores; REQ-F-043).
+  bot: `${ADMIN_API_PREFIX}/bot`,
+  botSwitch: `${ADMIN_API_PREFIX}/bot/interruptor`,
+  botBlocks: `${ADMIN_API_PREFIX}/bot/bloqueos`,
+  botUnblock: (id: number) => `${ADMIN_API_PREFIX}/bot/bloqueos/${id}/quitar`,
+  botBlockReached: (token: string) => `${ADMIN_API_PREFIX}/bot/topes/${encodeURIComponent(token)}/bloquear`,
 });
 
 const businessId = z.enum(PUBLIC_BUSINESS_IDS);
@@ -203,6 +209,88 @@ export type UserUpdateRequest = UserDataRequest;
 export type UserPasswordRequest = PasswordPairRequest;
 export interface PasswordChangeRequest extends PasswordPairRequest {
   currentPassword: string;
+}
+
+// --- Control del bot (REQ-F-043) --------------------------------------------------------
+
+/**
+ * Listas cerradas del control del bot: las copia de core porque el admin no puede importarlo; una
+ * prueba de `api/` comprueba que no se desincronizan. Las reglas están solo en core y la API responde
+ * 422 con `fields`. El contrato nunca lleva el número completo, su seudónimo ni el id de la clave.
+ */
+export const BOT_MANUAL_DURATIONS = ['24h', '7d', '30d', 'permanente'] as const;
+export type BotManualDuration = (typeof BOT_MANUAL_DURATIONS)[number];
+export const BOT_DEFAULT_DURATION: BotManualDuration = '7d';
+export const BOT_REASON_MAX = 200;
+export const BOT_REACHED_CAPS = ['orders', 'messages', 'cooldown', 'burst', 'minute'] as const;
+export const BOT_BLOCK_ORIGINS = ['tope', 'repeticion', 'manual'] as const;
+export const BOT_USAGE_COUNTERS = ['templates_day', 'templates_month', 'outbound_day', 'outbound_month', 'budget'] as const;
+export const BOT_PROVIDER_IDS = ['meta', 'twilio'] as const;
+
+export const botControlStateSchema = z.object({
+  paused: z.boolean(),
+  /** ISO con la zona del negocio; null si nunca se cambió. */
+  changedAt: isoDate.nullable(),
+  changedByName: z.string().nullable(),
+  reason: z.string().nullable(),
+});
+export type BotControlState = z.infer<typeof botControlStateSchema>;
+
+export const botStateSchema = z.object({
+  /** El bot realmente en marcha en la API; `provider` null: desactivado. */
+  status: z.object({ enabled: z.boolean(), provider: z.enum(BOT_PROVIDER_IDS).nullable() }),
+  control: botControlStateSchema,
+  usage: z.object({
+    day: z.string(),
+    month: z.string(),
+    timeZone: z.string(),
+    /** Solo lectura. `budget` va en micro-USD; el resto, en unidades. */
+    counters: z.array(z.object({ id: z.enum(BOT_USAGE_COUNTERS), used: z.number(), limit: z.number(), reached: z.boolean() })),
+  }),
+  /** "Alcanzaron un tope hoy": en memoria de la API. `token` es opaco y de un solo uso. */
+  reached: z.array(z.object({ token: z.string(), masked: z.string(), cap: z.enum(BOT_REACHED_CAPS), at: isoDate })),
+  blocks: z.array(
+    z.object({
+      /** null: alta automática aún sin guardar (`pending`), que no se puede quitar. */
+      id: id.nullable(),
+      pending: z.boolean(),
+      masked: z.string(),
+      origin: z.enum(BOT_BLOCK_ORIGINS),
+      reason: z.string().nullable(),
+      /** null: el sistema. */
+      author: z.string().nullable(),
+      since: isoDate,
+      /** null: permanente. */
+      until: isoDate.nullable(),
+    }),
+  ),
+  /** false: la API no tiene la clave de la lista negra y no acepta altas. */
+  canBlock: z.boolean(),
+  /** Bloqueos vigentes que siguen con la clave anterior (rotación). */
+  previousKeyBlocks: z.number().int().nonnegative(),
+  /** false: la base falló y esto es la última copia conocida. */
+  storeHealthy: z.boolean(),
+});
+export type BotState = z.infer<typeof botStateSchema>;
+
+export const botStateResponseSchema = z.object({ bot: botStateSchema });
+export const botControlResponseSchema = z.object({ control: botControlStateSchema });
+/** 201 de un alta y 200 de una baja: solo el número enmascarado. */
+export const botBlockResponseSchema = z.object({ block: z.object({ masked: z.string() }) });
+export type BotBlockResponse = z.infer<typeof botBlockResponseSchema>;
+
+/** Cuerpos de las peticiones (forma; las reglas las aplica la API con core). Lista cerrada de campos. */
+export interface BotSwitchRequest {
+  paused: boolean;
+  reason?: string;
+}
+export interface BotReachedBlockRequest {
+  duration: string;
+  reason?: string;
+}
+/** El teléfono solo viaja en este cuerpo: nunca en una URL, en un log ni en una respuesta. */
+export interface BotBlockRequest extends BotReachedBlockRequest {
+  phone: string;
 }
 
 // --- Errores --------------------------------------------------------------------------

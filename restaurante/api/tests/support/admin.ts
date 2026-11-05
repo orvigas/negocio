@@ -1,4 +1,14 @@
 import { CSRF_HEADER, type Freshness } from '@restaurante/contracts';
+import {
+  createBotControl,
+  createMemoryBotControlStore,
+  DEFAULT_BOT_LIMITS,
+  type BotControl,
+  type BotControlStore,
+  type BotKeys,
+  type BotLimits,
+  type BotProvider,
+} from '@restaurante/core/bot-control';
 import { createProductRepository, type MemoryProductStore, type ProductRepository } from '@restaurante/core/catalog';
 import {
   LastAdminError,
@@ -189,13 +199,30 @@ export interface AdminHarness {
   logger: Logger & { lines: string[] };
   clock: { now: Date };
   ids: Record<string, number>;
+  botControl: BotControl;
+  botStore: BotControlStore;
+}
+
+/** Clave y personal del control del bot de las pruebas (REQ-F-043). */
+export const TEST_BOT_KEYS: BotKeys = Object.freeze({ current: Buffer.alloc(32, 7), previous: undefined });
+export const BOT_STAFF = '5215511110001';
+
+export interface BotOptions {
+  provider?: BotProvider | null;
+  keys?: BotKeys | null;
+  limits?: BotLimits;
+  /** Store del control; por defecto, en memoria. */
+  store?: BotControlStore;
 }
 
 export async function startAdmin({
   users: testUsers = [ADMIN, MOLOTES_EDITOR],
   realNotifier,
+  bot: { provider = 'meta', keys = TEST_BOT_KEYS, limits = DEFAULT_BOT_LIMITS, store: botStore = createMemoryBotControlStore() } = {},
 }: {
   users?: TestUser[];
+  /** Control del bot (REQ-F-043). */
+  bot?: BotOptions;
   /** Aviso interno real, para las pruebas de punta a punta; sin él, el doble `notifier`. */
   realNotifier?: LandingNotifier;
 } = {}): Promise<AdminHarness> {
@@ -220,9 +247,21 @@ export async function startAdmin({
   await products.init();
   const { notifier, notified } = createFakeNotifier();
   const logger = recordingLogger();
-  const admin = createAdminRoutes({ users, products, notifier: realNotifier ?? notifier, timeZone: 'America/Mexico_City', hashParams: TEST_HASH_PARAMS, now, logger });
+  const botControl = createBotControl({ store: botStore, keys, limits, timeZone: 'America/Mexico_City', staff: [BOT_STAFF], logger, now });
+  await botControl.init();
+  const admin = createAdminRoutes({
+    users,
+    products,
+    notifier: realNotifier ?? notifier,
+    botControl,
+    botProvider: provider,
+    timeZone: 'America/Mexico_City',
+    hashParams: TEST_HASH_PARAMS,
+    now,
+    logger,
+  });
   const { url } = await listenLocal(createApiApp({ store, admin, logger }));
-  return { url, store, products, calls, change, audit, hashes, failNext, notified, notifier, logger, clock, ids: Object.fromEntries(records.map((user) => [user.username, user.id])) };
+  return { url, store, products, calls, change, audit, hashes, failNext, notified, notifier, logger, clock, botControl, botStore, ids: Object.fromEntries(records.map((user) => [user.username, user.id])) };
 }
 
 export interface Session {

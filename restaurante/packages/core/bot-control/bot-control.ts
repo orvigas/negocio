@@ -56,6 +56,7 @@ export const isManualDuration = (value: unknown): value is ManualDuration => typ
 export const REASON_MAX_LENGTH = 200;
 const REACHED_MAX = 200;
 const MAX_PENDING_BLOCKS = 100;
+const MAX_RELEASED = 1000;
 const HASH_DOMAIN = 'bot-block:v1:';
 
 export type ReachedCap = 'orders' | 'messages' | 'cooldown' | 'burst' | 'minute';
@@ -128,6 +129,8 @@ export function createBotControl({ store, keys, limits, timeZone, staff, logger,
   /** Bloqueos automáticos del historial (RF-7.2): hash -> fechas de alta. */
   let automaticHistory = new Map<string, number[]>();
   const pendingBlocks: { block: NewBlock; createdAt: Date }[] = [];
+  /** Seudónimos con un bloqueo recién quitado (DT-1 de REQ-F-043): se consumen con `takeReleased`. */
+  const released = new Set<string>();
   const reached = new Map<string, ReachedEntry & { hash: string; last4: string; day: string }>();
   let reachedDay = '';
 
@@ -287,6 +290,15 @@ export function createBotControl({ store, keys, limits, timeZone, staff, logger,
     reached.clear();
   }
 
+  /** Acotado: si se llena, se olvida la marca más antigua (ese número conserva sus topes de hoy). */
+  function markReleased(hash: string): void {
+    if (released.size >= MAX_RELEASED) {
+      const oldest = released.values().next();
+      if (!oldest.done) released.delete(oldest.value);
+    }
+    released.add(hash);
+  }
+
   function newBlockFor(canonical: string, origin: BlockOrigin, reason: string | null, ms: number | null, at: Date): NewBlock | null {
     const hashes = hashesOf(canonical);
     if (!hashes || !currentKey) return null;
@@ -418,9 +430,12 @@ export function createBotControl({ store, keys, limits, timeZone, staff, logger,
       );
     },
 
-    /** "Alcanzaron un tope hoy" (RF-6; D-T11): en memoria, sin el número ni el seudónimo en el HTML. */
+    /**
+     * "Alcanzaron un tope hoy" (RF-6; D-T11): en memoria, sin el número ni el seudónimo en el HTML.
+     * El personal no aparece (D-3 de REQ-F-043, H-1): sin entrada no hay token con el que bloquearlo.
+     */
     recordReached(canonical: string, cap: ReachedCap): void {
-      if (!currentKey) return;
+      if (!currentKey || staffNumbers.has(canonical)) return;
       const at = now();
       resetReachedIfNewDay(at);
       const hash = hashesOf(canonical)?.current;
@@ -465,13 +480,21 @@ export function createBotControl({ store, keys, limits, timeZone, staff, logger,
     },
 
     /** 4 últimos dígitos de una entrada de "alcanzaron un tope hoy" (para el aviso de éxito), o null. */
-    reachedLast4: (token: string): string | null => reached.get(token)?.last4 ?? null,
+    reachedLast4(token: string): string | null {
+      resetReachedIfNewDay(now());
+      return reached.get(token)?.last4 ?? null;
+    },
 
-    /** Bloqueo desde "alcanzaron un tope hoy" (token de un solo uso). */
+    /**
+     * Bloqueo desde "alcanzaron un tope hoy" (token de un solo uso; el de otro día ya no vale, H-7 de
+     * REQ-F-043). El número sale de la lista con todos sus topes (H-8), también si ya estaba bloqueado.
+     * Si la base falla, lanza y la entrada se conserva para reintentar.
+     */
     async blockReached(token: string, duration: ManualDuration, reason: string | null, actor: ControlActor & { kind: 'user' }): Promise<BlockOutcome> {
+      const at = now();
+      resetReachedIfNewDay(at);
       const entry = reached.get(token);
       if (!entry || !currentKey) return 'not_found';
-      const at = now();
       const ms = MANUAL_DURATIONS[duration].ms;
       const outcome = await addManual(
         {
@@ -486,7 +509,7 @@ export function createBotControl({ store, keys, limits, timeZone, staff, logger,
         },
         actor,
       );
-      reached.delete(token);
+      for (const [key, other] of reached) if (other.hash === entry.hash) reached.delete(key);
       return outcome;
     },
 
@@ -496,16 +519,30 @@ export function createBotControl({ store, keys, limits, timeZone, staff, logger,
       if (!removed) return null;
       localVersion += 1;
       setBlocks(blocks.filter((block) => block.phoneHash !== removed.phoneHash));
+      markReleased(removed.phoneHash);
       logger.info('bot_block_removed', { customer: maskedFromLast4(removed.last4), origin: removed.origin, actorId: actor.id });
       return removed.last4;
     },
 
+    /**
+     * ¿Se le quitó un bloqueo desde su último mensaje? (DT-1 de REQ-F-043). Se consume: el proceso del
+     * bot olvida entonces sus topes por número, para que quitar un bloqueo devuelva la atención.
+     */
+    takeReleased(canonical: string): boolean {
+      const hashes = hashesOf(canonical);
+      if (!hashes) return false;
+      const current = released.delete(hashes.current);
+      const previous = hashes.previous !== null && released.delete(hashes.previous);
+      return current || previous;
+    },
+
     /** Interruptor (RF-9.1): efecto inmediato al confirmarse. */
-    async setPaused(paused: boolean, actor: ControlActor & { kind: 'user' }, reason: string | null): Promise<void> {
+    async setPaused(paused: boolean, actor: ControlActor & { kind: 'user' }, reason: string | null): Promise<ControlState> {
       const state = await store.setControl(paused, actor, reason, now());
       localVersion += 1;
       control = state;
       logger.info(paused ? 'bot_control_paused' : 'bot_control_resumed', { actorId: actor.id });
+      return state;
     },
 
     /**

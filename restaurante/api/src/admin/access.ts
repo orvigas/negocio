@@ -40,9 +40,10 @@ export interface AdminAccess {
   business(ctx: Context & { params: Record<string, string> }, options: { write: boolean }): Promise<AdminAuth & { businessId: BusinessId }>;
   /**
    * Gestión de usuarios (REQ-F-040, RF-1): sesión (401) -> rol administrador (403, antes de mirar el
-   * id: un editor recibe 403 también con su propio id) -> en escrituras, el CSRF (403).
+   * id: un editor recibe 403 también con su propio id) -> en escrituras, el CSRF (403). Control del
+   * bot (REQ-F-043): igual, con su propio mensaje de 403.
    */
-  adminOnly(ctx: Context, options: { write: boolean }): Promise<AdminAuth>;
+  adminOnly(ctx: Context, options: { write: boolean; forbiddenMessage?: string }): Promise<AdminAuth>;
 }
 
 const BEARER = /^Bearer ([A-Za-z0-9_-]{1,128})$/;
@@ -91,11 +92,11 @@ export function createAdminAccess({
       return { ...auth, businessId: business };
     },
 
-    async adminOnly(ctx, { write }) {
+    async adminOnly(ctx, { write, forbiddenMessage = 'No tienes permiso para gestionar usuarios.' }) {
       const auth = await authenticate(ctx);
       if (!isAdmin(auth.user)) {
         logger.warn('admin_forbidden', { path: ctx.path, method: ctx.method, userId: auth.user.id });
-        throw new ApiHttpError(403, 'FORBIDDEN_ROLE', 'No tienes permiso para gestionar usuarios.');
+        throw new ApiHttpError(403, 'FORBIDDEN_ROLE', forbiddenMessage);
       }
       if (write) assertCsrf(ctx, auth);
       return auth;

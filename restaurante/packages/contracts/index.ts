@@ -3,6 +3,7 @@
 // su cliente y el formulario de producto del admin.
 export * from './admin.ts';
 export * from './admin-client.ts';
+export * from './page.ts';
 export * from './product-form.ts';
 export * from './products.ts';
 export * from './public-client.ts';

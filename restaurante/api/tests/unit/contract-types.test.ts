@@ -14,6 +14,7 @@ import {
   type BotState,
   type ManagedUser,
   type PublicBusinessId,
+  type PublicPage,
   type PublicProducts,
   type UserRole,
 } from '@restaurante/contracts';
@@ -41,13 +42,20 @@ import {
   type Role,
   type UserRecord,
 } from '@restaurante/core/identity';
-import type { PublishedProducts } from '@restaurante/core/catalog';
+import type { PageDataByBusiness, PublishedProducts } from '@restaurante/core/catalog';
 import { BUSINESS_IDS, silentLogger, type BusinessId } from '@restaurante/core/shared';
 
 /**
  * El contrato de contracts y los tipos de core no se desincronizan (REQ-F-038, RF-2;
  * .claude/rules/frontend-backend.md). `npm run typecheck` comprueba los expectTypeOf.
  */
+describe('contrato de la página ↔ core (REQ-F-044)', () => {
+  it('los datos de página tienen la misma forma en core y en el contrato', () => {
+    expectTypeOf<PublicPage['molotes']>().toEqualTypeOf<PageDataByBusiness['molotes']>();
+    expectTypeOf<PublicPage['birria']>().toEqualTypeOf<PageDataByBusiness['birria']>();
+  });
+});
+
 describe('contrato de productos ↔ core', () => {
   it('los productos publicados tienen la misma forma en core y en el contrato', () => {
     expectTypeOf<PublicProducts['molotes']>().toEqualTypeOf<PublishedProducts['molotes']>();

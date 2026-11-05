@@ -4,23 +4,26 @@ import { ADMIN_API_PREFIX } from '@restaurante/contracts';
 
 import type { AccountRoutes } from './account-routes.ts';
 import type { BotRoutes } from './bot-routes.ts';
+import type { PageRoutes } from './page-routes.ts';
 import type { ProductRoutes } from './product-routes.ts';
 import type { SessionRoutes } from './session-routes.ts';
 import type { UserRoutes } from './user-routes.ts';
 
 /**
- * Rutas de `/api/v1/admin` (REQ-F-039; usuarios y cuenta propia, REQ-F-040; control del bot, REQ-F-043). Una ruta conocida con otro método responde 405 con `Allow`
+ * Rutas de `/api/v1/admin` (REQ-F-039; usuarios y cuenta propia, REQ-F-040; control del bot, REQ-F-043; datos de página, REQ-F-044). Una ruta conocida con otro método responde 405 con `Allow`
  * (`allowedMethods`; el cuerpo lo pone el manejador central); una ruta desconocida, 404.
  */
 export function createAdminRouter({
   session,
   products,
+  pages,
   users,
   account,
   bot,
 }: {
   session: SessionRoutes;
   products: ProductRoutes;
+  pages: PageRoutes;
   users: UserRoutes;
   account: AccountRoutes;
   bot: BotRoutes;
@@ -48,6 +51,10 @@ export function createAdminRouter({
   router.post('/bot/bloqueos', bot.block);
   router.post('/bot/bloqueos/:id/quitar', bot.unblock);
   router.post('/bot/topes/:token/bloquear', bot.blockReached);
+
+  router.get('/:business/pagina', pages.get);
+  router.put('/:business/pagina', pages.save);
+  router.post('/:business/pagina/restaurar', pages.restore);
 
   router.get('/:business/productos', products.list);
   router.post('/:business/productos', products.create);

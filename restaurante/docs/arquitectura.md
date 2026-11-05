@@ -329,7 +329,7 @@ Decisión del usuario: "Sí, 6 tickets en ese orden". Cada ticket es su propio P
 | 2 | **REQ-F-040**: usuarios y cuenta propia | Terminado en dos PR (#110 y #111) y en producción desde el 2026-10-29 (#114), detalle abajo |
 | 3 | **REQ-F-042**: mover el bot a `api` | Tres PR (#121, #124 y el de despliegue) hacia `epic/arquitectura`, detalle abajo. Publica una entrada de `api` para el webhook con un router de Traefik solo para esa ruta. **La URL se conserva** (`https://birriaelmuneco.com/webhooks/whatsapp`, decisión D-1 de REQ-F-042): no hay ningún cambio en Meta. Activa la regla de lint para el bot |
 | 4 | **REQ-F-043**: control del bot en el admin nuevo | Tres PR (#130, #131 y el de solo lectura y documentación) hacia `epic/arquitectura`, detalle abajo. Pausa, bloqueos y topes |
-| 5 | Menú y página | Antes se decide si el menú queda en archivos o pasa a MySQL |
+| 5 | **REQ-F-044**: página en MySQL y edición en el admin nuevo | Tres PR hacia `epic/arquitectura`. PR 1: tablas, `core`, `db`, contratos y endpoints de `api`, apagados por `PAGE_CUTOVER` (responden `PAGE_UNAVAILABLE`, sin consumidores). PR 2: pantalla "Página". PR 3, en un segundo despliegue: importación, landings por API y solo lectura en `/admin` |
 | 6 | Retirada del `/admin` actual | Mover la importación de semillas y el menú, quitar las credenciales de la base de `landing-pages`, quitar el router `restaurante-admin` y activar la regla de lint para `/admin` |
 
 Los IDs de los tickets 5 y 6 se asignan al crearlos.

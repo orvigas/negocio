@@ -5,6 +5,7 @@ import { createProductRepository } from '@restaurante/core/catalog';
 import { errorProp } from '@restaurante/core/shared';
 import { createPrismaClient } from '@restaurante/db/client';
 import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
+import { createPrismaPageStore } from '@restaurante/db/prisma-page-store';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
 import { createUserRepository } from '@restaurante/db/user-repository';
 import { probeOf, queryOf, verifyDatabase } from '@restaurante/db/verify';
@@ -17,6 +18,7 @@ import { startBotControlTimers } from './bot/control-timers.ts';
 import { createBotFromConfig, createBotWebhookApp } from './bot/webhook-app.ts';
 import { ApiConfigError, loadApiConfig } from './config.ts';
 import { createLandingNotifier } from './notifier.ts';
+import { createApiPages } from './page-cutover.ts';
 
 /**
  * Arranque de la API (REQ-F-038 y REQ-F-039). Verifica la conexión y el estado de las migraciones
@@ -92,16 +94,19 @@ const stopControlTimers = startBotControlTimers({ botControl, refreshMs: config.
 const bot = createBotFromConfig({ config: config.whatsappBot, limits: config.botLimits, timeZone: config.timezone, products, botControl, logger });
 const stopCatalogReload = startCatalogReload({ products });
 
+// Datos de página (REQ-F-044): de MySQL, sin caché; hasta el corte, siempre "no disponible".
+const pages = createApiPages({ store: createPrismaPageStore({ prisma }), timeZone: config.timezone, logger });
 const admin = createAdminRoutes({
   users: createUserRepository({ prisma }),
   products,
+  pages,
   notifier,
   botControl,
   botProvider: bot?.chatBot.provider ?? null,
   timeZone: config.timezone,
   logger,
 });
-const app = createApiApp({ store, admin, logger });
+const app = createApiApp({ store, pages, admin, logger });
 const server = app.listen(config.port, config.host);
 try {
   await once(server, 'listening');

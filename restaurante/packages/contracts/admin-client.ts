@@ -39,6 +39,15 @@ import {
   type UserWriteResponse,
 } from './admin.ts';
 import { isJson, isTimeout, readLimited } from './http.ts';
+import {
+  pageConflictSchema,
+  pageStateResponseSchema,
+  pageWriteResponseSchema,
+  type PageRestoreRequest,
+  type PageSaveRequest,
+  type PageStateResponse,
+  type PageWriteResponse,
+} from './page.ts';
 import type { PublicBusinessId } from './products.ts';
 
 /**
@@ -61,6 +70,8 @@ const apiErrorBodySchema = z.object({
     message: z.string(),
     fields: z.record(z.string(), z.string()).optional(),
     current: z.object({ id: z.number(), version: z.number(), updatedAt: z.string(), updatedBy: z.string().nullable() }).optional(),
+    /** 409 `PAGE_CONFLICT`: la versión vigente de la página (REQ-F-044). */
+    currentPage: pageConflictSchema.optional(),
   }),
 });
 export type AdminApiError = z.infer<typeof apiErrorBodySchema>['error'];
@@ -110,6 +121,10 @@ export interface AdminApiClient {
   resetUserPassword(auth: AdminCredentials, id: number, input: UserPasswordRequest): Promise<AdminApiResult<UserWriteResponse>>;
   /** Cambia la propia contraseña; devuelve la sesión nueva (la de `auth` deja de valer). */
   changeOwnPassword(auth: AdminCredentials, input: PasswordChangeRequest): Promise<AdminApiResult<PasswordChangeResponse>>;
+  // Datos de página (REQ-F-044).
+  getPage(auth: AdminCredentials, business: PublicBusinessId): Promise<AdminApiResult<PageStateResponse>>;
+  savePage(auth: AdminCredentials, business: PublicBusinessId, input: PageSaveRequest): Promise<AdminApiResult<PageWriteResponse>>;
+  restorePage(auth: AdminCredentials, business: PublicBusinessId, input: PageRestoreRequest): Promise<AdminApiResult<PageWriteResponse>>;
   // Control del bot (solo administradores; REQ-F-043).
   getBot(auth: AdminCredentials): Promise<AdminApiResult<{ bot: BotState }>>;
   setBotPaused(auth: AdminCredentials, input: BotSwitchRequest): Promise<AdminApiResult<{ control: BotControlState }>>;
@@ -204,6 +219,9 @@ export function createAdminApiClient({ baseUrl, timeoutMs, fetch: fetchFn = (inp
       request('POST', adminPaths.userStatus(id, active ? 'reactivar' : 'desactivar'), { auth, body: {}, schema: userWriteResponseSchema }),
     resetUserPassword: (auth, id, input) => request('PUT', adminPaths.userPassword(id), { auth, body: input, schema: userWriteResponseSchema }),
     changeOwnPassword: (auth, input) => request('POST', adminPaths.accountPassword, { auth, body: input, schema: passwordChangeResponseSchema }),
+    getPage: (auth, business) => request('GET', adminPaths.page(business), { auth, schema: pageStateResponseSchema }),
+    savePage: (auth, business, input) => request('PUT', adminPaths.page(business), { auth, body: input, schema: pageWriteResponseSchema }),
+    restorePage: (auth, business, input) => request('POST', adminPaths.pageRestore(business), { auth, body: input, schema: pageWriteResponseSchema }),
     getBot: (auth) => request('GET', adminPaths.bot, { auth, schema: botStateResponseSchema }),
     setBotPaused: (auth, input) => request('PUT', adminPaths.botSwitch, { auth, body: input, schema: botControlResponseSchema }),
     blockNumber: (auth, input) => request('POST', adminPaths.botBlocks, { auth, body: input, schema: botBlockResponseSchema, expect: 201 }),

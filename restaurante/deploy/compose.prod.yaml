@@ -9,6 +9,9 @@
 # Para consultar a mano (como deploy, desde /opt/restaurante):
 #   docker compose -f deploy/compose.prod.yaml --env-file .env --env-file state/release.env ps
 #
+# RESTAURANTE_API_WEBHOOK (enciende el router del webhook en la api) también la pone deploy.sh y queda
+# en release.env.
+#
 # La app recibe solo su lista explícita de variables (D-6): nunca la contraseña root de MySQL.
 name: restaurante
 
@@ -18,6 +21,50 @@ x-logging: &logging
   options:
     max-size: 10m
     max-file: "5"
+
+# Variables del bot (REQ-F-042, RF-6): un solo .env y la misma lista para los dos servicios (RN-5).
+# - api ejecuta el bot y las usa todas.
+# - app solo usa el proveedor, el personal, la clave de la lista negra y los topes (D-4), pero recibe
+#   también el resto (P-2): la vuelta atrás automática arranca la app anterior con este mismo compose,
+#   y esa versión lleva el bot y no arranca sin ellas. Se le quitan en el ticket 6.
+x-bot-env: &bot-env
+  WHATSAPP_MOLOTES: ${WHATSAPP_MOLOTES:-}
+  WHATSAPP_BIRRIA: ${WHATSAPP_BIRRIA:-}
+  WHATSAPP_BOT_PROVIDER: ${WHATSAPP_BOT_PROVIDER:-}
+  WHATSAPP_BOT_ACCOUNT_ID: ${WHATSAPP_BOT_ACCOUNT_ID:-}
+  WHATSAPP_BOT_ACCESS_TOKEN: ${WHATSAPP_BOT_ACCESS_TOKEN:-}
+  WHATSAPP_BOT_STAFF_MOLOTES: ${WHATSAPP_BOT_STAFF_MOLOTES:-}
+  WHATSAPP_BOT_STAFF_BIRRIA: ${WHATSAPP_BOT_STAFF_BIRRIA:-}
+  WHATSAPP_BOT_STAFF_TEMPLATE: ${WHATSAPP_BOT_STAFF_TEMPLATE:-}
+  WHATSAPP_BOT_APP_SECRET: ${WHATSAPP_BOT_APP_SECRET:-}
+  WHATSAPP_BOT_VERIFY_TOKEN: ${WHATSAPP_BOT_VERIFY_TOKEN:-}
+  WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE: ${WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE:-}
+  WHATSAPP_GRAPH_API_VERSION: ${WHATSAPP_GRAPH_API_VERSION:-}
+  # Protección del bot (REQ-F-025). La clave es secreta (D-T1); los umbrales vacíos usan los valores por defecto.
+  WHATSAPP_BOT_BLOCKLIST_KEY: ${WHATSAPP_BOT_BLOCKLIST_KEY:-}
+  WHATSAPP_BOT_BLOCKLIST_KEY_PREVIOUS: ${WHATSAPP_BOT_BLOCKLIST_KEY_PREVIOUS:-}
+  BOT_LIMIT_ORDERS_PER_NUMBER_DAY: ${BOT_LIMIT_ORDERS_PER_NUMBER_DAY:-}
+  BOT_LIMIT_MESSAGES_PER_NUMBER_DAY: ${BOT_LIMIT_MESSAGES_PER_NUMBER_DAY:-}
+  BOT_LIMIT_MESSAGES_PER_MINUTE: ${BOT_LIMIT_MESSAGES_PER_MINUTE:-}
+  BOT_LIMIT_BURST: ${BOT_LIMIT_BURST:-}
+  BOT_LIMIT_BURST_WINDOW_SECONDS: ${BOT_LIMIT_BURST_WINDOW_SECONDS:-}
+  BOT_LIMIT_TEMPLATES_DAY: ${BOT_LIMIT_TEMPLATES_DAY:-}
+  BOT_LIMIT_TEMPLATES_MONTH: ${BOT_LIMIT_TEMPLATES_MONTH:-}
+  BOT_LIMIT_OUTBOUND_DAY: ${BOT_LIMIT_OUTBOUND_DAY:-}
+  BOT_LIMIT_OUTBOUND_MONTH: ${BOT_LIMIT_OUTBOUND_MONTH:-}
+  BOT_BUDGET_MONTH_USD: ${BOT_BUDGET_MONTH_USD:-}
+  BOT_COST_UTILITY_USD: ${BOT_COST_UTILITY_USD:-}
+  BOT_COST_SERVICE_USD: ${BOT_COST_SERVICE_USD:-}
+  BOT_FREE_SERVICE_MONTH: ${BOT_FREE_SERVICE_MONTH:-}
+  BOT_REPEAT_COUNT: ${BOT_REPEAT_COUNT:-}
+  BOT_REPEAT_WINDOW_MINUTES: ${BOT_REPEAT_WINDOW_MINUTES:-}
+  BOT_COOLDOWN_MINUTES: ${BOT_COOLDOWN_MINUTES:-}
+  BOT_BLOCK_CAP_DAYS: ${BOT_BLOCK_CAP_DAYS:-}
+  BOT_BLOCK_REPEAT_STEPS_HOURS: ${BOT_BLOCK_REPEAT_STEPS_HOURS:-}
+  BOT_BLOCK_HISTORY_DAYS: ${BOT_BLOCK_HISTORY_DAYS:-}
+  BOT_AUDIT_RETENTION_MONTHS: ${BOT_AUDIT_RETENTION_MONTHS:-}
+  BOT_QUEUE_MAX: ${BOT_QUEUE_MAX:-}
+  BOT_CONTROL_REFRESH_SECONDS: ${BOT_CONTROL_REFRESH_SECONDS:-}
 
 services:
   mysql:
@@ -75,47 +122,11 @@ services:
       ADMIN_NEW_URL: https://${RESTAURANTE_ADMIN_DOMAIN:?Falta RESTAURANTE_ADMIN_DOMAIN en .env}
       INTERNAL_PORT: "3002"
       INTERNAL_NOTIFY_TOKEN: ${RESTAURANTE_INTERNAL_NOTIFY_TOKEN:?Falta RESTAURANTE_INTERNAL_NOTIFY_TOKEN en .env}
+      <<: *bot-env
       WHATSAPP_MOLOTES_URL: ${WHATSAPP_MOLOTES_URL:-}
-      WHATSAPP_MOLOTES: ${WHATSAPP_MOLOTES:-}
       WHATSAPP_MOLOTES_MESSAGE: ${WHATSAPP_MOLOTES_MESSAGE:-}
       WHATSAPP_BIRRIA_URL: ${WHATSAPP_BIRRIA_URL:-}
-      WHATSAPP_BIRRIA: ${WHATSAPP_BIRRIA:-}
       WHATSAPP_BIRRIA_MESSAGE: ${WHATSAPP_BIRRIA_MESSAGE:-}
-      WHATSAPP_BOT_PROVIDER: ${WHATSAPP_BOT_PROVIDER:-}
-      WHATSAPP_BOT_ACCOUNT_ID: ${WHATSAPP_BOT_ACCOUNT_ID:-}
-      WHATSAPP_BOT_ACCESS_TOKEN: ${WHATSAPP_BOT_ACCESS_TOKEN:-}
-      WHATSAPP_BOT_STAFF_MOLOTES: ${WHATSAPP_BOT_STAFF_MOLOTES:-}
-      WHATSAPP_BOT_STAFF_BIRRIA: ${WHATSAPP_BOT_STAFF_BIRRIA:-}
-      WHATSAPP_BOT_STAFF_TEMPLATE: ${WHATSAPP_BOT_STAFF_TEMPLATE:-}
-      WHATSAPP_BOT_APP_SECRET: ${WHATSAPP_BOT_APP_SECRET:-}
-      WHATSAPP_BOT_VERIFY_TOKEN: ${WHATSAPP_BOT_VERIFY_TOKEN:-}
-      WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE: ${WHATSAPP_BOT_STAFF_TEMPLATE_LANGUAGE:-}
-      WHATSAPP_GRAPH_API_VERSION: ${WHATSAPP_GRAPH_API_VERSION:-}
-      # Protección del bot (REQ-F-025). La clave es secreta (D-T1); los umbrales vacíos usan los valores por defecto.
-      WHATSAPP_BOT_BLOCKLIST_KEY: ${WHATSAPP_BOT_BLOCKLIST_KEY:-}
-      WHATSAPP_BOT_BLOCKLIST_KEY_PREVIOUS: ${WHATSAPP_BOT_BLOCKLIST_KEY_PREVIOUS:-}
-      BOT_LIMIT_ORDERS_PER_NUMBER_DAY: ${BOT_LIMIT_ORDERS_PER_NUMBER_DAY:-}
-      BOT_LIMIT_MESSAGES_PER_NUMBER_DAY: ${BOT_LIMIT_MESSAGES_PER_NUMBER_DAY:-}
-      BOT_LIMIT_MESSAGES_PER_MINUTE: ${BOT_LIMIT_MESSAGES_PER_MINUTE:-}
-      BOT_LIMIT_BURST: ${BOT_LIMIT_BURST:-}
-      BOT_LIMIT_BURST_WINDOW_SECONDS: ${BOT_LIMIT_BURST_WINDOW_SECONDS:-}
-      BOT_LIMIT_TEMPLATES_DAY: ${BOT_LIMIT_TEMPLATES_DAY:-}
-      BOT_LIMIT_TEMPLATES_MONTH: ${BOT_LIMIT_TEMPLATES_MONTH:-}
-      BOT_LIMIT_OUTBOUND_DAY: ${BOT_LIMIT_OUTBOUND_DAY:-}
-      BOT_LIMIT_OUTBOUND_MONTH: ${BOT_LIMIT_OUTBOUND_MONTH:-}
-      BOT_BUDGET_MONTH_USD: ${BOT_BUDGET_MONTH_USD:-}
-      BOT_COST_UTILITY_USD: ${BOT_COST_UTILITY_USD:-}
-      BOT_COST_SERVICE_USD: ${BOT_COST_SERVICE_USD:-}
-      BOT_FREE_SERVICE_MONTH: ${BOT_FREE_SERVICE_MONTH:-}
-      BOT_REPEAT_COUNT: ${BOT_REPEAT_COUNT:-}
-      BOT_REPEAT_WINDOW_MINUTES: ${BOT_REPEAT_WINDOW_MINUTES:-}
-      BOT_COOLDOWN_MINUTES: ${BOT_COOLDOWN_MINUTES:-}
-      BOT_BLOCK_CAP_DAYS: ${BOT_BLOCK_CAP_DAYS:-}
-      BOT_BLOCK_REPEAT_STEPS_HOURS: ${BOT_BLOCK_REPEAT_STEPS_HOURS:-}
-      BOT_BLOCK_HISTORY_DAYS: ${BOT_BLOCK_HISTORY_DAYS:-}
-      BOT_AUDIT_RETENTION_MONTHS: ${BOT_AUDIT_RETENTION_MONTHS:-}
-      BOT_QUEUE_MAX: ${BOT_QUEUE_MAX:-}
-      BOT_CONTROL_REFRESH_SECONDS: ${BOT_CONTROL_REFRESH_SECONDS:-}
       ADMIN_USER: ${ADMIN_USER:-}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
     volumes:
@@ -126,7 +137,7 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-    # Una sola réplica: sesiones, límite de intentos y conversaciones del bot viven en memoria.
+    # Una sola réplica: las sesiones y el límite de intentos de /admin viven en memoria.
     read_only: true
     tmpfs:
       - /tmp
@@ -185,27 +196,37 @@ services:
       - "traefik.http.middlewares.restaurante-canonical.redirectregex.replacement=https://${RESTAURANTE_DOMAIN}$${1}"
       - "traefik.http.middlewares.restaurante-canonical.redirectregex.permanent=true"
 
-  # API propia (REQ-F-038; administración de productos desde REQ-F-039): solo en las redes internas db
-  # (app y MySQL) y admin (inventory-manager), sin ports ni labels de Traefik: nada fuera de Docker la
-  # alcanza (desviación D-3 de REQ-F-039). Usuario solo DML de la app.
+  # API propia (REQ-F-038; administración de productos desde REQ-F-039) y bot de WhatsApp (REQ-F-042).
+  # Redes: db (app y MySQL), admin (inventory-manager) y traefik, la que da salida a internet para
+  # hablar con Meta y por la que le llega el webhook. Sin ports. Desde internet solo se alcanza
+  # /webhooks/whatsapp, y por el puerto 3004, que no tiene ninguna otra ruta (P-1): el 3001 no lo
+  # enruta Traefik. Un contenedor vecino de traefik-public sí llega a api:3001, como llega a app:3000
+  # (riesgo aceptado, H-1). Usuario solo DML de la app. Una sola réplica: sesiones del admin nuevo,
+  # límite de intentos, claves de idempotencia y conversaciones del bot viven en memoria.
   # Valor por defecto de la imagen (decisión P-2 A): los respaldos de ops/backup/ leen este archivo
   # sin conocer la API; ningún flujo arranca esa imagen (deploy.sh siempre pasa el digest real).
   api:
     image: ${RESTAURANTE_API_IMAGE:-ghcr.io/orvigas/restaurante-api:sin-desplegar}
     environment:
+      <<: *bot-env
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: "3001"
-      DATABASE_URL: mysql://restaurante_app:${RESTAURANTE_DB_APP_PASSWORD:?Falta RESTAURANTE_DB_APP_PASSWORD en .env}@mysql:3306/restaurante
+      WEBHOOK_PORT: "3004"
+      # Nombres de contenedor, únicos en el host, no los de servicio (mysql, app): la api está en
+      # traefik-public, y un vecino con ese alias respondería por ellos y recibiría la credencial.
+      # Sirven con cualquier imagen de la api y no obligan a recrear MySQL.
+      DATABASE_URL: mysql://restaurante_app:${RESTAURANTE_DB_APP_PASSWORD:?Falta RESTAURANTE_DB_APP_PASSWORD en .env}@${COMPOSE_PROJECT_NAME:-restaurante}-mysql-1:3306/restaurante
       # Solo la pone deploy.sh al volver a la versión anterior (D-1); nunca en .env.
       DATABASE_ALLOW_NEWER_SCHEMA: ${DATABASE_ALLOW_NEWER_SCHEMA:-false}
       BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-America/Mexico_City}
       # Aviso interno a la app tras cada escritura de productos (REQ-F-039, RF-13).
-      LANDING_INTERNAL_URL: http://app:3002
+      LANDING_INTERNAL_URL: http://${COMPOSE_PROJECT_NAME:-restaurante}-app-1:3002
       INTERNAL_NOTIFY_TOKEN: ${RESTAURANTE_INTERNAL_NOTIFY_TOKEN:?Falta RESTAURANTE_INTERNAL_NOTIFY_TOKEN en .env}
     networks:
       - db
       - admin
+      - traefik
     depends_on:
       mysql:
         condition: service_healthy
@@ -228,6 +249,25 @@ services:
       start_period: 90s
       start_interval: 2s
     logging: *logging
+    labels:
+      # Webhook del bot (REQ-F-042). RESTAURANTE_API_WEBHOOK la calcula deploy.sh a partir de la imagen:
+      # true si lleva la etiqueta org.restaurante.webhook. Con una api anterior es false: el router
+      # no existe y la ruta vuelve al router raíz, es decir, a la app anterior, que tiene el bot
+      # (RF-13). Fuera de deploy.sh (respaldos), false.
+      - "traefik.enable=${RESTAURANTE_API_WEBHOOK:-false}"
+      # Imprescindible: la api está en tres redes y Traefik solo llega por traefik-public.
+      - "traefik.docker.network=traefik-public"
+      # El puerto del webhook, nunca el 3001.
+      - "traefik.http.services.restaurante-webhook.loadbalancer.server.port=3004"
+      # Solo la ruta exacta en el dominio raíz (D-1: Meta no cambia). Prioridad por encima del router
+      # raíz y de restaurante-admin (100). Sin límite de peticiones, como siempre: la protección es la
+      # del bot. Mientras la api no esté healthy, Traefik no publica este router.
+      - "traefik.http.routers.restaurante-webhook.rule=Host(`${RESTAURANTE_DOMAIN:?Falta RESTAURANTE_DOMAIN en .env}`) && Path(`/webhooks/whatsapp`)"
+      - "traefik.http.routers.restaurante-webhook.priority=200"
+      - "traefik.http.routers.restaurante-webhook.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-websecure}"
+      - "traefik.http.routers.restaurante-webhook.tls=true"
+      - "traefik.http.routers.restaurante-webhook.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.routers.restaurante-webhook.service=restaurante-webhook"
 
   # Admin nuevo (REQ-F-039): Koa con SSR en admin.<dominio>. Solo en traefik (entrada) y en la red
   # interna admin (para llegar a la api): no alcanza MySQL. Como cualquier contenedor de traefik-public,

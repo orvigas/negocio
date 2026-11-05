@@ -59,7 +59,7 @@ cleanup() {
     docker logs --tail 40 smoke-traefik 2>&1 | sed 's/^/  traefik: /' || true
   fi
   compose --profile migrate down -v --remove-orphans >/dev/null 2>&1 || true
-  docker rm -f smoke-traefik smoke-registry >/dev/null 2>&1 || true
+  docker rm -f smoke-traefik smoke-registry smoke-vecino >/dev/null 2>&1 || true
   if [[ "$CREATED_NETWORK" == true ]]; then docker network rm traefik-public >/dev/null 2>&1 || true; fi
   if [[ -z "${SMOKE_WORKDIR:-}" ]]; then rm -rf -- "$WORK"; else rm -rf -- "$BASE"; fi
   exit "$status"
@@ -98,10 +98,41 @@ derive() { # derive <etiqueta nueva> <Dockerfile en stdin> [contexto]
   docker build --quiet -t "$1" -f - "${2:-$WORK/empty}" >/dev/null
 }
 
+# Cabeceras de la respuesta por Traefik. La CSP la pone la app (helmet), nunca la api: dice quién responde.
+https_headers() { curl -sk -o /dev/null -D - --max-time 10 --resolve "$1:443:$TRAEFIK_IP" -X "${3:-GET}" "https://$1$2" | tr -d '\r'; }
+served_by_app() { # served_by_app <ruta>
+  local headers
+  headers=$(https_headers "$DOMAIN" "$1")
+  grep -qi '^content-security-policy:' <<<"$headers"
+}
+webhook_on_api() { # La ruta del webhook llega a la api: 503 BOT_DISABLED (sin bot en la prueba) y sin CSP.
+  local body
+  body=$(curl -sk --max-time 10 --resolve "$DOMAIN:443:$TRAEFIK_IP" "https://$DOMAIN/webhooks/whatsapp")
+  grep -q BOT_DISABLED <<<"$body" && ! served_by_app /webhooks/whatsapp
+}
+webhook_on_app() { # Con una api sin webhook, la ruta vuelve al router raíz (aquí la app actual, sin bot: 404).
+  test "$(https_status "$DOMAIN" /webhooks/whatsapp)" = 404 && served_by_app /webhooks/whatsapp
+}
+# El procedimiento de docs/despliegue.md, "Arrancar la api a mano": el router sigue a la imagen.
+manual_api() { # manual_api <imagen>
+  local webhook
+  webhook=$(docker image inspect -f '{{index .Config.Labels "org.restaurante.webhook"}}' "$1" | grep -q whatsapp && echo true || echo false)
+  RESTAURANTE_API_IMAGE="$1" RESTAURANTE_API_WEBHOOK="$webhook" \
+    docker compose -f "$BASE/deploy/compose.prod.yaml" --env-file "$BASE/.env" --env-file "$BASE/state/release.env" up -d --no-deps api 2>/dev/null
+}
+wait_for() { # wait_for <función...>: Traefik tarda un instante en aplicar un cambio de router.
+  local deadline=$((SECONDS + 30))
+  until "$@"; do
+    ((SECONDS < deadline)) || return 1
+    sleep 2
+  done
+}
+
 app_id() { compose ps -q app; }
 app_image() { docker inspect -f '{{.Config.Image}}' "$(app_id)"; }
 api_id() { compose ps -q api; }
 api_image() { docker inspect -f '{{.Config.Image}}' "$(api_id)"; }
+api_traefik_enable() { docker inspect -f '{{index .Config.Labels "traefik.enable"}}' "$(api_id)"; }
 inventory_id() { compose ps -q inventory-manager; }
 inventory_image() { docker inspect -f '{{.Config.Image}}' "$(inventory_id)"; }
 wait_container_healthy() { # wait_container_healthy <id>
@@ -171,22 +202,37 @@ check 'la red db es interna' test "$(jq '.networks.db.internal' <<<"$CONFIG")" =
 check 'la app recibe NODE_ENV, HOST y TRUST_PROXY fijados' test "$(jq -c '.services.app.environment | [.NODE_ENV, .HOST, .TRUST_PROXY]' <<<"$CONFIG")" = '["production","0.0.0.0","true"]'
 check 'la app no recibe la contraseña root de MySQL' test "$(jq '.services.app.environment | has("MYSQL_ROOT_PASSWORD")' <<<"$CONFIG")" = false
 # REQ-F-038 (CA-8): la API solo en la red interna, sin puertos ni router de Traefik.
-# REQ-F-039: la api también en la red interna admin (para inventory-manager), nunca en traefik.
-check 'la api solo está en las redes internas db y admin' test "$(jq -c '.services.api.networks | keys' <<<"$CONFIG")" = '["admin","db"]'
+# REQ-F-039: la api también en la red interna admin (para inventory-manager).
+# REQ-F-042: y en traefik, por la salida a Meta y la entrada del webhook.
+check 'la api está en db, admin y traefik' test "$(jq -c '.services.api.networks | keys' <<<"$CONFIG")" = '["admin","db","traefik"]'
 check 'la red admin es interna' test "$(jq '.networks.admin.internal' <<<"$CONFIG")" = true
 check 'inventory-manager solo está en admin y traefik (no alcanza MySQL)' test "$(jq -c '.services["inventory-manager"].networks | keys' <<<"$CONFIG")" = '["admin","traefik"]'
 check 'inventory-manager no recibe credenciales de la base ni la del aviso' test "$(jq '.services["inventory-manager"].environment | (has("DATABASE_URL") or has("MYSQL_ROOT_PASSWORD") or has("INTERNAL_NOTIFY_TOKEN"))' <<<"$CONFIG")" = false
 check 'inventory-manager llega a la api por la red interna' test "$(jq -r '.services["inventory-manager"].environment.API_INTERNAL_URL' <<<"$CONFIG")" = 'http://api:3001'
 check 'la app enlaza al admin nuevo (modo de solo lectura de productos)' test "$(jq -r '.services.app.environment.ADMIN_NEW_URL' <<<"$CONFIG")" = "https://$ADMIN_DOMAIN"
-check 'la api avisa a la app en su puerto interno' test "$(jq -r '.services.api.environment.LANDING_INTERNAL_URL' <<<"$CONFIG")" = 'http://app:3002'
+# DEF-004 (REQ-F-042): la api está en traefik-public; sus nombres no pueden ser los de un vecino.
+check 'la api avisa a la app por su nombre de contenedor' test "$(jq -r '.services.api.environment.LANDING_INTERNAL_URL' <<<"$CONFIG")" = "http://$PROJECT-app-1:3002"
+check 'la api llega a MySQL por su nombre de contenedor' test "$(jq --arg host "@$PROJECT-mysql-1:3306/" '.services.api.environment.DATABASE_URL | contains($host)' <<<"$CONFIG")" = true
 check 'la app y la api comparten la credencial del aviso' test "$(jq -r '.services.app.environment.INTERNAL_NOTIFY_TOKEN == .services.api.environment.INTERNAL_NOTIFY_TOKEN and (.services.app.environment.INTERNAL_NOTIFY_TOKEN | length) >= 32' <<<"$CONFIG")" = true
 check 'ningún router de Traefik apunta al puerto interno 3002' bash -c "! jq -r '[.services[] | .labels // {} | to_entries[] | .value] | .[]' <<<'$CONFIG' | grep -q 3002"
 check 'el subdominio tiene su límite: 60 por minuto y ráfaga de 60' test "$(jq -c '.services["inventory-manager"].labels | [.["traefik.http.middlewares.restaurante-inventory-ratelimit.ratelimit.average"], .["traefik.http.middlewares.restaurante-inventory-ratelimit.ratelimit.period"], .["traefik.http.middlewares.restaurante-inventory-ratelimit.ratelimit.burst"]]' <<<"$CONFIG")" = '["60","1m","60"]'
-check 'la api no tiene labels (ningún router de Traefik)' test "$(jq '.services.api.labels // {} | length' <<<"$CONFIG")" = 0
+check 'ningún router de Traefik apunta al puerto interno de la api (3001)' bash -c "! jq -r '[.services[] | .labels // {} | to_entries[] | .value] | .[]' <<<'$CONFIG' | grep -q 3001"
+# REQ-F-042 (CA-3): el único router de la api es el del webhook, con la ruta exacta y su puerto propio.
+API_ROUTERS=$(jq -c '[.services.api.labels | keys[] | select(startswith("traefik.http.routers.")) | split(".")[3]] | unique' <<<"$CONFIG")
+check "la api solo tiene el router restaurante-webhook ($API_ROUTERS)" test "$API_ROUTERS" = '["restaurante-webhook"]'
+check 'el router del webhook es la ruta exacta en el dominio raíz' test "$(jq -r '.services.api.labels["traefik.http.routers.restaurante-webhook.rule"]' <<<"$CONFIG")" = "Host(\`$DOMAIN\`) && Path(\`/webhooks/whatsapp\`)"
+check 'el router del webhook está por encima de los de la app' test "$(jq -r '.services.api.labels["traefik.http.routers.restaurante-webhook.priority"]' <<<"$CONFIG")" = 200
+check 'el servicio del webhook usa el puerto 3004' test "$(jq -r '.services.api.labels["traefik.http.services.restaurante-webhook.loadbalancer.server.port"]' <<<"$CONFIG")" = 3004
+check 'la api escucha el webhook en el 3004' test "$(jq -r '.services.api.environment.WEBHOOK_PORT' <<<"$CONFIG")" = 3004
+check 'fuera de deploy.sh, el router del webhook queda apagado' test "$(jq -r '.services.api.labels["traefik.enable"]' <<<"$CONFIG")" = false
+check 'con una api con webhook, se enciende' test "$(RESTAURANTE_API_WEBHOOK=true compose config --format json | jq -r '.services.api.labels["traefik.enable"]')" = true
+BOT_VARS='[.environment | to_entries[] | select(.key | test("^(WHATSAPP_BOT_|WHATSAPP_GRAPH_|BOT_|WHATSAPP_MOLOTES$|WHATSAPP_BIRRIA$)"))] | sort_by(.key)'
+check 'la api y la app reciben las mismas variables del bot (RN-5, P-2)' test "$(jq -c ".services.api | $BOT_VARS" <<<"$CONFIG")" = "$(jq -c ".services.app | $BOT_VARS" <<<"$CONFIG")"
+check 'la api recibe los secretos del bot' test "$(jq '.services.api.environment | has("WHATSAPP_BOT_ACCESS_TOKEN") and has("WHATSAPP_BOT_APP_SECRET") and has("WHATSAPP_BOT_VERIFY_TOKEN") and has("WHATSAPP_BOT_BLOCKLIST_KEY")' <<<"$CONFIG")" = true
 check 'la api no publica puertos' test "$(jq '.services.api.ports // [] | length' <<<"$CONFIG")" = 0
 check 'la api no recibe la contraseña root de MySQL' test "$(jq '.services.api.environment | has("MYSQL_ROOT_PASSWORD")' <<<"$CONFIG")" = false
 check 'la app llega a la api por la red interna' test "$(jq -r '.services.app.environment.API_INTERNAL_URL' <<<"$CONFIG")" = 'http://api:3001'
-check 'los routers de Traefik son solo de la app y de inventory-manager' test "$(jq '[.services | to_entries[] | select(.key != "app" and .key != "inventory-manager") | .value.labels // {} | keys[] | select(startswith("traefik."))] | length' <<<"$CONFIG")" = 0
+check 'los routers de Traefik son solo de la app, de inventory-manager y del webhook' test "$(jq '[.services | to_entries[] | select(.key != "app" and .key != "inventory-manager" and .key != "api") | .value.labels // {} | keys[] | select(startswith("traefik."))] | length' <<<"$CONFIG")" = 0
 
 say 'imágenes en el registro local'
 derive smoke/app-v2 <<<"FROM $APP_SRC
@@ -218,6 +264,18 @@ COPY 29990101000000_smoke_compatible /app/packages/db/prisma/migrations/29990101
 API1=$(push "$API_SRC" restaurante-api v1)
 API_NEWER=$(push smoke/api-newer restaurante-api newer)
 API_BAD=$(push smoke/api-bad restaurante-api bad)
+# REQ-F-042 (RF-13): una api anterior no lleva la etiqueta del webhook.
+derive smoke/api-sin-webhook <<<"FROM $API_SRC
+LABEL org.restaurante.webhook=\"\""
+# Y una api healthy cuyo webhook no responde: escucha en otro puerto y Traefik da 502.
+derive smoke/api-webhook-mudo <<<"FROM $API_SRC
+CMD [\"sh\", \"-c\", \"WEBHOOK_PORT=3099 exec node src/server.ts\"]"
+# Y una api que funciona como versión nueva, pero no arranca cuando vuelve como anterior (DEF-003).
+derive smoke/api-sin-vuelta <<<"FROM $API_SRC
+CMD [\"sh\", \"-c\", \"[ \\\"\$DATABASE_ALLOW_NEWER_SCHEMA\\\" = true ] && exit 1; exec node src/server.ts\"]"
+API_OLD=$(push smoke/api-sin-webhook restaurante-api sin-webhook)
+API_FRAGILE=$(push smoke/api-sin-vuelta restaurante-api sin-vuelta)
+API_MUTE=$(push smoke/api-webhook-mudo restaurante-api webhook-mudo)
 derive smoke/inventory-bad <<<"FROM $INVENTORY_SRC
 CMD [\"node\", \"-e\", \"process.exit(1)\"]"
 INV1=$(push "$INVENTORY_SRC" restaurante-inventory-manager v1)
@@ -257,6 +315,7 @@ check 'https raíz responde 200' test "$(https_status "$DOMAIN" /)" = 200
 check 'release.env registra la app v1' grep -q "^RESTAURANTE_APP_IMAGE=$REGISTRY/restaurante@$APP1\$" "$BASE/state/release.env"
 check 'release.env registra la api v1' grep -q "^RESTAURANTE_API_IMAGE=$REGISTRY/restaurante-api@$API1\$" "$BASE/state/release.env"
 check 'release.env registra inventory-manager v1' grep -q "^RESTAURANTE_INVENTORY_IMAGE=$REGISTRY/restaurante-inventory-manager@$INV1\$" "$BASE/state/release.env"
+check 'release.env registra el webhook en la api' grep -q '^RESTAURANTE_API_WEBHOOK=true$' "$BASE/state/release.env"
 check 'releases.log registra el despliegue' grep -q 'result=ok' "$BASE/state/releases.log"
 check 'el volcado existe con permisos 600' test "$(stat -c '%a' "$BASE"/backups/*.sql.gz)" = 600
 
@@ -278,6 +337,26 @@ LINE=$(docker logs "$(app_id)" 2>/dev/null | grep '"msg":"request"' | grep '"pat
 check 'el log de la petición lleva protocol https' grep -q '"protocol":"https"' <<<"$LINE"
 CLIENT_IP=$(jq -r '.ip // empty' <<<"$LINE")
 check "la IP registrada ($CLIENT_IP) es la del cliente, no la de Traefik ($TRAEFIK_IP)" test -n "$CLIENT_IP" -a "$CLIENT_IP" != "$TRAEFIK_IP"
+
+# --- Webhook del bot en la api (REQ-F-042: CA-1 a CA-4) -----------------------------------------
+# Antes de parar la api: tras un reinicio, Traefik tarda unos segundos en volver a publicar el router
+# y, mientras, la ruta llega a la app.
+say 'webhook en la api, acotado a su ruta'
+check 'la api tiene el router del webhook encendido' test "$(api_traefik_enable)" = true
+check 'GET /webhooks/whatsapp lo responde la api (503 BOT_DISABLED, sin bot en la prueba)' webhook_on_api
+check 'POST /webhooks/whatsapp también' test "$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 -X POST --resolve "$DOMAIN:443:$TRAEFIK_IP" "https://$DOMAIN/webhooks/whatsapp")" = 503
+check 'la petición aparece en el log de la api' bash -c "docker logs '$(api_id)' 2>/dev/null | grep '\"msg\":\"request\"' | grep -q '\"path\":\"/webhooks/whatsapp\"'"
+check 'y no en el de la app' bash -c "! docker logs '$(app_id)' 2>/dev/null | grep '\"msg\":\"request\"' | grep -q '\"path\":\"/webhooks/whatsapp\"'"
+check 'el log de la api lleva la IP del cliente, no la de Traefik' bash -c "docker logs '$(api_id)' 2>/dev/null | grep '\"path\":\"/webhooks/whatsapp\"' | tail -n 1 | jq -re '.ip | select(. != \"$TRAEFIK_IP\")' >/dev/null"
+for path in /api/v1/admin/sesion /api/v1/public/birria/productos /webhooks /webhooks/ /webhooks/whatsapp/ /webhooks/whatsapp/x /webhooks/whatsappx; do
+  check "$path no llega a la api (404 de la app)" test "$(https_status "$DOMAIN" "$path"):$(served_by_app "$path" && echo app)" = 404:app
+done
+check '/api/v1/admin no aparece en el log de la api' bash -c "! docker logs '$(api_id)' 2>/dev/null | grep -q '\"path\":\"/api/v1/admin'"
+check 'el puerto del webhook no sirve /api/v1 (defensa en profundidad)' bash -c "docker exec '$(app_id)' wget -q -O - http://api:3004/api/v1/public/birria/productos 2>&1 | grep -q 404"
+for path in / /molotes /birria; do
+  check "$path sigue en 200" test "$(https_status "$DOMAIN" "$path")" = 200
+done
+check "www no enruta el webhook a la api (301 a la raíz)" test "$(redirect_of https "www.$DOMAIN" /webhooks/whatsapp)" = "301 https://$DOMAIN/webhooks/whatsapp"
 
 # --- API propia en la red interna (REQ-F-038: CA-7, CA-8 y CA-11) -------------------------------
 say 'api en la red interna y productos de las landings desde la api'
@@ -319,10 +398,22 @@ check 'el subdominio no enruta a la api (404 de inventory-manager)' test "$(http
 check 'el dominio de las landings no expone el aviso interno' test "$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 -X POST --resolve "$DOMAIN:443:$TRAEFIK_IP" "https://$DOMAIN/internal/v1/productos-cambiados")" = 404
 check 'inventory-manager llega a la api por la red admin' bash -c "docker exec '$(inventory_id)' wget -q -O - http://api:3001/api/v1/public/birria/productos | grep -q '\"data\"'"
 check 'inventory-manager no ve MySQL' bash -c "! docker exec '$(inventory_id)' getent hosts mysql"
-check 'la api llega al aviso interno de la app y sin credencial recibe 401' bash -c "docker exec '$(api_id)' wget -q -O - --post-data '{\"business\":\"birria\"}' --header 'Content-Type: application/json' http://app:3002/internal/v1/productos-cambiados 2>&1 | grep -q 401"
+check 'la api llega al aviso interno de la app y sin credencial recibe 401' bash -c "docker exec '$(api_id)' wget -q -O - --post-data '{\"business\":\"birria\"}' --header 'Content-Type: application/json' http://$PROJECT-app-1:3002/internal/v1/productos-cambiados 2>&1 | grep -q 401"
 # Sin usuarios en la base de la prueba, /admin responde 503 (administración no disponible): lo que se
 # comprueba es que el dominio de las landings sigue sirviendo su /admin, no el admin nuevo.
 check 'el /admin de las landings sigue en su dominio (503 sin usuarios, no 404)' bash -c "curl -sk --max-time 10 --resolve '$DOMAIN:443:$TRAEFIK_IP' 'https://$DOMAIN/admin/login' | grep -q ADMIN_UNAVAILABLE"
+
+# --- Vecino de traefik-public con los nombres de los servicios (REQ-F-042, DEF-004) --------------
+say 'un vecino con los alias app y mysql no afecta a la api'
+docker run -d --name smoke-vecino --network traefik-public --network-alias app --network-alias mysql --entrypoint sleep "$API_SRC" 600 >/dev/null
+VECINO_IP=$(docker inspect -f '{{(index .NetworkSettings.Networks "traefik-public").IPAddress}}' smoke-vecino)
+check 'la trampa funciona: desde la api, app resuelve al vecino' bash -c "docker exec '$(api_id)' getent ahosts app | grep -q '$VECINO_IP'"
+docker restart "$(api_id)" >/dev/null
+check 'la api arranca con el vecino en la red' wait_container_healthy "$(api_id)"
+check 'y el aviso interno sigue llegando a la app' bash -c "docker exec '$(api_id)' wget -q -O - --post-data '{\"business\":\"birria\"}' --header 'Content-Type: application/json' http://$PROJECT-app-1:3002/internal/v1/productos-cambiados 2>&1 | grep -q 401"
+check 'el nombre de la app no resuelve al vecino' bash -c "! docker exec '$(api_id)' getent ahosts $PROJECT-app-1 | grep -q '$VECINO_IP'"
+docker rm -f smoke-vecino >/dev/null
+check 'el webhook vuelve a la api' wait_for webhook_on_api
 
 # --- Segundo despliegue y retención (CA-7) ------------------------------------------------------
 say 'segundo despliegue y retención de volcados'
@@ -375,6 +466,68 @@ check 'inventory-manager anterior queda healthy' wait_container_healthy "$(inven
 check 'las landings siguen en 200' test "$(https_status "$DOMAIN" /)" = 200
 check 'la api sigue healthy' test "$(docker inspect -f '{{.State.Health.Status}}' "$(api_id)")" = healthy
 check 'releases.log registra inventory_failed' grep -q 'result=inventory_failed' "$BASE/state/releases.log"
+
+# --- El router del webhook sigue a la imagen de la api (REQ-F-042: RF-13 y CA-14) ----------------
+say 'vuelta a una api sin webhook'
+check 'deploy con una api sin la etiqueta -> 0' run_deploy 11 "$APP2" "$MIG" "$API_OLD" "$INV1"
+check 'la api queda con traefik.enable=false' test "$(api_traefik_enable)" = false
+check 'la ruta del webhook vuelve a la app' wait_for webhook_on_app
+check 'release.env lo registra' grep -q '^RESTAURANTE_API_WEBHOOK=false$' "$BASE/state/release.env"
+
+say 'primer despliegue con webhook y app rota: la vuelta atrás devuelve el router'
+check 'deploy con api con webhook y app rota -> 21' expect_exit 21 run_deploy 12 "$APP_BAD" "$MIG" "$API1" "$INV1"
+check 'la api volvió a la anterior' test "$(api_image)" = "$REGISTRY/restaurante-api@$API_OLD"
+check 'con traefik.enable=false' test "$(api_traefik_enable)" = false
+check 'la app volvió a la anterior' test "$(app_image)" = "$REGISTRY/restaurante@$APP2"
+check 'la ruta del webhook vuelve a la app' wait_for webhook_on_app
+
+say 'api healthy cuyo webhook no llega por Traefik'
+BEFORE=$(app_id)
+check 'deploy con webhook mudo -> 15' expect_exit 15 run_deploy 13 "$APP2" "$MIG" "$API_MUTE" "$INV1"
+check 'la app en marcha no se tocó' test "$(app_id)" = "$BEFORE"
+check 'la api volvió a la anterior' test "$(api_image)" = "$REGISTRY/restaurante-api@$API_OLD"
+check 'con traefik.enable=false' test "$(api_traefik_enable)" = false
+check 'la ruta del webhook sigue en la app' wait_for webhook_on_app
+
+say 'sin api anterior y con el webhook mudo (DEF-005)'
+docker rm -f "$(api_id)" >/dev/null
+sed -i '/^RESTAURANTE_API_/d' "$BASE/state/release.env"
+check 'deploy con webhook mudo y sin api anterior -> 15' expect_exit 15 run_deploy 15 "$APP2" "$MIG" "$API_MUTE" "$INV1"
+check 'la api rota queda detenida' test -z "$(api_id)"
+check 'la ruta del webhook vuelve a la app' wait_for webhook_on_app
+
+say 'despliegue hacia una api con webhook'
+check 'deploy con api con webhook -> 0' run_deploy 14 "$APP2" "$MIG" "$API1" "$INV1"
+check 'la api queda con traefik.enable=true' test "$(api_traefik_enable)" = true
+check 'el webhook lo responde la api' wait_for webhook_on_api
+
+say 'la api anterior no vuelve en una vuelta atrás (DEF-003)'
+check 'deploy con una api frágil -> 0' run_deploy 16 "$APP2" "$MIG" "$API_FRAGILE" "$INV1"
+check 'con app rota y la api anterior sin arrancar -> 22, no 21' expect_exit 22 run_deploy 17 "$APP_BAD" "$MIG" "$API1" "$INV1"
+check 'la app volvió a la anterior' test "$(app_image)" = "$REGISTRY/restaurante@$APP2"
+check 'releases.log lo registra' grep -q 'result=health_failed_api_not_restored' "$BASE/state/releases.log"
+check 'el siguiente despliegue lo arregla -> 0' run_deploy 18 "$APP2" "$MIG" "$API1" "$INV1"
+check 'el webhook lo responde la api' wait_for webhook_on_api
+
+say 'procedimientos de docs/despliegue.md (DEF-001 y DEF-002)'
+cp "$BASE/state/release.env" "$WORK/release.env.backup"
+# Como tras restore.sh: release.env sin las líneas de la api.
+sed -i '/^RESTAURANTE_API_/d' "$BASE/state/release.env"
+docker rm -f "$(api_id)" >/dev/null
+check 'tras una restauración, el procedimiento arranca la api' manual_api "$REGISTRY/restaurante-api@$API1"
+check 'con el router encendido' test "$(api_traefik_enable)" = true
+check 'la api queda healthy' wait_container_healthy "$(api_id)"
+check 'y el webhook la alcanza' wait_for webhook_on_api
+cp "$WORK/release.env.backup" "$BASE/state/release.env"
+# Con release.env en true, una api sin webhook no hereda el router (nada de 502).
+check 'con una api sin webhook, el procedimiento apaga el router' manual_api "$REGISTRY/restaurante-api@$API_OLD"
+check 'traefik.enable=false' test "$(api_traefik_enable)" = false
+check 'la ruta vuelve a la app, sin 502' wait_for webhook_on_app
+check 'volver a la api con webhook' manual_api "$REGISTRY/restaurante-api@$API1"
+check 'la api queda healthy' wait_container_healthy "$(api_id)"
+check 'el webhook lo responde la api' wait_for webhook_on_api
+DOC="$DEPLOY_SRC/../docs/despliegue.md"
+check 'todo comando documentado que recrea la api pasa RESTAURANTE_API_WEBHOOK' bash -c "test -f '$DOC' && ! grep -E '(up -d|up) --no-deps api' '$DOC' | grep -v RESTAURANTE_API_WEBHOOK | grep -q ."
 
 say 'api rota tras una migración nueva (DEF-001 de REQ-F-038)'
 BEFORE=$(app_id)

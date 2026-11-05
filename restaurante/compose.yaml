@@ -24,8 +24,7 @@ services:
       # (1040 Too many connections). Con 4 a 8 trabajadores se miden entre 105 y 130.
       - --max-connections=500
       # Solo desarrollo y pruebas (REQ-F-041): una espera de bloqueo vence a los 5 s (producción:
-      # 10 s, deploy/compose.prod.yaml). Lo exigen las pruebas db-lock-wait-*.test.ts, que
-      # retienen el bloqueo 6 s y comprueban este valor.
+      # 10 s, deploy/compose.prod.yaml), para que un bloqueo en una prueba falle pronto.
       - --innodb-lock-wait-timeout=5
     environment:
       MYSQL_ROOT_PASSWORD: ${RESTAURANTE_DB_ROOT_PASSWORD:-root-dev}

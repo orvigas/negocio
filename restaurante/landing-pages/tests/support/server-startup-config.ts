@@ -12,8 +12,7 @@ import { startServer, type StartOptions } from './process.ts';
 
 /**
  * Arranque real del servidor según su configuración (REQ-F-015 y REQ-F-038) en
- * server-startup-config.test.ts y server-startup-host*.test.ts. REQ-F-041: preparación compartida
- * por los archivos en que se partió server-startup-config.test.ts, sin cambios.
+ * server-startup-config.test.ts.
  */
 
 export const cleanups: (() => Promise<unknown>)[] = [];

@@ -33,11 +33,21 @@ Las pruebas que usan la base de datos corren contra MySQL 8.4 real (REQ-F-014), 
 - `TEST_DATABASE_URL` (usuario solo DML, el de la app) y `TEST_ADMIN_DATABASE_URL` (DDL, solo el soporte de pruebas) apuntan únicamente a `127.0.0.1`, `localhost`, `::1` o `mysql-dev` y a bases con prefijo `restaurante_test`. La salvaguarda de `tests/setup/` rechaza cualquier otra antes de conectar. No la relajes.
 - Sin MySQL, la suite falla con el mensaje de cómo levantarlo (`npm run db:up`). Ninguna prueba se salta por falta de base.
 - El store de productos en memoria sigue siendo el doble de las pruebas unitarias.
-- El MySQL de pruebas corta una espera de bloqueo a los 5 s (`--innodb-lock-wait-timeout=5` en `compose.yaml`; producción, 10 s). Si cambias ese valor, revisa `tests/support/lock-wait.ts`.
+- El MySQL de pruebas corta una espera de bloqueo a los 5 s (`--innodb-lock-wait-timeout=5` en `compose.yaml`; producción, 10 s).
 
 ## Duración por archivo
 
 El CI reparte los archivos de prueba en shards por número, no por duración (REQ-F-041). Ningún archivo debe pasar de 20 s en el CI: uno más largo se parte por sus `describe`, con la preparación común en `tests/support/` y sin cambiar los casos. No acortes una espera por condición con una espera fija ni agregues `retry`, y no subas `testTimeout` ni `hookTimeout` para que un archivo quepa.
+
+## Qué pruebas son permanentes
+
+Las pruebas permanentes cubren la funcionalidad de la app: pedido, bot y su conversación, productos, página, permisos, sesión, CSRF, privacidad y avisos del día. No se crean pruebas permanentes para todo: cada comportamiento se prueba una vez, en la prueba más barata que lo cubra (unitaria o en proceso).
+
+## Pruebas de arquitectura o mudanza
+
+Los cambios de arquitectura y de tecnología no dejan pruebas permanentes. Las pruebas de QA que solo comprueban uno de esos cambios (que el comportamiento sigue igual tras mover módulos, procesos, rutas o puertos; fronteras entre paquetes; migraciones, driver o imagen) se ejecutan durante el QA del ticket y no se quedan en el repositorio: su resultado queda en el QA Report. Si una de ellas encuentra un defecto o un caso de lógica, seguridad u operación que ninguna prueba cubre, ese caso pasa a la prueba más barata de ese comportamiento, con un nombre de dominio y sin sufijo `qa-req-f-*`. Las reglas de dependencias entre paquetes se comprueban con `npm run lint`, no con pruebas.
+
+Se conservan a propósito una cadena real de punta a punta por flujo principal, la concurrencia del último administrador y una prueba de que la app no arranca con configuración peligrosa o una base inválida.
 
 ## Limpieza al terminar
 

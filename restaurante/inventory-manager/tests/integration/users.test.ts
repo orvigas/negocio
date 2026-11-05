@@ -98,6 +98,27 @@ describe('lista (RF-3, CA-2)', () => {
   });
 });
 
+describe('salida segura (S-5 y Q-3)', () => {
+  it('un nombre con HTML se pinta escapado en la lista y en la edición', async () => {
+    const { h, browser } = await as();
+    h.api.managed[1]!.displayName = '<img src=x onerror=alert(1)>';
+    for (const path of ['/usuarios', `/usuarios/${ELI_ID}/editar`]) {
+      const html = await (await browser.get(path)).text();
+      expect(html, path).toContain('&lt;img src=x onerror=alert(1)&gt;');
+      expect(dom(html).querySelectorAll('main img'), path).toHaveLength(0);
+    }
+  });
+
+  it('una clave `ok` desconocida no pinta ningún aviso; una conocida sí', async () => {
+    const { browser } = await as();
+    const notices = async (path: string) => dom(await (await browser.get(path)).text()).querySelectorAll('main .notice').length;
+    expect(await notices('/usuarios?ok=desconocido')).toBe(0);
+    expect(await notices('/usuarios?ok=__proto__')).toBe(0);
+    expect(await notices('/cuenta?ok=created')).toBe(0);
+    expect(await notices('/usuarios?ok=created')).toBe(1);
+  });
+});
+
 describe('alta (RF-4, CA-3)', () => {
   it('sin JS: crea el usuario con el token CSRF y vuelve a la lista con el aviso; el nuevo puede entrar', async () => {
     const { h, browser } = await as();

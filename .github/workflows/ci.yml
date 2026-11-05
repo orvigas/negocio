@@ -567,11 +567,16 @@ jobs:
           sudo install -d /opt/restaurante/ops/backup
           sudo install -m 755 restaurante/ops/backup/*.sh /opt/restaurante/ops/backup/
           systemd-analyze verify restaurante/ops/backup/systemd/*.service restaurante/ops/backup/systemd/*.timer restaurante/ops/backup/systemd/*.path
+      # Las dos pruebas de humo solo corren hacia main: en un PR a la épica, o a otra rama, se omiten
+      # como pasos y el resto del job sigue. Los scripts se conservan.
       - name: prueba de humo
+        if: github.event_name != 'pull_request' || github.base_ref == 'main'
         run: bash restaurante/deploy/ci/smoke.sh restaurante:production restaurante:migrate restaurante:api restaurante:inventory-manager
       - name: age
+        if: github.event_name != 'pull_request' || github.base_ref == 'main'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends age
       - name: prueba de humo de respaldos
+        if: github.event_name != 'pull_request' || github.base_ref == 'main'
         run: bash restaurante/ops/backup/ci/smoke.sh restaurante:production restaurante:migrate
 
   # Publicación en GHCR (REQ-F-016, RF-3): en main (push o ejecución manual) con cambios de código,

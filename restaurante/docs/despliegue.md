@@ -81,7 +81,7 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
 ### Cómo llega una versión a producción
 
 1. El CI (`.github/workflows/ci.yml`) del PR ejecuta `calidad`, `docker` (imágenes y pruebas de
-   humo del despliegue y de los respaldos) y `auditoria`, y se hace merge a `main` con las tres en
+   humo del despliegue y de los respaldos, estas solo en un PR hacia `main`) y `auditoria`, y se hace merge a `main` con las tres en
    verde. En un PR de solo documentación o en borrador (ver "Cuándo se ejecuta" en la sección CI
    del `README.md`) quedan omitidas.
 2. En el push a `main`, si solo trae documentación, no se publica ni se despliega nada. Con

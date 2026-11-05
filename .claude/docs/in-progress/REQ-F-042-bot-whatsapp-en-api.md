@@ -1918,3 +1918,7 @@ QA ronda 2 del PR 3 (decisión del usuario: "si"): DEF-001 a DEF-006 corregidos,
 ### Versión 19
 
 PR 3 mergeado por el usuario en `epic/arquitectura` (#126, merge `16acc18`, head `f0682cf`), con el CI en verde y CA-15 cumplido. El ticket sigue en `in-progress/` hasta las comprobaciones de producción.
+
+### Versión 20
+
+Limpieza de pruebas (PR `chore/limpia-pruebas-de-arquitectura`, 2026-11-05): se retiran `bot-procesos-qa-req-f-042*.test.ts` y `dependency-rule-bot-qa-req-f-042.test.ts`, pedido del usuario ("los cambios de arquitectura y tecnologia no deben ser permanentes"). Evidencia de QA que los sustituye: sección `## QA Report` de este ticket y la ejecución 42123270135 del CI (`e7bde63`), la última en que pasaron, con `calidad` en verde: `bot-procesos-qa-req-f-042` 10 casos, `-mantenimiento` 1 y `-desactivado` 1 sobre los procesos reales de `api` y `landing-pages`. Las comprobaciones de producción siguen pendientes.

@@ -2064,3 +2064,7 @@ CI del commit `dd2b2e1` en verde (ejecución 42064630316): `calidad`, `docker`, 
 
 - **El ticket no pasa a `done/`:** sigue en `in-progress/` hasta las comprobaciones de producción.
 - **Pendiente:** la carrera de puertos se trata en un PR de soporte aparte hacia `epic/arquitectura`, rama `fix/soporte-pruebas-limpieza-y-puertos-epic`. Ese CI verde no demostraba que la carrera hubiera desaparecido. El PR tolera la colisión reintentando con puertos nuevos cuando los eligió `startServer`; no elimina la causa, y los caminos que fijan puertos siguen expuestos.
+
+### Versión 3
+
+Limpieza de pruebas (PR `chore/limpia-pruebas-de-arquitectura`, 2026-11-05): se retiran las sondas `admin-bot-qa-req-f-043-*` y las `bot-pantalla-qa-req-f-043-*` sin caso propio, pedido del usuario ("Corrige hasta que nya nom haya pruebas innecesarias"). Quedan `bot-pantalla-qa-req-f-043-flujo` y `-fallos`, y `admin-bot-api-process`. Evidencia: los QA Report de este ticket y la ejecución 42123270135 del CI (`e7bde63`), con `calidad` en verde.

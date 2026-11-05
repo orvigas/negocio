@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 1)
+QA_APPROVED (PR 1). CI en curso: [PR 134](https://github.com/orvigas/negocio/pull/134) hacia `epic/arquitectura`.
 
 ## Aprobación
 
@@ -928,3 +928,7 @@ Plan aprobado por el usuario, cita textual: "Si". `senior-qa` ejecuta el plan: 2
 ### Pruebas de cobertura de QA (2026-11-05)
 
 DEF-002 atendido solo con pruebas (recomendaciones 1 a 3 de QA); las mutaciones 20, 21, 22 y 28 se detectan ahora, comprobado en una copia temporal. `npm test`: 216 archivos y 2.908 pruebas en verde, con el fallo esperado que ya existía. DEF-001 queda registrado y H-4 anotado para el PR 2.
+
+### Pull Request del PR 1 (2026-11-05)
+
+PR 134 hacia `epic/arquitectura`, commit `2e59769`. CI en curso.

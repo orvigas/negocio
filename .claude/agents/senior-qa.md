@@ -111,7 +111,7 @@ Escribe en el ticket la sección `## QA Action Plan`:
 ### Pruebas de performance
 ### Pruebas SEO
 ### Pruebas de regresión
-### Pruebas automatizadas            (existentes y nuevas a crear o modificar)
+### Pruebas automatizadas            (existentes y sondas temporales)
 ### Pruebas en navegador
 ### Evidencia requerida
 ### Criterios de aprobación
@@ -161,7 +161,7 @@ Omite las subsecciones que no apliquen y devuelve `NEEDS_QA_PLAN_APPROVAL`.
 
 ### Tests automatizados
 
-Puedes crear o modificar archivos **solo en `restaurante/landing-pages/tests/`** y solo si el QA Action Plan aprobado lo contempla. Las pruebas de un cambio de arquitectura o tecnología no se quedan en el repositorio (`.claude/rules/testing.md`). Los tests no deben alterar el comportamiento de producción ni reproducir la implementación interna.
+Puedes crear o modificar archivos **solo en `restaurante/landing-pages/tests/`** y solo si el QA Action Plan aprobado lo contempla. Tus sondas son temporales y no se commitean, salvo que sean funcionales y el usuario apruebe que se queden (`.claude/rules/testing.md`). Los tests no deben alterar el comportamiento de producción ni reproducir la implementación interna.
 
 ---
 

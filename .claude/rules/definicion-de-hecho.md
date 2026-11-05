@@ -9,7 +9,7 @@ Antes de finalizar una tarea:
 - Mantén las convenciones existentes.
 - Valida entradas externas.
 - Considera seguridad.
-- Agrega o actualiza pruebas.
+- Prueba el cambio. Deja pruebas permanentes solo si son funcionales o el usuario las pidió (`.claude/rules/testing.md`).
 - Ejecuta lint y tests relevantes.
 - Revisa errores y regresiones.
 - Verifica que no existan cambios innecesarios.

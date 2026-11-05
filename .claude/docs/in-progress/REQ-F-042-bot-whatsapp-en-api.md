@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 3 de 3, ronda 2), condicionado al CI verde en el PR y a las comprobaciones de producción. PR 1 (#121) y PR 2 (#124) mergeados en `epic/arquitectura`, con `main` integrado (#125). El PR 3 está en `feature/REQ-F-042-bot-whatsapp-en-api-3-deploy`, sin commit. DEF-001 a DEF-006 corregidos y verificados.
+Los tres PR están mergeados en `epic/arquitectura`: #121, #124 y #126 (merge `16acc18`). El ticket sigue en `in-progress/` hasta las comprobaciones de producción (CA-1 a CA-3, CA-9, memoria en el VPS y certificado real), que dependen del despliegue de la épica. No está en `DONE`.
 
 ## Aprobación
 
@@ -1795,6 +1795,28 @@ CA-1 a CA-3, CA-9, memoria en el VPS y certificado real. Hay que reinstalar `dep
 - Pruebas W completas por `curl`: el router no cambió y el smoke cubre sus rutas.
 - Memoria de `api`: no se volvió a medir con la imagen de la rama, que no cambió de digest respecto a la ronda 1.
 
+### Pull Request del PR 3
+
+- **PR:** https://github.com/orvigas/negocio/pull/126 (`feature/REQ-F-042-bot-whatsapp-en-api-3-deploy` → `epic/arquitectura`). Mergeado por el usuario el 2026-11-05 UTC: merge `16acc18`, head `f0682cf`.
+- **Commits:**
+  - `a2f1b93` feat: enruta el webhook de WhatsApp a api con la misma URL y vuelta atrás segura (REQ-F-042, PR 3 de 3).
+  - `f0682cf` docs: documenta el bot en api, su despliegue y su recuperación (REQ-F-042, PR 3 de 3).
+- **CI** (ejecución 41943418030, sobre `f0682cf`): en verde.
+  - `calidad`: pass. `auditoria`: pass (40 s). `docker`: pass (13 min 25 s).
+  - `cambios`, `verificacion`, `pruebas (1/2)` y `pruebas (2/2)`: pass.
+  - `publish`, `deploy`, `vigente` y `validado`: omitidos, como corresponde a un PR.
+  - Prueba de humo del despliegue y de los respaldos dentro de `docker`: 184 y 58 comprobaciones, 0 fallos.
+- **Duración máxima por archivo en el CI** (límite 20 s), de los 173 archivos del log; ninguno pasa de 20 s:
+  - `landing-pages`: 17,6 s (`server-startup-provider-qa.test.ts`), de 129 archivos;
+  - `api`: 8,4 s (`admin-users-api.test.ts`), de 36 archivos;
+  - `inventory-manager`: 1,3 s (`products.test.ts`), de 8 archivos.
+- **Pruebas en el CI:** `api` 984, `landing-pages` 1455 (1454 y 1 `expected fail` previo) e `inventory-manager` 111. Total: 2550.
+- **Reglas de agentes:** este PR incluyó en `.claude/agents/senior-fullstack.md` y `.claude/agents/senior-qa.md` las dos reglas pedidas por el usuario ("si, déjalo como regla"): la revisión previa a QA y la regresión selectiva.
+
+**CA-15:** cumplido: `typecheck`, `lint` y `npm test` en verde, ningún archivo de más de 20 s en el CI y `calidad`, `docker` y `auditoria` en verde.
+
+**Pendientes de producción, a cargo del despliegue de la épica:** CA-1, CA-2, CA-3, CA-9, memoria en el VPS y certificado real. Acciones manuales: reinstalar `deploy/` cuando el job `deploy` falle con el código 4 (paso 1.3), actualizar `restore.sh` en el VPS (paso 11.5) y hacer "Comprobaciones del webhook (REQ-F-042)" de `docs/despliegue.md`.
+
 ## Trazabilidad
 
 | Objetivo / historia | Requisitos | Criterios |
@@ -1892,3 +1914,7 @@ QA ronda 2 del PR 3 (decisión del usuario: "si"): DEF-001 a DEF-006 corregidos,
 ### Versión 18
 
 `.claude/agents/senior-fullstack.md` y `.claude/agents/senior-qa.md` incluyen dos reglas nuevas pedidas por el usuario ("si, déjalo como regla"): la revisión previa a QA y la regresión selectiva. Van en el commit de documentación del PR 3.
+
+### Versión 19
+
+PR 3 mergeado por el usuario en `epic/arquitectura` (#126, merge `16acc18`, head `f0682cf`), con el CI en verde y CA-15 cumplido. El ticket sigue en `in-progress/` hasta las comprobaciones de producción.

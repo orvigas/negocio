@@ -115,7 +115,7 @@ restaurante/                 # Raíz de los npm workspaces (REQ-F-036 y REQ-F-03
 │   │   ├── middleware/          # error-handler.ts, request-logger.ts, admin-guard.ts
 │   │   ├── repositories/        # Menús (contrato y reglas, archivos y memoria) y productos (product-repository.ts)
 │   │   ├── routes/              # Rutas (@koa/router): index.ts (landings, iconos), admin.ts (/admin)
-│   │   ├── services/            # admin-*, product-form, session-store, login-throttle
+│   │   ├── services/            # admin-*, landing-products, product-form
 │   │   ├── styles/              # Fuentes Tailwind: shared/, molotes/, birria/, admin/, components/ (sin uso por ahora)
 │   │   ├── utils/               # datetime.ts, form-body.ts, json-body.ts
 │   │   └── views/               # render.ts + layouts/, pages/, partials/ (.html), landings/ (.ts), admin/ (.ts y .html)

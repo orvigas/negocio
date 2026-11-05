@@ -9,6 +9,7 @@ import {
 } from '@restaurante/core/shared';
 import {
   AUTHOR_MAX_LENGTH,
+  PAGE_ACTIONS as CHANGE_ACTIONS,
   SCHEMA_VERSION,
   diffMenuData,
   mergePageData,
@@ -16,10 +17,12 @@ import {
   textLength,
   validateMenuDocument,
   validatePageData,
+  versionOf,
   type FieldChange,
   type MenuData,
   type MenuDataByBusiness,
   type MenuDocument,
+  type PageAction as ChangeAction,
   type PageData,
   type ValidationError,
 } from '@restaurante/core/catalog';
@@ -145,14 +148,7 @@ export const REPOSITORY_METHODS = Object.freeze([
   'getStartupSource',
 ]);
 
-export const CHANGE_ACTIONS = Object.freeze({
-  SAVE: 'save',
-  OVERWRITE_AFTER_CONFLICT: 'overwrite_after_conflict',
-  RESTORE_PREVIOUS: 'restore_previous',
-  RESTORE_SEED: 'restore_seed',
-});
-
-export type ChangeAction = (typeof CHANGE_ACTIONS)[keyof typeof CHANGE_ACTIONS];
+export { CHANGE_ACTIONS, type ChangeAction, versionOf };
 
 /** Guardado con una versión que ya no es la vigente (RF-7). */
 export class MenuConflictError extends Error {
@@ -199,9 +195,6 @@ export class MenuDataError extends Error {
     this.issues = issues;
   }
 }
-
-/** Identificador de versión: cambia con cada escritura, incluidas las restauraciones. */
-export const versionOf = (document: Pick<MenuDocument, 'revision' | 'updatedAt'>): string => `${document.revision}@${document.updatedAt ?? 'seed'}`;
 
 /** Comprueba que un objeto cumple el contrato (falla rápido al construir la app). */
 export function assertMenuRepository(repository: unknown): MenuRepository {

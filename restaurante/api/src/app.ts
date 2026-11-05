@@ -1,16 +1,17 @@
 import Koa, { type Context, type Middleware } from 'koa';
 
-import { ADMIN_API_PREFIX, isPublicBusinessId, productsResponseSchemas } from '@restaurante/contracts';
-import { toPublished, type ProductStore } from '@restaurante/core/catalog';
-import { isBusinessId, silentLogger, type Logger } from '@restaurante/core/shared';
+import { ADMIN_API_PREFIX, isPublicBusinessId, pageResponseSchemas, productsResponseSchemas } from '@restaurante/contracts';
+import { PageUnavailableError, toPublished, type PageRepository, type PageState, type ProductStore } from '@restaurante/core/catalog';
+import { isBusinessId, silentLogger, type BusinessId, type Logger } from '@restaurante/core/shared';
 
 import { createAdminRouter } from './admin/router.ts';
-import { ApiHttpError, createErrorHandler } from './errors.ts';
+import { ApiHttpError, createErrorHandler, pageUnavailable } from './errors.ts';
 
 /**
  * App de la API (REQ-F-038, RF-1; REQ-F-039). Construida sin abrir puertos (testeable).
  *
  *   GET|HEAD /api/v1/public/{molotes|birria}/productos -> 200 { data } (contrato de contracts)
+ *   GET|HEAD /api/v1/public/{molotes|birria}/pagina    -> 200 { data } o 503 PAGE_UNAVAILABLE (REQ-F-044)
  *   /api/v1/admin/...                                  -> administración (src/admin/router.ts),
  *                                                         solo si se pasan sus rutas (`admin`)
  *
@@ -23,7 +24,7 @@ import { ApiHttpError, createErrorHandler } from './errors.ts';
  *   solo lleva el nombre y el código del error.
  */
 
-const PRODUCTS_PATH = /^\/api\/v1\/public\/([^/]+)\/productos$/;
+const PUBLIC_PATH = /^\/api\/v1\/public\/([^/]+)\/(productos|pagina)$/;
 const ALLOWED_METHODS = 'GET, HEAD';
 
 /** `extra`: campos adicionales de la petición (el puerto del webhook añade la IP y el protocolo). */
@@ -38,9 +39,21 @@ export function createRequestLogger(logger: Logger, extra: (ctx: Context) => Rec
   };
 }
 
+/** Datos de página, o el 503 propio de "no disponible" (REQ-F-044, RF-4). */
+async function readPage(pages: Pick<PageRepository, 'get'>, business: BusinessId): Promise<PageState> {
+  try {
+    return await pages.get(business);
+  } catch (err) {
+    if (err instanceof PageUnavailableError) throw pageUnavailable();
+    throw err;
+  }
+}
+
 export interface ApiAppOptions {
   /** Store de productos (Prisma en producción, memoria en las pruebas). La parte pública solo lo lee. */
   store: Pick<ProductStore, 'listBusiness'>;
+  /** Datos de página (REQ-F-044); sin ellos, su ruta pública responde 404. */
+  pages?: Pick<PageRepository, 'get'> | undefined;
   /** Rutas de administración (REQ-F-039 y REQ-F-040); sin ellas, /api/v1/admin responde 404. */
   admin?: Parameters<typeof createAdminRouter>[0] | undefined;
   logger?: Logger;
@@ -48,7 +61,7 @@ export interface ApiAppOptions {
 
 const isAdminPath = (path: string): boolean => path === ADMIN_API_PREFIX || path.startsWith(`${ADMIN_API_PREFIX}/`);
 
-export function createApiApp({ store, admin, logger = silentLogger }: ApiAppOptions): Koa {
+export function createApiApp({ store, pages, admin, logger = silentLogger }: ApiAppOptions): Koa {
   if (typeof store?.listBusiness !== 'function') throw new TypeError('createApiApp requiere el store de productos');
   const app = new Koa();
   // Los errores se registran en el manejador central, sin el mensaje (podría contener datos).
@@ -74,13 +87,23 @@ export function createApiApp({ store, admin, logger = silentLogger }: ApiAppOpti
     // Rutas de administración sin coincidencia: 404 sin cuerpo, para que allowedMethods responda 405
     // si la ruta existe con otro método (y, si no, el manejador central responda 404).
     if (isAdminPath(ctx.path)) return;
-    const match = PRODUCTS_PATH.exec(ctx.path);
-    if (!match) throw new ApiHttpError(404, 'NOT_FOUND', 'Recurso no encontrado.');
+    const match = PUBLIC_PATH.exec(ctx.path);
+    if (!match || (match[2] === 'pagina' && !pages)) throw new ApiHttpError(404, 'NOT_FOUND', 'Recurso no encontrado.');
     if (ctx.method !== 'GET' && ctx.method !== 'HEAD') {
       throw new ApiHttpError(405, 'METHOD_NOT_ALLOWED', 'Método no permitido.', { Allow: ALLOWED_METHODS });
     }
     const business = match[1];
     if (!isPublicBusinessId(business) || !isBusinessId(business)) throw new ApiHttpError(404, 'BUSINESS_NOT_FOUND', 'Negocio desconocido.');
+    if (pages && match[2] === 'pagina') {
+      const parsed = pageResponseSchemas[business].safeParse({ data: (await readPage(pages, business)).data });
+      if (!parsed.success) {
+        logger.error('page_response_invalid', { business, issues: parsed.error.issues.length });
+        throw new Error('La respuesta no cumple el contrato');
+      }
+      ctx.type = 'application/json; charset=utf-8';
+      ctx.body = parsed.data;
+      return;
+    }
     const published = toPublished(business, await store.listBusiness(business));
     const parsed = productsResponseSchemas[business].safeParse({ data: published });
     if (!parsed.success) {

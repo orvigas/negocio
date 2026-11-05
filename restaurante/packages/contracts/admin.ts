@@ -37,6 +37,9 @@ export const adminPaths = Object.freeze({
   userStatus: (id: number, action: 'desactivar' | 'reactivar') => `${ADMIN_API_PREFIX}/usuarios/${id}/${action}`,
   userPassword: (id: number) => `${ADMIN_API_PREFIX}/usuarios/${id}/contrasena`,
   accountPassword: `${ADMIN_API_PREFIX}/cuenta/contrasena`,
+  // Datos de página (REQ-F-044).
+  page: (business: PublicBusinessId) => `${ADMIN_API_PREFIX}/${business}/pagina`,
+  pageRestore: (business: PublicBusinessId) => `${ADMIN_API_PREFIX}/${business}/pagina/restaurar`,
   // Control del bot (solo administradores; REQ-F-043).
   bot: `${ADMIN_API_PREFIX}/bot`,
   botSwitch: `${ADMIN_API_PREFIX}/bot/interruptor`,

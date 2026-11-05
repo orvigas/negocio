@@ -9,7 +9,7 @@ import {
   type BotLimits,
   type BotProvider,
 } from '@restaurante/core/bot-control';
-import { createProductRepository, type MemoryProductStore, type ProductRepository } from '@restaurante/core/catalog';
+import { createMemoryPageStore, createProductRepository, type MemoryPageStore, type MemoryProductStore, type ProductRepository } from '@restaurante/core/catalog';
 import {
   LastAdminError,
   SCRYPT_DEFAULTS,
@@ -28,6 +28,7 @@ import { createAdminRoutes } from '../../src/admin/index.ts';
 import { createApiApp } from '../../src/app.ts';
 import { API_DEFAULTS } from '../../src/config.ts';
 import type { LandingNotifier } from '../../src/notifier.ts';
+import { createApiPages } from '../../src/page-cutover.ts';
 import { makeStore } from './fixtures.ts';
 import { listenLocal } from './http.ts';
 
@@ -187,6 +188,8 @@ export function recordingLogger(): Logger & { lines: string[] } {
 export interface AdminHarness {
   url: string;
   store: MemoryProductStore;
+  /** Store de los datos de página (REQ-F-044), vacío salvo `seedPages`. */
+  pageStore: MemoryPageStore;
   /** El repositorio de productos de /api/v1/admin: el mismo que usa el bot en la api (REQ-F-042, RF-10). */
   products: ProductRepository;
   calls: { findCredentials: number; recordLogin: number; writes: number };
@@ -218,6 +221,7 @@ export interface BotOptions {
 export async function startAdmin({
   users: testUsers = [ADMIN, MOLOTES_EDITOR],
   realNotifier,
+  pageCutover = true,
   bot: { provider = 'meta', keys = TEST_BOT_KEYS, limits = DEFAULT_BOT_LIMITS, store: botStore = createMemoryBotControlStore() } = {},
 }: {
   users?: TestUser[];
@@ -225,6 +229,8 @@ export async function startAdmin({
   bot?: BotOptions;
   /** Aviso interno real, para las pruebas de punta a punta; sin él, el doble `notifier`. */
   realNotifier?: LandingNotifier;
+  /** Con `false`, como las imágenes anteriores al corte de la página (REQ-F-044, RF-4). */
+  pageCutover?: boolean;
 } = {}): Promise<AdminHarness> {
   const clock = { now: new Date('2026-10-26T18:00:00Z') };
   const now = () => clock.now;
@@ -249,9 +255,12 @@ export async function startAdmin({
   const logger = recordingLogger();
   const botControl = createBotControl({ store: botStore, keys, limits, timeZone: 'America/Mexico_City', staff: [BOT_STAFF], logger, now });
   await botControl.init();
+  const pageStore = createMemoryPageStore();
+  const pages = createApiPages({ store: pageStore, timeZone: 'America/Mexico_City', now, logger, cutover: pageCutover });
   const admin = createAdminRoutes({
     users,
     products,
+    pages,
     notifier: realNotifier ?? notifier,
     botControl,
     botProvider: provider,
@@ -260,8 +269,8 @@ export async function startAdmin({
     now,
     logger,
   });
-  const { url } = await listenLocal(createApiApp({ store, admin, logger }));
-  return { url, store, products, calls, change, audit, hashes, failNext, notified, notifier, logger, clock, botControl, botStore, ids: Object.fromEntries(records.map((user) => [user.username, user.id])) };
+  const { url } = await listenLocal(createApiApp({ store, pages, admin, logger }));
+  return { url, store, pageStore, products, calls, change, audit, hashes, failNext, notified, notifier, logger, clock, botControl, botStore, ids: Object.fromEntries(records.map((user) => [user.username, user.id])) };
 }
 
 export interface Session {

@@ -1019,3 +1019,7 @@ Implementación del PR 1 aprobada por el usuario (cita textual: "Si", en respues
 ### QA (Q2, PR 1, ronda 1)
 
 Plan aprobado por el usuario (cita textual: "Si", en respuesta a "¿Apruebas el plan de QA con esos 3 puntos?"). Validación ejecutada (2026-11-05): 18 criterios en PASS en la capa API, 3 defectos `TRIVIAL` (DEF-001 a DEF-003), mutaciones detectadas y sin empeorar la duración. 5 archivos de prueba nuevos en `restaurante/landing-pages/tests/`, sin commit. Estado: `QA_APPROVED`.
+
+### Pull Request del PR 1
+
+PR #130 hacia `epic/arquitectura`, commit `9f88402` (2026-11-05). El CI quedó en verde, pero `admin-bot-qa-req-f-043-acceso` tardó 31,3 s y `-proceso` 30,3 s, por encima del límite de 20 s por archivo. Se parten por `describe`, sin cambiar los casos, en `-acceso`, `-validacion`, `-estado`, `-proceso`, `-proceso-reinicio` y `-convivencia`, con la preparación en `tests/support/`. Siguen las 33 pruebas de las sondas. Sin cambios en código de producción.

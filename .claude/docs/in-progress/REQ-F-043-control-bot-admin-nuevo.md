@@ -2,9 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
-PR 1 de 3 (contratos y `api`): [PR #130](https://github.com/orvigas/negocio/pull/130), mergeado en `epic/arquitectura` (`1c801cf`). PR 2 de 3 (pantalla): implementado en `feature/REQ-F-043-control-bot-admin-nuevo-2-pantalla`, sin commit, implementación aprobada ("Si y apruebo"), QA aprobado, pendiente de commit y Pull Request. Queda el PR 3.
+PR 1 de 3 (contratos y `api`): [PR #130](https://github.com/orvigas/negocio/pull/130), mergeado en `epic/arquitectura` (`1c801cf`). PR 2 de 3 (pantalla): [PR #131](https://github.com/orvigas/negocio/pull/131) hacia `epic/arquitectura`, con el CI en verde, pendiente del merge del usuario. Queda el PR 3.
 
 ## Aprobación
 
@@ -1479,3 +1479,9 @@ QA Action Plan del PR 2 de 3 escrito sobre el working tree sin commit (2026-11-0
 ### QA (Q2, PR 2, ronda 1)
 
 QA del PR 2 de 3 ejecutado (2026-11-05): 10 archivos de sonda con 61 pruebas, mutaciones detectadas y pasada en navegador. Un defecto TRIVIAL nuevo (DEF-004). S-8 no se queda en el repositorio por duración. Estado: `QA_APPROVED`.
+
+### Pull Request del PR 2
+
+PR #131 hacia `epic/arquitectura`, commit `e0364fb` (2026-11-05). Incluye 10 archivos de sondas de QA y su soporte; la sonda S-8 (`-base`) queda fuera. DEF-001 a DEF-004 siguen abiertos.
+
+CI del commit `e0364fb` en verde (ejecución 42034148815): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion`. Duraciones en el CI, sin la preparación de cada archivo: `-lentitud` 5,9 s, `-flujo` 5,2 s, `-privacidad` 5,0 s, `-sinbot` 4,9 s, `-motivo` 4,9 s, `-topes` 4,5 s, `-acceso` 4,4 s, `-navegacion` 4,2 s, `-topes-bloqueado` 3,5 s, `-fallos` 1,4 s; `bot-failures` 3,4 s, `bot-actions` 2,8 s y `bot-access` 1,6 s. Ninguno pasa de 20 s, y no hizo falta partir ninguno. Archivos existentes más largos: `inventory-manager-qa-req-f-039-csrf` 19,7 s y `dependency-rule-apps` 19,4 s, sin cambios en este PR. Estado: `READY_FOR_MERGE`.

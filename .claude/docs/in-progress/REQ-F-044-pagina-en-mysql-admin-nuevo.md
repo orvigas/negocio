@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 1). CI en curso: [PR 134](https://github.com/orvigas/negocio/pull/134) hacia `epic/arquitectura`.
+PR 1 mergeado ([#134](https://github.com/orvigas/negocio/pull/134), `9dd95b1`) sin CI completo: ver "Incidencia del PR 1". Siguiente: PR 2.
 
 ## Aprobación
 
@@ -932,3 +932,11 @@ DEF-002 atendido solo con pruebas (recomendaciones 1 a 3 de QA); las mutaciones 
 ### Pull Request del PR 1 (2026-11-05)
 
 PR 134 hacia `epic/arquitectura`, commit `2e59769`. CI en curso.
+
+## Incidencia del PR 1
+
+El 2026-11-05, #134 se mergeó en `epic/arquitectura` sin que corrieran `calidad`, `docker`, `auditoria` ni `pruebas`. `git push && gh pr ready 134` se lanzaron seguidos, por una indicación errónea de la sesión principal: la ejecución 42122448914 (`ready_for_review`) se canceló y la 42122453025 (`fe7eeb6`) omitió las validaciones. GitHub permitió el merge con esas comprobaciones omitidas. Sin efecto en producción: un merge a la épica no despliega y `PAGE_CUTOVER` sigue en `false`.
+
+Validación local previa al merge: `typecheck`, `lint` y `build:css` en 0, y 2.908 pruebas (`api` 1.122, `landing-pages` 1.599 con 1 fallo esperado, `inventory-manager` 187). Las mutaciones 20, 21, 22 y 28 de QA se detectan. QA no revisó las 3 pruebas añadidas tras su aprobación (DEF-002).
+
+Decisión del usuario: "1 si, 2 si", a lanzar un PR para validar el árbol en CI y a añadir la regla a `.claude/rules/git.md`. El resultado del CI de ese PR se registra en el PR 2.

@@ -46,6 +46,8 @@ const RETURN_PATTERNS: readonly RegExp[] = [
   /^\/usuarios(?:\/nuevo)?$/,
   /^\/usuarios\/[1-9]\d{0,9}\/(?:editar|contrasena)$/,
   /^\/cuenta$/,
+  // Control del bot (REQ-F-043).
+  /^\/bot$/,
 ];
 
 export function sanitizeNext(value: unknown): string {

@@ -2,9 +2,9 @@
 
 ## Estado
 
-READY_FOR_MERGE
+QA_APPROVED
 
-PR 1 de 3 (contratos y `api`): [PR #130](https://github.com/orvigas/negocio/pull/130) hacia `epic/arquitectura`, con el CI en verde. Quedan el PR 2 y el PR 3.
+PR 1 de 3 (contratos y `api`): [PR #130](https://github.com/orvigas/negocio/pull/130), mergeado en `epic/arquitectura` (`1c801cf`). PR 2 de 3 (pantalla): implementado en `feature/REQ-F-043-control-bot-admin-nuevo-2-pantalla`, sin commit, implementación aprobada ("Si y apruebo"), QA aprobado, pendiente de commit y Pull Request. Queda el PR 3.
 
 ## Aprobación
 
@@ -634,6 +634,82 @@ Resultado del PR 1 de 3 (contratos y `api`). Sin commit, push ni PR.
 - **Cuota de pedidos:** `guard.release` también reinicia los pedidos del día del número, además de mensajes y enfriamientos.
 - **Sin ejecutar:** despliegue real y revert. Los procedimientos de `despliegue.md` se revisan en el PR 3.
 
+## Implementation Result (PR 2 de 3)
+
+Resultado del PR 2 de 3 (pantalla "Bot" en `inventory-manager`). Sin commit, push ni PR. No corrige DEF-001 a DEF-003, y `/admin/bot` en solo lectura y la documentación siguen en el PR 3.
+
+### Rama
+
+`feature/REQ-F-043-control-bot-admin-nuevo-2-pantalla`, creada desde `epic/arquitectura` (`1c801cf`).
+
+### Cambios realizados
+
+- **Pantalla:** `GET /bot` con Estado, Uso, Alcanzaron un tope hoy, Lista negra y Bloquear un número, en `ul` de tarjetas, sin `<table>` y sin JavaScript nuevo. Enlace "Bot" en la cabecera solo para administradores.
+- **Acciones:** los 4 POST con POST/redirect/GET, mismo origen, lista cerrada de campos y el cliente de `contracts`. `ok` es una lista cerrada, y `n` solo acepta 4 dígitos.
+- **Fallos (RF-12):** una escritura sin confirmar da 503 con "No pudimos confirmar el cambio. Revisa el estado antes de repetirlo." y enlace a `/bot`. El alta pinta además el formulario suelto. Un 404 con otro `code` no se trata como "no encontrado" (H-10).
+- **`common.ts`:** recibe `readClosedForm`, `adminSession`, `forbidden` y `fieldErrors`, que `users.ts` ahora usa sin cambiar su comportamiento.
+- **Pruebas:** doble `api-double-bot.ts`, `bot-page.ts` y 3 archivos nuevos con 63 pruebas.
+
+### Criterios de aceptación
+
+| CA | Estado en este PR |
+| --- | --- |
+| CA-1, CA-2 | Cumplidos en pantalla (`bot-access`) |
+| CA-3, CA-4, CA-5, CA-6, CA-7, CA-8, CA-10, CA-12, CA-13, CA-14, CA-19, CA-20 | Cumplidos en pantalla (`bot-actions`) contra el doble. CA-3, CA-5, CA-6 y CA-7 también en la pasada con la `api` real |
+| CA-9, CA-11 | Son de la API y siguen cubiertos por el PR 1. La pantalla solo pinta lo que recibe |
+| CA-15 | Cumplido en HTML, URL y logs de `inventory-manager`. En la pasada real, tampoco en los logs de `api` |
+| CA-18 | Cumplido (`bot-failures`) |
+| CA-21 | Cumplido: medido en Chrome headless (ver abajo) |
+| CA-22 | Cumplido en este PR. Se repite en el PR 3 |
+| CA-16, CA-17 | Pendientes (PR 3) |
+
+### Validaciones ejecutadas
+
+| Comando | Resultado |
+| --- | --- |
+| `npm run typecheck` | 0 |
+| `npm run lint` | 0, sin avisos |
+| `npm run build:css` | 0 |
+| `npm test`, `api` | 40 archivos, 1049 pruebas pasan |
+| `npm test`, `inventory-manager` | 11 archivos, 182 pruebas pasan |
+| `npm test`, `landing-pages` | 139 archivos, 1489 pasan y 1 fallo esperado (1490) |
+
+- **Duración local:** `bot-access` 0,5 s (12 pruebas), `bot-actions` 1,1 s (26) y `bot-failures` 1,7 s (25). El límite acordado era ~10 s.
+- **Mutaciones (se restauró el código tras cada una):** ignorar `code` en el 404 y 409: 2 fallos. Afirmar "no se guardó": 15. Conservar un motivo con teléfono: 4. Tratar un 404 ajeno como "no encontrado": 3.
+- **Navegador:** Chrome headless por el protocolo de DevTools, con pruebas temporales ya borradas.
+  - Contra el doble, con textos de 200 caracteres sin espacios, 2 topes, 2 bloqueos y 2 avisos: sin desplazamiento horizontal a 375, 768 y 1280 px, ni a 375 px sin JavaScript.
+  - Teclado: 21 paradas en orden visual, todas con foco visible (`outline` de 2 px).
+  - Con JavaScript desactivado y usando solo Enter, contra `api` real y MySQL: pausa, alta, alta repetida (409), inválida y del personal (422), baja y reanudación funcionan. `bot_audit` queda con `bot_paused`, `block_added`, `block_removed` y `bot_resumed`, y el número no aparece en los logs de `api` ni de `inventory-manager`.
+- **Corregido por la pasada:** `sanitizeNext` no aceptaba `/bot`, de modo que al volver a entrar se perdía el retorno. Y el nombre de la variable de la clave se salía del aviso a 375 px: `notice.html` ahora lleva `break-words`, en todas las pantallas.
+
+### Archivos afectados
+
+- `restaurante/inventory-manager/src/controllers/bot.ts` (nuevo), `common.ts`, `users.ts`
+- `restaurante/inventory-manager/src/views/bot.ts` (nuevo), `index.ts`
+- `restaurante/inventory-manager/src/views/pages/bot.html`, `bot-block-form.html` (nuevos)
+- `restaurante/inventory-manager/src/views/partials/bot-*.html` (9 nuevos), `notice.html`
+- `restaurante/inventory-manager/src/routes.ts`, `app.ts`, `session.ts`
+- `restaurante/inventory-manager/tests/integration/bot-access.test.ts`, `bot-actions.test.ts`, `bot-failures.test.ts` (nuevos)
+- `restaurante/inventory-manager/tests/support/api-double-bot.ts`, `bot-page.ts` (nuevos), `api-double.ts`, `browser.ts`
+- `restaurante/inventory-manager/tests/unit/config-session.test.ts`
+
+### Desviaciones del plan
+
+- **Motivo con posible teléfono:** no se conserva tras un error, ni con la API caída, aunque D-4 dice que el motivo se conserva. Copia la regla de dígitos de core solo para no repintar (`keptReason`), porque ese motivo podría ser el número que RF-9 protege. Es lo que hace hoy `/admin/bot`.
+- **`session.ts`:** no estaba en la lista del plan. Hacía falta para volver a `/bot` tras entrar.
+- **`notice.html`:** cambio mínimo que afecta a todos los avisos del admin nuevo.
+- **Sin `type="tel"`:** `field-input.html` fija `type="text"`; se usa `inputmode="tel"`, que da el mismo teclado.
+- **Un `:id` que no es número:** responde con la página 404 común, sin lista. Solo pasa con una URL manipulada.
+- **Tras un 422 o 409 del alta, si tampoco se puede leer el estado:** formulario suelto con el aviso de cambio sin confirmar.
+
+### Riesgos o pendientes
+
+- **"Alcanzaron un tope hoy" contra la `api` real:** no se probó en navegador, porque exige tráfico real al bot. Se probó contra el doble, y la API en el PR 1.
+- **El doble no sustituye a la `api`:** las reglas siguen probadas en `api/tests`. En un fallo real con la escritura aplicada, la pantalla no lo distingue: por eso invita a revisar.
+- **Duraciones en CI:** son locales. En el PR 1 casi se duplicaron en el CI.
+- **`npm run dev`:** la pasada usó los mismos procesos (`server.ts`) con una base de pruebas, no el entorno de `npm run dev` ni los datos locales.
+- **DEF-001 a DEF-003:** siguen abiertos, a la espera de la decisión del usuario.
+
 ## QA Action Plan
 
 Plan del PR 1 de 3 (contratos, core y `api`), sobre el working tree sin commit de `feature/REQ-F-043-control-bot-admin-nuevo-1-api` (base `epic/arquitectura`, `76a70f2`). Aprobación del usuario a la implementación, textual: "Si". NotebookLM no está disponible en la sesión: no se consultó. `Calculadora.xlsx` queda fuera.
@@ -992,6 +1068,372 @@ Ninguno de este PR. No hubo pasada de navegador: no hay pantalla.
 
 QA_APPROVED
 
+## QA Action Plan (PR 2 de 3)
+
+Plan del PR 2 de 3 (pantalla "Bot" de `inventory-manager`), sobre el working tree sin commit de `feature/REQ-F-043-control-bot-admin-nuevo-2-pantalla` (base `epic/arquitectura`, `1c801cf`). Aprobación de la implementación, textual: "Si y apruebo", aceptando que el motivo con posible teléfono se vacíe. DEF-001 a DEF-003: "No, a QA tal cual (Recomendado)"; no se revalidan. NotebookLM no tiene herramientas disponibles en la sesión: no se consultó. `Calculadora.xlsx` queda fuera.
+
+Las 63 pruebas del implementador corren contra un doble que él mismo escribió: se ejecutan, pero no cuentan como evidencia independiente. Cada riesgo alto se comprueba con procesos reales, con una sonda propia o con una mutación.
+
+### Objetivo
+
+Comprobar de forma independiente que la pantalla "Bot" cumple su parte de los CA contra la `api` real, que el número nunca se filtra y que el cambio en piezas compartidas no rompe nada.
+
+### Requisito bajo prueba
+
+RF-1 a RF-9, RF-12 y RF-13 en pantalla; D-1 a D-4, con la desviación de D-4 aceptada por el usuario (motivo con 8 o más dígitos vaciado); H-10. Fuera: CA-16, CA-17 y RF-14 (PR 3), y CA-9 y CA-11, salvo lo que se ve en pantalla (ya aprobados en la API).
+
+### Criterios de aceptación
+
+| CA | Casos |
+| --- | --- |
+| CA-1 | QA2-30 a QA2-33, QA2-60 |
+| CA-2 | QA2-34, QA2-35 |
+| CA-3, CA-4 | QA2-01, QA2-02, QA2-21 |
+| CA-5, CA-6 | QA2-03, QA2-04, QA2-20 a QA2-23 |
+| CA-7 | QA2-05, QA2-06 |
+| CA-8, CA-10 | QA2-10 a QA2-15 |
+| CA-9 (solo en pantalla) | QA2-11 |
+| CA-12, CA-14, CA-20 | QA2-07 a QA2-09 |
+| CA-13 | QA2-08 |
+| CA-15 | QA2-24 a QA2-27 |
+| CA-18, CA-19 | QA2-40 a QA2-47 |
+| CA-21 | QA2-60 a QA2-68 |
+| CA-22 | QA2-90 a QA2-92 |
+
+### Riesgos identificados
+
+Por orden de impacto. Las hipótesis salen de leer el código y aún no son defectos: se confirman o se descartan en Q2.
+
+- **R-1. Doble frente a `api` real.** La lista de topes nunca se vio contra la `api` real con tráfico al webhook. El doble puede aceptar formas que la `api` no devuelve.
+- **R-2. Hipótesis: `keptReason` diverge de core.** Core normaliza espacios y rechaza controles antes de mirar dígitos; `keptReason` no. Un motivo como `5512<U+0001>3456` da 422 en core y `keptReason` lo vuelve a pintar. Si el carácter separa un teléfono completo, RF-9 queda rozado.
+- **R-3. Hipótesis: error invisible en topes.** Si el 422 llega con un token que ya no está en la lista, `reachedRows` no pinta el error: 422 sin explicación.
+- **R-4. Hipótesis: orden frente a CA-1.** `readClosedForm` corre antes de `adminSession`: un editor con un campo desconocido o un cuerpo grande recibe 400 o 413, no el 403 de "con o sin cuerpo". Sin datos ni escritura, pero distinto del texto de CA-1. Se compara con Usuarios.
+- **R-5. Fuga por caminos de error.** Formulario suelto con `_csrf` reflejado (escapado), 400, 413, sesión caída, y `failureReason` en logs.
+- **R-6. Aviso engañoso (RF-12).** `api` caída, 5xx, `network`, `invalid_response`, `timeout`, 404 `NOT_FOUND`, 429 y otros 400: ninguno puede afirmar que no se guardó. Los desvíos 5 y 6 (404 común, formulario suelto tras un rechazo) se juzgan aquí.
+- **R-7. Regresión compartida.** `common.ts` y `users.ts`, `sanitizeNext` y `notice.html`.
+- **R-8. Medida a 375 px desfasada.** La captura previa es anterior a `break-words`.
+- **R-9. Lista grande.** 200 topes y muchos bloqueos: peso del HTML, ids duplicados y tiempo de la página.
+- **R-10. Salidas reales.** Una pasada con `.env` podría enviar WhatsApp de verdad o tocar la base de desarrollo. Se excluye por diseño (ver "Pruebas en navegador").
+- **R-11. Duración.** En el PR 1 el CI casi duplicó lo local, y cada sonda con procesos reales arranca al menos `api` e `inventory-manager`.
+
+### Pruebas funcionales
+
+Contra `api` e `inventory-manager` reales, MySQL de pruebas y webhook firmado, con la salida al proveedor doblada (`salida-bot-doble.ts`).
+
+- **QA2-01.** Pausar con motivo desde la pantalla: el siguiente mensaje firmado se descarta sin esperar 10 s (refresco en 300 s), con `bot_audit` `bot_paused`, autor y motivo. Reanudar: vuelve a atender y `bot_resumed`.
+- **QA2-02.** Motivo con 8 dígitos: 422, estado sin cambios, sin motivo pintado.
+- **QA2-03.** Alta de 7 días: 303 con `ok=blocked&n=<4>`, lista enmascarada, bot lo ignora, `block_added`.
+- **QA2-04.** Alta inválida (422), del personal (422) y repetida (409): nada escrito; error junto al campo con `aria-invalid` y `aria-describedby`.
+- **QA2-05.** Quitar un bloqueo manual y uno automático: el bot vuelve a atender y `block_removed`.
+- **QA2-06.** Id inexistente: 404 con aviso y lista actual. `:id` no numérico, doble clic y reenvío.
+- **QA2-07.** Los 5 contadores coinciden con la `api` tras tráfico real; sin controles para cambiar topes; estado en texto.
+- **QA2-08.** `api` sin clave: sin formulario, motivo explicado y POST directo con 409 sin guardar. Con clave anterior: aviso con la cuenta; con 0, sin aviso.
+- **QA2-09.** Bot sin configurar: "Desactivado" y se puede pausar. Con proveedor: nombre correcto.
+- **QA2-10.** Un cliente real supera un tope por webhook: aparece enmascarado con tope y hora, también en navegador.
+- **QA2-11.** Un número del personal supera ráfaga y tope por minuto: no aparece.
+- **QA2-12.** Bloquear desde la lista: 303, sale de la lista con todos sus topes, entra en la lista negra y `block_added`.
+- **QA2-13.** Reenvío del token usado: 404, aviso y lista actual.
+- **QA2-14.** Número ya bloqueado que sigue en la lista: 409 sin duplicar.
+- **QA2-15.** Token inexistente o manipulado (`..%2f`, 300 caracteres): 404, sin alcanzar otra ruta de la `api`; `encodeURIComponent` en ambos saltos.
+
+### Pruebas negativas y casos límite
+
+**D-4 y `keptReason`**
+
+- **QA2-20.** Teléfono vacío en cada salida del alta: 422, 409 ya bloqueado, 409 sin clave, 503, 5xx, `network`, `invalid_response`, `timeout`, 400, 413, sesión no comprobable y 422 con relectura fallida. Búsqueda del número en el cuerpo: 0.
+- **QA2-21.** Matriz de motivo contra la `api` real y la regla de core, en alta, tope e interruptor: 7 dígitos, 8, 8 con espacios, guiones, puntos, `+` y paréntesis, dígitos en los bordes, separadores no incluidos (`/`, `_`), NBSP y control entre dígitos (R-2), 200 y 201 caracteres, solo espacios, emoji y NFD. Cada fila anota core (acepta o rechaza), `keptReason` (conserva o vacía) y si divergen.
+- **QA2-22.** Motivo normal conservado y duración conservada; duración fuera de lista vuelve a `7d`.
+- **QA2-23.** Motivo con 8 o más dígitos vaciado también con la `api` caída.
+
+**RF-9, CA-15**
+
+- **QA2-24.** Número conocido en alta correcta y fallida: 0 coincidencias (completo, sin prefijo y con separadores) en stdout y stderr de ambos procesos, HTML, cabeceras `Location`, respuestas de la API, `bot_block` y `bot_audit`, indicando bytes revisados.
+- **QA2-25.** Las respuestas y el HTML no tienen `phoneHash` ni `keyId`.
+- **QA2-26.** En navegador: ni URL ni historial llevan el número; `n=` solo acepta 4 dígitos.
+- **QA2-27.** `?ok=` y `?n=` manipulados (`__proto__`, repetidos, HTML): sin efecto ni reflejo.
+
+**Escapado**
+
+- **QA2-28.** Motivo, nombre del autor y `_csrf` del formulario suelto con `<script>`, comillas y `{{ }}`: siempre escapados.
+
+### Pruebas de acceso
+
+- **QA2-30.** Editor: `GET /bot` 403 sin datos y sin enlace "Bot" en la cabecera; administrador con enlace.
+- **QA2-31.** Editor en los 4 POST, con cuerpo válido y sin cuerpo: 403, tablas sin cambios.
+- **QA2-32.** Editor con campo desconocido y cuerpo sobre 4 KB (R-4): se registra el status y se compara con `/usuarios`.
+- **QA2-33.** Anónimo: `GET` a `/acceso?next=%2Fbot`; `POST` con `expirada=1`. Sesión inválida en la `api`.
+- **QA2-34.** CSRF ausente o falso en los 4 POST: 403, tablas sin cambios.
+- **QA2-35.** `Origin` ajeno, `Sec-Fetch-Site: cross-site` y lista cerrada de campos (campo de más: 400 sin escribir).
+
+### Pruebas de fallos (RF-12, H-10)
+
+Contra `inventory-manager` real y una `api` falsa de `node:http` que da cada respuesta por petición.
+
+- **QA2-40.** `GET /bot` con conexión rechazada, 503, 500, `NOT_FOUND` e `invalid_response`: 503 con aviso, sin detalles internos.
+- **QA2-41.** Los 4 POST con 503, 500, 502, `network` e `invalid_response`: 503, "No pudimos confirmar el cambio", enlace a `/bot`, y ningún texto de "no se guardó".
+- **QA2-42.** Los 4 POST con 404 `NOT_FOUND` (`api` anterior): tratados como sin confirmar, no como "no encontrado". 404 con `code` del bot: aviso y lista.
+- **QA2-43.** Timeout real de 5 s en el alta: teléfono vacío y aviso de sin confirmar.
+- **QA2-44.** 429, 400 y 409 con un `code` inesperado: aviso sin confirmar y sin afirmar el resultado.
+- **QA2-45.** `api` caída con la sesión sin comprobar: formulario suelto, `_csrf` recibido y sin cabecera con datos. Al volver la `api`, enviar desde ese formulario funciona.
+- **QA2-46.** Desvío 6: 422 con relectura fallida. Se decide si el aviso induce a error sobre un rechazo seguro.
+- **QA2-47.** `storeHealthy` falso, con la base de `api` cortada de verdad (`db-cut-proxy`): aviso de última copia conocida.
+- **QA2-48.** R-3: 422 en `/topes` con un token que ya no está en la lista.
+- **QA2-49.** Desvío 5: `:id` no numérico. Se decide si la página 404 común es aceptable frente a CA-7.
+
+### Pruebas responsive
+
+Viewports 375×812, 768×1024 y 1440×900.
+
+- **QA2-50.** `scrollWidth <= clientWidth` medido, con motivo de 200 caracteres sin espacios, varios topes y bloqueos y el aviso con el nombre largo de la variable (arreglo de `break-words`).
+- **QA2-51.** Lo mismo a 375 px sin JavaScript.
+- **QA2-52.** Áreas táctiles de al menos 44 px, textos sin cortar y tarjetas legibles. Capturas nuevas.
+- **QA2-53.** Avisos de otras pantallas tras `break-words` a 375 px: Usuarios y productos.
+
+### Pruebas de accesibilidad
+
+- **QA2-60.** Un `h1`, `h2` por sección, `nav`, `main`, sin `<table>`; enlace "Bot" con `aria-current` como sus vecinos.
+- **QA2-61.** Teclado: todas las acciones solo con Tab, Enter y Espacio, con foco visible y orden visual.
+- **QA2-62.** Sin ids duplicados y cada control con etiqueta única por fila.
+- **QA2-63.** Avisos con `role="status"` y `role="alert"` y estado no dependiente del color.
+- **QA2-64.** Contraste medido en el texto y estados de la pantalla.
+- **QA2-65.** JavaScript desactivado en el navegador: pausa, reanudar, alta, baja y bloquear desde la lista.
+- **QA2-66.** Con JavaScript: `data-submit-guard` funciona y CSP sin errores en consola.
+- **QA2-67.** Doble envío sin JavaScript y botón atrás: 409 o 404, sin duplicar.
+- **QA2-68.** Dos administradores a la vez: la última pausa prevalece y un alta doble da 409.
+
+### Pruebas UX/UI
+
+No hay diseño en `_stich_source_/` (P-4 de REQ-F-039): se compara con el patrón de Usuarios en tipografía, tarjetas, botones y avisos. Se evalúa la conformidad, no el gusto.
+
+### Pruebas de performance
+
+- **QA2-70.** Página con 200 topes y 50 bloqueos: peso del HTML y tiempo de respuesta, sin JavaScript nuevo. Solo se reporta como defecto con una medida que afecte al uso.
+- **QA2-71.** Requests de la pantalla: sin recursos nuevos ni errores en consola.
+
+### Pruebas de regresión
+
+- **QA2-80.** Usuarios tras mover `readClosedForm`, `adminSession`, `forbidden` y `fieldErrors`: textos, status y orden iguales a la base (`users.test.ts` y comparación de 403, 400 y 422 entre `1c801cf` y el PR).
+- **QA2-81.** `sanitizeNext`: `/bot` vale; `/bot/`, `/bot?x`, `//evil`, `/bot/bloqueos`, `https://evil`, `/\evil`, `%2F%2Fevil` y salto de línea vuelven a `/`. Por `POST /acceso` real.
+- **QA2-82.** `/usuarios/productos` y `/bot/productos`: las rutas nuevas no pisan `/:business/productos`.
+- **QA2-83.** Las rutas de `landing-pages` y `/admin/bot` no cambian: sin archivos tocados y sus pruebas en verde.
+- **QA2-84.** `bot-*.html` solo usan clases compiladas por `build:css`.
+- **QA2-85.** Las sondas del PR 1 siguen siendo 33 pruebas: títulos de `9f88402` frente a los archivos partidos, y `vitest list` del conjunto, sin casos perdidos.
+
+### Pruebas automatizadas
+
+**Existentes (desde `restaurante/`)**
+
+- **QA2-90.** `npm run typecheck`, `npm run lint` y `npm run build:css`, con salida 0.
+- **QA2-91.** `npm test` en los 3 workspaces, sin y con sondas. El único fallo esperado admitido es el `it.fails` de `local-server.test.ts:88`.
+- **QA2-92.** `inventory-manager` sin imports de `core` ni `db`, y sin archivos ajenos en el diff.
+- **QA2-93.** Duración por archivo con los workers por defecto, en la suite completa: `bot-access`, `bot-actions`, `bot-failures` y cada sonda.
+
+**Sondas nuevas**
+
+Las reglas impiden que `inventory-manager` importe `core` o `db`, y este agente solo escribe en `restaurante/landing-pages/tests/`. Por eso las sondas van allí y son de caja negra: arrancan `api/src/server.ts` e `inventory-manager/src/server.ts` como procesos con `startServer`, sin importar código de otra app (la regla "una app nunca importa otra app" sigue intacta). Se reutilizan `start` (`admin-bot-qa-req-f-043-proceso.ts`), `client` y `loginAs`. Sin `retry`, sin subir tiempos de espera y sin esperas fijas. MySQL real con `setupAdmin` y `makeDatabase`. `inventory-manager/tests/` no se toca.
+
+| Sonda | Archivo (`landing-pages/tests/integration/`) | Pila | Casos |
+| --- | --- | --- | --- |
+| S-1 | `bot-pantalla-qa-req-f-043-flujo.test.ts` | Real | QA2-01 a QA2-09 |
+| S-2 | `bot-pantalla-qa-req-f-043-topes.test.ts` | Real, topes bajos | QA2-10 a QA2-15, QA2-48 |
+| S-3 | `bot-pantalla-qa-req-f-043-acceso.test.ts` | Real | QA2-30 a QA2-35, QA2-80 a QA2-82 |
+| S-4 | `bot-pantalla-qa-req-f-043-privacidad.test.ts` | Real | QA2-24, QA2-25, QA2-27, QA2-28 |
+| S-5 | `bot-pantalla-qa-req-f-043-motivo.test.ts` | Real | QA2-21, QA2-22 |
+| S-6 | `bot-pantalla-qa-req-f-043-fallos.test.ts` | `inventory-manager` y `api` falsa | QA2-20, QA2-23, QA2-40 a QA2-42, QA2-44 a QA2-46, QA2-49 |
+| S-7 | `bot-pantalla-qa-req-f-043-lentitud.test.ts` | `inventory-manager` y `api` falsa | QA2-43 (5 s reales del `API_TIMEOUT_MS` fijo de `server.ts`) |
+| S-8 | `bot-pantalla-qa-req-f-043-base.test.ts` | Real, con `db-cut-proxy` | QA2-47 |
+
+Preparación común en `landing-pages/tests/support/bot-pantalla-qa-req-f-043.ts`, incluida la `api` falsa, solo en `127.0.0.1`. Esta usa `node:http` y `@restaurante/contracts` para los tipos, que no tienen base de datos.
+
+**Duración.** Cada sonda usa una sola pila por archivo (`beforeAll`), con pocas pruebas. El objetivo es menos de 10 s en local con los workers por defecto. Si un archivo pasa de ahí, se parte por `describe` antes de ejecutar la batería definitiva.
+
+**Mutaciones**
+
+Solo en una copia temporal del scratchpad, nunca en el repositorio:
+
+- **M-1.** Ignorar `code` en 404 y 409: afirma 2 fallos.
+- **M-2.** Afirmar "no se guardó": afirma 15.
+- **M-3.** Conservar un motivo con teléfono: afirma 4.
+- **M-4.** Tratar un 404 ajeno como "no encontrado": afirma 3.
+
+Debe fallar al menos una prueba en cada mutación. Una diferencia en el número se anota, pero no es defecto.
+
+### Pruebas en navegador
+
+Pasada con Claude in Chrome en `http://127.0.0.1`, en pestaña nueva, con los casos QA2-10, QA2-12, QA2-26 y QA2-50 a QA2-67.
+
+- **Arranque.** El plan técnico pide `npm run dev`. Se usan los mismos puntos de entrada (`scripts/dev-server.ts` de `api` e `inventory-manager`, con `NODE_ENV=development`), pero con variables explícitas: base `restaurante_test*` desechable, credenciales falsas de `BOT_ENV` y salida doblada con `salida-bot-doble.ts`. Las variables del proceso prevalecen sobre `.env`. No se usa la base de desarrollo ni credenciales reales de WhatsApp, y nunca se envía un mensaje real.
+- **Datos.** Usuarios y tráfico del webhook firmado con un script temporal, que se borra al terminar. Topes bajos (`BOT_LIMIT_BURST`).
+- **375 px.** `resize_window`, comprobando `innerWidth`. Chrome suele limitar el ancho de ventana: si no llega a 375, se mide con Chrome headless por el protocolo de DevTools con un script en el scratchpad, sin dependencias nuevas, y se deja constancia.
+- **Sin JavaScript.** La extensión no puede desactivarlo por pestaña: se usa un perfil o headless con `Emulation.setScriptExecutionDisabled`, y se indica cuál se usó.
+- **Extensión sin respuesta tras 2 o 3 intentos.** CA-21 se valida en headless real con evidencia de medidas y capturas. Lo que solo se pueda ver a mano queda como revisión manual; si un CA depende de ello, se devuelve `NEEDS_USER_DECISION`.
+
+No se pulsa nada que abra diálogos. Procesos, pestañas y bases se cierran al terminar.
+
+### Evidencia requerida
+
+- Salida resumida y código de salida de QA2-90 a QA2-93.
+- Por sonda: casos, resultado y respuesta, filas o logs en cada fallo.
+- Tabla de la matriz QA2-21 y de la matriz de fallos QA2-20, QA2-41 y QA2-42.
+- Búsqueda del número con 0 coincidencias y bytes revisados.
+- Capturas nuevas a 375 px y escritorio, y `scrollWidth` y `clientWidth` por viewport.
+- Tabla de duraciones y resultados de M-1 a M-4.
+- `git status` antes y después, sin cambios fuera del ticket y de las sondas.
+
+### Criterios de aprobación
+
+- La parte de pantalla de CA-1 a CA-8, CA-10, CA-12 a CA-15, CA-18 a CA-20 y CA-21 completo en PASS, con evidencia independiente del doble del implementador.
+- "Alcanzaron un tope hoy" comprobado contra la `api` real con tráfico firmado.
+- `typecheck`, `lint` y `npm test` en verde, con el fallo esperado explicado.
+- Ninguna fuga del número (CA-15) y ningún aviso que afirme que no se guardó.
+- Sin defectos `BLOCKER` ni `CRITICAL`; los `MAJOR` solo con decisión del usuario.
+- Ninguna sonda ni archivo del PR pasa de ~10 s en local.
+- Las hipótesis R-2, R-3 y R-4 y los desvíos 5 y 6 quedan decididos con evidencia. Si el requisito no permite decidir, se devuelve `NEEDS_USER_DECISION`.
+
+No se hace despliegue, commit ni push, y no se usan bases de desarrollo ni de producción.
+
+## QA Report (PR 2 de 3)
+
+### Ronda
+
+Ronda 1, PR 2 de 3 (pantalla "Bot"), sobre el working tree sin commit (base `1c801cf`). Aprobación del plan, cita textual: "Si", en respuesta a "¿Apruebas el plan de QA del PR 2 con esos puntos?". NotebookLM no tiene herramientas disponibles en la sesión: no se consultó.
+
+### Pruebas ejecutadas
+
+| Comando o acción | Resultado real |
+| --- | --- |
+| `npm run build:css`, `typecheck`, `lint` (con sondas) | 0, 0 y 0, sin avisos |
+| `npm test`, sin sondas | 0. `api` 40 archivos, 1049; `landing-pages` 139 archivos, 1489 y 1 fallo esperado (1490); `inventory-manager` 11 archivos, 182 |
+| `npm test`, con sondas | 0. `api` 1049; `landing-pages` 149 archivos, 1550 y 1 fallo esperado (1551); `inventory-manager` 182 |
+| Sondas en `landing-pages/tests/integration/bot-pantalla-qa-req-f-043-*` | 10 archivos, 61 pruebas, 4 repeticiones sin fallos |
+| Pila con `scripts/dev-server.ts` de `api` e `inventory-manager` | `restaurante_test*`, `BOT_ENV` falso, sin `.env`. 9 envíos, todos al doble de salida; ninguno salió de la máquina |
+| Claude in Chrome a 1280 px | Lista de topes real, bloqueo por teclado, sin errores en consola. No baja de 1280 px (`innerWidth` sigue en 1280 tras pedir 375) |
+| Chrome headless por DevTools, sin dependencias | 375, 768 y 1440 px, con y sin JavaScript |
+
+El "1 fallo esperado" sigue siendo el `it.fails` de `local-server.test.ts:88`. La partición de las sondas del PR 1 conserva sus 33 pruebas, en 9 archivos.
+
+**Mutaciones**, en copia temporal, ya borrada. La copia no incluye los iconos de `landing-pages`, de modo que una prueba de favicon falla sin mutar: no se cuenta.
+
+| Mutación | Afirmado | Medido |
+| --- | --- | --- |
+| M-1, ignorar `code` | 2 | 2 |
+| M-2, afirmar "no se guardó" | 15 | 15 |
+| M-3, conservar motivo con teléfono | 4 | 4 |
+| M-4, 404 ajeno como "no encontrado" | 3 | 2 |
+
+Las 4 se detectan. En M-4 la diferencia puede venir de cómo se escribió la mutación; no es defecto.
+
+**Duración** (máximo de 3 repeticiones con los workers por defecto, incluida la migración de cada trabajador):
+
+| Archivo | Pruebas | Máximo |
+| --- | --- | --- |
+| `bot-access`, `bot-actions`, `bot-failures` | 12, 26, 25 | 0,4 s, 1,0 s, 1,5 s |
+| `-acceso` | 1 | 7,8 s |
+| `-fallos` | 52 | 2,9 s |
+| `-flujo` | 1 | 7,4 s |
+| `-lentitud` | 1 | 9,2 s (5 s son el `API_TIMEOUT_MS` fijo) |
+| `-motivo` | 1 | 8,0 s |
+| `-navegacion` | 1 | 6,5 s |
+| `-privacidad` | 1 | 8,0 s |
+| `-sinbot` | 1 | 7,3 s |
+| `-topes` | 1 | 7,0 s |
+| `-topes-bloqueado` | 1 | 1,5 s |
+
+`-acceso` y `-topes` se partieron antes de aprobar, sin perder casos. **Cambio frente al plan:** S-8 (`-base`) no se queda en el repositorio. Tardaba de 10 a 12,5 s en paralelo, es una sola prueba y no se puede partir, y al doble en el CI superaría los 20 s. Se ejecutó con éxito en cada ronda; copia en `bot-pantalla-qa-req-f-043-base.test.ts.bak`, en el scratchpad. El corte de base ya lo cubre `api-process.test.ts`.
+
+### Criterios de aceptación
+
+| CA | Resultado | Evidencia |
+| --- | --- | --- |
+| CA-1 | PASS | Editor: 403 sin datos y sin enlace, con cuerpo válido y vacío. Ver R-4 |
+| CA-2 | PASS | CSRF ausente o falso en los 4 POST: 403, tablas sin cambios |
+| CA-3 | PASS | Pausa desde la pantalla con refresco de 300 s: `bot_paused_dropped`, 0 envíos, `bot_audit` |
+| CA-4 | PASS | 422, sin cambiar el estado y sin repintar el motivo |
+| CA-5, CA-6 | PASS | Alta real, bot lo ignora; 409, 422 y 422 sin escribir, teléfono vacío, duración y motivo conservados |
+| CA-7 | PASS | Baja: vuelve a atender, `block_removed`; repetida, 404 con lista |
+| CA-8, CA-10 | PASS | Webhook firmado real: fila, bloqueo, salida de la lista; token usado, inexistente y manipulado 404; ya bloqueado 409 sin duplicar |
+| CA-9 (pantalla) | PASS | El personal supera la ráfaga y no aparece, también en navegador |
+| CA-12 | PASS | Contadores iguales a la `api`, sin controles de topes |
+| CA-13 | PASS | Sin clave: sin formulario, explicado y 409 sin guardar |
+| CA-14 | PASS | Con 3 bloqueos, aviso; con 0, sin aviso |
+| CA-15 | PASS | 0 coincidencias del número en 183 KB de respuestas, logs de ambos procesos, tablas y API. En la pila de navegador, 0 en 45 KB de logs |
+| CA-18 | PASS | 8 fallos en lectura y en los 4 POST: 503 y ningún "no se guardó" |
+| CA-19 | PASS | `storeHealthy` falso: aviso. Con la base cortada del todo la sesión da 503 antes de llegar a él (QA2-47) |
+| CA-20 | PASS | "Desactivado", y pausa con `bot_paused` |
+| CA-21 | PASS | `scrollWidth` igual a `clientWidth` en los 3 viewports, con y sin JavaScript. Sin JavaScript y solo teclado a 375 px: pausar, reanudar, alta, quitar, bloquear desde la lista e inválido |
+| CA-22 | PASS | `typecheck`, `lint`, `npm test`; `inventory-manager` sin `core` ni `db` |
+| CA-16, CA-17 | Fuera | PR 3 |
+
+### Hipótesis del plan y desvíos
+
+- **R-2, `keptReason` frente a core: confirmada.** Es DEF-004. Bordes y separadores (`-`, `.`, `+`, paréntesis, espacios, NBSP, `/`, `_`, `,`) coinciden; solo diverge un control entre dígitos.
+- **R-3, error invisible en topes: descartada.** Con la fila ya fuera de la lista, el error también se ve.
+- **R-4, orden frente a CA-1: confirmada y aceptable.** Editor: 400, 413 y 415 con un campo desconocido, un cuerpo grande u otro tipo, antes del rol; `/usuarios` da exactamente lo mismo. Sin datos ni escritura. RF-1 fija ese orden "en la API", y ahí el rol va primero (PR 1).
+- **Desvío 5 (404 común con `:id` no numérico): aceptable.** Solo con una URL manipulada, 404 con enlace a `/bot`, sin llamar a la API. CA-7 pide 404.
+- **Desvío 6 (formulario suelto tras 422 con relectura caída): aceptable.** Pierde el error del campo, pero no afirma nada, conserva duración y motivo, y el teléfono vuelve vacío. Solo ocurre con la API cayendo entre dos peticiones.
+- **D-4 y su desviación aceptada:** teléfono vacío en todas las salidas; motivo con 8 o más dígitos vaciado, también con la API caída; motivo normal conservado.
+- **Pasada de `npm run dev`:** se usaron sus puntos de entrada con `NODE_ENV=development`, no el comando con `.env`, tal como se aprobó.
+
+### Defectos encontrados
+
+Ninguno `BLOCKER`, `CRITICAL`, `MAJOR` ni `MINOR`. DEF-001 a DEF-003 siguen abiertos por decisión del usuario.
+
+### DEF-004
+
+- Severidad: TRIVIAL
+- Criterio de aceptación afectado: ninguno. Roza RF-9 y la desviación aceptada de D-4
+- Descripción: `keptReason` no vacía un motivo con dígitos separados por un carácter de control, que core rechaza antes de mirar los dígitos.
+- Pasos para reproducir: `POST /bot/bloqueos` con `telefono=abc` y `motivo=55\u000198\u000176\u00015432`.
+- Resultado esperado: motivo vacío, porque podría ser un teléfono.
+- Resultado actual: 422, y el motivo vuelve al formulario.
+- Evidencia: `-motivo.test.ts`, filas "control entre dígitos", "teléfono partido con control" y "NEL entre dígitos".
+- Impacto: exige insertar caracteres de control a mano. Solo lo ve quien lo envió; core lo rechaza, así que no se guarda ni se registra.
+- Recomendación: aplicar a `keptReason` la misma normalización de core, o dejarlo. No bloquea este PR.
+
+### Regresión
+
+- `users.ts`: el diff solo mueve funciones a `common.ts`, con el mismo texto y orden; `users.test.ts` no cambia y pasa. Errores 400, 413 y 415 iguales entre Bot y Usuarios.
+- `sanitizeNext`: `/bot` vale; `/bot/`, `/bot?x=1`, `//evil.example`, `/bot/bloqueos`, `https://…`, `/\evil`, codificado, con salto de línea y `/BOT` vuelven a `/`.
+- Rutas: `/usuarios/productos` y `/bot/productos`, 404; `GET` de rutas POST, 405.
+- `notice.html`: sin desplazamiento en Usuarios, productos y cuenta a 375, 768 y 1440 px.
+- `landing-pages/src`, `api` y `packages` sin cambios.
+
+### Responsive
+
+A 375, 768 y 1440 px, sin desplazamiento horizontal ni elementos fuera de la pantalla, con y sin JavaScript. Con datos extremos (motivos de 200 caracteres sin espacios, autor de 120, 200 topes, 50 bloqueos y 2 avisos), tampoco. Capturas `bot-375.png`, `bot-375-nojs.png` y `bot-375-extremo.png` en el scratchpad.
+
+### Accesibilidad
+
+Un `h1`, 5 `h2`, un `main`, sin `<table>`, `aria-current="page"` en "Bot", ids sin duplicar, 8 etiquetas únicas y todos los campos etiquetados. Contraste medido en `main`: 0 elementos por debajo de 4,5:1 o 3:1. Foco visible en cada parada, en orden visual. Los campos miden 42 px, como en el resto del admin: observación, sin criterio que lo exija.
+
+### UX/UI
+
+Sin diseño en `_stich_source_/`. Coincide con el patrón de Usuarios en tarjetas, tipografía, botones y avisos.
+
+### Performance
+
+Con 200 topes y 50 bloqueos: 587 KB de HTML y de 10 a 31 ms contra la API falsa. Sin JavaScript nuevo ni errores en consola. Sin defecto.
+
+### SEO
+
+No aplica: pantalla privada de administración.
+
+### Pendientes de revisión manual
+
+**Sin ejecutar o parcial:**
+
+- `npm run dev` literal con `.env`, excluido por el plan.
+- `--watch` de los puntos de entrada: no se usó.
+- 375 px en Chrome con ventana real: medido en headless.
+- Duración en el CI real.
+- Dos administradores: alta doble 409 y 303; pausa doble 303 y 303. Qué motivo queda depende del orden de llegada.
+
+Quedan dos bases vacías, `restaurante_test_4d1754_9_2` y `restaurante_test_8abebf_2_x78284_1`, sin tablas y con el mismo nombre antes y después de varias rondas: no se crearon en las sondas y no se tocaron. Sin procesos ni worktrees temporales.
+
+### Resultado final
+
+QA_APPROVED
+
 ## Historial de cambios
 
 ### Versión 1
@@ -1025,3 +1467,15 @@ Plan aprobado por el usuario (cita textual: "Si", en respuesta a "¿Apruebas el 
 PR #130 hacia `epic/arquitectura`, commit `9f88402` (2026-11-05). El CI quedó en verde, pero `admin-bot-qa-req-f-043-acceso` tardó 31,3 s y `-proceso` 30,3 s, por encima del límite de 20 s por archivo. Se parten por `describe`, sin cambiar los casos, en `-acceso`, `-validacion`, `-estado`, `-proceso`, `-proceso-reinicio` y `-convivencia`, con la preparación en `tests/support/`. Siguen las 33 pruebas de las sondas. Sin cambios en código de producción.
 
 Tras la partición, el CI del commit `7a9d565` queda en verde (ejecución 41999823830): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion`. Duraciones en el CI: `-acceso` 8,2 s, `-validacion` 7,8 s, `-estado` 7,7 s, `-proceso` 8,8 s, `-proceso-reinicio` 8,0 s y `-convivencia` 9,3 s. El archivo más largo de toda la suite tarda 17,0 s. Estado: `READY_FOR_MERGE`.
+
+### Implementación del PR 2
+
+Pantalla "Bot" en `inventory-manager`, rama `feature/REQ-F-043-control-bot-admin-nuevo-2-pantalla`, sin commit (2026-11-05). `typecheck`, `lint` y `npm test` en verde; pasada en Chrome headless a 375 y 1280 px y sin JavaScript, también contra la `api` real. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA (Q1, PR 2)
+
+QA Action Plan del PR 2 de 3 escrito sobre el working tree sin commit (2026-11-05): casos QA2-01 a QA2-93, sondas S-1 a S-8 en `landing-pages/tests/` y mutaciones M-1 a M-4. Sin pruebas ejecutadas. Estado: `NEEDS_QA_PLAN_APPROVAL`.
+
+### QA (Q2, PR 2, ronda 1)
+
+QA del PR 2 de 3 ejecutado (2026-11-05): 10 archivos de sonda con 61 pruebas, mutaciones detectadas y pasada en navegador. Un defecto TRIVIAL nuevo (DEF-004). S-8 no se queda en el repositorio por duración. Estado: `QA_APPROVED`.

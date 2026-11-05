@@ -1,0 +1,22 @@
+<h1 class="font-headline text-3xl font-black tracking-tight uppercase">Bot</h1>
+      {{{ notices }}}
+      <section class="bot-panel mt-6 rounded-2xl border border-rim bg-surface p-4 md:p-6" aria-labelledby="bot-status-title">
+        <h2 id="bot-status-title" class="font-headline text-lg font-bold">Estado</h2>
+        <dl class="bot-panel__details mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 text-masa">{{{ status }}}
+        </dl>{{{ switchForm }}}
+      </section>
+      <section class="bot-panel mt-6" aria-labelledby="bot-usage-title">
+        <h2 id="bot-usage-title" class="font-headline text-lg font-bold">Uso</h2>
+        <p class="mt-1 text-sm text-masa">Día {{ day }}, mes {{ month }}, zona horaria {{ timeZone }}. Los topes se cambian en la configuración del servidor.</p>
+        <ul class="bot-usage mt-3 grid gap-3 sm:grid-cols-2">{{{ usage }}}
+        </ul>
+      </section>
+      <section class="bot-panel mt-6" aria-labelledby="bot-reached-title">
+        <h2 id="bot-reached-title" class="font-headline text-lg font-bold">Alcanzaron un tope hoy</h2>{{{ reached }}}
+      </section>
+      <section class="bot-panel mt-6" aria-labelledby="bot-blocks-title">
+        <h2 id="bot-blocks-title" class="font-headline text-lg font-bold">Lista negra</h2>{{{ blocks }}}
+      </section>
+      <section class="bot-panel mt-6 rounded-2xl border border-rim bg-surface p-4 md:p-6" aria-labelledby="bot-add-title">
+        <h2 id="bot-add-title" class="font-headline text-lg font-bold">Bloquear un número</h2>{{{ add }}}
+      </section>

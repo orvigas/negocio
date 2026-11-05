@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE (PR 2 de 3). PR 1 mergeado en `epic/arquitectura` (#121). PR 2 en #124, desde `feature/REQ-F-042-bot-whatsapp-en-api-2-bot`, con el CI en verde; el merge lo hace el usuario. Falta el PR 3.
+QA_APPROVED (PR 3 de 3, ronda 2), condicionado al CI verde en el PR y a las comprobaciones de producción. PR 1 (#121) y PR 2 (#124) mergeados en `epic/arquitectura`, con `main` integrado (#125). El PR 3 está en `feature/REQ-F-042-bot-whatsapp-en-api-3-deploy`, sin commit. DEF-001 a DEF-006 corregidos y verificados.
 
 ## Aprobación
 
@@ -543,6 +543,145 @@ Validaciones:
 - Duración: el mayor de `landing-pages`, 15,6 s; el de `api`, 4,7 s.
 - No ejecutado: CI ni construcción de imágenes Docker.
 
+### PR 3 de 3: despliegue y documentación
+
+#### Rama
+
+`feature/REQ-F-042-bot-whatsapp-en-api-3-deploy`, desde `epic/arquitectura` (`5c6c8bd`). Sin commit todavía.
+
+#### Cambios realizados
+
+- **Imagen `api`:** `LABEL org.restaurante.webhook="whatsapp"` y `EXPOSE 3001 3004`. Comentario del simulador actualizado.
+- **`compose.prod.yaml`:**
+  - router `restaurante-webhook`: `Host(<dominio>) && Path(`/webhooks/whatsapp`)`, prioridad 200, certresolver y HTTPS como los demás, servicio en el 3004 y `traefik.enable=${RESTAURANTE_API_WEBHOOK:-false}`;
+  - `api` entra en `traefik-public` y recibe `WEBHOOK_PORT=3004`;
+  - las variables del bot salen de un solo bloque (`x-bot-env`) que comparten `app` y `api` (RN-5). `app` las conserva todas (P-2).
+- **`deploy.sh`:**
+  - `compose()` calcula `RESTAURANTE_API_WEBHOOK` con la etiqueta de la imagen de `api` de cada llamada;
+  - `probe_webhook`: con una `api` con etiqueta, comprueba por Traefik que el webhook le llega antes de cambiar la app; si no, vuelve a la `api` anterior y termina con 15;
+  - en la vuelta atrás automática, la `api` vuelve la última;
+  - `release.env` registra `RESTAURANTE_API_WEBHOOK`, y el paso 1 descarga también la `api` anterior.
+- **`smoke.sh`:** comprobaciones estáticas del router y de las variables, webhook en la `api`, rutas que no llegan a ella, y cuatro escenarios de RF-13 (api sin etiqueta, vuelta atrás automática, webhook que no responde y vuelta a una api con webhook).
+- **`env.production.example`:** comentarios; sin nombres nuevos.
+- **Documentación de RF-14:** `README.md`, `docs/arquitectura.md` (§1, §4, §6, §8 ticket 3 con la URL conservada, §9 D-3 y §10), `docs/despliegue.md` y `docs/desarrollo.md`.
+
+#### Qué pasa con los mensajes durante el despliegue (D-3, RF-13)
+
+- **Corte:** mientras la `api` nueva arranca, Traefik no publica su router (filtra los contenedores que no están `healthy`) y `/webhooks/whatsapp` sigue en la app anterior, que tiene el bot. Al quedar `healthy`, el router de prioridad 200 toma la ruta. La app, la única que dejaría la ruta sin bot, cambia después de que `probe_webhook` lo haya comprobado.
+- **Lo que garantiza que el webhook no dé 404 de forma permanente:** la app no se cambia sin esa comprobación, y el router sigue a la imagen: con una `api` sin etiqueta no existe, y la ruta vuelve a la app anterior.
+- **Ventanas medidas en local** (imágenes reales de `main` y de esta rama, bot configurado, una petición cada 0,3 s):
+  - corte hacia la versión nueva: 74 peticiones, 0 fallos;
+  - vuelta atrás automática (código 21): 1 respuesta 502, en 73 peticiones;
+  - reinicio de la `api` ya con la app nueva: 11 respuestas 404 en unos 4 s;
+  - volver a la versión anterior desplegándola con `deploy.sh`: 22 respuestas 404 o 502 en unos 8 s, porque la `api` cambia antes que la app.
+- **No es cierto que el webhook nunca responda 404:** en las dos últimas ventanas lo hace durante unos segundos. Meta reintenta lo que no recibe 200, así que no se pierden entregas (RF-13). Los tiempos del VPS pueden ser mayores.
+- Las conversaciones a medias se pierden en cada corte (aceptado, D-3). Una entrega ya respondida con 200 no se reintenta.
+
+#### Desviaciones del plan
+
+- **`probe_webhook` y su salida con el código 15:** el plan no los incluía. Sin ellos, una `api` `healthy` que Traefik no enrutara dejaría el webhook en una app sin bot.
+- **La `api` vuelve la última en la vuelta atrás automática.** El plan conservaba el orden. Con la `api` primero, el sondeo dio 14 fallos en esa vuelta atrás; con este orden, 1.
+- **`RESTAURANTE_API_WEBHOOK` en `release.env`:** para que `$C up -d --no-deps api` a mano conserve el router. `ops/backup/restore.sh` reescribe ese archivo sin esa línea: documentado en `despliegue.md`.
+- **El paso 1 descarga la `api` anterior:** si no estuviera en el host, su etiqueta se leería como ausente.
+- **Bloque `x-bot-env`:** el plan solo pedía que `api` recibiera las variables.
+- **`docs/desarrollo.md`:** no está en RF-14, pero el túnel y el `.env` del bot apuntaban a `landing-pages`, y CA-16 lo exige.
+- **El sondeo de `probe_webhook` usa `OPTIONS`:** no llega al bot y no deja `bot_webhook_verify_failed`. Distingue quién responde por la cabecera CSP, que solo pone la app.
+
+#### Sin cambios, pendiente de autorización del usuario
+
+`.claude/CLAUDE.md` §8 y `.claude/agents/senior-fullstack.md` siguen desfasados: dicen que el bot está en `landing-pages` y citan `src/content/hours.ts`, ya borrado. Son configuración del proyecto y necesitan autorización del usuario. Una edición de `.claude/CLAUDE.md` se llegó a hacer en esta fase y se revirtió con `git checkout`. No forman parte de RF-14, así que no afectan a CA-16.
+
+#### Criterios de aceptación
+
+- **Pendientes de producción (no cumplidos todavía):** CA-1, CA-2 y CA-3. En local, por Traefik y con el bot configurado: verificación con token correcto 200 y reto, token incorrecto 403, `POST` firmado 200, sin firma 401, `bot_provider_selected` solo en `api`, y `/api/v1/admin/sesion`, `/api/v1/public/birria/productos` y las rutas vecinas del webhook no llegan a `api`. Faltan el dominio, el certificado y Meta real. Comprobación: `docs/despliegue.md`, "Comprobaciones del webhook (REQ-F-042)".
+- **CA-4:** en local, sin bot, `api` responde 503 `BOT_DISABLED`; las landings, el `/admin` y el admin nuevo responden (smoke).
+- **CA-14:** cumplido en local con las imágenes reales de `main`: tras la vuelta atrás con `deploy.sh`, y también tras la automática, `GET` de verificación da 200 con el reto y lo responde `app`, y `RESTAURANTE_API_WEBHOOK=false`. Se repite en producción solo si llega a haber una vuelta atrás. En el CI, el smoke solo cubre la imagen sin etiqueta, porque no tiene las imágenes anteriores.
+- **CA-15:** en local, verde. **Pendiente:** el CI del PR.
+- **CA-16:** cumplido para los documentos de RF-14.
+- **Memoria:** medida local hecha (`api` 100,0 MiB). **Pendiente:** medición en el VPS.
+
+#### Validaciones ejecutadas
+
+- `npm run typecheck`: código 0. `npm run lint`: código 0. `npm run build:css`: código 0.
+- Pruebas por workspace, con MySQL local (`npx vitest run`, código 0 en los tres):
+  - `api`: 36 archivos y 984 pruebas;
+  - `landing-pages`: 129 archivos y 1455 pruebas;
+  - `inventory-manager`: 8 archivos y 111 pruebas;
+  - ningún fallo. Se ejecutaron por workspace, no con `npm test`.
+- Duración máxima por archivo en local: `landing-pages` 16,4 s (`db-outage-handshake-autenticacion.test.ts`); `api` 4,8 s. Este PR no cambia pruebas; el límite de 20 s se comprueba en el CI, que no se ha ejecutado.
+- `shellcheck` (imagen `koalaman/shellcheck-alpine:stable`) sobre `deploy.sh`, `01-usuarios.sh`, `smoke.sh`, `resumen.sh` y `resumen-test.sh`: código 0. La última pasada, solo sobre `deploy.sh`, tras su último cambio.
+- `deploy/ci/smoke.sh` en local, con las cuatro imágenes construidas de esta rama: 158 comprobaciones, 0 fallos. Una copia en la carpeta temporal usó el puerto 5050 para el registro, porque AirPlay ocupa el 5000 en macOS.
+  - La primera ejecución dio 3 fallos: las comprobaciones del webhook corrían justo después de reiniciar la `api`, antes de que Traefik volviera a publicar el router. Se movieron antes de esa parada.
+- Comprobación puntual con imágenes de `origin/main` (`352014e`), fuera del repositorio: los resultados de arriba.
+- No ejecutado: CI, despliegue real, Meta real, medición en el VPS.
+
+#### Archivos afectados
+
+- `restaurante/deploy/{compose.prod.yaml,deploy.sh,env.production.example,ci/smoke.sh}`
+- `restaurante/landing-pages/Dockerfile`
+- `restaurante/README.md`, `restaurante/docs/{arquitectura,despliegue,desarrollo}.md`
+- Este ticket
+
+#### Riesgos o pendientes
+
+- **Tras el merge de la épica a `main` (acción del usuario):** reinstalar `deploy/` cuando el job `deploy` falle con el código 4 y comprobar CA-1 a CA-3 y CA-9 en producción; medir la memoria con autorización para el SSH.
+- **Sin mitigar:** los 404 de unos segundos en cada reinicio o despliegue de la `api`, mientras haya una sola réplica.
+- **`curl` de `probe_webhook` contra Traefik real:** se probó con el Traefik v3.7.14 del smoke, no con el del VPS.
+- **Vuelta atrás manual:** exige `RESTAURANTE_API_WEBHOOK=false` y volver primero la app; está documentado, pero depende de quien la ejecute.
+- **`api` en `traefik-public`:** un contenedor vecino alcanza `api:3001` (H-1, aceptado).
+
+#### Correcciones de QA, ronda 1
+
+Decisiones del usuario, cita textual: "1. Si / 2. Corrigelo / 3. si te autorizo / 4. si es". Es decir: corregir también DEF-003, DEF-005 y DEF-006; corregir DEF-004 sin importar lo que haya hoy en el VPS; la consulta de solo lectura del VPS la hizo la sesión principal; y la URL de Meta está confirmada.
+
+- **R-1 sin efecto:** el usuario confirmó en la consola de Meta que la URL es exactamente `https://birriaelmuneco.com/webhooks/whatsapp`.
+- **Consulta del VPS (sesión principal, sin SSH de este agente):** `traefik-public` solo tiene `restaurante-app-1` y `restaurante-inventory-manager-1`. Traefik es `traefik:latest`, versión 3.7.14, en `network_mode: host`, igual que la del smoke. `docker network inspect` no muestra alias, así que no prueba que no exista un alias `app` o `mysql` de otro proyecto.
+- **DEF-001 (`docs/despliegue.md` §11.7, paso 5):** remite a una sección nueva, "Arrancar la `api` a mano", que calcula `RESTAURANTE_API_WEBHOOK` con la etiqueta de la imagen. §5, §6, §9 y §11.7 usan ese único procedimiento.
+- **DEF-002:**
+  - §9: con otra `api`, ese mismo procedimiento; ya no hereda `true` de `release.env`.
+  - "Problemas frecuentes": entradas del 502, del `AVISO` de `restore.sh` y del código 22 con la app restaurada.
+  - `restore.sh`: **documentación y aviso en el script.** Solo documentación no basta: en plena recuperación, el 0 del script se lee como "todo bien". Al terminar comprueba si la `api` tiene el router y, si no, si la app responde 404 en el webhook; en ese caso la última línea es `AVISO: el bot queda SIN SERVICIO`.
+  - Sigue terminando con 0: los datos sí están restaurados y un código de error invitaría a repetir una operación destructiva que no arreglaría nada. La comprobación corre después de restaurar y no puede estropear la restauración. No arregla la `api` por su cuenta, porque el respaldo no dice qué imagen usar.
+  - Coste: el usuario debe actualizar `restore.sh` en el VPS (paso 11.5). Sin eso todo funciona igual, pero sin aviso.
+- **DEF-003:** en el código 21 se comprueba la `api` anterior (`healthy` y webhook). Si no queda bien, termina con **22** y `health_failed_api_not_restored`, con un mensaje propio que dice que no hace falta restaurar la base. El resumen del CI ya trata el 22 como "producción pudo quedar sin servicio".
+- **DEF-004:** `api` usa `restaurante-mysql-1` y `restaurante-app-1`, con `${COMPOSE_PROJECT_NAME:-restaurante}` para el smoke.
+  - **Por qué nombres de contenedor y no alias propios:** un alias nuevo obligaría a recrear MySQL y la app en el despliegue, con el bot activo; el nombre de contenedor ya existe, es único en el host y sirve desde el primer momento.
+  - **No toca `.env`:** el compose compone las dos URL. Tampoco cambia P-2.
+  - **Vuelta atrás:** son solo cadenas de configuración que cualquier imagen acepta; comprobado con imágenes reales de `main`.
+  - **Dependencia:** el sufijo `-1` es la convención de Compose para una sola réplica, ya documentada en los comandos de `despliegue.md`. El smoke fallaría si cambiara.
+- **DEF-005:** sin `api` anterior, una `api` nueva que falla se detiene, y el webhook vuelve a la app.
+- **DEF-006:** el aviso dice ahora que "seguiría la api nueva". Si la imagen anterior no se puede arrancar, la vuelta atrás lo registra y termina con 21, con la `api` nueva atendiendo.
+
+Hallazgo adicional, corregido en el mismo procedimiento: con `C="sudo docker compose ..."`, un `VAR=valor $C ...` no llega a compose, porque `sudo` borra el entorno (comprobado con `sudo` en un contenedor Alpine; Ubuntu lo hace igual por defecto, no comprobado en el VPS). Los comandos de §5, §6, §9 y §11.7 que pasaban imágenes habrían usado en silencio `release.env`. Ahora usan `sudo env`.
+
+Cambios ya aplicados por la sesión principal, autorizados por el usuario: `.claude/CLAUDE.md` §8 y `.claude/agents/senior-fullstack.md` (líneas 82, 114, 118, 127 y 164). La línea 118 no estaba en la propuesta original y solo se le quitaron las entradas del bot. Sustituye a "Sin cambios, pendiente de autorización del usuario".
+
+Smoke:
+
+- `deploy/ci/smoke.sh`: vecino con alias `app` y `mysql`; sin `api` anterior con webhook mudo (15); `api` anterior que no vuelve (22); el procedimiento manual en los dos sentidos; y una comprobación de que ningún comando de `despliegue.md` recrea la `api` sin `RESTAURANTE_API_WEBHOOK`. Ese archivo ahora se lee de `docs/`: el comando local del `README.md` lo monta.
+- `ops/backup/ci/smoke.sh`: `restore.sh` avisa sin router y no avisa con router.
+
+Validaciones:
+
+- `npm run build:css`, `npm run typecheck`, `npm run lint` y `npm test`: código 0.
+- `npm test`: `api` 36 archivos y 984 pruebas; `landing-pages` 129 archivos y 1455 pruebas (1454 y 1 `expected fail` previo); `inventory-manager` 8 archivos y 111 pruebas.
+- `shellcheck` de los dos pasos del CI: código 0.
+- `deploy/ci/smoke.sh`, imágenes reconstruidas, `REGISTRY_PORT=5050`: 184 comprobaciones, 0 fallos.
+- `ops/backup/ci/smoke.sh`: 58 comprobaciones, 0 fallos, tras dos ejecuciones fallidas: una por un error de esta corrección en el smoke (variable sin definir; un contenedor con etiquetas que `compose ps` no lista) y otra por mi forma de montarlo (`--drill` necesita una ruta visible para el daemon).
+- Comprobación puntual con imágenes de `352014e` y el `deploy/` final, bot sintético:
+  - verificación correcta en A, B, C, D y E, con `app` o `api` según corresponda;
+  - corte: 72 peticiones, 0 fallos;
+  - vuelta atrás automática: 4 respuestas 502, en 85 peticiones (1 en la medición anterior);
+  - reinicio de `api`: 11 respuestas 404;
+  - volver a la versión anterior con `deploy.sh`: 14 respuestas 404 o 502.
+- Memoria en esa ejecución: `api` 103,1 MiB. `arquitectura.md` conserva la medida de 100,0 MiB; las diferencias de esta magnitud no cambian la conclusión.
+- No ejecutado: CI, despliegue real, Meta real, `restore.sh` en el VPS, SSH.
+
+Riesgos de esta ronda:
+
+- `app` a MySQL y `app` e `inventory-manager` a `api` siguen usando nombres de servicio. Ya estaban en `traefik-public` antes de este ticket y quedan fuera de la decisión del usuario, que se refiere a `api`.
+- Con DEF-003, el código 22 significa ahora dos cosas; el mensaje las distingue.
+
 ## QA Action Plan
 
 ### PR 1 de 3: piezas compartidas a `core` (regresión)
@@ -802,6 +941,189 @@ CA-15 queda en local y condicionado al CI verde en el PR, como en el PR 1. CA-14
 #### Aprobación del QA Action Plan
 
 Aprobado por el usuario, con las cinco acciones solicitadas. Cita textual: "si".
+
+### PR 3 de 3: despliegue y documentación
+
+Diseño del plan: `git diff` del working tree de `feature/REQ-F-042-bot-whatsapp-en-api-3-deploy` (base `epic/arquitectura`, `5c6c8bd`), CodeGraph (`createBotWebhookApp`, `createWhatsAppWebhook`, `loadApiConfig`, `parseChatBot`) y lectura dirigida de `compose.prod.yaml`, `deploy.sh`, `smoke.sh`, `restore.sh` y `docs/despliegue.md`. NotebookLM: sin herramientas MCP en esta sesión del agente, no se consultó. No se ejecutó ninguna prueba: las hipótesis de abajo son lecturas del código, no resultados.
+
+#### Objetivo
+
+Comprobar con evidencia propia que el corte del webhook a `api` no expone nada más que esa ruta, que no deja el webhook en un proceso sin bot en ningún camino de `deploy.sh` y que la documentación describe lo que hace el sistema.
+
+#### Requisito bajo prueba
+
+RF-3, RF-4, RF-5, RF-6, RF-13 y RF-14, con D-1, D-3, D-4, P-1 y P-2. Implementación aprobada por el usuario. Citas textuales: "1. si" (a "¿Apruebas la implementación para que pase a senior-qa?") y "2. si" (a "¿Autorizas actualizar .claude/CLAUDE.md §8 y .claude/agents/senior-fullstack.md?").
+
+La autorización del punto 2 deja sin efecto la sección "Sin cambios, pendiente de autorización" del Implementation Result: la sesión principal ya aplicó esos cambios.
+
+#### Criterios de aceptación
+
+| Criterio | Alcance en este PR | Pruebas |
+| --- | --- | --- |
+| CA-1 | Local por Traefik, con dominio de prueba. Producción: pendiente | W-01 |
+| CA-2 | Local por Traefik, con entrega firmada sin mensajes. Producción: pendiente | W-02, W-03 |
+| CA-3 | Local por Traefik. Producción: pendiente | W-04 a W-09, W-12 |
+| CA-4 | Completo, en local | W-10 |
+| CA-14 | Completo, en local, con imágenes de `main` (`352014e`) | V-01 a V-05 |
+| CA-15 | Local con condiciones del CI; el CI real corre con el PR listo | G-01 a G-04 |
+| CA-16 | Completo | K-01 a K-05 |
+| CA-5 a CA-13 | Cerrados en el PR 2. Solo regresión | G-02 |
+
+Pendiente de producción significa que no se cumple todavía y no es `BLOCKED`.
+
+#### Riesgos identificados
+
+- **R-1. Regla exacta frente al router de Koa.** La nota de T-04 del PR 2 registra que Koa trata `/webhooks/whatsapp/` y `/WEBHOOKS/WHATSAPP` como el webhook. `Path` de Traefik es exacto y distingue mayúsculas: tras el corte esas variantes dejan de llegar a un bot. No afecta si la URL en Meta es exactamente la de D-1, pero eso solo se puede confirmar en la consola de Meta.
+- **R-2. Normalización de la ruta en Traefik.** `..`, barras dobles y `%2F` pueden hacer que una ruta distinta de la solicitada llegue al router. El 3004 es la segunda defensa (P-1).
+- **R-3. `probe_webhook`.** Depende de que `OPTIONS` responda 2xx en la `api`, con y sin bot, y de que la app anterior devuelva CSP en `OPTIONS`. Si la app anterior no la devolviera, el sondeo pasaría sin que la `api` tuviera la ruta.
+- **R-4. Vuelta atrás con la `api` al final.** Ese paso es `up -d ... || true`, sin `wait_healthy` ni `probe_webhook`, y después se registra el código 21. Con una `api` anterior con etiqueta y una app anterior sin bot, un fallo ahí dejaría el webhook en un proceso sin bot y el despliegue informaría que se restauró.
+- **R-5. Código 22.** Con la `api` al final, un fallo de la app anterior deja la `api` nueva en marcha con `release.env` anterior.
+- **R-6. `restore.sh`.** Lectura: no recrea la `api`, así que no apaga el router por sí solo. Pero elimina de `release.env` la imagen y `RESTAURANTE_API_WEBHOOK`. Hipótesis a comprobar: el comando literal de la recuperación en un VPS nuevo (`despliegue.md` §11.7, paso 5: `RESTAURANTE_API_IMAGE=<imagen> $C up -d --no-deps api`) no pasa `RESTAURANTE_API_WEBHOOK=true`, y dejaría el router apagado con una app sin bot, de forma permanente.
+- **R-7. Restauración con el bot escribiendo.** `restore.sh` y `despliegue.md` §9 paran `app` antes del `DROP DATABASE`, pero ahora el bot vive en `api`, que sigue en marcha y escribe `bot_*`.
+- **R-8. §9 de `despliegue.md`.** Ahí no se reescribe `release.env`. Hipótesis: arrancar una `api` anterior con `RESTAURANTE_API_IMAGE` hereda `RESTAURANTE_API_WEBHOOK=true` y deja el router apuntando a un 3004 que no existe, porque el aviso solo está en el §6.
+- **R-9. Nombres en `traefik-public`.** `api` entra por primera vez en una red compartida. Otro stack del VPS con un servicio llamado `api`, `app` o `mysql` podría resolverse desde `api`, `app` o `inventory-manager`. El smoke no tiene vecinos, así que no lo detecta.
+- **R-10. Salida a internet.** El bot necesita salir por `traefik-public` (H-1). Hay que confirmar la ruta por defecto y el DNS con tres redes, dos de ellas internas.
+- **R-11. Healthcheck sin el 3004 (decisión).** Un webhook que falla después del despliegue no vuelve la `api` `unhealthy`. El sondeo solo cubre el momento del despliegue.
+- **R-12. `x-bot-env`.** El merge YAML puede quitar o cambiar una variable de `app`, o dejar fuera de `api` una que su configuración lee (`loadApiConfig`, `parseChatBot`, `parseBotLimits`).
+- **R-13. Cifras del informe.** Una sola muestra, con el reloj de un Mac. El CI no tiene imágenes de `main`, así que CA-14 solo se verifica aquí.
+- **R-14. Entorno.** Docker Desktop puede reiniciarse y apagar MySQL. AirPlay ocupa el 5000. Son fallos de entorno, y se repite la ejecución antes de clasificar.
+
+#### Preparación y entorno
+
+Todo es local y usa solo valores sintéticos: sin SSH al VPS, sin Meta, sin despliegue y sin leer `.env` reales.
+
+1. **Imágenes propias.** Se reconstruyen los cuatro objetivos desde el working tree, y `production`, `migrate`, `api` e `inventory-manager` desde `git archive 352014e` en el scratchpad. No se reutilizan `restaurante-old:*` ni las etiquetas del implementador. Se comprueba la etiqueta de cada `api`: `whatsapp` en la rama y vacía en `main`.
+2. **Ejecutor Linux.** `smoke.sh` y `deploy.sh` necesitan `flock`, GNU `stat` y llegar a la IP de Traefik, y nada de eso existe en el Mac. Se usan desde un contenedor `docker:cli` con bash, curl, jq, util-linux, coreutils, findutils y age, conectado al socket de Docker y a `traefik-public`, con `SMOKE_WORKDIR` en una ruta que el daemon ve igual.
+3. **Copia del smoke en el scratchpad.** Solo cambia `REGISTRY_PORT=5050`, y se conserva ese diff como evidencia. Los casos propios van en un guion aparte, también en el scratchpad, sobre el mismo montaje.
+4. **Bot sintético.** Formato válido de Meta, sin credenciales reales. Las entregas firmadas no llevan mensajes: `200` sin ninguna salida a Meta.
+
+No se escribe en `restaurante/landing-pages/tests/` ni en `deploy/`. Si un caso merece quedar en `smoke.sh`, se recomienda en el informe.
+
+#### Pruebas funcionales: enrutado por Traefik
+
+Cada caso se identifica por tres señales: estado, cabecera CSP (solo la app) y línea `request` en el log de `api` o de `app`.
+
+- **W-01 (CA-1).** `GET /webhooks/whatsapp` con `hub.*`: token correcto da 200 y el reto, token incorrecto da 403, sin CSP, con `bot_webhook_verify_failed` en `api`. Comparado con la misma petición a la app de `main`.
+- **W-02 (CA-2).** `POST` firmado, sin mensajes y con un cuerpo con bytes no ASCII, en HTTP/1.1 y HTTP/2: 200 `OK`, en el log de `api` y no en el de `app`. Traefik no altera el cuerpo ni la cabecera de la firma.
+- **W-03 (CA-2).** Sin firma 401, firma incorrecta 403, JSON inválido firmado 400 y cuerpo mayor del límite 413. Mismo estado y cuerpo que `main`, con `bot_webhook_signature_invalid`.
+- **W-04 (CA-3).** Rutas que no deben llegar a `api`: 404 de la app, con CSP y sin línea en el log de `api`. `/api/v1/admin/sesion`, `/api/v1/admin/sonda-qa`, `/api/v1/public/birria/productos`, `/webhooks`, `/webhooks/`, `/webhooks/whatsapp/`, `/webhooks/whatsapp/x`, `/webhooks/whatsappx`, `/WEBHOOKS/WHATSAPP`, `/Webhooks/whatsapp`, `/api/webhooks/whatsapp`, `/x/webhooks/whatsapp`, `//webhooks/whatsapp` y `/webhooks//whatsapp`.
+- **W-05 (CA-3, R-2).** Con `curl --path-as-is`, sin normalizar: `/webhooks/whatsapp/../../api/v1/public/birria/productos`, `/webhooks/../api/v1/admin/sesion`, `/webhooks/whatsapp/..%2f..%2fapi%2fv1%2fadmin%2fsesion`, `/%2e%2e/api/v1/admin/sesion`, `/webhooks%2Fwhatsapp`, `/webhooks/whatsapp%2F`, `/%77ebhooks/whatsapp`, `/webhooks/whatsapp;x=1`, `/webhooks/whatsapp%20` y `/webhooks/whatsapp%00`. Se acepta cualquier respuesta que no sea un dato de `api`: 400 de Traefik, 404, o el webhook si la ruta normalizada es exactamente la suya. Un dato de `/api/v1` es defecto `BLOCKER`.
+- **W-06 (CA-3).** Por el 3004, desde un contenedor de `traefik-public`: `/api/v1/*`, `/salud` y `/` dan 404 sin datos.
+- **W-07 (RF-3).** Inventario real de Traefik por `/api/http/routers` y `/api/http/services`, activando su API en la copia del smoke: el único router hacia `api` es `restaurante-webhook`, su servidor está en la IP de `traefik-public` y en el 3004, y ningún servicio apunta al 3001. `docker port` vacío en `api`.
+- **W-08 (RF-4).** Otras máquinas y puertos: `https://www.<dominio>/webhooks/whatsapp` da 301 a la raíz, `http://<dominio>/webhooks/whatsapp` da 301 a https como en `main`, y `admin.<dominio>/webhooks/whatsapp` no llega a `api`. También `Host` en mayúsculas y con `:443`, y un `Host` desconocido.
+- **W-09 (CA-3).** `/`, `/molotes`, `/birria`, `/admin` y `admin.<dominio>/salud` responden como con `main`. El límite de `/admin` sigue en su router y `/webhooks/whatsapp` no tiene límite, como en `main`: 50 peticiones seguidas sin 429.
+- **W-10 (CA-4, RF-5).** `api` sin bot: 503 `BOT_DISABLED`, `OPTIONS` sigue pasando el sondeo, y las landings y los dos admin funcionan.
+- **W-11 (RF-3).** `X-Forwarded-For` falsificado por el cliente: el log de `api` lleva la IP que añade Traefik, nunca la falsificada.
+- **W-12.** Métodos por Traefik: `PUT` y `DELETE` dan 405 con `Allow`, `HEAD` no procesa nada y `OPTIONS` no deja rastro de error en el log.
+
+#### Pruebas funcionales: `deploy.sh`
+
+Con las imágenes del smoke (`api-sin-webhook`, `api-webhook-mudo`, `app-bad`) y las reales de `main` donde se indica. Cada caso comprueba código de salida, `traefik.enable`, quién atiende la ruta, `release.env` y `releases.log`.
+
+- **D-01 (corte).** `main` a la rama: código 0, `RESTAURANTE_API_WEBHOOK=true`, y la app cambia después de que `probe_webhook` termina (orden en el log).
+- **D-02 (sondeo, R-3).** `OPTIONS` por Traefik contra los cuatro destinos: `api` con bot, `api` sin bot, app de `main` y app de la rama. Las dos `api` pasan y las dos apps no.
+- **D-03 (código 15).** `api` healthy con el 3004 mudo: código 15, app intacta, `api` anterior, router apagado, y con migraciones nuevas, `protect_running_app` recrea la app.
+- **D-04 (código 15 sin `api` anterior).** Sin versión anterior a la que volver: qué queda y qué informa.
+- **D-05 (código 16).** `inventory-manager` roto en el corte: el webhook sigue en `api`, con el router encendido, y `release.env` no cambia. Se revisa el siguiente despliegue desde ese estado.
+- **D-06 (código 21 hacia `api` sin etiqueta).** La `api` vuelve después de la app, router apagado y webhook en la app anterior.
+- **D-07 (código 21 hacia `api` con etiqueta, R-4).** Ambas versiones posteriores al corte: la ruta acaba en la `api` anterior. Además, una `api` anterior que no arranca: se documenta qué queda y si el código 21 lo oculta.
+- **D-08 (código 22, R-5).** App anterior también rota: estado de la `api`, del router y de `release.env`, y si `despliegue.md` lo explica.
+- **D-09 (compatibilidad).** `release.env` sin `RESTAURANTE_API_WEBHOOK` ni `RESTAURANTE_API_IMAGE`, como tras una restauración: toma la `api` del contenedor en marcha, calcula bien el valor y deja el archivo completo.
+- **D-10 (imagen ausente).** Falla el `docker pull` de la `api` anterior: aviso en el log, el despliegue sigue y la vuelta atrás informa lo que ocurre.
+- **D-11 (idempotencia).** Redesplegar los mismos digests no recrea la `api` ni causa fallos en el webhook. Una variable `RESTAURANTE_API_WEBHOOK` exportada o en `.env` no altera lo que calcula `deploy.sh`.
+- **D-12 (`$C`).** `$C restart api` y `$C up -d --no-deps api` tras un despliegue normal conservan el router y la imagen.
+
+#### Pruebas funcionales: vuelta atrás con imágenes de `main` (CA-14)
+
+- **V-01 (CA-14).** Despliegue de la rama y vuelta a `main` con `deploy.sh`: `GET` con token correcto da 200 y el reto, con CSP y en el log de `app`; `RESTAURANTE_API_WEBHOOK=false`; token incorrecto 403.
+- **V-02 (CA-14, RF-13).** Vuelta atrás automática (código 21) con app rota sobre `main`: las mismas comprobaciones.
+- **V-03 (cifras).** Muestreo independiente de la ruta cada 0,3 s durante las cuatro operaciones de la tabla de `despliegue.md`, **tres veces cada una**, registrando estado y quién responde. `GET` de verificación y `POST` sin firma: no generan salidas a Meta.
+
+  | Operación | Informado | Se contrasta con |
+  | --- | --- | --- |
+  | Corte hacia la versión nueva | 74 peticiones, 0 fallos | Mínimo, mediana y máximo |
+  | Vuelta atrás automática (21) | 1 respuesta 502 en 73 | Ídem |
+  | Reinicio de la `api` con la app nueva | 11 respuestas 404, unos 4 s | Ídem |
+  | Volver a `main` con `deploy.sh` | 22 respuestas 404 o 502, unos 8 s | Ídem |
+
+  Las cifras no tienen que ser iguales, pero la tabla debe ser verdadera en orden de magnitud y en su afirmación principal: ningún fallo en el corte, un fallo aislado en la 21. Una diferencia mayor se informa como corrección de CA-16. Un estado final sin bot detrás de la ruta es defecto, sea cual sea la cifra.
+- **V-04 (RF-13).** Ninguna ventana termina en un estado permanente sin bot: 60 s después de cada operación, la verificación responde.
+- **V-05 (CA-13 en el corte).** Con un bloqueo caducado y la app y la `api` en marcha a la vez durante el corte y la vuelta atrás: `block_expired` una sola vez.
+
+#### Pruebas funcionales: `restore.sh` (R-6, R-7 y R-8)
+
+Con `ops/backup/restore.sh` real, en una copia del smoke de respaldos sobre el compose del PR, con `api` con etiqueta y Traefik. No se simula reescribiendo `release.env`.
+
+- **B-01.** Tras `restore.sh`, con la `api` en marcha: `traefik.enable` sigue en `true`, la ruta sigue en `api` y la verificación responde. Es la respuesta directa a la pregunta de si deja el router apagado.
+- **B-02.** Después, cada comando documentado, en sus palabras exactas: `$C restart api`, `$C up -d --no-deps api`, y `RESTAURANTE_API_IMAGE=<imagen> $C up -d --no-deps api` de §11.7. Se anota el estado final del router y de la ruta.
+- **B-03.** VPS nuevo: `restore.sh` sin `api` en marcha y luego el paso 5 tal como está escrito.
+- **B-04.** Respaldo de una app sin bot sobre una `api` anterior sin etiqueta: la ruta queda sin bot, aunque ningún paso haya fallado. Se comprueba si la documentación lo cubre.
+- **B-05 (R-7).** Peticiones al webhook durante el `DROP DATABASE` y la carga, con la `api` en marcha: qué responde, qué registra y si tras la restauración el control del bot y el catálogo de `api` vuelven a coincidir con la base, sin reiniciar. Lo mismo con el §9.
+- **B-06 (R-8).** Procedimiento del §9 con una `api` anterior a REQ-F-042 y `release.env` en `true`.
+- **B-07.** El siguiente `deploy.sh` tras una restauración deja `release.env` completo (D-09) y `backup.sh` lee un `release.env` con la línea nueva.
+
+#### Pruebas de configuración y red
+
+- **E-01 (P-2, RN-5).** `compose config` con el bot vacío, con todas sus variables y sin `.env` opcionales: válido en los tres casos. Con `RESTAURANTE_API_WEBHOOK` sin definir, `false` y `true`.
+- **E-02 (R-12).** Las claves y valores de `app` coinciden exactamente con los de `epic/arquitectura`. Las de `api` son las de la base más el bot y `WEBHOOK_PORT`. Con valores distintos por variable, `api` y `app` reciben los mismos.
+- **E-03 (R-12).** Lista de variables que leen `loadApiConfig`, `parseChatBot` y `parseBotLimits` frente al compose. La ausencia de `WHATSAPP_BOT_WEBHOOK_URL` es correcta solo porque Twilio está prohibido en producción: se confirma que `api` arranca sin ella con Meta.
+- **E-04 (CA-12).** `api` con `NODE_ENV=production` en el contenedor real: arranca con el bot completo, y con clave ausente, D-6 incumplida o Twilio termina con el mensaje esperado, sin mostrar valores. El contenedor no queda `healthy` y `deploy.sh` da el código 15.
+- **E-05 (R-10).** Dentro de `api`: ruta por defecto por `traefik-public`, resolución DNS de `graph.facebook.com` y salida HTTPS a un destino que no es Meta. No se conecta a Meta.
+- **E-06 (R-9).** Un contenedor vecino en `traefik-public` con los alias `api`, `app` y `mysql`: qué resuelven `app`, `api` e `inventory-manager`, y si las landings, el aviso interno y la base siguen hablando con el servicio correcto. El resultado local dice si hay riesgo. Si lo hay, la existencia real de esos nombres en el VPS es una pregunta para el usuario.
+- **E-07 (R-11).** Con el 3004 detenido dentro de la `api` ya en marcha: estado `healthy` y 502 en la ruta. Confirma el comportamiento decidido y que `despliegue.md` da la pista para diagnosticarlo.
+- **E-08.** Sin secretos en la salida de `deploy.sh`, en los logs de `api` y `app` de toda la ronda, ni en `docker inspect` de las etiquetas de Traefik.
+- **E-09.** `env.production.example`: sin variables nuevas y coherente con el compose.
+
+#### Pruebas de documentación (CA-16)
+
+- **K-01.** Búsqueda en `README.md`, `docs/{arquitectura,despliegue,desarrollo}.md`, `.env.example` y `deploy/env.production.example`: ninguna descripción del bot dentro de `landing-pages`, salvo el historial marcado como tal.
+- **K-02.** Cada punto de RF-14 tiene su contenido: `arquitectura.md` §1, §4, §6, §8 ticket 3, §9 D-3 y §10; `despliegue.md` webhook sin cambio en Meta, variables, comprobaciones, frescura de CA-9, problemas frecuentes y vuelta atrás; `README.md` con bot, túnel, Twilio y simulador.
+- **K-03 (D-1).** La URL conservada es la que aparece en todos los documentos. Prevalece sobre cualquier texto anterior de `arquitectura.md` y sobre NotebookLM.
+- **K-04.** Comandos y cifras de `despliegue.md`: la tabla de comprobaciones del webhook se ejecuta tal cual en local (con el dominio del smoke), y los comandos de §6, §9 y §11.7 se validan en B-02, B-03 y B-06.
+- **K-05.** `.claude/CLAUDE.md` §8 y `.claude/agents/senior-fullstack.md`: las rutas citadas existen. Comprobadas en este análisis las de `api/src/bot/`, `providers/select.ts`, `core/shared/whatsapp-link.ts`, `core/schedule/business-hours.ts`, `api/src/bot/content/`, los dobles, `no-meta.ts` y `chat-bot-contract.test.ts`: todas existen.
+
+#### Pruebas de performance
+
+Memoria local de `api` con `docker stats`, en reposo y con muestreo, comparada con los 100,0 MiB informados. No se juzga el umbral del 80 %, que es del VPS. Duración de `deploy.sh`: lo que añaden `probe_webhook` y la descarga de la `api` anterior.
+
+#### Pruebas de regresión
+
+Blast radius de CodeGraph: `createBotWebhookApp`, `createWhatsAppWebhook` y `parseChatBot`. Este PR no cambia `src/` ni pruebas, lo que se confirma con `git diff --stat`.
+
+- **G-01 (CA-15).** Desde `restaurante/`, `npm run db:up`, `npm run build:css`, `npm run typecheck`, `npm run lint` y `npm test`, este último tal cual, con los tres workspaces, código de salida y totales contrastados con los informados (`api` 36/984, `landing-pages` 129/1455 e `inventory-manager` 8/111). Sin `lint:fix`.
+- **G-02 (CA-5 a CA-13).** Son las suites de `npm test`: `bot-procesos-qa-req-f-042*`, `api-process`, `dependency-rule*`.
+- **G-03 (duración).** Condiciones del CI con `npm test -- --maxWorkers=4 --shard=1/2` y `--shard=2/2` y `--reporter=json`. Las duraciones locales no predicen las del CI: un archivo por encima de 20 s se contrasta con el log del último CI, sin cambiar timeouts.
+- **G-04.** `shellcheck` (imagen `koalaman/shellcheck-alpine:stable`) sobre los archivos de los dos pasos del CI: los de `deploy/` y los de `ops/backup/`. `resumen-test.sh`. `smoke.sh` y `ops/backup/ci/smoke.sh` completos en la copia, con las imágenes reconstruidas, y validación del job `contenido de las imágenes` para `api`.
+- **G-05.** Sin cambios ajenos: los archivos del diff son los del informe y `Calculadora.xlsx` no entra en el trabajo.
+
+No aplican responsive, accesibilidad, Stitch ni navegador: no cambia HTML, CSS ni JavaScript del frontend, y W-09 cubre las respuestas de las rutas. Tampoco SEO por la misma razón.
+
+#### Evidencia requerida
+
+Comandos con su código de salida, diff de la copia del smoke, tabla de W-04 y W-05 (ruta, estado, CSP y log), inventario de Traefik, extractos de `deploy-<n>.log`, `release.env` y `releases.log` por escenario, muestras de V-03 por operación y repetición, y salida de los comandos de restauración. Sin valores reales ni secretos. Los archivos quedan en el scratchpad y el informe lleva el resumen.
+
+#### Fuera de alcance
+
+- SSH al VPS, Meta, despliegues, `.env` reales y producción. Por tanto, quedan **pendientes de producción**: CA-1 a CA-3, CA-9, memoria en el VPS, certificado real y comportamiento con la versión de Traefik del VPS (el smoke usa la v3.7.14).
+- Pendientes de confirmar por el usuario, solo con su consulta: la URL exacta de Meta (R-1) y, si E-06 lo pide, los nombres de los servicios en `traefik-public` (R-9).
+- CI real: corre con el PR listo.
+- Corrección de defectos y cambios en `deploy/` o en la documentación: los hace `senior-fullstack`.
+
+#### Criterios de aprobación
+
+`QA_APPROVED` del PR 3 si:
+
+- CA-4, CA-14 y CA-16 pasan con evidencia; CA-1, CA-2 y CA-3 pasan en local y quedan pendientes de producción; CA-15, en local y condicionado al CI;
+- ninguna ruta de `/api/v1`, ni el 3001, se alcanza por Traefik;
+- ningún camino de `deploy.sh` documentado como correcto deja la ruta sin bot de forma permanente;
+- `typecheck`, `lint`, `npm test`, `shellcheck` y los dos smoke pasan, verificados por QA;
+- no hay `BLOCKER` ni `CRITICAL`, y cada `MAJOR` tiene decisión del usuario.
+
+Un archivo de más de 20 s en condiciones del CI, una ambigüedad del requisito o un `MAJOR` dan `NEEDS_USER_DECISION`. Lo que falle por el entorno se repite y, si persiste, se informa como bloqueo de entorno, no como defecto.
+
+#### Aprobación del QA Action Plan
+
+Aprobado por el usuario. Cita textual: "Si lo apruebo".
 
 ## QA Report
 
@@ -1163,6 +1485,316 @@ CI real (`calidad`, `docker`, `auditoria`), router de Traefik, CA-1 a CA-3 en pr
 
 `QA_APPROVED` (PR 2 de 3, condicionado al CI verde en el PR, como en el PR 1).
 
+### PR 3 de 3: despliegue y documentación
+
+#### Ronda
+
+1 (2026-11-04). Rama `feature/REQ-F-042-bot-whatsapp-en-api-3-deploy`, sin commit, sobre `5c6c8bd`. Ejecutada en local, con valores sintéticos, tras la aprobación del plan ("Si lo apruebo"). Evidencia completa en el scratchpad de la sesión (carpeta `ev/`).
+
+#### Resultado final
+
+**`QA_REJECTED`.** CA-16 falla: dos procedimientos de `docs/despliegue.md`, ejecutados tal como están escritos, dejan el webhook sin bot de forma permanente (DEF-001 y DEF-002). `deploy.sh`, el router, el compose y la imagen no tienen ningún defecto `BLOCKER` ni `CRITICAL`, y no se expone ninguna ruta de `api` salvo el webhook.
+
+#### Pruebas ejecutadas
+
+| Prueba | Resultado real |
+| --- | --- |
+| `npm run db:up`, `build:css`, `typecheck`, `lint` | Código 0 en los cuatro |
+| `npm test` (tres workspaces, tal cual) | Código 0. `api` 36 archivos y 984 pruebas; `landing-pages` 129 y 1455 (1454 pasan y 1 `expected fail` previo); `inventory-manager` 8 y 111. Coincide con lo informado |
+| Shards con `--maxWorkers=4`, `--shard=1/2` y `2/2` | Código 0. Máximo por archivo: 13,3 s (`db-outage-handshake-subida-saludo.test.ts`). Duración local, no predice la del CI |
+| `shellcheck` de los dos pasos del CI | Código 0 en los dos |
+| `resumen-test.sh` | Código 0 |
+| `deploy/ci/smoke.sh`, imágenes propias de la rama | 158 comprobaciones, 0 fallos. Copia con solo `REGISTRY_PORT=5050` |
+| `ops/backup/ci/smoke.sh` | 55 comprobaciones, 0 fallos |
+| Imágenes propias | Ocho, reconstruidas: cuatro de la rama y cuatro de `git archive 352014e`. Etiqueta `whatsapp` en la `api` de la rama y vacía en la de `main` |
+| Montaje propio | Traefik v3.7.14 con su API activa, registro local, bot Meta sintético. Estado inicial instalado con el `deploy/` de `main` y corte con el de la rama |
+| Contenido de imágenes | `api` con el bot y sin el CLI de Prisma ni el simulador; `production` sin simulador |
+
+Docker Desktop y MySQL no se cayeron durante la ronda: ningún fallo fue de entorno.
+
+#### Criterios de aceptación
+
+| Criterio | Resultado | Evidencia |
+| --- | --- | --- |
+| CA-1 | PASS en local; pendiente de producción | W-01: token correcto 200 y reto, incorrecto 403, sin CSP, con `bot_webhook_verify_failed` en `api` |
+| CA-2 | PASS en local; pendiente de producción | W-02: `POST` firmado con bytes no ASCII, HTTP/1.1 y HTTP/2, 200 `OK`. Un mensaje real por Traefik con un doble de salida en `api`: 200 y una salida, sin contacto con Meta. Sin firma 401, firma mala 403, JSON inválido 400. Mismo estado y cuerpo que `main` |
+| CA-3 | PASS en local; pendiente de producción | W-04 a W-09: ver "Hipótesis" y el apartado de enrutado |
+| CA-4 | PASS | W-10: `GET` y `POST` 503 `BOT_DISABLED`, landings y admin nuevo responden, `/admin` igual que sin bot |
+| CA-14 | PASS | V-01 y V-02: tras volver a `main`, con `deploy.sh` y con el código 21, 200 y reto, con CSP, y `RESTAURANTE_API_WEBHOOK=false`, en las tres repeticiones |
+| CA-15 | PASS en local; pendiente del CI | Tabla anterior. Ningún archivo pasa de 20 s en local |
+| CA-16 | **FAIL** | K-01, K-02, K-03 y K-05 pasan. K-04 falla: DEF-001 y DEF-002 |
+| CA-5 a CA-13 | PASS (regresión) | Suites de `npm test`. CA-12 y CA-13, además, en contenedor real (E-04 y V-05) |
+
+**Pendientes de producción, no cumplidos todavía:** CA-1 a CA-3, CA-9, memoria en el VPS, certificado real y versión de Traefik del VPS.
+
+#### Hipótesis del plan
+
+| Hipótesis | Resultado | Evidencia |
+| --- | --- | --- |
+| `restore.sh` deja el router apagado | **Descartada** | B-01: `traefik.enable=true`, la ruta sigue en `api` y la verificación responde. `release.env` queda sin las líneas de `api` |
+| R-1 Variantes de la URL | **Confirmada como cambio de comportamiento** | `/webhooks/whatsapp/`, `/WEBHOOKS/WHATSAPP` y `/Webhooks/whatsapp` pasan de 403 con el bot a 404 sin bot. No es defecto: D-1 fija la URL exacta. Falta confirmar la URL en la consola de Meta |
+| R-3 `probe_webhook` | **Descartada** | D-02: `OPTIONS` da 200 sin CSP en `api` con y sin bot, 200 con CSP en la app de `main` y 404 en la de la rama: pasan solo las `api` |
+| R-4 `api` al final sin comprobación | **Confirmada** | D-07b: DEF-003 |
+| R-5 Código 22 | **Descartada como defecto** | D-08: la `api` nueva sigue atendiendo el webhook con el router encendido, la app caída y `release.env` sin cambios. El aviso de `despliegue.md` para ese código es suficiente |
+| R-6 Comando del §11.7 | **Confirmada** | B-02.3 y B-03: DEF-001 |
+| R-7 Restauración con el bot escribiendo | **Descartada como defecto** | B-05 y B-05b: 11 `POST` firmados con pausa y 2623 sin pausa durante `restore.sh`, todos con 200, `api` healthy, sin reinicios y sin errores en el log. La pausa creada después del respaldo desaparece de `api` sin reiniciar. Límites de la prueba: la base es diminuta (unos 3 s de restauración) y la ráfaga activó el enfriamiento del bot, así que casi ninguna entrega llegó a escribir |
+| R-8 §9 con `release.env` en `true` | **Confirmada** | B-06: DEF-002 |
+| R-9 Nombres en `traefik-public` | **Confirmada en local** | E-06: DEF-004 |
+| R-10 Salida a internet | **Descartada** | E-05: ruta por defecto por `traefik-public`, DNS de `graph.facebook.com` correcto y HTTPS a `1.1.1.1` con 200, sin contactar con Meta |
+| R-11 Healthcheck sin el 3004 | **Confirmada como decisión** | E-07: `healthy` con 502. `despliegue.md` no tiene entrada para un 502 (ver DEF-002) |
+| R-12 `x-bot-env` | **Descartada** | E-01: válido con y sin bot. E-02: entorno y etiquetas de `app` idénticos a la base; `mysql`, `migrate` e `inventory-manager` también; `api` solo suma el bot y `WEBHOOK_PORT`, con los mismos valores que `app` |
+| R-13 Cifras del informe | **Confirmadas en orden de magnitud** | V-03 |
+
+#### V-03: fallos de `/webhooks/whatsapp` (una petición cada 0,3 s, tres repeticiones)
+
+| Operación | Informado | Medido por QA |
+| --- | --- | --- |
+| Corte hacia la versión nueva | 0 fallos | 0, 0 y 0 |
+| Vuelta atrás automática (21) | 1 respuesta 502 | 1, 1 y 1 (502) |
+| Reinicio de la `api` con la app nueva | 11 respuestas 404, unos 4 s | 9, 9 y 9 (404), en 2,6 s |
+| Volver a `main` con `deploy.sh` | 22 respuestas, unos 8 s | 22, 23 y 33 (404 y 502), entre 7,6 y 10,2 s |
+
+La tabla de `despliegue.md` es verdadera en su afirmación principal. V-04: tras cada operación, la verificación responde; la primera repetición esperó 60 s.
+
+#### Defectos encontrados
+
+##### DEF-001
+
+- **Severidad:** `MAJOR`. Es el procedimiento de recuperación ante desastre, el bot queda fuera sin ningún error y existe alternativa (volver a desplegar).
+- **Criterio afectado:** CA-16, RF-13.
+- **Descripción:** `docs/despliegue.md` §11.7, paso 5, indica `RESTAURANTE_API_IMAGE=<imagen> $C up -d --no-deps api` tras `restore.sh`. Como `release.env` ya no tiene `RESTAURANTE_API_WEBHOOK`, la `api` queda con el router apagado.
+- **Pasos:** desplegar la rama, ejecutar `restore.sh` y ese comando (B-02.3). Lo mismo sin `api` previa (B-03).
+- **Resultado esperado:** el webhook llega a la `api`.
+- **Resultado actual:** `enable=false` y 404 con CSP tras 30 y 60 s, en una app sin bot, de forma permanente.
+- **Evidencia:** `ev/s4.txt`. Con `RESTAURANTE_API_WEBHOOK=true` añadido, 200 y reto (B-02.4).
+- **Impacto:** tras la recuperación, las landings funcionan y el bot no atiende a nadie.
+- **Recomendación:** el comando documentado debe dejar el router coherente con la imagen. El §5 ("Recrear la `api`") remite al §6, que solo menciona `false`.
+
+##### DEF-002
+
+- **Severidad:** `MAJOR`. Los dos casos dejan la ruta sin bot de forma permanente, y existe alternativa (desplegar).
+- **Criterio afectado:** CA-16, RF-13.
+- **Descripción:** las restauraciones con una `api` de otra versión no están cubiertas.
+  - §9 ("arráncalos igual con `RESTAURANTE_API_IMAGE`"): con una `api` anterior a REQ-F-042, hereda `true` de `release.env`. El aviso solo está en el §6.
+  - `restore.sh` de un respaldo con app sin bot sobre una `api` sin etiqueta: el script termina con 0.
+- **Pasos:** B-06 y B-04.
+- **Resultado esperado:** RF-13, nunca un webhook apuntando a un proceso sin bot, o un aviso en el procedimiento.
+- **Resultado actual:** B-06 da `enable=true` y 502 en `GET` y `POST`, y B-04 da 404 con CSP tras 20 s.
+- **Evidencia:** `ev/s4.txt`.
+- **Impacto:** quien sigue el §9 deja el bot fuera. "Problemas frecuentes" no tiene una entrada para el 502.
+- **Recomendación:** avisar en esos dos procedimientos y documentar el síntoma 502.
+
+##### DEF-003
+
+- **Severidad:** `MINOR`. Exige un doble fallo: app nueva rota y `api` anterior que no arranca.
+- **Criterio afectado:** RF-13.
+- **Descripción:** en el código 21 con `api` anterior con etiqueta, ese último paso no se comprueba.
+- **Pasos:** D-07b, `api` anterior que sale al arrancar.
+- **Resultado esperado:** que el resultado refleje que el webhook no quedó atendido.
+- **Resultado actual:** código 21, "versión anterior restaurada", `api` en `restarting` con 8 reinicios y 404 de la app sin bot.
+- **Evidencia:** `ev/s3.txt`.
+- **Impacto:** el operador ve un despliegue fallido, pero el mensaje dice que todo se restauró. Solo afecta a versiones posteriores a REQ-F-042.
+- **Recomendación:** comprobar ese paso, o decirlo en el mensaje.
+
+##### DEF-004
+
+- **Severidad:** `MAJOR`, condicionada a que exista ese nombre en el VPS. El impacto observado es la entrega de una credencial a otro contenedor.
+- **Criterio afectado:** ninguno directo. RF-3 y riesgo H-1, que solo aceptó que un vecino alcance `api:3001`.
+- **Descripción:** al entrar en `traefik-public`, `api` resuelve también por esa red los nombres `app` y `mysql`.
+- **Pasos:** contenedor en `traefik-public` con alias `app`, y después `mysql` (E-06).
+- **Resultado esperado:** `api` habla con sus servicios.
+- **Resultado actual:**
+  - alias `app`: 4 de 5 peticiones a `http://app:3002` llegan al vecino, con la cabecera `Authorization`;
+  - alias `mysql`: el DNS solo devuelve al vecino y la `api` no arranca, que `deploy.sh` convertiría en código 15;
+  - alias `api`: no afecta a la `api`. La `app` y `inventory-manager` ya estaban expuestas antes de este PR, igual que `app` a `mysql`.
+- **Evidencia:** `ev/s3.txt` y `ev/s5.txt`.
+- **Impacto:** si otro stack del VPS tiene un servicio `app`, el aviso interno falla y el token llega a ese contenedor.
+- **Recomendación:** confirmar los nombres en el VPS. Si hay colisión, el nombre usado por `api` no debe depender de esa red.
+
+##### DEF-005
+
+- **Severidad:** `MINOR`. Solo es alcanzable sin ninguna `api` anterior, cosa que no pasa en el VPS actual.
+- **Criterio afectado:** RF-13.
+- **Descripción:** código 15 sin `api` anterior, con 3004 mudo (D-04): la `api` rota sigue en marcha con el router encendido.
+- **Resultado actual:** 502, con la app anterior con bot en marcha, aunque el log diga "la app no se tocó".
+- **Recomendación:** tratarlo en la misma corrección que DEF-003.
+
+##### DEF-006
+
+- **Severidad:** `TRIVIAL`.
+- **Criterio afectado:** ninguno.
+- **Descripción:** con la `api` anterior imposible de descargar (D-10), el aviso dice que una vuelta atrás "dejaría el webhook en la app". En realidad falla el `up`, la `api` nueva sigue y el webhook responde.
+- **Recomendación:** ajustar el mensaje.
+
+#### Regresión
+
+Sin regresión. `deploy.sh` y el router:
+
+- **Códigos:** 0, 15, 16, 21 y 22 se comportan como se documenta (D-01 a D-12), salvo DEF-003 y DEF-005.
+- **Idempotencia:** los mismos digests no recrean la `api` y dan 0 fallos en 34 peticiones. `RESTAURANTE_API_WEBHOOK` exportada o en `.env` no altera el valor calculado.
+- **`$C`:** `restart api` y `up -d --no-deps api` conservan router e imagen tras un despliegue normal.
+- **`release.env`:** sin las líneas de `api`, el siguiente despliegue lo deja completo (B-07, D-04). `backup.sh` funciona con la línea nueva.
+- **CA-13:** una sola `block_expired` en el corte, en la vuelta atrás y al volver a `main`.
+- **Secretos (E-08):** seis valores buscados en logs de despliegue y restauración, logs de `api` y `app` y etiquetas: 0 coincidencias.
+
+**Enrutado (W-04 a W-12):** inventario de Traefik con un solo router hacia `api`, `restaurante-webhook`, en el 3004 y en su IP de `traefik-public`. Ningún servicio apunta al 3001 y `docker port` está vacío. Tras la matriz completa, el log de `api` solo tiene `/webhooks/whatsapp`. Ningún dato de `/api/v1` en los 15 casos de `--path-as-is`.
+
+**Corrección de la expectativa del plan:** `//webhooks/whatsapp`, `/webhooks//whatsapp`, `/x/../webhooks/whatsapp` y `/%77ebhooks/whatsapp` no dan 404: Traefik las normaliza y llegan al webhook, como en `main`. No exponen otra ruta. No es defecto.
+
+El `/admin` responde 503 `ADMIN_UNAVAILABLE` en el montaje, igual con `main` y con la rama, porque no hay usuarios. Su funcionamiento lo cubre `npm test`.
+
+#### Responsive, accesibilidad, UX/UI y SEO
+
+No aplican: no cambia HTML, CSS ni JavaScript del frontend. Tamaño de `/`, `/molotes` y `/birria` idéntico con `main` y con la rama.
+
+#### Performance
+
+`api` entre 97,2 y 99,0 MiB, frente a los 100,0 MiB informados. Un despliegue completo tarda entre 15 y 22 s en local: el sondeo no lo alarga de forma apreciable.
+
+#### Pendientes de revisión manual
+
+- **Meta:** confirmar, solo consultando, que la URL de la consola es exactamente `https://birriaelmuneco.com/webhooks/whatsapp` (R-1).
+- **VPS:** nombres de los servicios en `traefik-public` (DEF-004).
+
+#### No ejecutado
+
+- CI real, despliegue, Meta, SSH al VPS.
+- Twilio por Traefik: prohibido en producción. Su rechazo en contenedor real sí se comprobó.
+- Corte con la versión de Traefik del VPS.
+- Restauración con una base de tamaño real.
+- `/admin` con usuarios por Traefik.
+- `protect_running_app` con webhook mudo: lo cubre el smoke con la `api` rota.
+
+#### Ronda 2 (2026-11-05)
+
+Revalidación de "Correcciones de QA, ronda 1". Rama sin commit, con las decisiones del usuario: corregir DEF-001 a DEF-006; R-1 queda sin efecto porque la URL de Meta se confirmó exacta. Sin SSH, Meta, despliegues ni `.env` reales. Evidencia en `ev2/` del scratchpad.
+
+##### Resultado final de la ronda 2
+
+**`QA_APPROVED` (PR 3), condicionado al CI verde en el PR y a las comprobaciones de producción.** DEF-001 a DEF-006 quedan corregidos, CA-16 pasa y no hay defectos abiertos.
+
+##### Montaje
+
+- **Fidelidad:** proyecto `restaurante`, sin `COMPOSE_PROJECT_NAME` en `.env`, como el `env.production.example`. Contenedores reales: `restaurante-mysql-1`, `restaurante-app-1`, `restaurante-api-1` y `restaurante-inventory-manager-1`. Estado inicial instalado con el `deploy/` de `main`.
+- **Imágenes:** ocho reconstruidas por QA, de la rama y de `352014e`.
+- **`sudo` real:** usuario `deploy` con `NOPASSWD`, `sudo` de Alpine con `env_reset`. El bloque de "Arrancar la `api` a mano" se extrae de `despliegue.md` y solo se sustituyen `cd /opt/restaurante` por la ruta del montaje y el digest.
+- **Sin Ubuntu:** el `sudo` del VPS no se probó. Los demás comandos del §6 y §9 se copiaron con la misma sustitución.
+
+##### Pruebas ejecutadas
+
+| Prueba | Resultado real |
+| --- | --- |
+| `build:css`, `typecheck`, `lint` | Código 0 |
+| `npm test` | Código 0: `api` 36 y 984; `landing-pages` 129 y 1455 (1454 más el `expected fail` previo); `inventory-manager` 8 y 111 |
+| Shards `--maxWorkers=4` | Código 0. Máximo 13,0 s. Medición local |
+| `shellcheck` de los dos pasos y `resumen-test.sh` | Código 0 |
+| `deploy/ci/smoke.sh` | **184 comprobaciones, 0 fallos** |
+| `ops/backup/ci/smoke.sh` | **58 comprobaciones, 0 fallos** |
+| Secretos | Seis valores, en logs de despliegue, restauración, `api` y `app`: 0 coincidencias |
+| `compose config` | Válido con y sin bot y con el router sin definir, `false` y `true`. `app`, `mysql`, `migrate` e `inventory-manager` idénticos a la base. Router sin cambios |
+
+##### Defectos de la ronda 1
+
+| Defecto | Escenario repetido | Antes | Ahora | Resultado |
+| --- | --- | --- | --- | --- |
+| DEF-001 | Procedimiento tras `restore.sh`, con y sin `api` en marcha | `enable=false` y 404 permanente | `enable=true`, 200 y reto a los 10 y 60 s; `POST` sin firma 401 en `api` | Corregido |
+| DEF-002 | §9 con `api` de `main` y `release.env` en `true` | 502 permanente | `enable=false`, 200 con la app de `main` | Corregido |
+| DEF-002 | `restore.sh`, app sin bot y `api` sin etiqueta | Código 0 sin ningún aviso | Código 0 y `AVISO` en la última línea; arreglado con el procedimiento | Corregido |
+| DEF-002 | Fila del 502 | Sin entrada | 502, el comando da etiqueta vacía, y el procedimiento quita el 502 | Corregido |
+| DEF-003 | Código 21 con `api` anterior que no arranca | 21 y "restaurada" | **22**, `health_failed_api_not_restored`, y mensaje propio | Corregido |
+| DEF-004 | Vecino con alias `app` y `mysql` | 4 de 5 avisos al vecino; `api` sin arrancar | 10 de 10 avisos a la app, 0 peticiones al vecino, `api` healthy sin reinicios | Corregido |
+| DEF-005 | Código 15 sin `api` anterior y 3004 mudo | 502 con la `api` rota | `api` detenida, 200 de la app con bot | Corregido |
+| DEF-006 | `api` anterior no descargable | Aviso incorrecto | "seguiría la api nueva", y el webhook sigue atendido | Corregido |
+
+##### DEF-004 en detalle
+
+- **Nombres usados:** en `docker inspect` de `api`, `DATABASE_URL` apunta a `restaurante-mysql-1` y `LANDING_INTERNAL_URL` a `http://restaurante-app-1:3002`, sin `COMPOSE_PROJECT_NAME` y sin tocar `.env`. Coincide con `despliegue.md` y con los nombres vistos en el VPS.
+- **Vecino:** `app` y `mysql` siguen resolviendo al vecino desde la `api`, y los nombres de contenedor no. Por eso el cambio funciona.
+- **Vuelta atrás:** con `api` y app de `main`, los mismos nombres funcionan: productos desde la base, aviso interno y `healthy` con el vecino.
+- **Arranque antes que el contenedor:**
+  - Sin `restaurante-app-1`: la `api` queda healthy; el aviso falla con `bad address` y funciona al volver la app.
+  - Sin `restaurante-mysql-1`: la `api` espera con `database_waiting`, sin reinicios, y queda healthy al volver MySQL.
+  - Primer despliegue desde cero, con la `api` antes que la app: código 0, 200 y aviso correcto.
+
+##### `restore.sh` y su `AVISO`
+
+| Caso | Código | `AVISO` | Correcto |
+| --- | --- | --- | --- |
+| `api` con router | 0 | No | Sí |
+| App con bot y `api` sin router | 0 | No | Sí |
+| App sin bot y `api` sin etiqueta | 0 | Sí | Sí |
+| Sin `api` | 0 | Sí | Sí |
+| `api` en bucle de reinicios con router | 0 | No | Ver OBS-1 |
+
+`backup.sh` funciona con `release.env` completo y un despliegue posterior a la restauración lo deja completo.
+
+##### Documentación y `sudo env` (CA-16)
+
+- **Hallazgo de `sudo`, confirmado:** con `RESTAURANTE_API_IMAGE=x sudo docker compose ...` la variable no llega (0 coincidencias en `config --images`), y con `sudo env` sí (1).
+- **§6, los dos sentidos:** app y después `api` a `main`, sin router y con 200 de la app. Después `api` con webhook sobre esa app, con router y 200 de la `api`. Vuelta de la app. El siguiente despliegue termina con 0.
+- **§9:** `stop`, `DROP`, carga del volcado, app, `inventory-manager` y `api`, con el procedimiento: 200 con router coherente. Con app sin bot y `api` anterior da 404, y la nota "Alguien tiene que atender el webhook" lo advierte.
+- **Búsqueda:** una sola línea de `despliegue.md` recrea la `api`, y lleva `RESTAURANTE_API_WEBHOOK`. Ninguna descripción del bot en `landing-pages`, salvo la tabla histórica de `arquitectura.md`.
+
+##### V-03, tres repeticiones
+
+| Operación | Ronda 1 | Informe de la corrección | Ronda 2 |
+| --- | --- | --- | --- |
+| Corte | 0, 0, 0 | 0 | **0, 0, 0** |
+| Vuelta atrás automática (21) | 1, 1, 1 | 4 | **1, 1, 1** (502) |
+| Reinicio de la `api` | 9, 9, 9 | 11 | **9, 9, 10** (404), hasta 2,8 s |
+| Volver a `main` con `deploy.sh` | 22, 23, 33 | 14 | **28, 30, 30**, entre 9,6 y 10,6 s |
+
+Los 4 fallos de la vuelta atrás no se reproducen, y `despliegue.md` da un rango correcto ("entre 1 y 4"). Los 14 tampoco. Las ventanas son de segundos en todos los casos y V-04 pasa: nunca queda un estado permanente sin bot.
+
+##### Las pruebas nuevas del smoke detectan el defecto
+
+Se reintrodujeron los defectos en una copia, sin tocar el repositorio:
+
+| Mutación | Comprobaciones que fallan |
+| --- | --- |
+| `mysql` y `app` en el compose (DEF-004) | `la api avisa a la app por su nombre de contenedor`, `la api llega a MySQL por su nombre de contenedor`, `la api arranca con el vecino en la red` |
+| Sin detener la `api` (DEF-005) | `la api rota queda detenida`, `la ruta del webhook vuelve a la app` |
+| Sin comprobar la `api` anterior (DEF-003) | `con app rota y la api anterior sin arrancar -> 22, no 21`, `releases.log lo registra` |
+| Comando sin la variable en `despliegue.md` (DEF-001) | `todo comando documentado que recrea la api pasa RESTAURANTE_API_WEBHOOK` |
+| `restore.sh` nunca avisa | `restore.sh avisa de que nadie atiende el webhook` |
+| `restore.sh` siempre avisa | `y sin aviso` |
+
+Total de la copia mutada del despliegue: 176 pasan y 8 fallan, las esperadas.
+
+##### Criterios de aceptación, ronda 2
+
+| Criterio | Resultado |
+| --- | --- |
+| CA-1, CA-2, CA-3 | PASS en local (router sin cambios); pendientes de producción |
+| CA-4 | PASS, por el smoke |
+| CA-14 | PASS: 6 de 6 operaciones con 200, reto, CSP y `enable=false`; token incorrecto 403; línea en el log de `app` |
+| CA-15 | PASS en local; pendiente del CI |
+| CA-16 | **PASS** |
+| CA-5 a CA-13 | PASS (regresión) |
+
+##### Observaciones, no defectos
+
+- **OBS-1:** el `AVISO` mira la etiqueta del router, no si la `api` responde. Con una `api` que ya estaba en bucle de reinicios y router encendido, no avisa y la ruta da 404. La `api` estaba rota antes de restaurar y el texto del aviso describe otro caso.
+- **OBS-2:** tras un código 15 sin `api` anterior, la `api` detenida cuenta como "anterior". Si el siguiente despliegue falla, termina con 22 y un mensaje correcto, pero queda esa `api` rota con 502. Exige tres fallos seguidos y un VPS sin `api` previa.
+- **OBS-3:** `despliegue.md` dice "unos 8 s" al volver a la versión anterior; en esta ronda fueron entre 9,6 y 10,6 s. Es el mismo orden de magnitud y el texto avisa de que varía.
+- **OBS-4:** la comprobación del smoke `y el aviso interno sigue llegando a la app` usa el nombre de contenedor directo y no detecta por sí sola la mutación del compose. La comprobación estática sí la detecta.
+- **OBS-5:** el sufijo `-1` depende de la convención de Compose para una sola réplica. Un cambio lo detectaría el smoke.
+- **Riesgo previo al ticket, solo anotado:** `app` usa `mysql` y `api`, e `inventory-manager` usa `api`, por nombre de servicio. Siguen expuestos a un alias de `traefik-public`.
+
+##### Pendientes de producción
+
+CA-1 a CA-3, CA-9, memoria en el VPS y certificado real. Hay que reinstalar `deploy/` cuando el job falle con el código 4 y `restore.sh` en el paso 11.5, para tener el `AVISO`.
+
+##### No ejecutado
+
+- CI real, despliegue, Meta y SSH al VPS.
+- `sudo` de Ubuntu: se probó el de Alpine.
+- Los comandos en `/opt/restaurante`: se ejecutaron en la ruta del montaje.
+- `sudo -u deploy -H docker pull` contra GHCR: se usó el registro local.
+- Restauración con una base de tamaño real.
+- Pruebas W completas por `curl`: el router no cambió y el smoke cubre sus rutas.
+- Memoria de `api`: no se volvió a medir con la imagen de la rama, que no cambió de digest respecto a la ronda 1.
+
 ## Trazabilidad
 
 | Objetivo / historia | Requisitos | Criterios |
@@ -1236,3 +1868,27 @@ QA ronda 2 del PR 2: DEF-001, A-1 y A-2 verificados, DEF-002 aceptado y foco vis
 ### Versión 13
 
 CI del PR 2 en #124: la primera ejecución dio 21,9 s en `bot-procesos-qa-req-f-042.test.ts`, que se parte por sus `describe` (`4c03d85`) sin cambiar casos. CI en verde con un máximo de 14,5 s por archivo: CA-15 cumplido para este PR. Revisión manual hecha por el usuario, sin defectos reportados. Estado: `READY_FOR_MERGE` (PR 2 de 3).
+
+### Versión 14
+
+PR 3: implementación de despliegue y documentación en `feature/REQ-F-042-bot-whatsapp-en-api-3-deploy`. Estado: `NEEDS_IMPLEMENTATION_APPROVAL` (PR 3). CA-1 a CA-3 quedan pendientes de producción.
+
+### Versión 15
+
+Implementación del PR 3 aprobada por el usuario ("1. si"), y autorizada la actualización de `.claude/CLAUDE.md` §8 y `.claude/agents/senior-fullstack.md` ("2. si"), que la sesión principal ya aplicó. QA Action Plan del PR 3 escrito, sin ejecutar pruebas. Estado: `NEEDS_QA_PLAN_APPROVAL` (PR 3).
+
+### Versión 16
+
+QA Action Plan del PR 3 aprobado por el usuario ("Si lo apruebo") y ejecutado, ronda 1: 158 y 55 comprobaciones de los dos smoke sin fallos, CA-14 verificado con imágenes de `main`, y seis defectos (tres `MAJOR`, dos `MINOR` y un `TRIVIAL`). Estado: `QA_REJECTED` (PR 3).
+
+### Versión 15
+
+PR 3: QA ronda 1 `QA_REJECTED`. Correcciones de DEF-001 a DEF-006 según las decisiones del usuario ("1. Si / 2. Corrigelo / 3. si te autorizo / 4. si es"). R-1 sin efecto. Estado: `NEEDS_IMPLEMENTATION_APPROVAL` (PR 3).
+
+### Versión 17
+
+QA ronda 2 del PR 3 (decisión del usuario: "si"): DEF-001 a DEF-006 corregidos, CA-16 pasa, 184 y 58 comprobaciones de los dos smoke sin fallos, y los defectos reintroducidos en una copia hacen fallar las pruebas nuevas. Estado: `QA_APPROVED` (PR 3), condicionado al CI.
+
+### Versión 18
+
+`.claude/agents/senior-fullstack.md` y `.claude/agents/senior-qa.md` incluyen dos reglas nuevas pedidas por el usuario ("si, déjalo como regla"): la revisión previa a QA y la regresión selectiva. Van en el commit de documentación del PR 3.

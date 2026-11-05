@@ -8,8 +8,8 @@ necesita desviarse de este documento, lo actualiza en el mismo PR.
 
 | | |
 | --- | --- |
-| Estado | **Aceptada** (estrategia general). Decisiones A (2026-10-24), B y C (2026-10-26) tomadas ([sección 9](#9-decisiones)). Aplicados los pasos 1 (REQ-F-036), 2 (REQ-F-037) y 3 (REQ-F-038) y los tickets 1 (REQ-F-039) y 2 (REQ-F-040) del paso 4. En producción desde el 2026-10-29 (PR #105, `c53f6f3`; REQ-F-040 con el PR #114, `3715486`) |
-| Fecha | 2026-10-24 (última actualización: 2026-10-28) |
+| Estado | **Aceptada** (estrategia general). Decisiones A (2026-10-24), B y C (2026-10-26) tomadas ([sección 9](#9-decisiones)). Aplicados los pasos 1 (REQ-F-036), 2 (REQ-F-037) y 3 (REQ-F-038) y los tickets 1 (REQ-F-039) y 2 (REQ-F-040) del paso 4, en producción desde el 2026-10-29 (PR #105, `c53f6f3`; REQ-F-040 con el PR #114, `3715486`). El ticket 3 (REQ-F-042) está en `epic/arquitectura`, pendiente de llegar a `main` |
+| Fecha | 2026-10-24 (última actualización: 2026-11-04) |
 | Alcance | Estructura del código, regla de dependencias, contratos, consumo de la API y orden de la migración. No cambia el stack de `.claude/CLAUDE.md` §2 |
 
 ## 1. Contexto
@@ -21,12 +21,13 @@ son relativas a `restaurante/landing-pages/`.
 - **`landing-pages`**: las landings por SSR (`src/views/`, `src/content/`, `public/`), con el aviso
   del día decidido en el servidor (REQ-F-028 y REQ-F-034), que obtienen los productos de la API
   (REQ-F-038). **En transición** sigue conteniendo la administración en `/admin` (SSR con sesión y
-  CSRF: usuarios, productos y control del bot), la API JSON de productos en `/admin/api`
-  (REQ-F-008) y el **bot de WhatsApp** (`src/services/whatsapp-bot/`), que arma el pedido y avisa
-  al personal: los pedidos **no se guardan**.
-- **`api`** (REQ-F-038 y REQ-F-039): la API JSON propia, solo en la red interna. Publica los
-  productos de cada negocio (`/api/v1/public/<negocio>/productos`) y su administración
-  (`/api/v1/admin/...`).
+  CSRF: usuarios, productos y control del bot) y la API JSON de productos en `/admin/api`
+  (REQ-F-008).
+- **`api`** (REQ-F-038, REQ-F-039 y REQ-F-042): la API JSON propia, solo en la red interna. Publica
+  los productos de cada negocio (`/api/v1/public/<negocio>/productos`) y su administración
+  (`/api/v1/admin/...`). Ejecuta además el **bot de WhatsApp** (`api/src/bot/`), que arma el pedido
+  y avisa al personal: los pedidos **no se guardan**. Su webhook se sirve en un puerto propio, lo
+  único de `api` que se alcanza desde internet.
 - **`inventory-manager`** (REQ-F-039): el admin nuevo de productos por SSR, que solo habla con la
   `api` mediante el cliente de `contracts`.
 - **Paquetes**: `core` (dominio en TypeScript puro, sin E/S de infraestructura), `db` (MySQL 8.4
@@ -37,7 +38,7 @@ El código ya tenía la base de esta separación: **repositorios con interfaz** 
 implementaciones (`ProductRepository` sobre Prisma o memoria, el repositorio de menús en archivo o
 memoria y `BotControlStore`), **reglas de negocio sin Koa** e **inyección por fábricas**
 (`createX({ deps })`) armada en el `server.ts` y el `app.ts` de cada app. Lo que queda es terminar
-de sacar de `landing-pages` la administración y el bot (§8) para que los frontends y los dominios
+de sacar de `landing-pages` la administración (§8) para que los frontends y los dominios
 nuevos (inventario, ventas, CRM) compartan esas piezas sin duplicarlas.
 
 ## 2. Objetivos y restricciones
@@ -180,12 +181,13 @@ packages/core/inventory/
   nombre: un import relativo a un archivo de `packages/` o a un archivo interno de un módulo de
   `core` falla en el lint.
 - **Regla de transición** (desviación registrada en el paso 2, REQ-F-037; limitada en el paso 3):
-  mientras `landing-pages` siga conteniendo `/admin` y el bot, **ese código** puede importar
+  mientras `landing-pages` siga conteniendo `/admin`, **ese código** puede importar
   `core`, `db` y `contracts`. En `eslint.config.ts` no tiene un bloque de restricción propio: solo
   le aplica la regla general de `landing-pages` (los paquetes se importan por su nombre y, de
   `core`, solo el `index.ts` de cada módulo; O-2), y un comentario "REGLA DE TRANSICIÓN —
-  TEMPORAL" marca la excepción. La restricción se activa en el paso 4 para `/admin`, cuando pase a
-  `inventory-manager`, y para el bot, cuando pase a `api`.
+  TEMPORAL" marca la excepción. La restricción se activa en el ticket 6 del paso 4, cuando `/admin`
+  se retire. Para el bot ya está activa (REQ-F-042): el lint rechaza un archivo del bot en
+  `landing-pages` y cualquier import de otra app.
 
 ## 5. Contratos compartidos (`packages/contracts`)
 
@@ -223,7 +225,7 @@ siguen en `landing-pages`). La resiliencia es la de la tabla, concretada así:
   buena sin límite de tiempo y, si no la hubo (arranque sin API), la semilla de
   `content/seeds.ts`; ninguna landing responde 5xx por la API;
 - las landings no tienen credenciales de la base **en su código**, pero el contenedor
-  `landing-pages` las conserva hasta el paso 4 porque `/admin` y el bot siguen en él.
+  `landing-pages` las conserva hasta el paso 4 porque `/admin` sigue en él.
 
 **Paso 4, ticket 1 aplicado (REQ-F-039):** `inventory-manager` renderiza en el servidor (decisión
 B) y es lo único con lo que habla el navegador. Llama a `/api/v1/admin` por la red interna `admin`
@@ -236,17 +238,21 @@ con el cliente de `contracts` (`createAdminApiClient`, que nunca lanza). Concret
 - **Resiliencia:** con la API caída o en 503, aviso y lo escrito se conserva. Un 409 muestra quién y
   cuándo, y deja cargar la versión vigente o guardar encima.
 - **Frescura:** tras cada escritura confirmada, la API avisa a `landing-pages` por su puerto interno
-  (`INTERNAL_PORT`, 3002, con credencial): invalida la caché de esa landing y recarga el catálogo del
-  bot. La escritura espera ese primer aviso como mucho 2 s para decir la verdad
-  (`meta.freshness`). La red de seguridad es la caducidad de 60 s de las landings y la recarga del
-  bot cada 60 s.
+  (`INTERNAL_PORT`, 3002, con credencial): invalida la caché de esa landing. La escritura espera ese
+  primer aviso como mucho 2 s para decir la verdad (`meta.freshness`). La red de seguridad es la
+  caducidad de 60 s de las landings. Desde REQ-F-042 el bot está en `api` y usa la misma caché de
+  productos que `/api/v1/admin`: lo ve en proceso, sin aviso, y `meta.freshness` solo confirma si
+  esa caché quedó al día. Su red de seguridad es una recarga cada 60 s.
 - **Un solo escritor:** con `ADMIN_NEW_URL`, el `/admin` actual muestra los productos en solo
   lectura (410 y `PRODUCTS_MOVED` en sus escrituras), así que la API, con una réplica y su mutex, es
   la única que escribe productos.
 
-**El bot de WhatsApp es un cliente más de `core`.** Vive dentro de `api` (su webhook es otra entrada
-HTTP) y, cuando exista `sales`, sus pedidos confirmados se guardan como ventas en lugar de solo
-avisar al personal.
+**El bot de WhatsApp es un cliente más de `core`** (REQ-F-042). Vive dentro de `api` (`api/src/bot/`)
+y su webhook es otra entrada HTTP, en un puerto propio. Cuando exista `sales`, sus pedidos
+confirmados se guardan como ventas en lugar de solo avisar al personal. Hasta el ticket 4, la pausa,
+los bloqueos y el uso se manejan desde el `/admin` de `landing-pages`: ese proceso y el de `api`
+comparten el control por la base (`core/bot-control`), `api` lo refresca cada
+`BOT_CONTROL_REFRESH_SECONDS` (10 s) y solo `api` corre el mantenimiento.
 
 ## 7. Patrones
 
@@ -297,7 +303,7 @@ El ticket 2 del paso 4 (REQ-F-040) llegó con el PR #114 (merge `3715486`) y se 
 | `src/repositories/prisma-*.ts`, `prisma/` | `packages/db/` |
 | `src/repositories/memory-*.ts` | Junto a su interfaz en `core` (son las implementaciones de prueba) |
 | `src/controllers/admin-products-api.ts` y `routes/admin-api.ts` | `api/` (`/api/v1/admin/products`) |
-| `src/services/whatsapp-bot/`, `controllers/whatsapp-webhook.ts` | `api/` (el bot), usando `core` |
+| `src/services/whatsapp-bot/`, `controllers/whatsapp-webhook.ts` | `api/src/bot/`, usando `core` (**aplicado en REQ-F-042**) |
 | `src/views/`, `src/content/`, `src/styles/`, `public/` | `landing-pages/` |
 | `src/views/admin/`, `controllers/admin*.ts` | Se sustituyen por `inventory-manager/` en el paso 4 |
 | `src/config/env.ts` | Cada app valida solo sus variables; lo común va en un módulo compartido |
@@ -313,12 +319,37 @@ Decisión del usuario: "Sí, 6 tickets en ese orden". Cada ticket es su propio P
 | --- | --- | --- |
 | 1 | **REQ-F-039**: base del admin nuevo y productos | Terminado en tres PR (#94, #95 y #99), detalle abajo |
 | 2 | **REQ-F-040**: usuarios y cuenta propia | Terminado en dos PR (#110 y #111) y en producción desde el 2026-10-29 (#114), detalle abajo |
-| 3 | Mover el bot a `api` | Publica una entrada de `api` para el webhook (su router de Traefik solo para esa ruta) y cambia la URL en Meta (acción del usuario). Activa la regla de lint para el bot |
+| 3 | **REQ-F-042**: mover el bot a `api` | Tres PR (#121, #124 y el de despliegue) hacia `epic/arquitectura`, detalle abajo. Publica una entrada de `api` para el webhook con un router de Traefik solo para esa ruta. **La URL se conserva** (`https://birriaelmuneco.com/webhooks/whatsapp`, decisión D-1 de REQ-F-042): no hay ningún cambio en Meta. Activa la regla de lint para el bot |
 | 4 | Control del bot en el admin nuevo | Pausa, bloqueos y topes |
 | 5 | Menú y página | Antes se decide si el menú queda en archivos o pasa a MySQL |
 | 6 | Retirada del `/admin` actual | Mover la importación de semillas y el menú, quitar las credenciales de la base de `landing-pages`, quitar el router `restaurante-admin` y activar la regla de lint para `/admin` |
 
-Los IDs de los tickets 3 a 6 se asignan al crearlos.
+Los IDs de los tickets 4 a 6 se asignan al crearlos.
+
+### Paso 4, ticket 3 aplicado (REQ-F-042)
+
+- **Bot en `api/src/bot/`:** orquestador, proveedores, intérprete, protección, contenido propio,
+  simulador y pruebas. Lo que comparte con las landings y con `/admin` pasó a `core` (horario,
+  nombres, enlace de Maps, enlace de WhatsApp y `bot-control`).
+- **Webhook en un puerto propio (P-1):** `WEBHOOK_PORT`, 3004, una app Koa que solo tiene
+  `/webhooks/whatsapp`. El puerto 3001 sigue siendo interno.
+- **URL conservada (D-1):** `https://birriaelmuneco.com/webhooks/whatsapp`. El router
+  `restaurante-webhook` usa `Host(<dominio>) && Path(/webhooks/whatsapp)`, ruta exacta, con prioridad
+  200, por encima de los routers de la app, y apunta al 3004. El resto del dominio sigue yendo a
+  `landing-pages`.
+- **Red:** `api` entra en `traefik-public`, por la entrada del webhook y porque necesita salida a
+  internet para hablar con Meta. Un contenedor vecino de esa red alcanza `api:3001`, como alcanza
+  `app:3000` (riesgo aceptado). `api` llega a MySQL y a `app` por sus nombres de contenedor, para que
+  un alias `mysql` o `app` de un vecino no responda por ellos.
+- **Vuelta atrás (RF-13):** la imagen `api` lleva `LABEL org.restaurante.webhook="whatsapp"` y
+  `deploy.sh` enciende el router solo con esa etiqueta (`RESTAURANTE_API_WEBHOOK`). Con una `api`
+  anterior el router no existe y la ruta vuelve a la app anterior, que tiene el bot y sigue recibiendo
+  sus variables (P-2, hasta el ticket 6). Antes de cambiar la app, `deploy.sh` comprueba que Traefik
+  ya enruta el webhook a `api`. En la vuelta atrás automática, la `api` vuelve la última, cuando la
+  app anterior ya está lista, y se comprueba que quede atendiendo.
+- **`/admin` en transición:** pausa, bloqueos y uso (leído de la base). La lista de topes de hoy
+  vuelve en el ticket 4 (D-2).
+- **Regla de lint:** la regla de transición ya no menciona el bot.
 
 ### Paso 4, ticket 2 aplicado (REQ-F-040)
 
@@ -486,7 +517,9 @@ y se registra aquí, con la fecha y lo que respondió el usuario. Las tres está
   en `admin.<dominio>/api`.
   - El navegador solo habla con `inventory-manager`, que reenvía la sesión a la API por la red
     interna `admin`; así la cookie sigue en el mismo origen sin CORS.
-  - El ticket 3 (webhook del bot) publicará una entrada de `api` y decidirá su host y su ruta.
+  - El ticket 3 (webhook del bot, REQ-F-042) publicó una sola entrada de `api`: la ruta exacta
+    `/webhooks/whatsapp` en el dominio raíz, en un puerto propio (el 3004), con la misma URL que ya
+    conocía Meta. El resto de `api` sigue sin publicarse.
 
 ### Decisión C: tomada
 
@@ -515,7 +548,7 @@ y se registra aquí, con la fecha y lo que respondió el usuario. Las tres está
   caché, la última copia buena y la semilla de la [sección 6](#6-cómo-se-consume-la-api). Riesgo
   aceptado: si `landing-pages` se reinicia con la API caída, muestra la semilla (que puede estar
   desfasada respecto de la base) hasta que la API vuelva. Las cachés del bot (de la base) y de las
-  landings (de la API) pueden divergir un momento si falla un refresco; las dos se invalidan con
+  landings (de la API) pueden divergir un momento si falla un refresco; las dos se actualizan con
   cada escritura.
 - **Memoria del VPS** con más contenedores (decisión A): medida en el paso 1 (REQ-F-036, CA-13
   cumplido el 2026-10-26 con la toma de tráfico simulado: 33,5 %). Umbral: si la estimación con
@@ -541,15 +574,26 @@ y se registra aquí, con la fecha y lo que respondió el usuario. Las tres está
     35,6 % y del umbral del 80 %. Por contenedor: `app` 76,9 MiB, `api` 72,6 MiB,
     `inventory-manager` 43,2 MiB, MySQL 527,3 MiB y Traefik 120,3 MiB (los tres Node suman
     192,7 MiB frente a los 252,3 MiB de la estimación). **La decisión A se mantiene.**
+- **Revisión de memoria del paso 4, ticket 3** (REQ-F-042): no hay contenedores nuevos; el bot sale
+  de `app` y entra en `api`, y el balance es casi neutro.
+  Medida local (Docker Desktop, `docker stats`, 2026-11-04, con el bot configurado en `api`, unos 20 s
+  después del arranque y sin conversaciones): **`api` 100,0 MiB**, `app` 98,0 MiB,
+  `inventory-manager` 47,3 MiB. Cota con la medición real del VPS: 1232 + (100,0 − 72,6) =
+  **1259,4 MiB, el 32,2 %** de 3915 MiB, muy por debajo del umbral del 80 %, sin contar lo que libera
+  `app`: **la decisión A se mantiene**.
+  - **Pendiente:** la medición real en el VPS tras desplegar la épica (`free -m` y
+    `docker stats --no-stream`, solo lectura), para compararla con el 31,5 % y el umbral del 80 %.
 - **Dos administraciones a la vez** durante el paso 4: el `/admin` actual se mantiene hasta que el
   nuevo tenga lo mismo y se retira en el ticket 6. Desde REQ-F-039 muestra los productos en solo
-  lectura y el admin nuevo los edita (un solo escritor). Usuarios, cuenta, bot y menú siguen en el
-  `/admin` actual hasta los tickets 2 a 5.
+  lectura y el admin nuevo los edita (un solo escritor). Usuarios, cuenta, control del bot y menú
+  siguen en el `/admin` actual hasta los tickets 2 a 5.
 - **Estado en memoria de la `api`** (REQ-F-039): viven en el proceso las sesiones del admin nuevo,
   el límite de intentos de acceso y las claves de idempotencia (creadas en `api/src/admin/index.ts`),
-  y la caché y el mutex del repositorio de productos de `core/catalog` (compuesto en
-  `api/src/server.ts`). Un reinicio o un despliegue de `api` cierra todas las sesiones (hay que
-  volver a entrar), y la `api` no puede tener más de una réplica mientras ese estado no pase a MySQL.
+  la caché y el mutex del repositorio de productos de `core/catalog` (compuesto en
+  `api/src/server.ts`) y, desde REQ-F-042, las conversaciones del bot, su deduplicación y la copia del
+  control. Un reinicio o un despliegue de `api` cierra todas las sesiones (hay que volver a entrar) y
+  corta las conversaciones a medias, y la `api` no puede tener más de una réplica mientras ese estado
+  no pase a MySQL.
 
 ### Medición de memoria del VPS
 

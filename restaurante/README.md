@@ -40,8 +40,8 @@ estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md)
 
 | Workspace | Contenido |
 | --- | --- |
-| `landing-pages/` | La app Koa descrita en este README (las landings, `/admin`, `/admin/api` y el bot de WhatsApp). Las landings leen los productos de `api/` (REQ-F-038) |
-| `api/` | API propia (REQ-F-038, REQ-F-039 y REQ-F-040): `GET /api/v1/public/{molotes,birria}/productos` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos y, con `ADMIN_NEW_URL`, la única vía web para gestionar usuarios. Solo en la red interna; ver [API propia](#api-propia-api) |
+| `landing-pages/` | La app Koa descrita en este README (las landings, `/admin` y `/admin/api`). Las landings leen los productos de `api/` (REQ-F-038) |
+| `api/` | API propia (REQ-F-038, REQ-F-039 y REQ-F-040): `GET /api/v1/public/{molotes,birria}/productos` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos y, con `ADMIN_NEW_URL`, la única vía web para gestionar usuarios. Solo en la red interna; ver [API propia](#api-propia-api). También ejecuta el [bot de WhatsApp](#bot-de-whatsapp) (REQ-F-042), con su webhook en un puerto propio, lo único de `api` que se alcanza desde internet |
 | `inventory-manager/` | Admin nuevo (REQ-F-039 y REQ-F-040): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos, los usuarios y "Mi cuenta" con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
 | `packages/web/` (`@restaurante/web`) | Utilidades HTTP y SSR sin dominio que comparten las apps Koa (REQ-F-039): plantillas, lectura de formularios y JSON, mismo origen y logger JSON |
 | `packages/core/` (`@restaurante/core`) | Dominio en TypeScript puro, sin Koa ni Prisma: módulos `catalog`, `schedule`, `identity`, `bot-control` y `shared`. Cada módulo se importa solo por su `index.ts` (`@restaurante/core/catalog`) |
@@ -66,9 +66,9 @@ estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md)
   `views/landings/` y `services/landing-products.ts`) no puede importar `db`, Prisma, `mariadb`,
   `core/identity`, `core/bot-control`, la persistencia de `core/catalog` ni el repositorio de
   productos: los productos le llegan del cliente de `contracts` (REQ-F-038). En todo
-  `landing-pages`, los paquetes se importan por su nombre, nunca por ruta relativa. `/admin` y el
-  bot pueden seguir importando `core` y `db` hasta el paso 4 (regla de transición). `npm run lint`
-  lo impone (ver [Arquitectura §4](docs/arquitectura.md#4-estructura-monorepo-con-npm-workspaces)).
+  `landing-pages`, los paquetes se importan por su nombre, nunca por ruta relativa. `/admin` puede
+  seguir importando `core` y `db` hasta el ticket 6 del paso 4 (regla de transición); el bot ya no
+  está en `landing-pages` y su código no puede volver (REQ-F-042). `npm run lint` lo impone (ver [Arquitectura §4](docs/arquitectura.md#4-estructura-monorepo-con-npm-workspaces)).
 - **Rutas:** salvo que se indique otra cosa, las rutas de archivos de la app que cita este README
   (`src/...`, `public/...`, `tests/...`, `scripts/...`, `.env`, `data/`) son relativas a
   `landing-pages/`, y las de `core/...` y `db/...` a `packages/`. `prisma/...` y
@@ -156,7 +156,7 @@ apruebe con `npm install-scripts approve <paquete>`.
 | `npm run watch:css`  | Compilación de CSS en modo observación                      |
 | `npm run admin:hash-password` | Pide la contraseña de administración (sin mostrarla) e imprime el valor de `ADMIN_PASSWORD_HASH` |
 | `npm run admin:recover -- --usuario <nombre>` | Recupera el acceso de administración por consola (ver [Recuperar el acceso](#recuperar-el-acceso)) |
-| `npm run bot:chat [-- --ahora AAAA-MM-DDTHH:MM]` | Conversación con el bot de WhatsApp en la terminal contra el simulador de la Cloud API, sin Meta (ver [Probar el bot en local](#probar-el-bot-en-local)) |
+| `npm run bot:chat [-- --ahora AAAA-MM-DDTHH:MM]` | Conversación con el bot de WhatsApp en la terminal contra el simulador de la Cloud API, sin Meta; delega en el workspace `api` (ver [Probar el bot en local](#probar-el-bot-en-local)) |
 | `npm run db:generate` | Genera el cliente de Prisma en `packages/db/src/generated/prisma` (necesario antes de `typecheck`, `lint`, `test` y `dev`) |
 | `npm run db:up` / `npm run db:down` | Levanta / detiene el MySQL 8.4 local de `compose.yaml` (solo en `127.0.0.1:3307`; datos en el volumen `mysql-dev-data`) |
 | `npm run db:migrate` | Aplica las migraciones pendientes (`prisma migrate deploy`, en `packages/db`) con `MIGRATION_DATABASE_URL` de `packages/db/.env` |
@@ -397,9 +397,10 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
   repetir el valor.
 - **Aviso interno** (REQ-F-039): `landing-pages` escucha en `INTERNAL_PORT` (3002 por defecto; nunca
   el de `PORT`, que es el que enruta Traefik) solo `POST /internal/v1/productos-cambiados`, con
-  `Authorization: Bearer <INTERNAL_NOTIFY_TOKEN>`. Invalida la caché de la landing de ese negocio y
-  recarga el catálogo del bot. Si el aviso se pierde, la red de seguridad es la caducidad de 60 s de
-  la caché y la recarga del catálogo del bot cada 60 s.
+  `Authorization: Bearer <INTERNAL_NOTIFY_TOKEN>`. Invalida la caché de la landing de ese negocio. Si
+  el aviso se pierde, la red de seguridad es la caducidad de 60 s de la caché. El bot, en `api`, usa
+  la misma caché de productos que escribe `/api/v1/admin`, así que no necesita aviso (REQ-F-042, RF-10);
+  si esa recarga falla, tiene su propia red de seguridad de 60 s.
 
 ### Admin nuevo (`inventory-manager/`)
 
@@ -465,7 +466,7 @@ el job `deploy` usa secretos (los del environment `production`).
 - Primero corre el job `cambios`, que clasifica con `git diff` los archivos que el PR agrega a su
   rama base (o los del push a `main`). Son **solo documentación** si todos están en `.claude/`, son
   `*.md` fuera de `restaurante/` o están en `restaurante/docs/` con extensión `.md`. Los demás
-  `*.md` de `restaurante/` cuentan como código (`landing-pages/tests/unit/whatsapp-bot-free-text.test.ts` lee
+  `*.md` de `restaurante/` cuentan como código (`api/tests/unit/whatsapp-bot-free-text.test.ts` lee
   este README y `tests/fixtures/` forma parte de las pruebas), igual que cualquier otro archivo
   (código, Docker, CI, configuración), sin importar el nombre de la rama.
 - En un PR, `calidad`, `docker` y `auditoria` solo corren si hay cambios de código;
@@ -582,7 +583,7 @@ cada imagen una sola vez y las reutiliza en todas sus comprobaciones.
 | Comprobación | Pasos, en orden |
 | ------------ | --------------- |
 | `calidad`    | Agrega `verificacion` y `pruebas` (REQ-F-041). `verificacion`: Node 24 (versión de `.nvmrc`), `npm ci --strict-allow-scripts`, `npm run db:generate` (cliente de Prisma), `npm run typecheck`, `npm run lint`, `npm run db:up` (MySQL 8.4 de `compose.yaml`) y `prisma migrate diff` (el esquema y las migraciones no divergen). `pruebas (1/2)` y `pruebas (2/2)`, en paralelo, cada uno en su runner y con su MySQL: Node 24, `npm ci --strict-allow-scripts`, `npm run db:generate`, `npm run build:css` (las pruebas leen el CSS generado), `npm run db:up` y `npm test -- --maxWorkers=4 --shard=<n>/2` (contra MySQL; los argumentos llegan a cada workspace; ver [Trabajadores de Vitest en el CI](#trabajadores-de-vitest-en-el-ci)) |
-| `docker`     | 1) Imágenes: build de los targets `production`, `migrate`, `api` e `inventory-manager` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64`, con la caché `gha` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite, que `production` y `api` llevan el código de `contracts` (REQ-F-038) y de `packages/web` (y `api`, la copia de las imágenes de las landings), que `inventory-manager` (REQ-F-039) no lleva `packages/db` ni `packages/core`, ni Prisma ni mariadb, y sí `contracts`, `web`, su CSS compilado y los iconos de las landings, y que `migrate` aplica el esquema sobre una base vacía con código 0; arranca la `api` en la red interna hasta que queda `healthy` (con la credencial del aviso interno) y `production` sin `HOST` con `API_INTERNAL_URL` hacia ella, y comprueba que escucha en `0.0.0.0`, queda `healthy`, responde por el puerto publicado (REQ-F-015) y carga los productos de la API; después, `inventory-manager` queda `healthy` con su `HEALTHCHECK` (`/salud`), y se retira el MySQL de estas comprobaciones (`docker compose down --volumes`). 2) Despliegue, con las mismas imágenes: `shellcheck` de los scripts de `deploy/` y de `ops/backup/`, `deploy/ci/resumen-test.sh` (cada estado del resumen de `deploy`, con entradas simuladas; REQ-F-030), las unidades de systemd de los respaldos y la prueba de humo del despliegue, `deploy/ci/smoke.sh` (REQ-F-016), con las cuatro imágenes: el compose de producción no publica puertos y MySQL solo está en la red interna; con un registro local y un Traefik v3 ejecuta `deploy.sh` como el comando forzado de SSH y comprueba los rechazos (argumentos, suma de `deploy/`, permisos del `.env`), el primer despliegue, las redirecciones 301, el 429 en `/admin`, la IP y el esquema en el log, la retención de 7 volcados, la migración fallida (la app no se toca), la vuelta atrás ante una imagen rota (también tras una migración nueva) y dos despliegues a la vez. Desde REQ-F-038, también los tres digests (la forma de 2 se rechaza), la `api` solo en la red interna (sin puertos ni labels), la llamada de la app a la `api`, que las landings muestran lo que sirve la `api` y siguen en 200 con la `api` parada, y que una `api` rota termina con 15 sin tocar la app (o, si hubo migraciones nuevas, con la app recreada con `DATABASE_ALLOW_NEWER_SCHEMA=true`, que sobrevive a un reinicio). Desde REQ-F-039, los cuatro digests (la forma de 3, sin `inventory-manager`, se rechaza), `RESTAURANTE_ADMIN_DOMAIN` y la credencial del aviso interno obligatorios (si faltan, 3), ningún router de Traefik hacia el puerto interno 3002, `inventory-manager` solo en las redes `admin` y `traefik` (sin MySQL ni credenciales de la base), `healthy` y sin puertos, el subdominio del admin (200 en `/acceso` con `no-store` y `noindex`, 301 de HTTP a HTTPS, 429 tras la ráfaga de su límite de 60 por minuto, sin enrutar a la `api`), el aviso de la `api` a la app (401 sin credencial) y que un `inventory-manager` roto termina con 16, vuelve al anterior y deja la app como estaba y la `api` nueva en marcha; por último, la prueba de humo de los respaldos (`ops/backup/ci/smoke.sh`, REQ-F-019) |
+| `docker`     | 1) Imágenes: build de los targets `production`, `migrate`, `api` e `inventory-manager` del `Dockerfile` (su etapa `build` ejecuta `npm run typecheck`), solo `linux/amd64`, con la caché `gha` y sin publicar las imágenes; comprueba que `production` no lleva el CLI de Prisma ni SQLite, que `production` y `api` llevan el código de `contracts` (REQ-F-038) y de `packages/web` (y `api`, la copia de las imágenes de las landings), que `inventory-manager` (REQ-F-039) no lleva `packages/db` ni `packages/core`, ni Prisma ni mariadb, y sí `contracts`, `web`, su CSS compilado y los iconos de las landings, y que `migrate` aplica el esquema sobre una base vacía con código 0; arranca la `api` en la red interna hasta que queda `healthy` (con la credencial del aviso interno) y `production` sin `HOST` con `API_INTERNAL_URL` hacia ella, y comprueba que escucha en `0.0.0.0`, queda `healthy`, responde por el puerto publicado (REQ-F-015) y carga los productos de la API; después, `inventory-manager` queda `healthy` con su `HEALTHCHECK` (`/salud`), y se retira el MySQL de estas comprobaciones (`docker compose down --volumes`). 2) Despliegue, con las mismas imágenes: `shellcheck` de los scripts de `deploy/` y de `ops/backup/`, `deploy/ci/resumen-test.sh` (cada estado del resumen de `deploy`, con entradas simuladas; REQ-F-030), las unidades de systemd de los respaldos y la prueba de humo del despliegue, `deploy/ci/smoke.sh` (REQ-F-016), con las cuatro imágenes: el compose de producción no publica puertos y MySQL solo está en la red interna; con un registro local y un Traefik v3 ejecuta `deploy.sh` como el comando forzado de SSH y comprueba los rechazos (argumentos, suma de `deploy/`, permisos del `.env`), el primer despliegue, las redirecciones 301, el 429 en `/admin`, la IP y el esquema en el log, la retención de 7 volcados, la migración fallida (la app no se toca), la vuelta atrás ante una imagen rota (también tras una migración nueva) y dos despliegues a la vez. Desde REQ-F-038, también los tres digests (la forma de 2 se rechaza), la `api` solo en la red interna (sin puertos ni labels), la llamada de la app a la `api`, que las landings muestran lo que sirve la `api` y siguen en 200 con la `api` parada, y que una `api` rota termina con 15 sin tocar la app (o, si hubo migraciones nuevas, con la app recreada con `DATABASE_ALLOW_NEWER_SCHEMA=true`, que sobrevive a un reinicio). Desde REQ-F-039, los cuatro digests (la forma de 3, sin `inventory-manager`, se rechaza), `RESTAURANTE_ADMIN_DOMAIN` y la credencial del aviso interno obligatorios (si faltan, 3), ningún router de Traefik hacia el puerto interno 3002, `inventory-manager` solo en las redes `admin` y `traefik` (sin MySQL ni credenciales de la base), `healthy` y sin puertos, el subdominio del admin (200 en `/acceso` con `no-store` y `noindex`, 301 de HTTP a HTTPS, 429 tras la ráfaga de su límite de 60 por minuto, sin enrutar a la `api`), el aviso de la `api` a la app (401 sin credencial) y que un `inventory-manager` roto termina con 16, vuelve al anterior y deja la app como estaba y la `api` nueva en marcha. Desde REQ-F-042, la `api` también está en `traefik-public` con un solo router, `restaurante-webhook`, en la ruta exacta y el puerto 3004: el webhook llega a la `api` y ninguna otra ruta, un vecino con los alias `app` o `mysql` no la afecta, el router sigue a la imagen (también en las vueltas atrás y en el procedimiento manual de `docs/despliegue.md`), y un webhook mudo o una `api` anterior que no vuelve terminan con 15 o 22; por último, la prueba de humo de los respaldos (`ops/backup/ci/smoke.sh`, REQ-F-019) |
 | `auditoria`  | Node 24 y `npm run audit:deps` (REQ-F-020; `landing-pages/scripts/audit-deps.ts`), sin `npm ci`: `npm audit` sobre el `package-lock.json` de la raíz por imagen, con la política de [Auditoría de dependencias](#auditoría-de-dependencias) |
 
 La caché de npm se invalida al cambiar `package-lock.json`; la de Docker reutiliza las capas que
@@ -641,7 +642,7 @@ misma ruta:
 docker build -f landing-pages/Dockerfile -t restaurante:production --target production . && docker build -f landing-pages/Dockerfile -t restaurante:migrate --target migrate . && docker build -f landing-pages/Dockerfile -t restaurante:api --target api . && docker build -f landing-pages/Dockerfile -t restaurante:inventory-manager --target inventory-manager .
 docker network create traefik-public 2>/dev/null; w=/tmp/restaurante-smoke; mkdir -p "$w"
 docker run --rm --network traefik-public -v /var/run/docker.sock:/var/run/docker.sock \
-  -v "$PWD/deploy:/src/deploy:ro" -v "$w:$w" -e SMOKE_WORKDIR="$w" docker:cli \
+  -v "$PWD/deploy:/src/deploy:ro" -v "$PWD/docs:/src/docs:ro" -v "$w:$w" -e SMOKE_WORKDIR="$w" docker:cli \
   sh -c 'apk add -q bash curl jq coreutils findutils util-linux gzip && bash /src/deploy/ci/smoke.sh restaurante:production restaurante:migrate restaurante:api restaurante:inventory-manager'
 ```
 
@@ -831,7 +832,7 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `ADMIN_PASSWORD_HASH`      | No                      | Hash scrypt de la contraseña del primer administrador (`npm run admin:hash-password`). Nunca la contraseña en claro |
 | `TRUST_PROXY`              | No (`false`)            | `true` detrás de un proxy con TLS (Traefik en producción): Koa usa `X-Forwarded-Proto` (HTTPS) y la última IP de `X-Forwarded-For` (límite de intentos y log) |
 | `DATABASE_ALLOW_NEWER_SCHEMA` | No (`false`)         | Solo la pone `deploy/deploy.sh` al volver a la versión anterior: la app arranca aunque la base tenga migraciones que no conoce (REQ-F-016). Nunca en `.env` |
-| `WHATSAPP_BOT_*`, `WHATSAPP_GRAPH_API_VERSION` | Todas o ninguna | Bot de WhatsApp; ver [Variables del bot](#variables-del-bot). Sin ninguna, el bot queda deshabilitado |
+| `WHATSAPP_BOT_PROVIDER`, `WHATSAPP_BOT_STAFF_*`, `WHATSAPP_BOT_BLOCKLIST_KEY(_PREVIOUS)`, `BOT_*` | Todas o ninguna | Solo lo que necesita la página "Bot" de `/admin` (REQ-F-042, D-4). El bot y el resto de sus variables están en `api`: ver [Variables del bot](#variables-del-bot) |
 
 ## HTTP
 
@@ -845,7 +846,6 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `GET /<archivo>` | Estáticos de `public/` (sin índices ni archivos ocultos)                                   |
 | `/admin/...`     | Administración de menús y productos (ver [Administración de menús](#administración-de-menús))  |
 | `/admin/api/...` | API JSON de productos, con sesión (ver [API de productos](#api-de-productos))                |
-| `GET`/`POST /webhooks/whatsapp` | Webhook del bot de WhatsApp: verificación de la suscripción y recepción de mensajes firmados (ver [Bot de WhatsApp](#bot-de-whatsapp)); 503 si el bot no está configurado |
 
 Las tres rutas HTML usan el mismo controlador (`src/controllers/landing.ts`): con un
 `businessId` fijo renderiza ese negocio y sin él (`/`) renderiza Birria con el aviso del día;
@@ -865,7 +865,8 @@ la ruta sale de `BUSINESS_PATHS`. En desarrollo (`NODE_ENV=development`), `?dia=
 `miercoles`, `jueves`, `viernes`, `sabado` o `domingo` fuerza el día del aviso en `/` y en
 `/molotes`. En `test` y `production` el parámetro se ignora.
 Cualquier otra ruta responde 404 y los métodos distintos de GET/HEAD, 405 (salvo los POST de
-la administración y del webhook del bot).
+la administración). `/webhooks/whatsapp` ya no es de esta app: la atiende `api` en su propio puerto
+(ver [Bot de WhatsApp](#bot-de-whatsapp)) y aquí responde 404.
 
 Los errores responden JSON con formato común:
 
@@ -878,24 +879,31 @@ Los logs son JSON por línea en stdout (método, ruta sin query string, estado y
 
 ## Bot de WhatsApp
 
-Un solo bot para los dos negocios (REQ-F-009), dentro de esta misma app: el proveedor envía cada
-mensaje del cliente al webhook `POST /webhooks/whatsapp` y el bot responde con la API del
-proveedor. No hay pago, ni panel de pedidos, ni pedidos guardados.
+Un solo bot para los dos negocios (REQ-F-009), dentro de la app `api` (REQ-F-042): el proveedor
+envía cada mensaje del cliente al webhook `POST /webhooks/whatsapp` y el bot responde con la API
+del proveedor. No hay pago, ni panel de pedidos, ni pedidos guardados.
+
+El webhook se sirve en un puerto propio de `api` (`WEBHOOK_PORT`, 3004), una app Koa que solo tiene
+esa ruta. En producción Traefik publica únicamente esa ruta exacta,
+`https://birriaelmuneco.com/webhooks/whatsapp`, la misma URL de siempre: Meta no cambia. Desde
+internet no se alcanza ninguna otra ruta de `api`. Sin bot configurado, responde 503 `BOT_DISABLED`.
+En esta sección, las rutas `src/` y `tests/` del bot son relativas a `api/`; la página "Bot" de
+`/admin` sigue en `landing-pages` hasta el ticket 4 del paso 4.
 
 **Proveedores (REQ-F-012).** El bot funciona con uno de dos proveedores, elegido con
 `WHATSAPP_BOT_PROVIDER` (un solo proveedor activo por arranque):
 
 - **`meta`** — WhatsApp Cloud API de Meta. Es el proveedor de **producción**.
 - **`twilio`** — API de WhatsApp de Twilio, incluido su sandbox. Solo para **desarrollo**: con
-  `NODE_ENV=production` y `twilio` la app no arranca, esté o no habilitado el bot.
+  `NODE_ENV=production` y `twilio` la `api` no arranca, esté o no habilitado el bot.
 
 Cada proveedor es una implementación de la interfaz `ChatBot`
-(`src/services/whatsapp-bot/chat-bot.ts`): `WhatsAppBot` (Meta, `providers/meta/`) y `TwilioBot`
+(`src/bot/chat-bot.ts`): `WhatsAppBot` (Meta, `providers/meta/`) y `TwilioBot`
 (Twilio, `providers/twilio/`). `ChatBot` cubre solo lo que depende del proveedor: verificación y
 firma del webhook, formato de las entregas, respuesta al proveedor, envío y longitud máxima de un
 mensaje. La conversación (máquina de estados, catálogo, horario, carrito, textos, deduplicación,
 colas, límite por número y logs) existe una sola vez en el orquestador
-(`src/services/whatsapp-bot/orchestrator.ts`), que no importa código de ningún proveedor. El
+(`src/bot/orchestrator.ts`), que no importa código de ningún proveedor. El
 único módulo que conoce las dos implementaciones es `providers/select.ts`; la app, las rutas y
 el webhook solo usan `ChatBot`. Cambiar de proveedor es cambiar las variables y reiniciar; al
 arrancar queda `bot_provider_selected` con el proveedor en el log.
@@ -944,7 +952,7 @@ arrancar queda `bot_provider_selected` con el proveedor en el log.
   con su código. El bot no cobra, no valida pagos y no recibe comprobantes. Los datos de la cuenta
   (beneficiario, banco y CLABE, una sola cuenta para los dos negocios) se editan solo en
   `src/content/common/payment.ts` y se leen con `getBankAccount()`; los textos, en
-  `src/content/common/bot.ts`. Nunca van al log.
+  `src/bot/content/common/bot.ts`. Nunca van al log.
 - **Horario:** sale de `packages/core/schedule/business-hours.ts` (REQ-F-010; en `core` desde REQ-F-042). Fuera de horario avisa cuándo abre,
   deja pedir y marca el resumen "FUERA DE HORARIO". El lunes atiende como Molotes (cerrado; abre
   el martes). Si el negocio no abre ni ese día ni el siguiente (Molotes el viernes después de las
@@ -957,7 +965,7 @@ arrancar queda `bot_provider_selected` con el proveedor en el log.
   contacto.
 - **Mensajes largos:** se parten según el límite del proveedor (4096 caracteres con Meta, 1600
   con Twilio) sin separar nunca un bloque: un producto del menú con sus precios ni una línea del
-  pedido con su detalle y su cantidad (`splitMessage` en `src/services/whatsapp-bot/text.ts`;
+  pedido con su detalle y su cantidad (`splitMessage` en `src/bot/text.ts`;
   REQ-F-029). El aviso al personal en texto libre de Twilio se sigue partiendo por líneas.
 - **Formato de los textos (REQ-F-029):** pensado para la burbuja del celular. Los renglones
   estructurados (listas, precios, cantidades, totales, palabras clave) miden como máximo
@@ -969,12 +977,12 @@ arrancar queda `bot_provider_selected` con el proveedor en el log.
   línea (detalle en cursiva y `2 × $130 c/u = $260` con sangría). El formato es el mismo para los
   dos negocios y no depende del catálogo. Un nombre de producto con `*`, `_` o `~` puede alterar
   la negrita del menú (WhatsApp no permite escaparlos).
-- **Textos:** `src/content/common/bot.ts` (flujo y vocabulario común) y
-  `src/content/<negocio>/bot.ts` (lema, palabras del negocio, secciones del menú, emojis de los
+- **Textos:** `src/bot/content/common/bot.ts` (flujo y vocabulario común) y
+  `src/bot/content/<negocio>/bot.ts` (lema, palabras del negocio, secciones del menú, emojis de los
   productos y vocabulario del negocio).
 - **Emojis:** los textos llevan emojis de comida y bebida con moderación: acompañan a la palabra,
   nunca la sustituyen, y como mucho dos por línea. El emoji de cada producto del menú se define
-  por slug en `emojis` de `src/content/<negocio>/bot.ts`; un producto sin emoji se muestra sin
+  por slug en `emojis` de `src/bot/content/<negocio>/bot.ts`; un producto sin emoji se muestra sin
   él. El intérprete los ignora, así que un cliente que copie un texto del bot (el ejemplo de
   pedido, una línea del menú o "🏪 Recoger en sucursal") se entiende igual. No van en los
   parámetros de la plantilla de Meta, cuyo texto fija la plantilla aprobada; el aviso en texto
@@ -1007,7 +1015,7 @@ en producción y la prueba de punta a punta con Meta (CA-26 de REQ-F-009, pendie
 
 ### Vocabulario del bot
 
-El intérprete de pedidos es determinista y propio (`src/services/whatsapp-bot/interpreter/`):
+El intérprete de pedidos es determinista y propio (`src/bot/interpreter/`):
 no usa IA ni servicios externos y se puede sustituir por otro que cumpla la interfaz
 `OrderInterpreter` (`interpreter/types.ts`; opción `interpreter` de `createBotOrchestrator`).
 
@@ -1016,11 +1024,11 @@ no usa IA ni servicios externos y se puede sustituir por otro que cumpla la inte
   "Chica"), con tolerancia a errores de ortografía (1 letra en palabras de 4 a 7 letras, 2 en
   palabras de 8 o más; si dos productos empatan, el bot pregunta). Un producto nuevo o renombrado
   en `/admin` se reconoce sin tocar nada.
-- **Vocabulario común** (`botVocabulary` en `src/content/common/bot.ts`): cantidades en palabra
+- **Vocabulario común** (`botVocabulary` en `src/bot/content/common/bot.ts`): cantidades en palabra
   ("una", "media docena"), relleno que se ignora ("hola", "quiero", "por favor"), intención de
   pedir, palabras de entrega, de forma de pago (`payment`, por método), de confirmación, para terminar, para quitar y para agregar. Las
   palabras clave están en `botKeywords`.
-- **Vocabulario de cada negocio** (`vocabulary` en `src/content/<negocio>/bot.ts`):
+- **Vocabulario de cada negocio** (`vocabulary` en `src/bot/content/<negocio>/bot.ts`):
   - `example`: el ejemplo de la invitación a pedir;
   - `separatedExample`: el ejemplo con comas que se da cuando un mensaje sin separadores no se
     puede separar con seguridad ("2 tacos, 1 coca");
@@ -1099,16 +1107,20 @@ Los días y meses se cuentan en `BUSINESS_TIMEZONE`.
   vencidas o quitadas se borran a los 30 días; la auditoría, a los 12 meses; los contadores
   diarios, a los 13 meses (mantenimiento al arrancar y cada hora).
 - **Página "Bot" de `/admin`** (solo administradores): contadores de hoy y del mes frente a sus
-  topes, interruptor, "alcanzaron un tope hoy" (con "Bloquear"), lista negra con alta (número,
-  duración de 24 h, 7 d, 30 d o permanente y motivo opcional, sin números de teléfono) y baja.
-  Cada alta, baja, caducidad y cambio del interruptor queda en `bot_audit`.
+  topes, leídos de la base al cargar la página; interruptor; lista negra con alta (número, duración
+  de 24 h, 7 d, 30 d o permanente y motivo opcional, sin números de teléfono) y baja. Cada alta, baja,
+  caducidad y cambio del interruptor queda en `bot_audit`. La página está en `landing-pages` y el
+  bot en `api`: un cambio del interruptor o de la lista se aplica en el bot como mucho
+  `BOT_CONTROL_REFRESH_SECONDS` después (10 s), sin reiniciar nada, y el mantenimiento corre solo en
+  `api`. La lista "alcanzaron un tope hoy" y su botón vuelven con el control del bot en el admin
+  nuevo (ticket 4); hasta entonces, la página muestra un aviso (REQ-F-042, D-2).
 - **Rotar la clave:** pon la nueva en `WHATSAPP_BOT_BLOCKLIST_KEY` y la anterior en
   `WHATSAPP_BOT_BLOCKLIST_KEY_PREVIOUS`. Cada número bloqueado pasa a la clave nueva cuando vuelve
   a escribir; la página "Bot" muestra cuántos siguen con la anterior. Quita la anterior cuando
   llegue a 0 (o cuando esos bloqueos hayan vencido): si se pierde una clave, sus bloqueos dejan
   de aplicarse.
 - **Desplegar con el bot ya activo:** la clave es obligatoria con el bot. Añádela al `.env` del
-  VPS **antes** de desplegar la versión que la exige; sin ella, la app nueva no arranca y el
+  VPS **antes** de desplegar la versión que la exige; sin ella, la `api` nueva no arranca y el
   despliegue vuelve a la versión anterior.
 
 ### Variables del bot
@@ -1116,8 +1128,10 @@ Los días y meses se cuentan en `BUSINESS_TIMEZONE`.
 El bot queda habilitado si defines al menos una variable de datos del bot (todas las de la tabla
 salvo `WHATSAPP_BOT_PROVIDER`, que no lo habilita por sí sola; un valor vacío cuenta como no
 definido). Sin ninguna, el bot queda deshabilitado (el webhook responde 503 y las landings siguen
-igual). Habilitado, el proveedor y sus obligatorias deben estar y ser válidas o la app no arranca
-(lista los problemas sin mostrar valores). Las variables que solo usa el otro proveedor se
+igual). Habilitado, el proveedor y sus obligatorias deben estar y ser válidas o la `api` no arranca
+(lista los problemas sin mostrar valores). Todas van en `api/.env`; `landing-pages/.env` solo lleva
+el proveedor, el personal, la clave de la lista negra y los topes, con los mismos valores
+(página "Bot" de `/admin`). En producción hay un solo `.env` y el compose se los pasa a las dos apps. Las variables que solo usa el otro proveedor se
 ignoran. Con el bot, `WHATSAPP_MOLOTES` y `WHATSAPP_BIRRIA` deben ser el número del bot (el
 mismo): el botón de cada landing abre ese chat con su propio mensaje inicial.
 
@@ -1169,12 +1183,13 @@ impide arrancar con un mensaje que nombra la variable):
 
 ### Registrar el webhook en Meta (producción)
 
-1. Define las variables del bot con `WHATSAPP_BOT_PROVIDER=meta` y despliega la app detrás de
-   Traefik con HTTPS (`TRUST_PROXY=true`; ver [docs/despliegue.md](docs/despliegue.md)).
+1. Define las variables del bot con `WHATSAPP_BOT_PROVIDER=meta` y despliega detrás de Traefik con
+   HTTPS (ver [docs/despliegue.md](docs/despliegue.md)). Traefik envía a `api` solo esa ruta exacta;
+   el resto del dominio sigue yendo a las landings.
 2. En la app de Meta: WhatsApp → Configuración → Webhook. URL de devolución de llamada:
    `https://<tu-dominio>/webhooks/whatsapp`; token de verificación: el valor de
    `WHATSAPP_BOT_VERIFY_TOKEN`. Meta hace `GET` con `hub.mode=subscribe`, `hub.verify_token` y
-   `hub.challenge`; la app devuelve el reto solo si el token coincide (si no, 403).
+   `hub.challenge`; la `api` devuelve el reto solo si el token coincide (si no, 403).
 3. Suscribe el campo `messages`.
 4. Cada entrega llega con `X-Hub-Signature-256` (HMAC-SHA256 del cuerpo con el App Secret). Sin
    firma o mal formada responde 401; si no coincide, 403. En ambos casos no se procesa y queda
@@ -1233,7 +1248,7 @@ solo la dirección: "Pago: …" queda completo). Nunca se omite una línea, una 
 queda `bot_staff_notice_compacted` en el log. El parámetro `entrega` lleva la forma de pago
 (REQ-F-035): `Recoger en sucursal · Pago: efectivo` (o `tarjeta`, `transferencia`) y `A domicilio:
 <dirección> · Pago: pagar al recibir` (o `transferencia`). Este texto de la
-plantilla debe coincidir con `STAFF_TEMPLATE_BODY` (`src/services/whatsapp-bot/messages.ts`);
+plantilla debe coincidir con `STAFF_TEMPLATE_BODY` (`src/bot/messages.ts`);
 una prueba lo comprueba. Si Meta acepta el aviso pero avisa después de que no se entregó
 (estado `failed`, p. ej. plantilla pausada o número del personal sin WhatsApp), el cliente ya
 recibió la confirmación: **ese pedido puede perderse sin aviso**. Queda
@@ -1331,8 +1346,8 @@ npm run bot:chat -- --ahora 2026-10-09T16:00  # viernes 16:00 (hora del negocio)
 npm run bot:chat -- --proveedor twilio        # simula Twilio (aviso al personal en texto libre)
 ```
 
-Arranca la app en 127.0.0.1 con los productos de las semillas (en memoria; no toca `DATA_DIR`
-ni tu `.env`) y el bot del proveedor elegido conectado a su simulador
+Arranca el webhook de `api` en 127.0.0.1 con los productos de `api/tests/fixtures/` (en memoria; no
+toca la base ni tu `.env`) y el bot del proveedor elegido conectado a su simulador
 (`tests/support/cloud-api-double.ts` o `tests/support/twilio-api-double.ts`). Cada línea que
 escribes llega al webhook como un mensaje firmado igual que los del proveedor; verás las
 respuestas del bot y el aviso que recibiría el personal. Ninguna petición sale a internet.
@@ -1674,12 +1689,12 @@ restaurante/                  # Raíz de los npm workspaces (REQ-F-036, REQ-F-03
 │   ├── scripts/dev-server.ts # Entrada de `npm run dev:api` (NODE_ENV=development)
 │   ├── tests/                # Pruebas en proceso con el store en memoria (sin MySQL)
 │   └── .env.example          # NODE_ENV, HOST, PORT (3001) y DATABASE_URL
-├── landing-pages/            # Workspace de la app Koa: landings, /admin, /admin/api y el bot de WhatsApp
+├── landing-pages/            # Workspace de la app Koa: landings, /admin y /admin/api
 │   ├── src/
 │   │   ├── server.ts             # Entrada del proceso: valida config, prepara DATA_DIR y la base de datos, primer administrador, importación de productos, escucha en PORT, cierre ordenado
 │   │   ├── app.ts                # createApp(): app Koa testeable (config, repositorio, logger y `now` inyectables)
 │   │   ├── config/               # env.ts (carga/validación y tipo Config), business-paths.ts (ruta de cada landing)
-│   │   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests), whatsapp-webhook.ts (webhook del bot),
+│   │   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests),
 │   │   │                         # admin.ts (acceso, inicio y menús), admin-products.ts (productos en HTML), admin-products-api.ts y
 │   │   │                         # admin-api-access.ts (API JSON), admin-business-view.ts, admin-users.ts, admin-account.ts, admin-access.ts
 │   │   ├── routes/               # Router (@koa/router): index.ts (landings), admin.ts (/admin), admin-api.ts (/admin/api)
@@ -1687,9 +1702,7 @@ restaurante/                  # Raíz de los npm workspaces (REQ-F-036, REQ-F-03
 │   │   ├── repositories/         # Menús (contrato y reglas, archivos y memoria) y productos (reglas sobre el store de core/catalog)
 │   │   ├── services/             # whatsapp, admin-form, session-store, login-throttle, admin-bootstrap,
 │   │   │                         # product-form, bot-control, bot-usage, landing-products (productos de las landings desde la API; REQ-F-038),
-│   │   │                         # whatsapp-bot/ (bot de WhatsApp: chat-bot (interfaz ChatBot), orchestrator, conversation, catalog,
-│   │   │                         #   schedule, messages, store, text; providers/: select, http-send, meta/ (WhatsAppBot), twilio/ (TwilioBot))
-│   │   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), textos del bot (bot.ts), semillas seed.json e icons.ts
+│   │   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), semillas seed.json e icons.ts
 │   │   ├── utils/                # datetime.ts (zona del negocio), form-body.ts, json-body.ts
 │   │   ├── views/                # render.ts + plantillas HTML
 │   │   │   ├── layouts/base.html # <head> común (SEO, fuentes, CSS/JS por negocio) y skip link
@@ -1716,7 +1729,6 @@ restaurante/                  # Raíz de los npm workspaces (REQ-F-036, REQ-F-03
 │   ├── scripts/
 │   │   ├── hash-password.ts      # `npm run admin:hash-password`
 │   │   ├── admin-recover.ts      # `npm run admin:recover`
-│   │   ├── bot-chat.ts           # `npm run bot:chat`: el bot en la terminal contra el simulador (solo desarrollo)
 │   │   ├── audit-deps.ts         # `npm run audit:deps`: auditoría de dependencias por imagen (CI, job auditoria)
 │   │   ├── support/read-hidden.ts # Lectura de contraseñas sin eco (compartida)
 │   │   ├── support/audit-policy.ts # Política de la auditoría (umbral, excepciones, fail closed)
@@ -1724,19 +1736,12 @@ restaurante/                  # Raíz de los npm workspaces (REQ-F-036, REQ-F-03
 │   ├── data/                     # DATA_DIR por defecto fuera de producción (ignorado por git)
 │   ├── tests/
 │   │   ├── helpers.ts            # Config válida, semillas y repositorio en memoria para pruebas
-│   │   ├── setup/                # no-meta.ts (ninguna llamada a Meta ni Twilio), database-global.ts y database-guard.ts (MySQL de pruebas y salvaguarda)
+│   │   ├── setup/                # database-global.ts y database-guard.ts (MySQL de pruebas y salvaguarda)
 │   │   ├── support/admin.ts      # App con administración (base de datos de prueba), usuarios, inicio de sesión y formularios
 │   │   ├── support/products.ts   # Entradas válidas de producto y repositorios de productos para pruebas
 │   │   ├── support/database.ts   # Bases MySQL de prueba por trabajador (restaurante_test_*; nunca una base real) y database-admin.ts, test-database-config.ts (salvaguarda), tcp-proxy.ts
 │   │   ├── support/process.ts    # Procesos reales: arranque del servidor y comandos de consola
 │   │   ├── support/png.ts        # Lectura mínima de PNG/ICO (dimensiones, opacidad, color de fondo)
-│   │   ├── support/cloud-api-double.ts # Doble de la WhatsApp Cloud API (ninguna prueba llama a Meta)
-│   │   ├── support/twilio-api-double.ts # Doble de la API de mensajes de Twilio (ninguna prueba llama a Twilio)
-│   │   ├── support/whatsapp.ts   # Entregas del webhook de Meta, firma, reloj y bot de prueba
-│   │   ├── support/twilio.ts     # Entregas (formulario) y firma de Twilio, y bot de prueba con Twilio
-│   │   ├── support/chat-bot-drivers.ts # Drivers por proveedor de la batería de contrato de ChatBot
-│   │   ├── fixtures/whatsapp/    # Entregas de ejemplo del webhook de Meta (forma de los ejemplos oficiales)
-│   │   ├── fixtures/twilio/      # Entregas de ejemplo del webhook de Twilio (formulario y StatusCallback)
 │   │   ├── snapshots/            # HTML de referencia de las landings (regresión visual con la semilla)
 │   │   ├── unit/                 # config, esquema, precios, formulario, repositorio de archivos, sesión, landings, contenido vs. diseño, JS sobre el HTML real
 │   │   └── integration/          # Landings (fecha, SEO, CTA, datos editables, datos dañados), administración, estáticos, errores

@@ -79,7 +79,7 @@ El proyecto tiene dos superficies HTTP además de las landings:
 - **API JSON de productos** bajo `/admin/api` (REQ-F-008), con sesión.
 - **Webhook del bot de WhatsApp** en `/webhooks/whatsapp` (REQ-F-009, REQ-F-012). Es el único endpoint público sin sesión: la autenticidad la verifica el `ChatBot` del proveedor activo (Meta: firma `X-Hub-Signature-256`, HMAC-SHA256 del cuerpo crudo con el App Secret, y verificación con el token de suscripción; Twilio: `X-Twilio-Signature`, HMAC-SHA1 de `WHATSAPP_BOT_WEBHOOK_URL` más los parámetros ordenados, con el Auth Token). Todo cambio en esa ruta mantiene la verificación de la firma antes de procesar nada, la respuesta 200 inmediata y el procesamiento en segundo plano, y la deduplicación por id de mensaje.
 
-El bot vive en `src/services/whatsapp-bot/` en dos capas. El proveedor va detrás de la interfaz `ChatBot` (`chat-bot.ts`): `WhatsAppBot` (Cloud API de Meta, producción; `providers/meta/`) y `TwilioBot` (Twilio, solo desarrollo; `providers/twilio/`), elegidos con `WHATSAPP_BOT_PROVIDER` en un único módulo, `providers/select.ts`, el único que importa las implementaciones; producción nunca arranca con Twilio. La conversación es compartida y existe una sola vez: el orquestador `BotOrchestrator` (`orchestrator.ts`), `conversation.ts`, `messages.ts`, etc.; ningún módulo de la conversación importa de `providers/`. El texto libre del cliente lo interpreta un intérprete determinista propio detrás de la interfaz `OrderInterpreter` (`interpreter/`; REQ-F-013), inyectado en la conversación y sustituible sin tocarla; sin IA ni servicios externos. Su vocabulario (sinónimos por `slug`, variantes, detalles reconocidos y palabras comunes) vive en `src/content/{common,molotes,birria}/bot.ts`, y un producto sin sinónimos se reconoce por su nombre. Los números de opción siguen funcionando en cada paso. El detalle por línea nunca va al log: solo contadores (`bot_order_interpreted`). Guarda el estado de la conversación solo en memoria (una instancia; se borra al cerrar o tras 2 h) y lee el catálogo de la caché de productos y el horario de `src/content/hours.ts`. Envía mensajes con `fetch` nativo a bases fijas (`https://graph.facebook.com`, `https://api.twilio.com`). Sus textos viven en `src/content/{common,molotes,birria}/bot.ts` y su configuración, en las variables `WHATSAPP_BOT_*` (cualquier variable de datos habilita el bot; `WHATSAPP_BOT_PROVIDER` es entonces obligatoria). En los logs, el número del cliente va enmascarado y nunca aparecen el texto de los mensajes, los datos del cliente, los tokens ni el Account SID. Las pruebas nunca llaman a Meta ni a Twilio: usan los dobles de `tests/support/cloud-api-double.ts` y `tests/support/twilio-api-double.ts` (`tests/setup/no-meta.ts` rechaza cualquier `fetch` a ambos), y `tests/integration/chat-bot-contract.test.ts` recorre los mismos casos con los dos proveedores.
+El bot vive en `restaurante/api/src/bot/` en dos capas. El proveedor va detrás de la interfaz `ChatBot` (`chat-bot.ts`): `WhatsAppBot` (Cloud API de Meta, producción; `providers/meta/`) y `TwilioBot` (Twilio, solo desarrollo; `providers/twilio/`), elegidos con `WHATSAPP_BOT_PROVIDER` en un único módulo, `providers/select.ts`, el único que importa las implementaciones; producción nunca arranca con Twilio. La conversación es compartida y existe una sola vez: el orquestador `BotOrchestrator` (`orchestrator.ts`), `conversation.ts`, `messages.ts`, etc.; ningún módulo de la conversación importa de `providers/`. El texto libre del cliente lo interpreta un intérprete determinista propio detrás de la interfaz `OrderInterpreter` (`interpreter/`; REQ-F-013), inyectado en la conversación y sustituible sin tocarla; sin IA ni servicios externos. Su vocabulario (sinónimos por `slug`, variantes, detalles reconocidos y palabras comunes) vive en `api/src/bot/content/{common,molotes,birria}/bot.ts`, y un producto sin sinónimos se reconoce por su nombre. Los números de opción siguen funcionando en cada paso. El detalle por línea nunca va al log: solo contadores (`bot_order_interpreted`). Guarda el estado de la conversación solo en memoria (una instancia; se borra al cerrar o tras 2 h) y lee el catálogo de la caché de productos y el horario de `packages/core/schedule/business-hours.ts`. Envía mensajes con `fetch` nativo a bases fijas (`https://graph.facebook.com`, `https://api.twilio.com`). Sus textos viven en `api/src/bot/content/{common,molotes,birria}/bot.ts` y su configuración, en las variables `WHATSAPP_BOT_*` (cualquier variable de datos habilita el bot; `WHATSAPP_BOT_PROVIDER` es entonces obligatoria). En los logs, el número del cliente va enmascarado y nunca aparecen el texto de los mensajes, los datos del cliente, los tokens ni el Account SID. Las pruebas nunca llaman a Meta ni a Twilio: usan los dobles de `api/tests/support/cloud-api-double.ts` y `api/tests/support/twilio-api-double.ts` (`api/tests/setup/no-meta.ts` rechaza cualquier `fetch` a ambos), y `api/tests/integration/chat-bot-contract.test.ts` recorre los mismos casos con los dos proveedores.
 
 Persistencia:
 
@@ -111,11 +111,11 @@ restaurante/                 # Raíz de los npm workspaces (REQ-F-036 y REQ-F-03
 │   │   ├── app.ts / server.ts   # App Koa (testeable) y arranque del servidor
 │   │   ├── config/              # env.ts (validación de variables, tipo Config), business-paths.ts
 │   │   ├── content/             # Contenido por negocio (molotes/, birria/, common/), semillas seed.json, icons.ts, seeds.ts
-│   │   ├── controllers/         # landing.ts (elige negocio y renderiza), icons.ts, admin.ts, admin-users.ts, admin-account.ts, admin-access.ts, whatsapp-webhook.ts
+│   │   ├── controllers/         # landing.ts (elige negocio y renderiza), icons.ts, admin.ts, admin-users.ts, admin-account.ts, admin-access.ts
 │   │   ├── middleware/          # error-handler.ts, request-logger.ts, admin-guard.ts
 │   │   ├── repositories/        # Menús (contrato y reglas, archivos y memoria) y productos (product-repository.ts)
 │   │   ├── routes/              # Rutas (@koa/router): index.ts (landings, iconos), admin.ts (/admin)
-│   │   ├── services/            # whatsapp, admin-*, product-form, session-store, login-throttle, bot-control, bot-usage, whatsapp-bot/ (bot de WhatsApp)
+│   │   ├── services/            # admin-*, product-form, session-store, login-throttle
 │   │   ├── styles/              # Fuentes Tailwind: shared/, molotes/, birria/, admin/, components/ (sin uso por ahora)
 │   │   ├── utils/               # datetime.ts, form-body.ts, json-body.ts
 │   │   └── views/               # render.ts + layouts/, pages/, partials/ (.html), landings/ (.ts), admin/ (.ts y .html)
@@ -124,7 +124,7 @@ restaurante/                 # Raíz de los npm workspaces (REQ-F-036 y REQ-F-03
 │   │   ├── js/modules/          # Módulos ES reutilizables
 │   │   ├── js/{molotes,birria}/ # Punto de entrada por landing
 │   │   └── img/{common,molotes,birria}/
-│   ├── scripts/                 # hash-password.ts, admin-recover.ts (`npm run admin:recover`), bot-chat.ts (`npm run bot:chat`, solo desarrollo), support/, generate-icons.py
+│   ├── scripts/                 # hash-password.ts, admin-recover.ts (`npm run admin:recover`), support/, generate-icons.py
 │   ├── tests/                   # unit/, integration/, support/, snapshots/, helpers.ts
 │   ├── tsconfig.json            # Solo verificación de tipos (`npm run typecheck`)
 │   ├── vitest.config.ts
@@ -161,7 +161,7 @@ No inventes resultados de CodeGraph.
 - Toda entrada externa es no confiable: query, parámetros de ruta, headers, cookies, body y variables de entorno. Valida en el borde y falla rápido.
 - Escapa toda salida a HTML (usa `{{ }}`; `{{{ }}}` solo para la salida de otro render).
 - Mantén CSP y cabeceras de `koa-helmet`; no las relajes para "hacer funcionar" algo.
-- Construye los enlaces de WhatsApp solo mediante `src/services/whatsapp.ts` y la configuración validada.
+- Construye los enlaces de WhatsApp solo mediante `packages/core/shared/whatsapp-link.ts` y la configuración validada.
 - Nunca guardes secretos en el código, ni registres tokens, datos sensibles o valores de configuración en logs o errores (ver `.claude/rules/logging.md` y `.claude/rules/manejo-de-errores.md`).
 - Nunca desactives controles de seguridad para solucionar un error.
 
@@ -280,7 +280,8 @@ Desde `restaurante/`:
 3. `npm test`.
 4. `npm run lint` (debe terminar con 0; una regla solo se desactiva en una línea y con justificación después de `--`).
 5. Comprueba cada criterio de aceptación y compara el resultado con el Technical Action Plan.
-6. Revisa `git diff` en busca de cambios innecesarios o ajenos al ticket.
+6. Revisión previa a QA: si el ticket agrega o cambia procedimientos documentados (despliegue, vuelta atrás, restauración, recuperación), ejecuta en local cada comando como está escrito, en los dos sentidos cuando aplique, y anota el resultado. Lo que no puedas ejecutar, dilo en `Riesgos o pendientes`.
+7. Revisa `git diff` en busca de cambios innecesarios o ajenos al ticket.
 
 Formato del resultado (en el ticket y en tu respuesta):
 

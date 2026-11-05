@@ -7,15 +7,21 @@
 #   deploy <sha del commit> <digest app> <digest migrate> <digest api> <digest inventory> <suma de deploy/>
 #
 # Secuencia: precondiciones -> pull -> MySQL en marcha -> volcado (retención 7) -> migración ->
-# api con el digest nuevo (REQ-F-038; healthy) -> inventory-manager con el digest nuevo (REQ-F-039;
-# healthy + Traefik en el subdominio) -> app con el digest nuevo -> salud (healthy + Traefik) ->
-# registro. Si falla antes del cambio de la app, no la toca: si la api nueva no queda healthy, vuelve
-# a la api anterior y termina con 15; si inventory-manager no queda healthy, vuelve al anterior (o lo
-# detiene si no lo había), deja la app como estaba y la api nueva en marcha y termina con 16. La app
-# va la última porque la nueva activa el modo de solo lectura de los productos de /admin. Si falla la
-# salud de la app, vuelve a los digests anteriores de app, api e inventory-manager (o lo detiene) con
-# DATABASE_ALLOW_NEWER_SCHEMA=true (D-1) y termina con error. Nunca imprime secretos (sin set -x; no
-# muestra el .env ni la configuración resuelta del compose).
+# api con el digest nuevo (REQ-F-038; healthy + Traefik en el webhook, REQ-F-042) -> inventory-manager
+# con el digest nuevo (REQ-F-039; healthy + Traefik en el subdominio) -> app con el digest nuevo ->
+# salud (healthy + Traefik) -> registro. Si falla antes del cambio de la app, no la toca: si la api
+# nueva no queda healthy o Traefik no le enruta el webhook, vuelve a la api anterior y termina con 15;
+# si inventory-manager no queda healthy, vuelve al anterior (o lo detiene si no lo había), deja la app
+# como estaba y la api nueva en marcha y termina con 16. La app va la última porque la nueva activa el
+# modo de solo lectura de los productos de /admin y, desde REQ-F-042, ya no atiende el webhook. Si
+# falla la salud de la app, vuelve a los digests anteriores de app, api e inventory-manager (o lo
+# detiene) con DATABASE_ALLOW_NEWER_SCHEMA=true (D-1) y termina con error.
+#
+# El router del webhook sigue a la imagen de la api (REQ-F-042, RF-13): cada `compose` calcula
+# RESTAURANTE_API_WEBHOOK con la imagen de api que recibe, de modo que una api anterior, sin el bot,
+# nunca queda con el router encendido y la ruta vuelve a la app anterior, que sí lo tiene.
+#
+# Nunca imprime secretos (sin set -x; no muestra el .env ni la configuración resuelta del compose).
 set -euo pipefail
 umask 077
 
@@ -133,13 +139,22 @@ if [[ -f "$STATE_DIR/release.env" ]]; then
   PREVIOUS_INVENTORY_IMAGE=$(sed -n 's/^RESTAURANTE_INVENTORY_IMAGE=//p' "$STATE_DIR/release.env")
 fi
 
+# ¿Atiende esta imagen de la api el webhook del bot? true o false, según su etiqueta (Dockerfile). Una
+# imagen que no esté en el host cuenta como false: el webhook se queda en la app.
+api_webhook() { # api_webhook <imagen api>
+  local label
+  label=$(docker image inspect -f '{{index .Config.Labels "org.restaurante.webhook"}}' "$1" 2>/dev/null || true)
+  if [[ "$label" == whatsapp ]]; then echo true; else echo false; fi
+}
+
 # docker compose con las imágenes indicadas (el entorno gana al .env).
 # compose <imagen app> <imagen migrate> <imagen api> <imagen inventory> <argumentos...>
 compose() {
   local app_image=$1 migrate_image=$2 api_image=$3 inventory_image=$4
   shift 4
   RESTAURANTE_APP_IMAGE="$app_image" RESTAURANTE_MIGRATE_IMAGE="$migrate_image" RESTAURANTE_API_IMAGE="$api_image" \
-    RESTAURANTE_INVENTORY_IMAGE="$inventory_image" docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"
+    RESTAURANTE_INVENTORY_IMAGE="$inventory_image" RESTAURANTE_API_WEBHOOK="$(api_webhook "$api_image")" \
+    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"
 }
 
 # Con las imágenes de este despliegue.
@@ -189,6 +204,10 @@ docker pull --quiet "$APP_IMAGE" >/dev/null || { record pull_failed; fail 10 'no
 docker pull --quiet "$MIGRATE_IMAGE" >/dev/null || { record pull_failed; fail 10 'no se pudo descargar la imagen migrate'; }
 docker pull --quiet "$API_IMAGE" >/dev/null || { record pull_failed; fail 10 'no se pudo descargar la imagen de la api'; }
 docker pull --quiet "$INVENTORY_IMAGE" >/dev/null || { record pull_failed; fail 10 'no se pudo descargar la imagen de inventory-manager'; }
+# La vuelta atrás lee la etiqueta de la api anterior: tiene que estar en el host (REQ-F-042).
+if [[ -n "$PREVIOUS_API_IMAGE" ]]; then
+  docker pull --quiet "$PREVIOUS_API_IMAGE" >/dev/null || log 'aviso: no se pudo descargar la api anterior; en una vuelta atrás seguiría la api nueva'
+fi
 log 'imágenes descargadas'
 
 # --- 2. MySQL en marcha (idempotente; en el primer despliegue crea la base y los usuarios) --------
@@ -269,6 +288,21 @@ probe_https() {
 probe_traefik() { probe_https "$DOMAIN" /; }
 probe_admin() { probe_https "$ADMIN_DOMAIN" /salud; }
 
+# Con una api que atiende el webhook, comprueba que Traefik ya se lo enruta antes de cambiar la app:
+# la app nueva no tiene webhook. OPTIONS no llega al bot ni deja una verificación fallida en el log, y
+# la cabecera CSP la pone la app (helmet) y nunca la api: distingue quién responde.
+# probe_webhook <imagen api>
+probe_webhook() {
+  local deadline=$((SECONDS + PROBE_TIMEOUT)) headers
+  [[ "$(api_webhook "$1")" == true ]] || return 0
+  while ((SECONDS < deadline)); do
+    if headers=$(curl -fs -k -o /dev/null -D - -X OPTIONS --max-time 5 --resolve "$DOMAIN:443:$PROBE_ADDRESS" "https://$DOMAIN/webhooks/whatsapp") &&
+      ! grep -qi '^content-security-policy:' <<<"$headers"; then return 0; fi
+    sleep 2
+  done
+  return 1
+}
+
 # DEF-001 (REQ-F-038): si este despliegue aplicó migraciones y algo falla antes de cambiar la app, la
 # app en marcha (creada sin DATABASE_ALLOW_NEWER_SCHEMA) no podría volver a arrancar sobre la base
 # migrada si se reinicia (DATABASE_NEWER_THAN_CODE). Se recrea con su misma imagen y la bandera (D-1):
@@ -307,10 +341,11 @@ restore_inventory() {
 }
 
 # 5. API (REQ-F-038). Las landings toleran que no esté (sirven su última copia o la semilla), pero
-# no se cambia la app si la api nueva no queda healthy.
+# no se cambia la app si la api nueva no queda healthy. El webhook pasa solo a la api nueva (REQ-F-042):
+# mientras arranca, Traefik no publica su router y la ruta sigue yendo a la app en marcha.
 compose_new up -d --no-deps api
-if ! wait_healthy api "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" "$INVENTORY_IMAGE"; then
-  log 'la api nueva no pasó la comprobación de salud'
+if ! wait_healthy api "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" "$INVENTORY_IMAGE" || ! probe_webhook "$API_IMAGE"; then
+  log 'la api nueva no pasó la comprobación de salud (healthy y webhook por Traefik)'
   docker logs --tail 50 "$(service_container api "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" "$INVENTORY_IMAGE")" 2>&1 | sed 's/^/  api: /' >&2 || true
   if [[ -n "$PREVIOUS_API_IMAGE" ]]; then
     log "volviendo a la api $PREVIOUS_API_IMAGE"
@@ -318,8 +353,12 @@ if ! wait_healthy api "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" "$INVENTORY_IMA
     # termina justo después, así que la variable no llega a nada más.
     export DATABASE_ALLOW_NEWER_SCHEMA=true
     compose "$APP_IMAGE" "$MIGRATE_IMAGE" "$PREVIOUS_API_IMAGE" "${PREVIOUS_INVENTORY_IMAGE:-$INVENTORY_IMAGE}" up -d --no-deps api || true
+  else
+    # Sin api anterior, la nueva no se queda con el router encendido: el webhook vuelve a la app.
+    log 'sin versión anterior de la api: se detiene la nueva'
+    compose_new stop api >/dev/null 2>&1 || true
   fi
-  protect_running_app "${PREVIOUS_API_IMAGE:-$API_IMAGE}" "${PREVIOUS_INVENTORY_IMAGE:-$INVENTORY_IMAGE}" api_failed 15 'la api nueva no quedó healthy'
+  protect_running_app "${PREVIOUS_API_IMAGE:-$API_IMAGE}" "${PREVIOUS_INVENTORY_IMAGE:-$INVENTORY_IMAGE}" api_failed 15 'la api nueva no quedó healthy o Traefik no le enruta el webhook'
 fi
 log 'api healthy'
 
@@ -340,8 +379,8 @@ log 'inventory-manager healthy'
 compose_new up -d --no-deps app
 if wait_healthy app "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" "$INVENTORY_IMAGE" && probe_traefik; then
   if [[ -f "$STATE_DIR/release.env" ]]; then mv -f -- "$STATE_DIR/release.env" "$STATE_DIR/release.env.previous"; fi
-  printf 'RESTAURANTE_APP_IMAGE=%s\nRESTAURANTE_MIGRATE_IMAGE=%s\nRESTAURANTE_API_IMAGE=%s\nRESTAURANTE_INVENTORY_IMAGE=%s\nRESTAURANTE_COMMIT=%s\n' \
-    "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" "$INVENTORY_IMAGE" "$SHA" >"$STATE_DIR/release.env.tmp"
+  printf 'RESTAURANTE_APP_IMAGE=%s\nRESTAURANTE_MIGRATE_IMAGE=%s\nRESTAURANTE_API_IMAGE=%s\nRESTAURANTE_INVENTORY_IMAGE=%s\nRESTAURANTE_API_WEBHOOK=%s\nRESTAURANTE_COMMIT=%s\n' \
+    "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" "$INVENTORY_IMAGE" "$(api_webhook "$API_IMAGE")" "$SHA" >"$STATE_DIR/release.env.tmp"
   chmod 644 -- "$STATE_DIR/release.env.tmp"
   mv -f -- "$STATE_DIR/release.env.tmp" "$STATE_DIR/release.env"
   record ok
@@ -363,14 +402,22 @@ export DATABASE_ALLOW_NEWER_SCHEMA=true
 ROLLBACK_API_IMAGE=${PREVIOUS_API_IMAGE:-$API_IMAGE}
 ROLLBACK_MIGRATE_IMAGE=${PREVIOUS_MIGRATE_IMAGE:-$MIGRATE_IMAGE}
 ROLLBACK_INVENTORY_IMAGE=${PREVIOUS_INVENTORY_IMAGE:-$INVENTORY_IMAGE}
-if [[ -n "$PREVIOUS_API_IMAGE" ]]; then
-  log "volviendo a la api $PREVIOUS_API_IMAGE"
-  compose "$PREVIOUS_APP_IMAGE" "$ROLLBACK_MIGRATE_IMAGE" "$ROLLBACK_API_IMAGE" "$ROLLBACK_INVENTORY_IMAGE" up -d --no-deps api || true
-fi
 # inventory-manager también vuelve (o se detiene): la app anterior puede editar productos.
 restore_inventory "$PREVIOUS_APP_IMAGE" "$ROLLBACK_API_IMAGE"
 compose "$PREVIOUS_APP_IMAGE" "$ROLLBACK_MIGRATE_IMAGE" "$ROLLBACK_API_IMAGE" "$ROLLBACK_INVENTORY_IMAGE" up -d --no-deps app
 if wait_healthy app "$PREVIOUS_APP_IMAGE" "$ROLLBACK_MIGRATE_IMAGE" "$ROLLBACK_API_IMAGE" "$ROLLBACK_INVENTORY_IMAGE" && probe_traefik; then
+  # La api vuelve la última (REQ-F-042): la api nueva sigue atendiendo el webhook hasta que la app
+  # anterior, que tiene el bot, está lista para recibirlo.
+  if [[ -n "$PREVIOUS_API_IMAGE" ]]; then
+    log "volviendo a la api $PREVIOUS_API_IMAGE"
+    if ! compose "$PREVIOUS_APP_IMAGE" "$ROLLBACK_MIGRATE_IMAGE" "$ROLLBACK_API_IMAGE" "$ROLLBACK_INVENTORY_IMAGE" up -d --no-deps api; then
+      # La imagen no está: compose no toca el contenedor y la api nueva sigue atendiendo el webhook.
+      log 'aviso: no se pudo arrancar la api anterior; sigue la api nueva'
+    elif ! wait_healthy api "$PREVIOUS_APP_IMAGE" "$ROLLBACK_MIGRATE_IMAGE" "$ROLLBACK_API_IMAGE" "$ROLLBACK_INVENTORY_IMAGE" || ! probe_webhook "$ROLLBACK_API_IMAGE"; then
+      record health_failed_api_not_restored
+      fail 22 "la app anterior está restaurada ($PREVIOUS_APP_IMAGE), pero la api anterior no quedó healthy o Traefik no le enruta el webhook: el bot puede estar sin servicio (docs/despliegue.md, código 22)"
+    fi
+  fi
   record health_failed_rolled_back
   fail 21 "versión anterior restaurada ($PREVIOUS_APP_IMAGE); el despliegue falló"
 fi

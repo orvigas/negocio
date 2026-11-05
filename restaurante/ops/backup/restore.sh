@@ -13,6 +13,9 @@
 # arrancar la imagen de la app del respaldo -> salud -> state/release.env y releases.log. Mide cada
 # fase. Se pierde todo lo escrito después del respaldo.
 #
+# Si al terminar nadie atiende el webhook del bot (app sin bot y api sin router, REQ-F-042), lo avisa
+# en la última línea: la restauración sí se hizo y repetirla no lo arreglaría, así que termina con 0.
+#
 # Códigos: 2 uso o configuración, 3 precondición, 4 candado, 6 descifrado o integridad, 10 carga de
 # la base, 11 app-data, 12 la app no quedó healthy.
 set -euo pipefail
@@ -184,3 +187,15 @@ mv -f -- "$STATE_DIR/release.env.tmp" "$STATE_DIR/release.env"
 printf '%s %s restore=%s app=%s result=restored\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${COMMIT:-?}" "$BACKUP_LABEL" "$APP_IMAGE" >>"$STATE_DIR/releases.log"
 
 log "restauración completa en $((SECONDS - START)) s (app sin servicio $((SECONDS - START_DOWNTIME)) s). Comprueba docs/despliegue.md, paso 8."
+
+# --- Webhook del bot (REQ-F-042) -----------------------------------------------------------------
+# Esta restauración solo cambia la app. Con una app sin bot, el webhook depende del router de la api.
+api_id=$(compose ps -q api 2>/dev/null | head -n 1 || true)
+api_router=''
+if [[ -n "$api_id" ]]; then api_router=$(docker inspect -f '{{index .Config.Labels "traefik.enable"}}' "$api_id" 2>/dev/null || true); fi
+if [[ "$api_router" != true ]]; then
+  app_answer=$(docker exec "$(compose ps -q app)" wget -q -O /dev/null "http://127.0.0.1:3000/webhooks/whatsapp" 2>&1 || true)
+  if [[ "$app_answer" == *' 404'* ]]; then
+    log 'AVISO: el bot queda SIN SERVICIO: la app restaurada no tiene webhook y la api no tiene el router. Arranca una api con webhook (docs/despliegue.md, "Arrancar la api a mano") o vuelve a desplegar.'
+  fi
+fi

@@ -11,25 +11,32 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
 - **VPS:** Hostinger con Ubuntu 24.04, Docker y un **Traefik ya instalado** que sirve otros sitios
   en la red externa `traefik-public`. El proyecto vive en `/opt/restaurante`.
 - **Servicios** (`deploy/compose.prod.yaml`, proyecto `restaurante`):
-  - `app`: la imagen `production` (Koa). Sirve las dos landings, `/admin`, la API `/admin/api` y
-    el webhook del bot. Una sola réplica, sin puertos publicados, en la red interna `db` y en
+  - `app`: la imagen `production` (Koa). Sirve las dos landings, `/admin` y la API `/admin/api`.
+    Una sola réplica, sin puertos publicados, en la red interna `db` y en
     `traefik-public`. Se construye desde el workspace `restaurante/landing-pages/` del monorepo
     (REQ-F-036), que incluye los paquetes `restaurante/packages/core` y `packages/db` (REQ-F-037),
     con el contexto de build en `restaurante/`. Dentro de la imagen, la app está en
     `/app/landing-pages`, que es su directorio de trabajo: los comandos relativos de esta guía
     (`node scripts/admin-recover.ts`) valen para las imágenes de antes y de después del monorepo,
     así que la vuelta atrás no cambia.
-  - `api` (REQ-F-038 y REQ-F-039): la imagen `api`, la API propia.
+  - `api` (REQ-F-038, REQ-F-039 y REQ-F-042): la imagen `api`, la API propia y el bot de WhatsApp.
     - `GET /api/v1/public/{molotes|birria}/productos`: de aquí las landings de `app` leen los
       productos (`API_INTERNAL_URL=http://api:3001`).
     - `/api/v1/admin`: la administración de productos que usa `inventory-manager`. Desde REQ-F-039
       es la única que escribe los productos.
     - Tras cada escritura avisa a `app` por su puerto interno 3002 (`LANDING_INTERNAL_URL`, con la
-      credencial `RESTAURANTE_INTERNAL_NOTIFY_TOKEN`), para que la landing y el bot muestren el cambio
-      al instante.
-    - Solo en las redes internas `db` (con `app` y MySQL) y `admin` (con `inventory-manager`): sin
-      puertos publicados ni router de Traefik, así que nada fuera de Docker la alcanza (desviación D-3
-      de REQ-F-039).
+      credencial `RESTAURANTE_INTERNAL_NOTIFY_TOKEN`), para que la landing muestre el cambio al
+      instante. El bot lo ve en proceso, con la misma caché de productos.
+    - **Webhook del bot (REQ-F-042):** se sirve en el puerto 3004 (`WEBHOOK_PORT`), una app que solo
+      tiene `/webhooks/whatsapp`. Es lo único de `api` que Traefik publica: el router
+      `restaurante-webhook` lleva esa ruta exacta al 3004. El puerto 3001 no se publica.
+    - Redes: `db` (con `app` y MySQL), `admin` (con `inventory-manager`) y `traefik-public`, por la
+      entrada del webhook y porque el bot necesita salida a internet para hablar con Meta. Sin
+      puertos publicados. Un contenedor vecino de `traefik-public` alcanza `api:3001`, como alcanza
+      `app:3000`: `/api/v1/admin` exige sesión y `/api/v1/public` es de solo lectura.
+    - Llega a MySQL y a `app` por sus nombres de contenedor (`restaurante-mysql-1` y
+      `restaurante-app-1`), no por los de servicio: en `traefik-public`, un alias `app` o `mysql` de
+      otro proyecto respondería por ellos. Lo fija el compose; el `.env` no cambia.
     - Usa el mismo usuario solo DML que la app; nunca migra ni importa semillas. Si se cae, las
       landings siguen respondiendo con su última copia buena (o la semilla, si `app` arrancó sin ella).
   - `inventory-manager` (REQ-F-039): la imagen `inventory-manager`, el admin nuevo (Koa con SSR) en
@@ -39,8 +46,8 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
     - Está en `traefik-public` y en `admin`: no alcanza MySQL y no tiene credenciales de la base ni
       la del aviso.
     - Con él desplegado, la edición de productos, la gestión de usuarios y "Mi cuenta" del `/admin`
-      actual quedan en solo lectura (`ADMIN_NEW_URL`) y enlazan al admin nuevo. Bot y menú siguen en
-      `/admin` hasta los tickets siguientes del paso 4.
+      actual quedan en solo lectura (`ADMIN_NEW_URL`) y enlazan al admin nuevo. El control del bot y
+      el menú siguen en `/admin` hasta los tickets siguientes del paso 4.
     - **Aviso al personal (R-3 de REQ-F-040):** desde ese despliegue, las contraseñas se cambian en
       "Mi cuenta" de `https://admin.birriaelmuneco.com` (mismo usuario y contraseña), y las altas y
       cambios de usuarios, en "Usuarios" del admin nuevo. `npm run admin:recover` sigue igual.
@@ -48,7 +55,8 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
     datos en el volumen `restaurante_mysql-data`.
   - `migrate`: proceso puntual que aplica las migraciones con un usuario con DDL.
 - **Borde HTTPS:** Traefik.
-  - `https://birriaelmuneco.com` sirve la app.
+  - `https://birriaelmuneco.com` sirve la app, salvo la ruta exacta `/webhooks/whatsapp`, que va a
+    `api`.
   - `http://` responde 301 hacia `https://` del mismo host (redirección global del Traefik del
     VPS; sin ella, el router del proyecto responde 301 directamente a la raíz).
   - `https://www.` responde 301 a `https://birriaelmuneco.com`.
@@ -65,8 +73,8 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
   - los JSON de página y `changes.jsonl` viven en el volumen `restaurante_app-data`
     (`DATA_DIR=/var/lib/restaurante`);
   - los usuarios, la auditoría y los productos, en MySQL.
-- **Estado en memoria:** sesiones de `/admin`, límite de intentos y conversaciones del bot, en
-  `app`; sesiones del admin nuevo, su límite de intentos y las claves de idempotencia, en `api`.
+- **Estado en memoria:** sesiones de `/admin` y su límite de intentos, en `app`; sesiones del admin
+  nuevo, su límite de intentos, las claves de idempotencia y las conversaciones del bot, en `api`.
   Cada despliegue reinicia los contenedores: cierra las sesiones, corta las conversaciones y deja el
   sitio sin servicio unos 10 a 30 s.
 
@@ -157,7 +165,7 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
 ### Regla del bot en producción
 
 En producción el bot usa **Meta** (WhatsApp Cloud API). Con `NODE_ENV=production` y
-`WHATSAPP_BOT_PROVIDER=twilio` la app **no arranca**. Twilio es solo para desarrollo
+`WHATSAPP_BOT_PROVIDER=twilio` la `api` **no arranca** (ni la app). Twilio es solo para desarrollo
 ([Entorno de desarrollo](desarrollo.md#8-bot-real-con-el-sandbox-de-twilio)).
 
 ## 1. Preparar el VPS (una vez)
@@ -217,6 +225,41 @@ rm -rf /tmp/restaurante-deploy
 
 La última suma debe coincidir con la misma orden ejecutada en `restaurante/deploy/` de tu copia
 local.
+
+**Al llegar a `main` el bot en `api` (REQ-F-042):** cambian `compose.prod.yaml` (variables del bot
+y router del webhook en `api`) y `deploy.sh`, así que su suma cambia. **Reinstala `deploy/` con este
+paso** cuando el job `deploy` falle con el código 4 y vuelve a ejecutarlo. Actualiza también
+`restore.sh` en el VPS ([paso 11.5](#115-instalar-en-el-vps)): sin eso todo funciona igual, pero no
+avisa si el bot queda sin servicio tras restaurar. Hasta entonces producción
+no se toca, así que el webhook sigue en la versión anterior. No hay nada que hacer en Meta ni en el
+`.env`: las variables del bot son las mismas.
+
+Qué pasa con los mensajes en ese despliegue, y en cualquier vuelta atrás:
+
+- Mientras la `api` nueva arranca, Traefik no publica su router (solo enruta contenedores `healthy`):
+  `/webhooks/whatsapp` sigue yendo a la app anterior, que atiende el bot como siempre.
+- En cuanto la `api` queda `healthy`, Traefik publica `restaurante-webhook` y los mensajes pasan a
+  ella. `deploy.sh` comprueba ese enrutado **antes** de cambiar la app, la única que dejaría la ruta
+  sin bot. Si no lo ve en 60 s, vuelve a la `api` anterior y termina con el código 15, con la app
+  anterior todavía atendiendo el webhook.
+- En la **vuelta atrás automática** (código 21), la `api` nueva sigue atendiendo el webhook hasta que
+  la app anterior está lista, y solo entonces vuelve la `api` anterior.
+- Las entregas de Meta que no reciben 200 se reintentan: un fallo breve no pierde mensajes. Las ya
+  respondidas con 200 no se repiten. Las **conversaciones a medias se pierden**, porque viven en
+  memoria: el cliente vuelve a empezar (aceptado, D-3).
+
+Fallos de `/webhooks/whatsapp` medidos en local (2026-11-04, una petición cada 0,3 s, con las imágenes
+de `main` y las de REQ-F-042). Los tiempos del VPS pueden ser mayores:
+
+| Operación | Resultado |
+| --------- | --------- |
+| Corte hacia la versión nueva | Ningún fallo: la app anterior responde hasta que la `api` toma el relevo |
+| Vuelta atrás automática (código 21) | Entre 1 y 4 respuestas 502 |
+| Reinicio o despliegue de la `api`, ya con la app nueva | 404 de la app durante unos 4 s |
+| Volver a la versión anterior desplegándola con `deploy.sh` | 404 y 502 durante unos 8 s: la `api` cambia antes que la app |
+
+El último caso no tiene arreglo sin cambiar el orden de un despliegue normal. Si no corre prisa,
+hazlo fuera de las horas de pedidos.
 
 **Al llegar a `main` el admin nuevo (REQ-F-039)** (aplicado el 2026-10-29 con el #105; se conserva
 como referencia): `compose.prod.yaml` (servicio
@@ -299,7 +342,7 @@ Debe responder `uso: deploy <sha> ...` con código 2: la llave no abre una shell
   o su archivo de configuración). Si no se llaman `letsencrypt`, `web` y `websecure`, ajústalos
   en el `.env`.
 - Traefik debe tener el proveedor Docker. Con `exposedByDefault=false` funciona igual (la app
-  declara `traefik.enable=true`).
+  declara `traefik.enable=true`, y la `api` lo declara cuando su imagen trae el webhook).
 - DNS: registros `A` (y `AAAA` si hay IPv6) de `birriaelmuneco.com` y `www.birriaelmuneco.com`
   hacia el VPS.
 - DNS del admin nuevo (REQ-F-039, **a cargo del usuario**): registro `A` (y `AAAA`) de
@@ -354,10 +397,14 @@ sudo -u deploy -H nano /opt/restaurante/.env
 - **Contraseñas de MySQL:** cada una con `openssl rand -hex 32`. Son obligatorias y deben ser
   hexadecimales. Solo se aplican al crear el volumen de MySQL: cambiarlas después exige también
   `ALTER USER` en MySQL.
-- **App:** las mismas variables que describe [`landing-pages/.env.example`](../landing-pages/.env.example) (WhatsApp, bot de
-  Meta, `SITE_URL=https://birriaelmuneco.com`, primer administrador).
-  - El compose fija `NODE_ENV`, `HOST`, `PORT`, `TRUST_PROXY`, `DATA_DIR` y `DATABASE_URL`: no
-    las pongas.
+- **App y `api`:** las variables que describen [`landing-pages/.env.example`](../landing-pages/.env.example) (WhatsApp,
+  `SITE_URL=https://birriaelmuneco.com`, primer administrador) y [`api/.env.example`](../api/.env.example) (bot de Meta).
+  - Un solo `.env`: el compose pasa las mismas variables del bot a `api`, que las usa todas, y a
+    `app`, que usa el proveedor, el personal, la clave de la lista negra y los topes para la página
+    "Bot" de `/admin` (REQ-F-042). Las demás siguen llegando a `app` hasta el ticket 6, porque la
+    vuelta atrás a una versión con el bot en `app` las necesita.
+  - El compose fija `NODE_ENV`, `HOST`, `PORT`, `WEBHOOK_PORT`, `TRUST_PROXY`, `DATA_DIR` y
+    `DATABASE_URL`: no las pongas.
   - `ADMIN_PASSWORD_HASH` va entre comillas simples. Genéralo con `npm run admin:hash-password`
     en tu máquina.
 - **Admin nuevo (REQ-F-039):**
@@ -369,8 +416,8 @@ sudo -u deploy -H nano /opt/restaurante/.env
 - **Traefik:** `TRAEFIK_CERTRESOLVER`, `TRAEFIK_ENTRYPOINT_HTTP`, `TRAEFIK_ENTRYPOINT_HTTPS` y
   `RESTAURANTE_DOMAIN`. Cambiarlos no exige tocar el código (CA-11). Se aplican en el siguiente
   despliegue.
-- **Nunca** definas `DATABASE_ALLOW_NEWER_SCHEMA`: `deploy.sh` se niega a desplegar si la
-  encuentra.
+- **Nunca** definas `DATABASE_ALLOW_NEWER_SCHEMA` (`deploy.sh` se niega a desplegar si la
+  encuentra) ni `RESTAURANTE_API_WEBHOOK` (la calcula `deploy.sh` en cada despliegue).
 - Guarda una copia del `.env` cifrada y fuera del VPS.
 
 ## 4. Primer despliegue
@@ -404,7 +451,8 @@ rojo y la app se queda como esté ([Diagnóstico](#10-diagnóstico)).
 | Docker | `docker version` del Engine ≥ 25 (para `start_interval` del healthcheck) |
 | CA-15 de REQ-F-039: admin nuevo | Con el DNS ya propagado: `curl -sI https://admin.birriaelmuneco.com/acceso` → 200 con certificado válido en el navegador, `Cache-Control: no-store` y `X-Robots-Tag: noindex, nofollow`; `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' 'http://admin.birriaelmuneco.com/acceso?next=%2F'` → `301` a `https://` con la ruta y la query (con `curl -sI`, HEAD, da `308`); 120 peticiones **en paralelo**, `seq 1 120 \| xargs -P 30 -I{} curl -s -o /dev/null -w '%{http_code}\n' https://admin.birriaelmuneco.com/salud \| sort \| uniq -c`, dan una parte con 200 y el resto con 429 (el 2026-10-29: 62 y 58); `/molotes` sigue en 200. En serie no sirve: con la latencia real la ráfaga se recarga y 75 peticiones seguidas dieron todas 200 |
 | `api` y aviso no expuestos | `curl -s -o /dev/null -w '%{http_code}' https://admin.birriaelmuneco.com/api/v1/admin/sesion` → 404 (lo responde inventory-manager); `curl -s -o /dev/null -w '%{http_code}' -X POST https://birriaelmuneco.com/internal/v1/productos-cambiados` → 404 |
-| Frescura (CA-9) | Marca un producto como no disponible en el admin nuevo: el mensaje dice «La landing y el bot ya muestran el cambio», la landing deja de mostrarlo y en el log de `app` aparece `products_change_notified` con `landing:true` y `bot:true` |
+| Frescura (CA-9) | Marca un producto como no disponible en el admin nuevo: el mensaje dice «La landing y el bot ya muestran el cambio», la landing deja de mostrarlo, el siguiente mensaje al bot ya no lo ofrece y en el log de `app` aparece `products_change_notified` con `landing:true` |
+| Webhook del bot (REQ-F-042) | Ver [Comprobaciones del webhook](#comprobaciones-del-webhook-req-f-042) |
 
 Después, registra el webhook en Meta ([paso 7](#7-registrar-el-webhook-en-meta)).
 
@@ -424,11 +472,14 @@ ls -lt backups/                                    # volcados
 - **Recuperar el acceso a `/admin`:**
   `$C exec app node scripts/admin-recover.ts --usuario <nombre>`
   ([Recuperar el acceso](../README.md#recuperar-el-acceso)).
-- **Reiniciar la app:** `$C restart app`.
+- **Reiniciar la app:** `$C restart app`. Para reiniciar el bot, `$C restart api`: conserva el router
+  del webhook.
 - **Recrear la app** (`$C up -d app`): usa los digests de `state/release.env`. Tras una vuelta
   atrás con la base más nueva, la app recreada sin `DATABASE_ALLOW_NEWER_SCHEMA=true` no
-  arranca (`DATABASE_NEWER_THAN_CODE`). Antepón `DATABASE_ALLOW_NEWER_SCHEMA=true` al comando o,
-  mejor, despliega una versión corregida.
+  arranca (`DATABASE_NEWER_THAN_CODE`). Pásala con `sudo env` ([paso 6](#6-volver-a-una-versión-anterior-a-mano))
+  o, mejor, despliega una versión corregida.
+- **Recrear la `api`:** sigue [Arrancar la `api` a mano](#arrancar-la-api-a-mano), para que el router del
+  webhook quede coherente con la imagen.
 
 ### Redesplegar la punta de `main`
 
@@ -453,18 +504,41 @@ motivo:
 - Haz un revert en `main`: se despliega solo, con volcado y migración.
 - Si es urgente, en el VPS:
   1. Toma los digests de `state/release.env.previous` o de `state/releases.log`.
-  2. Ejecuta:
+  2. Ejecuta, con `sudo env`: un `VAR=valor` delante de `$C` no llega a `docker compose`, porque
+     `sudo` borra el entorno, y compose usaría sin avisar la imagen de `state/release.env`.
 
      ```sh
-     DATABASE_ALLOW_NEWER_SCHEMA=true RESTAURANTE_APP_IMAGE=ghcr.io/orvigas/restaurante@sha256:<digest> $C up -d --no-deps app
+     CE="docker compose -f deploy/compose.prod.yaml --env-file .env --env-file state/release.env"
+     sudo env DATABASE_ALLOW_NEWER_SCHEMA=true RESTAURANTE_APP_IMAGE=ghcr.io/orvigas/restaurante@sha256:<digest> $CE up -d --no-deps app
      ```
 
-     `$C` incluye `state/release.env`, pero las variables del entorno tienen prioridad. Para la
-     `api` (REQ-F-038), igual con `RESTAURANTE_API_IMAGE=ghcr.io/orvigas/restaurante-api@sha256:<digest>`
-     y `up -d --no-deps api`. Nombra siempre el servicio (`up -d --no-deps app` o `api`): sin
-     `RESTAURANTE_API_IMAGE`, el compose resuelve la `api` a la imagen
-     `…/restaurante-api:sin-desplegar`, que no existe.
+     Las variables de `sudo env` tienen prioridad sobre `state/release.env`. Para la `api`, sigue
+     [Arrancar la `api` a mano](#arrancar-la-api-a-mano), **después** de la app. Nombra siempre el
+     servicio (`up -d --no-deps app` o `api`): sin `RESTAURANTE_API_IMAGE`, el compose resuelve la
+     `api` a la imagen `…/restaurante-api:sin-desplegar`, que no existe.
   3. El siguiente despliegue desde `main` deja todo como indica el CI.
+
+### Arrancar la `api` a mano
+
+Úsalo siempre que recrees la `api` fuera de `deploy.sh`: el router del webhook debe coincidir con la
+imagen. Si no, el bot se queda fuera sin ningún error: una `api` con webhook y el router apagado da
+404 de la app, y una `api` anterior a REQ-F-042 con el router encendido da 502.
+
+```sh
+cd /opt/restaurante
+CE="docker compose -f deploy/compose.prod.yaml --env-file .env --env-file state/release.env"
+API=ghcr.io/orvigas/restaurante-api@sha256:<digest>
+sudo -u deploy -H docker pull "$API"
+WEBHOOK=$(sudo docker image inspect -f '{{index .Config.Labels "org.restaurante.webhook"}}' "$API" | grep -q whatsapp && echo true || echo false)
+sudo env RESTAURANTE_API_IMAGE="$API" RESTAURANTE_API_WEBHOOK="$WEBHOOK" $CE up -d --no-deps api
+```
+
+- Sobre una base más nueva que esa imagen, añade `DATABASE_ALLOW_NEWER_SCHEMA=true` a `sudo env`.
+- **Alguien tiene que atender el webhook:** una `api` con la etiqueta, o una app anterior a REQ-F-042
+  con su bot. Si `WEBHOOK` sale `false` y la app es de REQ-F-042 o posterior, el bot queda sin
+  servicio: vuelve también la app a una versión con bot, o usa una `api` con webhook.
+- `$C restart api` no recrea nada y conserva el router.
+- Comprueba el resultado con [las comprobaciones del webhook](#comprobaciones-del-webhook-req-f-042).
 
 **Imagen de la `api` (REQ-F-038).** Está en `state/release.env` (`RESTAURANTE_API_IMAGE`) después
 de cada despliegue correcto. `ops/backup/restore.sh` reescribe ese archivo solo con la app y
@@ -478,9 +552,24 @@ migrate, así que **tras una restauración** la línea ya no está. Búscala, po
 `deploy.sh` hace lo mismo con la primera opción: si `release.env` no tiene la api, toma la del
 contenedor en marcha como api anterior para su vuelta atrás.
 
+**Vuelta atrás y webhook (REQ-F-042).** El router del webhook sigue a la imagen de la `api`, no al
+compose instalado: `deploy.sh` lee la etiqueta `org.restaurante.webhook` de la imagen y calcula
+`RESTAURANTE_API_WEBHOOK` en cada operación.
+
+- **Vuelta atrás automática** (código 21): `deploy.sh` vuelve a la app y después a la `api` anteriores,
+  y comprueba que esa `api` queda `healthy` y con el webhook; si no, termina con el código 22. Si esa
+  `api` no tiene la etiqueta, el router se apaga y `/webhooks/whatsapp` vuelve al router raíz, es
+  decir, a la app anterior, que tiene el bot y sigue recibiendo sus variables. Así el webhook nunca
+  queda en un proceso sin bot.
+- **Revert en `main`:** también exige reinstalar el `deploy/` de ese commit (código 4), que no tiene
+  el router.
+
 ## 7. Registrar el webhook en Meta
 
-Con la app en marcha detrás de HTTPS:
+El webhook ya está registrado en producción. Este paso solo hace falta en una cuenta nueva: REQ-F-042
+no cambia nada en Meta, porque la URL es la misma aunque ahora la atienda `api`.
+
+Con la `api` en marcha detrás de HTTPS:
 
 1. En la app de Meta: **WhatsApp → Configuración → Webhook**.
 2. URL de devolución de llamada: `https://birriaelmuneco.com/webhooks/whatsapp`. Token de
@@ -492,7 +581,8 @@ Detalles y prerrequisitos de Meta en
 las landings funcionan igual: deja vacías las `WHATSAPP_BOT_*`.
 
 Con el bot habilitado, `.env` también necesita `WHATSAPP_BOT_BLOCKLIST_KEY` (REQ-F-025): genérala
-con `openssl rand -base64 32` y guárdala en el gestor de contraseñas. Sin ella la app no arranca.
+con `openssl rand -base64 32` y guárdala en el gestor de contraseñas. Sin ella la `api` y la app no
+arrancan.
 Si el bot ya estaba activo cuando llega la versión que la exige, el orden es:
 
 1. Añade la clave al `.env` del VPS.
@@ -508,8 +598,26 @@ valores por defecto (ver `README.md`, "Topes de gasto, lista negra e interruptor
    completo) y los digests.
 2. `https://birriaelmuneco.com/`, `/molotes` y `/birria` responden 200. `/admin` muestra el
    acceso, no un 503. `https://admin.birriaelmuneco.com/acceso` muestra el acceso del admin nuevo.
-3. En el log: `server_started` y, con el bot, `bot_provider_selected` con `meta`. Vigila
+3. En el log de `api`: `server_started` y, con el bot, `bot_provider_selected` con `meta`. Vigila
    `bot_staff_delivery_failed` y `bot_webhook_signature_invalid`.
+
+### Comprobaciones del webhook (REQ-F-042)
+
+Tras el primer despliegue con el bot en `api` y tras cualquier vuelta atrás. `<token>` es
+`WHATSAPP_BOT_VERIFY_TOKEN`; no lo pegues en un ticket ni en el chat.
+
+| Comprobación | Cómo |
+| ------------ | ---- |
+| Verificación con el token correcto | `curl -s 'https://birriaelmuneco.com/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=<token>&hub.challenge=123'` → `123` |
+| Token incorrecto | Igual con otro token → 403, y `bot_webhook_verify_failed` en `$C logs api` |
+| Lo atiende `api` | Sin cabecera CSP: `curl -sI -X GET 'https://birriaelmuneco.com/webhooks/whatsapp' \| grep -ic content-security-policy` → `0`. `$C logs api` tiene `bot_provider_selected` y la línea `request` de esa ruta; `$C logs app`, no |
+| Firma | `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://birriaelmuneco.com/webhooks/whatsapp -d '{}'` → 401, y `bot_webhook_signature_invalid` en `$C logs api` |
+| Un mensaje real | Escribe al número del bot: responde, y `$C logs api` lo refleja |
+| Otras rutas de `api` no expuestas | `curl -si https://birriaelmuneco.com/api/v1/admin/sesion` y `.../api/v1/public/birria/productos` → 404 con `Content-Security-Policy`: las responde `app`, no `api`. Para el log de `api`, usa una ruta inventada, como `/api/v1/admin/sonda-ca3`: no debe aparecer (la ruta de sesión sí la llama `inventory-manager`) |
+| Ruta exacta | `.../webhooks/whatsapp/` y `.../webhooks/` → 404 |
+| El sitio sigue igual | `/`, `/molotes` y `/birria` → 200; `/admin` muestra el acceso |
+| Vuelta atrás (solo tras volver a una versión de antes de REQ-F-042) | La verificación con el token correcto responde `123` y sí lleva CSP: la atiende `app` |
+| Memoria (§10 de la [arquitectura](arquitectura.md#10-riesgos)) | `free -m` y `sudo docker stats --no-stream`; compara con el 31,5 % y el umbral del 80 % |
 
 ## 9. Restaurar la base desde un volcado
 
@@ -530,12 +638,15 @@ gzip -dc backups/<archivo>.sql.gz | $C exec -T mysql sh -c 'exec mysql -uroot -p
    con sus digests en `state/releases.log`.
 
    ```sh
-   RESTAURANTE_APP_IMAGE=ghcr.io/orvigas/restaurante@sha256:<digest> $C up -d --no-deps app
+   CE="docker compose -f deploy/compose.prod.yaml --env-file .env --env-file state/release.env"
+   sudo env RESTAURANTE_APP_IMAGE=ghcr.io/orvigas/restaurante@sha256:<digest> $CE up -d --no-deps app
    ```
 
-   Si el volcado es de un commit con otra `api` u otro `inventory-manager` (sus digests también
-   están en `state/releases.log`), arráncalos igual con `RESTAURANTE_API_IMAGE` y
-   `RESTAURANTE_INVENTORY_IMAGE`.
+   Si el volcado es de un commit con otra `api` (sus digests también están en
+   `state/releases.log`), arráncala con [Arrancar la `api` a mano](#arrancar-la-api-a-mano), nunca solo
+   con `RESTAURANTE_API_IMAGE`: una `api` anterior a REQ-F-042 heredaría el router encendido de
+   `state/release.env` y el webhook daría 502. Con otro `inventory-manager`, arráncalo igual con
+   `sudo env RESTAURANTE_INVENTORY_IMAGE=<imagen> $CE up -d --no-deps inventory-manager`.
 
 2. Los permisos de los usuarios (`GRANT ... ON restaurante.*`) sobreviven al `DROP DATABASE`.
 3. Comprueba `$C ps` (healthy) y el [paso 8](#8-comprobaciones-después-de-cada-despliegue).
@@ -565,14 +676,21 @@ el log del paso `desplegar`.
 | Código 11 `MySQL no quedó healthy` | MySQL no arrancó (memoria, disco, volumen dañado) o el initdb falló en el primer arranque (contraseñas no hexadecimales) | `$C logs mysql`; la app no se tocó |
 | Código 12 (volcado) | MySQL caído, disco lleno o usuario `restaurante_backup` | `$C logs mysql`, `df -h` |
 | Código 13 (migración) | La migración falló; la app sigue con la versión anterior | Lee el error de Prisma en el log. Si quedó a medias, [restaura](#9-restaurar-la-base-desde-un-volcado) |
-| Código 15 (REQ-F-038) | La `api` nueva no quedó `healthy`; se volvió a la anterior si la había. La app no se tocó o, si hubo migraciones nuevas, se recreó con su misma imagen y `DATABASE_ALLOW_NEWER_SCHEMA=true` (el log del paso lo dice) | `$C logs api`: suele ser la base (`database_init_failed`) o la imagen. Las landings siguen con su última copia buena. Corrige y vuelve a desplegar: el siguiente despliegue correcto deja la app sin la bandera |
-| Código 16 (REQ-F-039) | `inventory-manager` no quedó `healthy` o Traefik no lo enruta en `admin.<dominio>`; volvió al anterior (o se detuvo si no lo había). La app no se tocó (o, con migraciones nuevas, se recreó con la bandera, como en el código 15); la `api` nueva sigue | `$C logs inventory-manager`: suele ser la configuración (`API_INTERNAL_URL`) o la imagen. Comprueba `RESTAURANTE_ADMIN_DOMAIN` y los routers `restaurante-inventory*` de Traefik. La edición de productos sigue en el `/admin` anterior hasta un despliegue correcto |
-| `products_notify_failed` / `products_notify_gave_up` en `api` | El aviso interno a `app` (puerto 3002) falla: `app` caída o credencial distinta | `$C ps app`; comprueba que `RESTAURANTE_INTERNAL_NOTIFY_TOKEN` sea la misma para las dos (la reciben del mismo `.env`). Mientras tanto, la landing y el bot ven el cambio como mucho en 60 s |
+| Código 15 (REQ-F-038) | La `api` nueva no quedó `healthy` o Traefik no le enruta `/webhooks/whatsapp` (REQ-F-042); se volvió a la anterior si la había. La app no se tocó o, si hubo migraciones nuevas, se recreó con su misma imagen y `DATABASE_ALLOW_NEWER_SCHEMA=true` (el log del paso lo dice) | `$C logs api`: suele ser la base (`database_init_failed`), la imagen o, con el bot, su configuración (lista los problemas sin valores). Si la `api` estaba `healthy`, revisa el router `restaurante-webhook` en Traefik y que la `api` esté en `traefik-public`. Las landings siguen con su última copia buena y el webhook, donde estaba. Corrige y vuelve a desplegar: el siguiente despliegue correcto deja la app sin la bandera |
+| Código 16 (REQ-F-039) | `inventory-manager` no quedó `healthy` o Traefik no lo enruta en `admin.<dominio>`; volvió al anterior (o se detuvo si no lo había). La app no se tocó (o, con migraciones nuevas, se recreó con la bandera, como en el código 15); la `api` nueva sigue. En el primer despliegue de REQ-F-042 quedan a la vez la `api` con el bot y la app anterior: el webhook va a la `api`, pero el mantenimiento del control puede correr en las dos hasta el siguiente despliegue y duplicar alguna auditoría de caducidad | `$C logs inventory-manager`: suele ser la configuración (`API_INTERNAL_URL`) o la imagen. Comprueba `RESTAURANTE_ADMIN_DOMAIN` y los routers `restaurante-inventory*` de Traefik. La edición de productos sigue en el `/admin` anterior hasta un despliegue correcto |
+| `products_notify_failed` / `products_notify_gave_up` en `api` | El aviso interno a `app` (puerto 3002) falla: `app` caída o credencial distinta | `$C ps app`; comprueba que `RESTAURANTE_INTERNAL_NOTIFY_TOKEN` sea la misma para las dos (la reciben del mismo `.env`). Mientras tanto, la landing ve el cambio como mucho en 60 s; el bot, al instante |
+| `POST /webhooks/whatsapp` responde 404 con CSP, o el bot no contesta | La ruta llegó a `app`: `api` caída o reiniciándose, o su router apagado | `$C ps api`; `docker inspect -f '{{index .Config.Labels "traefik.enable"}}' "$($C ps -q api)"` debe decir `true`. Si dice `false` con la imagen actual, recréala con [Arrancar la `api` a mano](#arrancar-la-api-a-mano). Meta reintenta lo que no recibió 200 |
+| El webhook responde 503 `BOT_DISABLED` | La `api` no ve variables del bot | Revisa las `WHATSAPP_BOT_*` del `.env` y recrea la `api` |
+| `/webhooks/whatsapp` responde 502 | Traefik enruta a una `api` que no escucha en el 3004: una `api` anterior a REQ-F-042 con el router encendido, o una `api` recreada a mano. Su healthcheck no mira el 3004 y sale `healthy` | `sudo docker image inspect -f '{{index .Config.Labels "org.restaurante.webhook"}}' "$($C ps -q api \| xargs sudo docker inspect -f '{{.Config.Image}}')"`: si no dice `whatsapp`, recréala con [Arrancar la `api` a mano](#arrancar-la-api-a-mano). Meta reintenta lo que no recibió 200 |
+| `restore.sh` termina con `AVISO: el bot queda SIN SERVICIO` | App restaurada sin bot y `api` sin router | [Arrancar la `api` a mano](#arrancar-la-api-a-mano) con una `api` con webhook, o vuelve a desplegar |
+| `bot_api_error` sin respuesta de Meta en `api` | Sin salida a internet | Comprueba que la `api` esté en `traefik-public` (`$C ps`, `docker inspect`) |
+
 | `admin.<dominio>` responde 429 | Límite de Traefik del admin nuevo (60 por minuto por IP, ráfaga de 60) | Espera un minuto |
 | Las landings registran `landing_products_fallback` | La `api` no responde, tarda más de 1,5 s o devuelve algo fuera del contrato | `$C ps api` y `$C logs api`. Las landings sirven su última copia buena (o la semilla tras reiniciar `app`) y vuelven solas cuando la api responde (`landing_products_recovered`) |
 | Código 20 | Primer despliegue sin versión anterior y la app no arranca | `$C logs app`: suele ser el `.env` (`ConfigError` lista los problemas) |
 | Código 21 | La versión nueva no arrancó; se volvió a la anterior | Corrige y vuelve a desplegar. La app anterior corre con `DATABASE_ALLOW_NEWER_SCHEMA=true` si hubo migración |
 | Código 22 | Tampoco arrancó la versión anterior | [Restaura la base](#9-restaurar-la-base-desde-un-volcado) y arranca la versión del volcado |
+| Código 22 con `la app anterior está restaurada` (REQ-F-042) | La app volvió, pero la `api` anterior no quedó `healthy` o Traefik no le enruta el webhook: el bot puede estar sin servicio | `$C ps api` y `$C logs api`. Arranca una `api` que funcione con [Arrancar la `api` a mano](#arrancar-la-api-a-mano) o vuelve a desplegar. No hace falta restaurar la base |
 | `/admin` responde 503 y `admin_requires_https` | La petición no llegó por HTTPS a través de Traefik | Revisa el entrypoint HTTPS y el certresolver |
 | `/admin` responde 429 | Límite de Traefik (10 por minuto por IP, ráfaga de 20) | Espera un minuto. Cada guardado son 2 peticiones (POST y redirección) |
 | `database_init_failed` | Base inalcanzable, credenciales, migraciones pendientes o base más nueva que el código | Según el código del log ([Base de datos](../README.md#base-de-datos)) |
@@ -785,8 +903,13 @@ nuevo. **Se pierde todo lo escrito después del respaldo.**
 8. Actualiza `state/release.env` y anota la restauración en `state/releases.log`.
 
 `restore.sh` no toca `api` ni `inventory-manager` (REQ-F-039): siguen con su imagen. Si el respaldo
-es de un commit con otra `api`, arráncala como en el [paso 9](#9-restaurar-la-base-desde-un-volcado);
+es de un commit con otra `api`, arráncala con [Arrancar la `api` a mano](#arrancar-la-api-a-mano);
 `inventory-manager` no guarda datos, así que basta con que siga en marcha.
+
+**El bot tras restaurar (REQ-F-042).** La `api` en marcha conserva su router. Solo hay un caso sin
+servicio: una app restaurada sin bot y una `api` sin router. Entonces `restore.sh` termina con 0,
+porque los datos sí están restaurados y repetirlo no cambiaría nada, pero su última línea es
+`AVISO: el bot queda SIN SERVICIO`. Si la ves, arranca una `api` con webhook o vuelve a desplegar.
 
 Al terminar imprime la duración de cada fase y el tiempo sin servicio.
 
@@ -818,11 +941,11 @@ Después, haz las comprobaciones del [paso 8](#8-comprobaciones-después-de-cada
   3. Copia el `.env` a `/opt/restaurante/.env` (`deploy`, `600`).
   4. Haz `docker login ghcr.io` como `deploy` (paso 1.4) y ejecuta `restore.sh latest`. Crea
      MySQL, la base y los usuarios, y después restaura.
-  5. `restore.sh` no conoce la `api` (REQ-F-038; decisión P-2: `ops/` no cambia): solo arranca la
+  5. `restore.sh` no conoce la `api` (REQ-F-038): solo arranca la
      app. En un VPS nuevo la `api` no está en marcha y las landings sirven la semilla de
-     `content/seeds.ts` (sin errores 5xx) hasta que la levantes. Vuelve a desplegar la punta de
-     `main` ([Redesplegar](#redesplegar-la-punta-de-main)), o arráncala a mano con
-     `RESTAURANTE_API_IMAGE=<imagen> $C up -d --no-deps api`. La `<imagen>` sale de
+     `content/seeds.ts` (sin errores 5xx) hasta que la levantes, y el bot no atiende a nadie.
+     Vuelve a desplegar la punta de `main` ([Redesplegar](#redesplegar-la-punta-de-main)), o
+     arráncala con [Arrancar la `api` a mano](#arrancar-la-api-a-mano). La imagen sale de
      `state/release.env.previous` o de `state/releases.log` ([Imagen de la `api`](#6-volver-a-una-versión-anterior-a-mano));
      `state/release.env` ya no la tiene, porque `restore.sh` lo reescribe sin ella. En el mismo VPS,
      la `api` sigue en marcha durante la restauración y no hace falta nada: si alguna vez necesitas

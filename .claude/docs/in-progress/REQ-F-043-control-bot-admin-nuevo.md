@@ -2,9 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
-PR 1 de 3 (contratos y `api`): [PR #130](https://github.com/orvigas/negocio/pull/130), mergeado en `epic/arquitectura` (`1c801cf`). PR 2 de 3 (pantalla): [PR #131](https://github.com/orvigas/negocio/pull/131), mergeado en `epic/arquitectura` (`0391e86`). PR 3 de 3 (solo lectura y documentación): implementado en `feature/REQ-F-043-control-bot-admin-nuevo-3-solo-lectura`, sin commit.
+PR 1 de 3 (contratos y `api`): [PR #130](https://github.com/orvigas/negocio/pull/130), mergeado en `epic/arquitectura` (`1c801cf`). PR 2 de 3 (pantalla): [PR #131](https://github.com/orvigas/negocio/pull/131), mergeado en `epic/arquitectura` (`0391e86`). PR 3 de 3 (solo lectura y documentación): [PR #132](https://github.com/orvigas/negocio/pull/132) hacia `epic/arquitectura`, con el CI en verde, pendiente del merge del usuario.
 
 ## Aprobación
 
@@ -2042,3 +2042,9 @@ DEF-005, DEF-006 y DEF-007 corregidos, solo textos y comentarios (2026-11-05). I
 ### QA del PR 3, ronda 2
 
 Correcciones de DEF-005 a DEF-007 aprobadas por el usuario (cita textual: "si apruebo las correciones"). Revalidación selectiva de textos (2026-11-05): los 3 corregidos, RF-14 en PASS, `typecheck` y `lint` en 0, y 154 pruebas afectadas en verde. Estado: `QA_APPROVED`.
+
+### Pull Request del PR 3
+
+PR #132 hacia `epic/arquitectura`, commit `dd2b2e1` (2026-11-05). Incluye `admin-bot-moved`, las sondas S-1 (en 3 archivos) y S-2 con su soporte, y la sección "Limpieza al terminar" de `.claude/rules/testing.md`, pedida por el usuario. DEF-001 a DEF-004 siguen abiertos. Las bases vacías `restaurante_test_4d1754_9_2` y `restaurante_test_8abebf_2_x78284_1` las borró la sesión principal por orden del usuario.
+
+CI del commit `dd2b2e1` en verde (ejecución 42064630316): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion`. Duraciones en el CI: `-solo-lectura-procesos` 12,3 s, `admin-bot-moved` 6,6 s, `-solo-lectura` 6,2 s, `-solo-lectura-rechazos` 4,5 s y `-solo-lectura-estados` 4,2 s. El archivo más largo de toda la suite tarda 18,9 s (`dependency-rule-apps`). Ninguno pasa de 20 s, y no hizo falta partir ninguno. Estado: `READY_FOR_MERGE`.

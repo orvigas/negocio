@@ -2,9 +2,9 @@
 
 ## Estado
 
-READY_FOR_MERGE
+QA_APPROVED
 
-PR 1 de 3 (contratos y `api`): [PR #130](https://github.com/orvigas/negocio/pull/130), mergeado en `epic/arquitectura` (`1c801cf`). PR 2 de 3 (pantalla): [PR #131](https://github.com/orvigas/negocio/pull/131), mergeado en `epic/arquitectura` (`0391e86`). PR 3 de 3 (solo lectura y documentación): [PR #132](https://github.com/orvigas/negocio/pull/132) hacia `epic/arquitectura`, con el CI en verde, pendiente del merge del usuario.
+PR 1 de 3 (contratos y `api`): [PR #130](https://github.com/orvigas/negocio/pull/130), mergeado en `epic/arquitectura` (`1c801cf`). PR 2 de 3 (pantalla): [PR #131](https://github.com/orvigas/negocio/pull/131), mergeado en `epic/arquitectura` (`0391e86`). PR 3 de 3 (solo lectura y documentación): [PR #132](https://github.com/orvigas/negocio/pull/132) hacia `epic/arquitectura`, con el CI de `dd2b2e1` en verde y el de `a46c3af` en rojo (ver "Pull Request del PR 3"). No está en `READY_FOR_MERGE`.
 
 ## Aprobación
 
@@ -2047,4 +2047,13 @@ Correcciones de DEF-005 a DEF-007 aprobadas por el usuario (cita textual: "si ap
 
 PR #132 hacia `epic/arquitectura`, commit `dd2b2e1` (2026-11-05). Incluye `admin-bot-moved`, las sondas S-1 (en 3 archivos) y S-2 con su soporte, y la sección "Limpieza al terminar" de `.claude/rules/testing.md`, pedida por el usuario. DEF-001 a DEF-004 siguen abiertos. Las bases vacías `restaurante_test_4d1754_9_2` y `restaurante_test_8abebf_2_x78284_1` las borró la sesión principal por orden del usuario.
 
-CI del commit `dd2b2e1` en verde (ejecución 42064630316): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion`. Duraciones en el CI: `-solo-lectura-procesos` 12,3 s, `admin-bot-moved` 6,6 s, `-solo-lectura` 6,2 s, `-solo-lectura-rechazos` 4,5 s y `-solo-lectura-estados` 4,2 s. El archivo más largo de toda la suite tarda 18,9 s (`dependency-rule-apps`). Ninguno pasa de 20 s, y no hizo falta partir ninguno. Estado: `READY_FOR_MERGE`.
+CI del commit `dd2b2e1` en verde (ejecución 42064630316): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion`. Duraciones en el CI: `-solo-lectura-procesos` 12,3 s, `admin-bot-moved` 6,6 s, `-solo-lectura` 6,2 s, `-solo-lectura-rechazos` 4,5 s y `-solo-lectura-estados` 4,2 s. El archivo más largo de toda la suite tarda 18,9 s (`dependency-rule-apps`). Ninguno pasa de 20 s, y no hizo falta partir ninguno.
+
+**Corrección del registro:** el commit `a46c3af` (`docs: registra el Pull Request de REQ-F-043`) puso `READY_FOR_MERGE` con el CI de `dd2b2e1` en verde. Ese estado no era cierto: el CI de `a46c3af` falló (ejecución 42067335247). El estado vuelve a `QA_APPROVED`.
+
+- **Fallo:** `pruebas (1/2)` y, por eso, `calidad`. Prueba `tests/integration/users-api-process-ultimo-admin.test.ts`, "dos administradores se desactivan entre sí con dos peticiones a la API, 10 veces: siempre queda uno": la `api` no arrancó, con `EADDRINUSE`, en `startStack` (`tests/support/users-api-process.ts:40`). 1 prueba falló y 946 pasaron en ese trabajo.
+- **Entre `dd2b2e1` y `a46c3af`:** solo cambió este ticket.
+- **Causa probable (inferencia, sin reproducir):** carrera de puertos en `freePorts` de `tests/support/process.ts`. El puerto se elige y se cierra antes de que el proceso hijo lo abra, y `handedOut` solo protege dentro de un trabajador de Vitest.
+- **Sin medir:** si las sondas nuevas que arrancan procesos reales hacen más frecuente la colisión.
+- **Fuera de este PR:** la corrección de la carrera. No se tocan pruebas, `tests/support/process.ts`, tiempos ni `retry`.
+- **Este commit cuenta de hecho como reintento:** cambia solo el ticket, y su CI vuelve a ejecutar la misma suite. Un resultado verde no demuestra que la carrera haya desaparecido.

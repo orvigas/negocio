@@ -8,7 +8,7 @@ import { createUserRepository } from '@restaurante/db/user-repository';
 import { VALID_ENV } from '../helpers.ts';
 import { ADMIN_ENV, ADMIN_PASSWORD, TEST_HASH_PARAMS } from './admin.ts';
 import { makeDatabase, makeTempDir } from './database.ts';
-import { freePort, startServer } from './process.ts';
+import { startServer } from './process.ts';
 import { databaseUrl } from './test-database-config.ts';
 
 /**
@@ -46,23 +46,21 @@ export async function startStack({ inventoryEnv = {}, browser }: { inventoryEnv?
   cleanups.push(database.cleanup);
   const dataDir = await makeTempDir();
   cleanups.push(dataDir.cleanup);
-  const apiPort = await freePort();
   const DATABASE_URL = databaseUrl(database.config);
-  const api = await startServer({ DATABASE_URL, PORT: String(apiPort), INTERNAL_NOTIFY_TOKEN: undefined }, 60_000, { args: [API_ENTRY] });
+  const api = await startServer({ DATABASE_URL, INTERNAL_NOTIFY_TOKEN: undefined }, 60_000, { args: [API_ENTRY] });
   cleanups.push(() => api.stop());
   expect(api.started, api.output().stderr).toBe(true);
-  const landing = await startServer({ DATABASE_URL, DATA_DIR: dataDir.dir, ...ADMIN_ENV, API_INTERNAL_URL: `http://127.0.0.1:${apiPort}`, INTERNAL_NOTIFY_TOKEN: undefined }, 60_000);
+  const landing = await startServer({ DATABASE_URL, DATA_DIR: dataDir.dir, ...ADMIN_ENV, API_INTERNAL_URL: api.url, INTERNAL_NOTIFY_TOKEN: undefined }, 60_000);
   cleanups.push(() => landing.stop());
   expect(landing.started, landing.output().stderr).toBe(true);
   const passwordHash = await hashPassword(EDITOR.password, TEST_HASH_PARAMS);
   await createUserRepository({ prisma: database.prisma }).create({ username: EDITOR.username, displayName: 'Eli Molotes', role: 'editor', businesses: ['molotes'], passwordHash }, { kind: 'system' });
 
   const startInventory = async (env: Record<string, string>) => {
-    const port = await freePort();
-    const proc = await startServer({ ...env, PORT: String(port), API_INTERNAL_URL: `http://127.0.0.1:${apiPort}` }, 60_000, { args: [INVENTORY_ENTRY] });
+    const proc = await startServer({ ...env, API_INTERNAL_URL: api.url }, 60_000, { args: [INVENTORY_ENTRY] });
     cleanups.push(() => proc.stop());
     expect(proc.started, proc.output().stderr).toBe(true);
-    return { proc, url: `http://127.0.0.1:${port}` };
+    return { proc, url: proc.url };
   };
   const { proc: inventory, url } = await startInventory({ NODE_ENV: 'development', ...inventoryEnv });
   return {

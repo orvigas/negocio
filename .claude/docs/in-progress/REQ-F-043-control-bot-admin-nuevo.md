@@ -2,9 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
-PR 1 de 3 (contratos y `api`): [PR #130](https://github.com/orvigas/negocio/pull/130), mergeado en `epic/arquitectura` (`1c801cf`). PR 2 de 3 (pantalla): [PR #131](https://github.com/orvigas/negocio/pull/131), mergeado en `epic/arquitectura` (`0391e86`). PR 3 de 3 (solo lectura y documentación): [PR #132](https://github.com/orvigas/negocio/pull/132) hacia `epic/arquitectura`, con el CI de `dd2b2e1` en verde y el de `a46c3af` en rojo (ver "Pull Request del PR 3"). No está en `READY_FOR_MERGE`.
+PR 1 de 3 (contratos y `api`): [PR #130](https://github.com/orvigas/negocio/pull/130), mergeado en `epic/arquitectura` (`1c801cf`). PR 2 de 3 (pantalla): [PR #131](https://github.com/orvigas/negocio/pull/131), mergeado en `epic/arquitectura` (`0391e86`). PR 3 de 3 (solo lectura y documentación): [PR #132](https://github.com/orvigas/negocio/pull/132), mergeado en `epic/arquitectura` (`7aa01f4`). Su último CI, sobre `05bf89c`, quedó en verde (ver "Último CI del PR 3"). El ticket sigue en `in-progress/` hasta las comprobaciones de producción.
 
 ## Aprobación
 
@@ -2057,3 +2057,10 @@ CI del commit `dd2b2e1` en verde (ejecución 42064630316): `calidad`, `docker`, 
 - **Sin medir:** si las sondas nuevas que arrancan procesos reales hacen más frecuente la colisión.
 - **Fuera de este PR:** la corrección de la carrera. No se tocan pruebas, `tests/support/process.ts`, tiempos ni `retry`.
 - **Este commit cuenta de hecho como reintento:** cambia solo el ticket, y su CI vuelve a ejecutar la misma suite. Un resultado verde no demuestra que la carrera haya desaparecido.
+
+### Último CI del PR 3
+
+`READY_FOR_MERGE` registrado en su momento: el CI de `05bf89c` (`docs: corrige el estado del ticket REQ-F-043 tras el fallo del CI del PR 132`, ejecución 42072011952) quedó en verde con `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion`. Duraciones en esa ejecución: `-solo-lectura-procesos` 8,8 s y máximo de la suite `api-process` 15,9 s. El #132 se mergeó en `epic/arquitectura` en `7aa01f4` (2026-11-05).
+
+- **El ticket no pasa a `done/`:** sigue en `in-progress/` hasta las comprobaciones de producción.
+- **Pendiente:** la carrera de puertos se trata en un PR de soporte aparte hacia `epic/arquitectura`, rama `fix/soporte-pruebas-limpieza-y-puertos-epic`. Ese CI verde no demostraba que la carrera hubiera desaparecido. El PR tolera la colisión reintentando con puertos nuevos cuando los eligió `startServer`; no elimina la causa, y los caminos que fijan puertos siguen expuestos.

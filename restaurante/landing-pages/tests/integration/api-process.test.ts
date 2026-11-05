@@ -39,10 +39,9 @@ afterEach(async () => {
 const API_ENV = { INTERNAL_NOTIFY_TOKEN: undefined };
 
 async function startApi(env: Record<string, string>) {
-  const port = await freePort();
-  const api = await startServer({ ...env, ...API_ENV, PORT: String(port) }, 30_000, { args: [API_ENTRY] });
+  const api = await startServer({ ...env, ...API_ENV }, 30_000, { args: [API_ENTRY] });
   cleanups.push(async () => void (await api.stop()));
-  return { ...api, url: `http://127.0.0.1:${port}` };
+  return api;
 }
 
 const logLines = (stdout: string) =>

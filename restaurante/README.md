@@ -41,8 +41,8 @@ estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md)
 | Workspace | Contenido |
 | --- | --- |
 | `landing-pages/` | La app Koa descrita en este README (las landings, `/admin` y `/admin/api`). Las landings leen los productos de `api/` (REQ-F-038) |
-| `api/` | API propia (REQ-F-038, REQ-F-039 y REQ-F-040): `GET /api/v1/public/{molotes,birria}/productos` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos y, con `ADMIN_NEW_URL`, la única vía web para gestionar usuarios. Solo en la red interna; ver [API propia](#api-propia-api). También ejecuta el [bot de WhatsApp](#bot-de-whatsapp) (REQ-F-042), con su webhook en un puerto propio, lo único de `api` que se alcanza desde internet |
-| `inventory-manager/` | Admin nuevo (REQ-F-039 y REQ-F-040): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos, los usuarios y "Mi cuenta" con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
+| `api/` | API propia (REQ-F-038, REQ-F-039 y REQ-F-040): `GET /api/v1/public/{molotes,birria}/productos` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos y, con `ADMIN_NEW_URL`, la única vía web para gestionar usuarios y controlar el bot. Solo en la red interna; ver [API propia](#api-propia-api). También ejecuta el [bot de WhatsApp](#bot-de-whatsapp) (REQ-F-042), con su webhook en un puerto propio, lo único de `api` que se alcanza desde internet |
+| `inventory-manager/` | Admin nuevo (REQ-F-039, REQ-F-040 y REQ-F-043): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos, los usuarios, "Mi cuenta" y el control del bot con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
 | `packages/web/` (`@restaurante/web`) | Utilidades HTTP y SSR sin dominio que comparten las apps Koa (REQ-F-039): plantillas, lectura de formularios y JSON, mismo origen y logger JSON |
 | `packages/core/` (`@restaurante/core`) | Dominio en TypeScript puro, sin Koa ni Prisma: módulos `catalog`, `schedule`, `identity`, `bot-control` y `shared`. Cada módulo se importa solo por su `index.ts` (`@restaurante/core/catalog`) |
 | `packages/db/` (`@restaurante/db`) | Persistencia: `prisma/` (schema y migraciones), `prisma.config.ts`, el cliente de Prisma generado (`src/generated/prisma`), la conexión, la verificación al arrancar y las implementaciones Prisma de los repositorios de `core` |
@@ -362,6 +362,9 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
   - cuenta propia (REQ-F-040): `POST /cuenta/contrasena` con la contraseña actual; cierra todas las
     sesiones del usuario y devuelve una sesión nueva para el navegador actual. Un fallo en la actual
     no cuenta para el límite de intentos;
+  - control del bot (REQ-F-043), solo para administradores: `GET /bot`, `PUT /bot/interruptor`, `POST /bot/bloqueos`,
+    `POST /bot/bloqueos/<id>/quitar` y `POST /bot/topes/<token>/bloquear`. La auditoría queda en
+    `bot_audit`. Las respuestas nunca llevan el número completo, su seudónimo ni el id de la clave;
   - los cuerpos tienen una lista cerrada de campos (otro campo: 422);
   - las escrituras exigen el token CSRF de la sesión en `X-CSRF-Token`; el límite de intentos cuenta
     el último valor de `X-Forwarded-For`, que escribe el admin.
@@ -404,7 +407,7 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
 
 ### Admin nuevo (`inventory-manager/`)
 
-El admin nuevo de REQ-F-039 y REQ-F-040 (paso 4 de [Arquitectura](docs/arquitectura.md)), en
+El admin nuevo de REQ-F-039, REQ-F-040 y REQ-F-043 (paso 4 de [Arquitectura](docs/arquitectura.md)), en
 `https://admin.birriaelmuneco.com` (en local, `http://127.0.0.1:3003`; ver
 [Entorno de desarrollo](docs/desarrollo.md)).
 
@@ -413,7 +416,8 @@ El admin nuevo de REQ-F-039 y REQ-F-040 (paso 4 de [Arquitectura](docs/arquitect
   también «Usuarios» (solo administradores: lista, alta, edición, desactivar y reactivar, y
   restablecer la contraseña; `/usuarios`, `/usuarios/nuevo`, `/usuarios/<id>/editar` y
   `/usuarios/<id>/contrasena`) y «Mi cuenta» (`/cuenta`, cualquier usuario: cambiar la propia
-  contraseña). Todo funciona sin JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el
+  contraseña). Desde REQ-F-043, también «Bot» (`/bot`, solo administradores): estado e interruptor,
+  contadores frente a sus topes, "alcanzaron un tope hoy", lista negra y alta de bloqueos. Todo funciona sin JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el
   doble envío y reordena sin recargar.
 - **Cambio de la propia contraseña:** la API devuelve una sesión nueva y el admin reescribe su cookie;
   las demás sesiones del usuario (también las del `/admin` actual) se cierran. Si un administrador
@@ -438,7 +442,9 @@ El admin nuevo de REQ-F-039 y REQ-F-040 (paso 4 de [Arquitectura](docs/arquitect
   responden 410 y `/admin/api` responde 410 `PRODUCTS_MOVED`. Desde REQ-F-040, también usuarios y
   «Mi cuenta»: la lista de usuarios se consulta sin controles, las pantallas de formulario y
   cualquier POST responden 410 con el aviso y el enlace a la pantalla equivalente del admin nuevo, y
-  nada se escribe. Bot y menú siguen en `/admin`; el primer administrador (`ADMIN_USER`) y
+  nada se escribe. Desde REQ-F-043, también el bot: `/admin/bot` muestra estado, uso y lista sin
+  formularios, con el aviso y el enlace a `/bot` del admin nuevo, y sus POST responden 410 sin
+  escribir. El menú sigue en `/admin`; el primer administrador (`ADMIN_USER`) y
   `npm run admin:recover` siguen funcionando.
 
 ## CI
@@ -888,7 +894,8 @@ esa ruta. En producción Traefik publica únicamente esa ruta exacta,
 `https://birriaelmuneco.com/webhooks/whatsapp`, la misma URL de siempre: Meta no cambia. Desde
 internet no se alcanza ninguna otra ruta de `api`. Sin bot configurado, responde 503 `BOT_DISABLED`.
 En esta sección, las rutas `src/` y `tests/` del bot son relativas a `api/`; la página "Bot" de
-`/admin` sigue en `landing-pages` hasta el ticket 4 del paso 4.
+`/admin` sigue en `landing-pages` en solo lectura; el control del bot está en el
+[admin nuevo](#admin-nuevo-inventory-manager) (REQ-F-043).
 
 **Proveedores (REQ-F-012).** El bot funciona con uno de dos proveedores, elegido con
 `WHATSAPP_BOT_PROVIDER` (un solo proveedor activo por arranque):
@@ -1073,7 +1080,7 @@ se paga (tarjeta virtual con límite bajo y alertas de facturación). La app añ
 
 Controles de cada mensaje entrante, en este orden (uno descartado no cuenta en los siguientes):
 
-1. **Interruptor** (página "Bot" de `/admin`): pausado, el bot no envía nada y descarta lo que
+1. **Interruptor** (pantalla "Bot" del admin nuevo): pausado, el bot no envía nada y descarta lo que
    llega; el webhook sigue respondiendo 200 y las landings y `/admin` siguen igual.
 2. **Lista negra:** un número bloqueado no recibe respuesta ni cuenta en los topes.
 3. **Enfriamiento:** 5 textos idénticos en 10 minutos (los que no son texto cuentan como el mismo)
@@ -1106,14 +1113,18 @@ Los días y meses se cuentan en `BUSINESS_TIMEZONE`.
   `WHATSAPP_BOT_BLOCKLIST_KEY` (que no está en la base) y sus 4 últimos dígitos. Las entradas
   vencidas o quitadas se borran a los 30 días; la auditoría, a los 12 meses; los contadores
   diarios, a los 13 meses (mantenimiento al arrancar y cada hora).
-- **Página "Bot" de `/admin`** (solo administradores): contadores de hoy y del mes frente a sus
-  topes, leídos de la base al cargar la página; interruptor; lista negra con alta (número, duración
-  de 24 h, 7 d, 30 d o permanente y motivo opcional, sin números de teléfono) y baja. Cada alta, baja,
-  caducidad y cambio del interruptor queda en `bot_audit`. La página está en `landing-pages` y el
-  bot en `api`: un cambio del interruptor o de la lista se aplica en el bot como mucho
-  `BOT_CONTROL_REFRESH_SECONDS` después (10 s), sin reiniciar nada, y el mantenimiento corre solo en
-  `api`. La lista "alcanzaron un tope hoy" y su botón vuelven con el control del bot en el admin
-  nuevo (ticket 4); hasta entonces, la página muestra un aviso (REQ-F-042, D-2).
+- **Pantalla "Bot" del admin nuevo** (`/bot`, solo administradores; REQ-F-043): contadores de hoy y
+  del mes frente a sus topes, que se muestran y no se editan; interruptor; "alcanzaron un tope hoy",
+  con bloqueo directo; lista negra con alta (número, duración de 24 h, 7 d, 30 d o permanente y motivo
+  opcional, sin números de teléfono) y baja. Cada alta, baja, caducidad y cambio del interruptor queda
+  en `bot_audit`. La pantalla habla con la misma instancia de `BotControl` que el bot, así que un
+  cambio se aplica en el siguiente mensaje, sin reiniciar nada. Quitar un bloqueo, manual o
+  automático, devuelve el cupo diario del número. El mantenimiento corre solo en `api`.
+- **Página "Bot" de `/admin`** (solo administradores): con `ADMIN_NEW_URL`, en solo lectura y con un
+  enlace a la pantalla anterior (ver [Admin nuevo](#admin-nuevo-inventory-manager)). Sin esa variable,
+  en local, sigue con su interruptor y su lista negra, y un cambio llega al bot como mucho
+  `BOT_CONTROL_REFRESH_SECONDS` después (10 s). La lista de topes no se muestra aquí: vive en la
+  memoria de `api` y se ve en el admin nuevo.
 - **Rotar la clave:** pon la nueva en `WHATSAPP_BOT_BLOCKLIST_KEY` y la anterior en
   `WHATSAPP_BOT_BLOCKLIST_KEY_PREVIOUS`. Cada número bloqueado pasa a la clave nueva cuando vuelve
   a escribir; la página "Bot" muestra cuántos siguen con la anterior. Quita la anterior cuando

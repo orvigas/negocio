@@ -98,7 +98,7 @@ describe('QA-T4: la lista "alcanzaron un tope hoy" vuelve en el admin nuevo (REQ
     context.botControl.recordReached(canonicalPhone('5215500004444'), 'messages');
 
     const page = await admin.get(PATH);
-    expect(textOf(page.text)).toContain('La lista de números que alcanzaron un tope hoy vuelve con el control del bot en el admin nuevo.');
+    expect(textOf(page.text)).toContain('La lista de números que alcanzaron un tope hoy está en el admin nuevo.');
     expect(page.text).not.toMatch(/\/admin\/bot\/topes\//);
     expect(textOf(page.text)).not.toContain('*********4444');
 
@@ -107,7 +107,7 @@ describe('QA-T4: la lista "alcanzaron un tope hoy" vuelve en el admin nuevo (REQ
     expect((await editor.post(action).type('form').send({ _csrf: editorCsrf, duracion: '24h', motivo: '' })).status).toBe(403);
     const gone = await post(admin, action, { duracion: '24h', motivo: '' });
     expect(gone.status).toBe(410);
-    expect(textOf(gone.text)).toContain('vuelve con el control del bot en el admin nuevo');
+    expect(textOf(gone.text)).toContain('está en el admin nuevo');
     // Sin CSRF, el mismo 403 que el resto de /admin.
     expect((await admin.post(action).type('form').send({ duracion: '24h', motivo: '' })).status).toBe(403);
     expect(await context.prisma.botBlock.count()).toBe(0);

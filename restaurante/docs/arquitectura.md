@@ -21,15 +21,17 @@ son relativas a `restaurante/landing-pages/`.
 - **`landing-pages`**: las landings por SSR (`src/views/`, `src/content/`, `public/`), con el aviso
   del día decidido en el servidor (REQ-F-028 y REQ-F-034), que obtienen los productos de la API
   (REQ-F-038). **En transición** sigue conteniendo la administración en `/admin` (SSR con sesión y
-  CSRF: usuarios, productos y control del bot) y la API JSON de productos en `/admin/api`
+  CSRF), donde usuarios, productos y control del bot quedan en solo lectura con `ADMIN_NEW_URL`, y
+  la API JSON de productos en `/admin/api`
   (REQ-F-008).
 - **`api`** (REQ-F-038, REQ-F-039 y REQ-F-042): la API JSON propia, solo en la red interna. Publica
   los productos de cada negocio (`/api/v1/public/<negocio>/productos`) y su administración
   (`/api/v1/admin/...`). Ejecuta además el **bot de WhatsApp** (`api/src/bot/`), que arma el pedido
   y avisa al personal: los pedidos **no se guardan**. Su webhook se sirve en un puerto propio, lo
   único de `api` que se alcanza desde internet.
-- **`inventory-manager`** (REQ-F-039): el admin nuevo de productos por SSR, que solo habla con la
-  `api` mediante el cliente de `contracts`.
+- **`inventory-manager`** (REQ-F-039, REQ-F-040 y REQ-F-043): el admin nuevo por SSR de productos,
+  usuarios, cuenta propia y control del bot, que solo habla con la `api` mediante el cliente de
+  `contracts`.
 - **Paquetes**: `core` (dominio en TypeScript puro, sin E/S de infraestructura), `db` (MySQL 8.4
   con Prisma: esquema, migraciones y repositorios), `contracts` (esquemas y clientes de la API) y
   `web` (utilidades HTTP y SSR sin dominio que comparten las apps).
@@ -249,10 +251,16 @@ con el cliente de `contracts` (`createAdminApiClient`, que nunca lanza). Concret
 
 **El bot de WhatsApp es un cliente más de `core`** (REQ-F-042). Vive dentro de `api` (`api/src/bot/`)
 y su webhook es otra entrada HTTP, en un puerto propio. Cuando exista `sales`, sus pedidos
-confirmados se guardan como ventas en lugar de solo avisar al personal. Hasta el ticket 4, la pausa,
-los bloqueos y el uso se manejan desde el `/admin` de `landing-pages`: ese proceso y el de `api`
-comparten el control por la base (`core/bot-control`), `api` lo refresca cada
-`BOT_CONTROL_REFRESH_SECONDS` (10 s) y solo `api` corre el mantenimiento.
+confirmados se guardan como ventas en lugar de solo avisar al personal.
+
+**Quién escribe el control del bot (REQ-F-043).** La pausa, los bloqueos y los topes se manejan en la
+pantalla "Bot" de `inventory-manager`, con `/api/v1/admin/bot`. Ese endpoint usa la misma instancia
+de `BotControl` que el bot, en el proceso de `api`: los cambios le llegan sin esperar el refresco, y
+la lista "alcanzaron un tope hoy" es la de su memoria. Con `ADMIN_NEW_URL`, `/admin/bot` queda en
+solo lectura (410 en sus POST), así que `api` es la única que escribe. Sin esa variable, en local,
+`/admin/bot` sigue escribiendo: los dos procesos comparten el control por la base
+(`core/bot-control`), `api` lo refresca cada `BOT_CONTROL_REFRESH_SECONDS` (10 s) y solo `api` corre
+el mantenimiento. En ese caso, una baja hecha desde `/admin` no libera el cupo del número en `api`.
 
 ## 7. Patrones
 
@@ -320,11 +328,33 @@ Decisión del usuario: "Sí, 6 tickets en ese orden". Cada ticket es su propio P
 | 1 | **REQ-F-039**: base del admin nuevo y productos | Terminado en tres PR (#94, #95 y #99), detalle abajo |
 | 2 | **REQ-F-040**: usuarios y cuenta propia | Terminado en dos PR (#110 y #111) y en producción desde el 2026-10-29 (#114), detalle abajo |
 | 3 | **REQ-F-042**: mover el bot a `api` | Tres PR (#121, #124 y el de despliegue) hacia `epic/arquitectura`, detalle abajo. Publica una entrada de `api` para el webhook con un router de Traefik solo para esa ruta. **La URL se conserva** (`https://birriaelmuneco.com/webhooks/whatsapp`, decisión D-1 de REQ-F-042): no hay ningún cambio en Meta. Activa la regla de lint para el bot |
-| 4 | Control del bot en el admin nuevo | Pausa, bloqueos y topes |
+| 4 | **REQ-F-043**: control del bot en el admin nuevo | Tres PR (#130, #131 y el de solo lectura y documentación) hacia `epic/arquitectura`, detalle abajo. Pausa, bloqueos y topes |
 | 5 | Menú y página | Antes se decide si el menú queda en archivos o pasa a MySQL |
 | 6 | Retirada del `/admin` actual | Mover la importación de semillas y el menú, quitar las credenciales de la base de `landing-pages`, quitar el router `restaurante-admin` y activar la regla de lint para `/admin` |
 
-Los IDs de los tickets 4 a 6 se asignan al crearlos.
+Los IDs de los tickets 5 y 6 se asignan al crearlos.
+
+### Paso 4, ticket 4 aplicado (REQ-F-043)
+
+Decisiones del usuario: "Solo mostrarlos (Recomendado)" para los topes, y "Solo lectura y 410
+(Recomendado)" para `/admin/bot`.
+
+- **PR 1 (#130), contratos y `api`:**
+  - `/api/v1/admin/bot`, solo para administradores: estado, interruptor, alta y baja de bloqueos, y
+    bloqueo desde "alcanzaron un tope hoy" con un token de un solo uso;
+  - la lista de topes vuelve a estar disponible, y el personal no aparece en ella ni se puede bloquear
+    por token;
+  - quitar un bloqueo devuelve el cupo diario del número: `takeReleased` y `guard.release`.
+- **PR 2 (#131), pantalla:** "Bot" en `inventory-manager`, sin JavaScript nuevo. Un teléfono escrito
+  nunca se vuelve a pintar. Una escritura sin confirmar da 503 y pide revisar el estado antes de
+  repetirla. Un 404 de una `api` anterior a este ticket (código `NOT_FOUND`) tampoco se toma por
+  "no encontrado".
+- **PR 3, solo lectura y documentación:** con `ADMIN_NEW_URL`, `/admin/bot` muestra estado, uso y
+  lista, sin formularios, con un aviso y un enlace a `<ADMIN_NEW_URL>/bot`. Sus 4 POST pasan sesión,
+  permiso, cuerpo y CSRF, y responden 410 con esa misma página, sin escribir. Registran
+  `admin_bot_moved`.
+- **Sin cambios de esquema ni variables nuevas.** `landing-pages` conserva la clave, el personal y los
+  topes hasta el ticket 6, porque `/admin/bot` sigue leyendo.
 
 ### Paso 4, ticket 3 aplicado (REQ-F-042)
 
@@ -348,7 +378,7 @@ Los IDs de los tickets 4 a 6 se asignan al crearlos.
   ya enruta el webhook a `api`. En la vuelta atrás automática, la `api` vuelve la última, cuando la
   app anterior ya está lista, y se comprueba que quede atendiendo.
 - **`/admin` en transición:** pausa, bloqueos y uso (leído de la base). La lista de topes de hoy
-  vuelve en el ticket 4 (D-2).
+  volvió en el ticket 4 (REQ-F-043), en el admin nuevo.
 - **Regla de lint:** la regla de transición ya no menciona el bot.
 
 ### Paso 4, ticket 2 aplicado (REQ-F-040)
@@ -585,8 +615,13 @@ y se registra aquí, con la fecha y lo que respondió el usuario. Las tres está
     `docker stats --no-stream`, solo lectura), para compararla con el 31,5 % y el umbral del 80 %.
 - **Dos administraciones a la vez** durante el paso 4: el `/admin` actual se mantiene hasta que el
   nuevo tenga lo mismo y se retira en el ticket 6. Desde REQ-F-039 muestra los productos en solo
-  lectura y el admin nuevo los edita (un solo escritor). Usuarios, cuenta, control del bot y menú
-  siguen en el `/admin` actual hasta los tickets 2 a 5.
+  lectura y el admin nuevo los edita (un solo escritor). Desde REQ-F-040 y REQ-F-043, también usuarios,
+  cuenta y control del bot. El menú sigue en el `/admin` actual hasta el ticket 5.
+- **Sin pausa web si cae `inventory-manager`** (REQ-F-043, D-2, riesgo aceptado): con `ADMIN_NEW_URL`,
+  `/admin/bot` no escribe, así que la pausa y los bloqueos dependen de `inventory-manager` y de `api`.
+  Las consultas de `/admin/bot` siguen disponibles. Si solo falla `inventory-manager`, el bot sigue
+  atendiendo; pausarlo exige recuperar ese contenedor o volver la app
+  ([vuelta atrás a mano](despliegue.md#6-volver-a-una-versión-anterior-a-mano)).
 - **Estado en memoria de la `api`** (REQ-F-039): viven en el proceso las sesiones del admin nuevo,
   el límite de intentos de acceso y las claves de idempotencia (creadas en `api/src/admin/index.ts`),
   la caché y el mutex del repositorio de productos de `core/catalog` (compuesto en

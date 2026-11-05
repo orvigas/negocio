@@ -56,6 +56,7 @@ on:
   pull_request:
     branches: [main, epic/arquitectura]
     # ready_for_review: al pasar de borrador a listo corre el CI completo (en borrador se omite).
+    # No encadenar `git push && gh pr ready`: el push cancela esa ejecución y la suya omite las validaciones.
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]

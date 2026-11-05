@@ -1,7 +1,7 @@
 import type { RouterContext } from '@koa/router';
 
 import type { AdminApiClient, AdminApiResult, AdminCredentials, PublicBusinessId } from '@restaurante/contracts';
-import type { Logger, SafeHtml } from '@restaurante/web';
+import { assertSameOrigin, readFormBody, type Logger, type SafeHtml } from '@restaurante/web';
 
 import type { InventoryConfig } from '../config.ts';
 import { clearSessionId, readSessionId, sanitizeNext } from '../session.ts';
@@ -10,7 +10,8 @@ import type { HeaderSection, PageContext, Views } from '../views/index.ts';
 /**
  * Piezas comunes de los controladores del admin nuevo (REQ-F-039; extraídas en REQ-F-040 para
  * compartirlas entre productos, usuarios y "Mi cuenta"): respuestas HTML, POST/redirect/GET, el paso al
- * acceso, la sesión reenviada a la API (D-1) y los fallos de la API (503 sin detalles internos).
+ * acceso, la sesión reenviada a la API (D-1), los fallos de la API (503 sin detalles internos) y, para
+ * las pantallas solo de administradores (usuarios y bot, REQ-F-043), el rol y el formulario cerrado.
  *
  * Nunca se registran cookies, ids de sesión, tokens ni contraseñas.
  */
@@ -86,6 +87,34 @@ export function createControllerKit({ config, api, views, logger }: { config: In
     return null;
   }
 
+  function forbidden(ctx: Ctx, context: PageContext, message: string): void {
+    logger.warn('admin_forbidden', { path: ctx.path, userId: context.user.id });
+    send(ctx, 403, views.message({ title: 'Sin permiso', notice: { tone: 'error', title: message }, context }));
+  }
+
+  /** Sesión y rol administrador. null si ya respondió; `forbiddenMessage` es el texto del 403. */
+  async function adminSession(ctx: Ctx, returnTo: string, forbiddenMessage: string, onUnavailable?: () => boolean): Promise<Session | null> {
+    const auth = await session(ctx, returnTo, onUnavailable);
+    if (!auth) return null;
+    if (auth.user.role !== 'admin') {
+      forbidden(ctx, auth, forbiddenMessage);
+      return null;
+    }
+    return auth;
+  }
+
+  /** Mismo origen y formulario con una lista cerrada de campos (DEF-004 de REQ-F-007): otro campo, 400. */
+  async function readClosedForm(ctx: Ctx, allowed: readonly string[], limit: number): Promise<Map<string, string>> {
+    assertSameOrigin(ctx, logger);
+    const fields = await readFormBody(ctx, { limit });
+    if ([...fields.keys()].some((name) => !allowed.includes(name))) ctx.throw(400, 'El formulario tiene campos desconocidos.', { code: 'INVALID_FORM' });
+    return fields;
+  }
+
+  /** Errores por campo de un 422; null si la respuesta es otra. La clave '' es un error general. */
+  const fieldErrors = (result: AdminApiResult<unknown>): Record<string, string> | null =>
+    !result.ok && result.kind === 'http' && result.status === 422 ? (result.error.fields ?? { '': result.error.message }) : null;
+
   function notFound(
     ctx: Ctx,
     { context, business, section, backHref = '/', backLabel = 'Volver al inicio' }: { context?: PageContext | undefined; business?: PublicBusinessId | undefined; section?: HeaderSection | undefined; backHref?: string; backLabel?: string } = {},
@@ -100,7 +129,7 @@ export function createControllerKit({ config, api, views, logger }: { config: In
 
   const credentials = (auth: Session, fields?: Map<string, string>): AdminCredentials => ({ sessionId: auth.sessionId, csrfToken: fields?.get('_csrf') ?? '' });
 
-  return Object.freeze({ send, seeOther, toLogin, toLoginClosed, unavailable, failureReason, isUnavailable, session, notFound, idOf, credentials });
+  return Object.freeze({ send, seeOther, toLogin, toLoginClosed, unavailable, failureReason, isUnavailable, session, forbidden, adminSession, readClosedForm, fieldErrors, notFound, idOf, credentials });
 }
 
 export type ControllerKit = ReturnType<typeof createControllerKit>;

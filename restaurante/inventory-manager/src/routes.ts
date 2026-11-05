@@ -2,6 +2,7 @@ import Router from '@koa/router';
 
 import type { AccountController } from './controllers/account.ts';
 import type { AdminController } from './controllers/admin.ts';
+import type { BotController } from './controllers/bot.ts';
 import type { UsersController } from './controllers/users.ts';
 
 /**
@@ -24,8 +25,15 @@ import type { UsersController } from './controllers/users.ts';
  * POST /usuarios/:id/desactivar | …/reactivar  -> estado
  * GET|POST /usuarios/:id/contrasena            -> restablecer la contraseña
  * GET|POST /cuenta                             -> cambiar la propia contraseña (cualquier usuario)
+ *
+ * Control del bot (REQ-F-043, solo administradores):
+ * GET  /bot                                    -> estado, uso, topes y lista negra
+ * POST /bot/interruptor                        -> pausar o reanudar
+ * POST /bot/bloqueos                           -> alta manual
+ * POST /bot/bloqueos/:id/quitar                -> baja
+ * POST /bot/topes/:token/bloquear              -> bloquear desde "alcanzaron un tope hoy"
  */
-export function createRouter({ admin: controller, users, account }: { admin: AdminController; users: UsersController; account: AccountController }): Router {
+export function createRouter({ admin: controller, users, account, bot }: { admin: AdminController; users: UsersController; account: AccountController; bot: BotController }): Router {
   const router = new Router();
   router.get('/salud', (ctx) => {
     ctx.type = 'text';
@@ -35,7 +43,7 @@ export function createRouter({ admin: controller, users, account }: { admin: Adm
   router.post('/acceso', controller.login);
   router.post('/salir', controller.logout);
   router.get('/', controller.home);
-  // Usuarios antes que productos: `/usuarios/productos` no es el negocio "usuarios".
+  // Usuarios y bot antes que productos: `/usuarios/productos` no es el negocio "usuarios".
   router.get('/usuarios', users.list);
   router.post('/usuarios', users.create);
   router.get('/usuarios/nuevo', users.newPage);
@@ -45,6 +53,11 @@ export function createRouter({ admin: controller, users, account }: { admin: Adm
   router.post('/usuarios/:id/reactivar', users.reactivate);
   router.get('/usuarios/:id/contrasena', users.passwordPage);
   router.post('/usuarios/:id/contrasena', users.resetPassword);
+  router.get('/bot', bot.page);
+  router.post('/bot/interruptor', bot.toggle);
+  router.post('/bot/bloqueos', bot.block);
+  router.post('/bot/bloqueos/:id/quitar', bot.unblock);
+  router.post('/bot/topes/:token/bloquear', bot.blockReached);
   router.get('/cuenta', account.page);
   router.post('/cuenta', account.changePassword);
   router.get('/:business/productos', controller.products);

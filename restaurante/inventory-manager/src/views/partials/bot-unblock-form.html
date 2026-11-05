@@ -1,0 +1,5 @@
+
+              <form class="bot-row__unblock" method="post" action="{{ action }}" data-submit-guard>
+                <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+                <button class="button button--secondary inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg border-[1.5px] border-adobo px-4 py-2 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-adobo/15" type="submit" data-busy-text="Quitando…">Quitar<span class="sr-only"> el bloqueo de {{ masked }}</span></button>
+              </form>

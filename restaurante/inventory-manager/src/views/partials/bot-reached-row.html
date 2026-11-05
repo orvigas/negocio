@@ -1,0 +1,16 @@
+
+          <li class="bot-row rounded-lg border border-rim bg-surface p-4">
+            <p class="bot-row__number font-bold break-words">{{ masked }}</p>
+            <dl class="bot-row__meta mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 text-sm text-masa">
+              <dt class="font-semibold">Tope:</dt>
+              <dd>{{ cap }}</dd>
+              <dt class="font-semibold">Hora:</dt>
+              <dd>{{ at }}</dd>
+            </dl>
+            <form class="bot-row__form mt-3 space-y-3" method="post" action="{{ action }}" data-submit-guard>
+              <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+              <div class="grid gap-4 md:grid-cols-2">{{{ fields }}}
+              </div>
+              <button class="button button--secondary inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg border-[1.5px] border-adobo px-4 py-2 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-adobo/15" type="submit" data-busy-text="Bloqueando…">Bloquear<span class="sr-only"> {{ row }}</span></button>
+            </form>
+          </li>

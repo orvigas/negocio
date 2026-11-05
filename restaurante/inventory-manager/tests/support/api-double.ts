@@ -12,6 +12,7 @@ import {
 } from '@restaurante/contracts';
 import { readJsonBody } from '@restaurante/web';
 
+import { createBotDouble, handleBot, type BotDouble } from './api-double-bot.ts';
 import { listenLocal } from './http.ts';
 
 /**
@@ -24,6 +25,8 @@ import { listenLocal } from './http.ts';
  * Usuarios y cuenta (REQ-F-040): solo administradores (403 `FORBIDDEN_ROLE`), 422 por usuario vacío o
  * repetido y por contraseñas que no coinciden, 409 `LAST_ADMIN`, cierre de las sesiones del usuario
  * (D-8) con `meta.ownSessionClosed`, y la sesión nueva al cambiar la propia contraseña.
+ *
+ * Control del bot (REQ-F-043): `api-double-bot.ts`.
  */
 
 export interface DoubleUser {
@@ -123,6 +126,8 @@ export interface ApiDouble {
   /** Contraseña vigente de cada usuario (para comprobar los cambios). */
   passwords: Map<number, string>;
   freshness: 'confirmed' | 'pending';
+  /** Control del bot (REQ-F-043). */
+  bot: BotDouble;
   /** Cambia un producto "desde otra sesión" (para el 409). */
   touch(id: number, by: string): void;
 }
@@ -151,6 +156,7 @@ export async function startApiDouble(initialUsers: DoubleUser[], products: Admin
     managed,
     passwords: new Map(users.map((entry) => [entry.user.id, entry.password])),
     freshness: 'confirmed',
+    bot: createBotDouble(),
     touch(id, by) {
       const found = state.products.find((candidate) => candidate.id === id);
       if (found) Object.assign(found, { version: found.version + 1, updatedAt: '2026-10-28T12:30:00-06:00', updatedBy: { id: 9, name: by } });
@@ -211,6 +217,11 @@ export async function startApiDouble(initialUsers: DoubleUser[], products: Admin
     if (userMatch) {
       if (user.role !== 'admin') return fail(403, 'FORBIDDEN_ROLE', 'No tienes permiso para gestionar usuarios.');
       return handleUsers(user, userMatch[1], userMatch[2], record, fail);
+    }
+
+    if (path === '/bot' || path.startsWith('/bot/')) {
+      if (user.role !== 'admin') return fail(403, 'FORBIDDEN_ROLE', 'No tienes permiso para gestionar el bot.');
+      return handleBot(ctx, state.bot, user, path.slice('/bot'.length), record);
     }
 
     const match = /^\/([^/]+)\/productos(?:\/(campos|orden|\d+))?(?:\/(recuperar|mover))?$/.exec(path);

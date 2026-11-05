@@ -1,6 +1,7 @@
 import type { AdminProduct, AdminUser, ProductFormField, PublicBusinessId } from '@restaurante/contracts';
 import type { Renderer, SafeHtml } from '@restaurante/web';
 
+import { BOT_PATH, createBotViews } from './bot.ts';
 import { ACCOUNT_PATH, USERS_PATH, createUserViews } from './users.ts';
 
 /**
@@ -47,8 +48,8 @@ export interface NoticeOptions {
   urgent?: boolean;
 }
 
-/** Sección de la cabecera fuera de un negocio (REQ-F-040): usuarios o "Mi cuenta". */
-export type HeaderSection = 'users' | 'account';
+/** Sección de la cabecera fuera de un negocio (REQ-F-040 y REQ-F-043): usuarios, bot o "Mi cuenta". */
+export type HeaderSection = 'users' | 'bot' | 'account';
 
 export interface PageOptions {
   title: string;
@@ -97,8 +98,13 @@ export function createViews(renderer: Renderer) {
         ...context.user.businesses.map((business) =>
           render('partials/nav-link', { href: productsPath(business), label: BUSINESS_NAMES[business], current: ariaCurrent(business === current) }),
         ),
-        // "Usuarios" solo para administradores (REQ-F-040, RF-1).
-        ...(context.user.role === 'admin' ? [render('partials/nav-link', { href: USERS_PATH, label: 'Usuarios', current: ariaCurrent(section === 'users') })] : []),
+        // "Usuarios" y "Bot" solo para administradores (REQ-F-040 y REQ-F-043, RF-1).
+        ...(context.user.role === 'admin'
+          ? [
+              render('partials/nav-link', { href: USERS_PATH, label: 'Usuarios', current: ariaCurrent(section === 'users') }),
+              render('partials/nav-link', { href: BOT_PATH, label: 'Bot', current: ariaCurrent(section === 'bot') }),
+            ]
+          : []),
       ]),
     });
   }
@@ -118,6 +124,7 @@ export function createViews(renderer: Renderer) {
     notice,
     page,
     ...createUserViews({ render, join, attrs, page, notice, displayDate }),
+    ...createBotViews({ render, join, attrs, page, notice, displayDate }),
 
     login({ next, problem }: { next: string; problem?: 'invalid' | 'locked' | 'expired' | 'unavailable' | 'closed' | undefined }): SafeHtml {
       const notices: Record<string, NoticeOptions> = {

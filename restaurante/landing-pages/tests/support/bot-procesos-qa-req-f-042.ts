@@ -82,7 +82,7 @@ export async function startStack({ env = BOT_ENV, reuse, beforeApi }: StackOptio
   const shared = {
     ...env,
     DATABASE_URL: appDatabaseUrl(database.name),
-    BOT_CONTROL_REFRESH_SECONDS: '1',
+    BOT_CONTROL_REFRESH_SECONDS: env['BOT_CONTROL_REFRESH_SECONDS'] ?? '1', // M-1 de REQ-F-043, PR 3: mide con 10 s reales.
     QA_SALIDA_LOG: salida,
     QA_DESFASE_MS: String(offset),
   };

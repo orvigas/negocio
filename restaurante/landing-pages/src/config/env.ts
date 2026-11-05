@@ -53,8 +53,9 @@ export interface Config {
   readonly allowNewerSchema: boolean;
   readonly trustProxy: boolean;
   /**
-   * ADMIN_NEW_URL (REQ-F-039, RF-15): URL del admin nuevo (inventory-manager). Con ella, la edición de
-   * productos del /admin actual queda en solo lectura y enlaza ahí; sin ella, /admin funciona como antes.
+   * ADMIN_NEW_URL (REQ-F-039, RF-15): URL del admin nuevo (inventory-manager). Con ella, los productos,
+   * los usuarios, "Mi cuenta" y el control del bot del /admin actual quedan en solo lectura y enlazan
+   * ahí; sin ella, /admin funciona como antes.
    */
   readonly adminNewUrl: string | undefined;
   /**

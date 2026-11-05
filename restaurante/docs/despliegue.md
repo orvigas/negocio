@@ -22,8 +22,8 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
   - `api` (REQ-F-038, REQ-F-039 y REQ-F-042): la imagen `api`, la API propia y el bot de WhatsApp.
     - `GET /api/v1/public/{molotes|birria}/productos`: de aquí las landings de `app` leen los
       productos (`API_INTERNAL_URL=http://api:3001`).
-    - `/api/v1/admin`: la administración de productos que usa `inventory-manager`. Desde REQ-F-039
-      es la única que escribe los productos.
+    - `/api/v1/admin`: la administración que usa `inventory-manager`. Desde REQ-F-039 es la única
+      que escribe los productos y, desde REQ-F-043, el control del bot.
     - Tras cada escritura avisa a `app` por su puerto interno 3002 (`LANDING_INTERNAL_URL`, con la
       credencial `RESTAURANTE_INTERNAL_NOTIFY_TOKEN`), para que la landing muestre el cambio al
       instante. El bot lo ve en proceso, con la misma caché de productos.
@@ -45,9 +45,9 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
       interna `admin`.
     - Está en `traefik-public` y en `admin`: no alcanza MySQL y no tiene credenciales de la base ni
       la del aviso.
-    - Con él desplegado, la edición de productos, la gestión de usuarios y "Mi cuenta" del `/admin`
-      actual quedan en solo lectura (`ADMIN_NEW_URL`) y enlazan al admin nuevo. El control del bot y
-      el menú siguen en `/admin` hasta los tickets siguientes del paso 4.
+    - Con él desplegado, la edición de productos, la gestión de usuarios, "Mi cuenta" y el control
+      del bot (REQ-F-043) del `/admin` actual quedan en solo lectura (`ADMIN_NEW_URL`) y enlazan al
+      admin nuevo. El menú sigue en `/admin` hasta los tickets siguientes del paso 4.
     - **Aviso al personal (R-3 de REQ-F-040):** desde ese despliegue, las contraseñas se cambian en
       "Mi cuenta" de `https://admin.birriaelmuneco.com` (mismo usuario y contraseña), y las altas y
       cambios de usuarios, en "Usuarios" del admin nuevo. `npm run admin:recover` sigue igual.
@@ -167,6 +167,17 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
 En producción el bot usa **Meta** (WhatsApp Cloud API). Con `NODE_ENV=production` y
 `WHATSAPP_BOT_PROVIDER=twilio` la `api` **no arranca** (ni la app). Twilio es solo para desarrollo
 ([Entorno de desarrollo](desarrollo.md#8-bot-real-con-el-sandbox-de-twilio)).
+
+El control del bot (pausa, bloqueos y topes) se hace en la pantalla "Bot" de
+`https://admin.birriaelmuneco.com/bot`, solo para administradores (REQ-F-043). `/admin/bot` queda en
+solo lectura: muestra estado, uso y lista, y enlaza a esa pantalla. **Sin `inventory-manager` no hay
+pausa web**: es un riesgo aceptado ([arquitectura §10](arquitectura.md#10-riesgos)).
+
+**Aviso al personal (REQ-F-043):** desde ese despliegue, el bot se pausa y los números se bloquean en
+"Bot" de `https://admin.birriaelmuneco.com`, con el mismo usuario y contraseña. El despliegue cierra las
+sesiones de `/admin`: quien envíe un formulario de `/admin/bot` abierto desde antes irá al acceso con
+"Tu sesión caducó. Vuelve a entrar. No se guardó ningún cambio." Al entrar verá la página en solo
+lectura, con el enlace al admin nuevo: **esa acción no se aplicó** y hay que repetirla allí.
 
 ## 1. Preparar el VPS (una vez)
 
@@ -504,19 +515,39 @@ motivo:
 - Haz un revert en `main`: se despliega solo, con volcado y migración.
 - Si es urgente, en el VPS:
   1. Toma los digests de `state/release.env.previous` o de `state/releases.log`.
-  2. Ejecuta, con `sudo env`: un `VAR=valor` delante de `$C` no llega a `docker compose`, porque
-     `sudo` borra el entorno, y compose usaría sin avisar la imagen de `state/release.env`.
+  2. Prepara el comando. Usa siempre `sudo env`: un `VAR=valor` delante de `$C` no llega a
+     `docker compose`, porque `sudo` borra el entorno, y compose usaría sin avisar la imagen de
+     `state/release.env`. Las variables de `sudo env` tienen prioridad sobre ese archivo.
 
      ```sh
      CE="docker compose -f deploy/compose.prod.yaml --env-file .env --env-file state/release.env"
+     ```
+
+     El orden es `inventory-manager`, app y `api`. Nombra siempre el servicio (`up -d --no-deps
+     inventory-manager`, `app` o `api`): sin `RESTAURANTE_API_IMAGE`, el compose resuelve la `api` a
+     la imagen `…/restaurante-api:sin-desplegar`, que no existe.
+  3. **Solo si vas a volver la `api` a una versión anterior a REQ-F-043**, vuelve primero
+     `inventory-manager`, con su digest de los mismos archivos de `state/`:
+
+     ```sh
+     sudo env RESTAURANTE_INVENTORY_IMAGE=ghcr.io/orvigas/restaurante-inventory-manager@sha256:<digest> $CE up -d --no-deps inventory-manager
+     ```
+
+     Si no, el `inventory-manager` nuevo queda con esa `api` de forma estable: el enlace "Bot" sigue
+     visible y la pantalla da 503 con un aviso. Sobre una base más nueva que esa imagen no hace falta
+     la bandera: `inventory-manager` no usa la base.
+  4. Vuelve la app:
+
+     ```sh
      sudo env DATABASE_ALLOW_NEWER_SCHEMA=true RESTAURANTE_APP_IMAGE=ghcr.io/orvigas/restaurante@sha256:<digest> $CE up -d --no-deps app
      ```
 
-     Las variables de `sudo env` tienen prioridad sobre `state/release.env`. Para la `api`, sigue
-     [Arrancar la `api` a mano](#arrancar-la-api-a-mano), **después** de la app. Nombra siempre el
-     servicio (`up -d --no-deps app` o `api`): sin `RESTAURANTE_API_IMAGE`, el compose resuelve la
-     `api` a la imagen `…/restaurante-api:sin-desplegar`, que no existe.
-  3. El siguiente despliegue desde `main` deja todo como indica el CI.
+  5. Si también vuelves la `api`, sigue ahora [Arrancar la `api` a mano](#arrancar-la-api-a-mano).
+  6. El siguiente despliegue desde `main` deja todo como indica el CI.
+
+Para volver a escribir en `/admin/bot` basta con la app: una versión anterior a REQ-F-043 vuelve a
+tener los formularios, y una `api` nueva recoge esos cambios en 10 s
+(`BOT_CONTROL_REFRESH_SECONDS`).
 
 ### Arrancar la `api` a mano
 
@@ -600,6 +631,14 @@ valores por defecto (ver `README.md`, "Topes de gasto, lista negra e interruptor
    acceso, no un 503. `https://admin.birriaelmuneco.com/acceso` muestra el acceso del admin nuevo.
 3. En el log de `api`: `server_started` y, con el bot, `bot_provider_selected` con `meta`. Vigila
    `bot_staff_delivery_failed` y `bot_webhook_signature_invalid`.
+4. **Control del bot (REQ-F-043), como administrador:**
+   - `https://admin.birriaelmuneco.com/bot` muestra el estado, los contadores y la lista negra.
+   - `https://birriaelmuneco.com/admin/bot` no tiene formularios y enlaza a esa pantalla.
+5. **Primer despliegue de REQ-F-043, una sola vez (fila histórica del personal):** el botón de
+   "alcanzaron un tope hoy" estuvo activo hasta REQ-F-042 y un número del personal pudo quedar
+   bloqueado, porque la lista negra no exime al personal. Compara la lista negra de la pantalla "Bot"
+   con los 4 últimos dígitos de `WHATSAPP_BOT_STAFF_MOLOTES` y `WHATSAPP_BOT_STAFF_BIRRIA`, sin copiarlos en un ticket ni en el
+   chat. Si alguno coincide, quítalo con «Quitar»: queda en `bot_audit` como `block_removed`.
 
 ### Comprobaciones del webhook (REQ-F-042)
 

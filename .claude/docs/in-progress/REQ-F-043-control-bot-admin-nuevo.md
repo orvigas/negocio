@@ -2,9 +2,9 @@
 
 ## Estado
 
-READY_FOR_MERGE
+QA_APPROVED
 
-PR 1 de 3 (contratos y `api`): [PR #130](https://github.com/orvigas/negocio/pull/130), mergeado en `epic/arquitectura` (`1c801cf`). PR 2 de 3 (pantalla): [PR #131](https://github.com/orvigas/negocio/pull/131) hacia `epic/arquitectura`, con el CI en verde, pendiente del merge del usuario. Queda el PR 3.
+PR 1 de 3 (contratos y `api`): [PR #130](https://github.com/orvigas/negocio/pull/130), mergeado en `epic/arquitectura` (`1c801cf`). PR 2 de 3 (pantalla): [PR #131](https://github.com/orvigas/negocio/pull/131), mergeado en `epic/arquitectura` (`0391e86`). PR 3 de 3 (solo lectura y documentación): implementado en `feature/REQ-F-043-control-bot-admin-nuevo-3-solo-lectura`, sin commit.
 
 ## Aprobación
 
@@ -709,6 +709,88 @@ Resultado del PR 2 de 3 (pantalla "Bot" en `inventory-manager`). Sin commit, pus
 - **Duraciones en CI:** son locales. En el PR 1 casi se duplicaron en el CI.
 - **`npm run dev`:** la pasada usó los mismos procesos (`server.ts`) con una base de pruebas, no el entorno de `npm run dev` ni los datos locales.
 - **DEF-001 a DEF-003:** siguen abiertos, a la espera de la decisión del usuario.
+
+## Implementation Result (PR 3 de 3)
+
+Resultado del PR 3 de 3 (`/admin/bot` en solo lectura y documentación). Sin commit, push ni PR. No corrige DEF-001 a DEF-004.
+
+### Rama
+
+`feature/REQ-F-043-control-bot-admin-nuevo-3-solo-lectura`, creada desde `epic/arquitectura` (`0391e86`).
+
+### Cambios realizados
+
+- **Solo lectura (RF-10):** con `ADMIN_NEW_URL`, `GET /admin/bot` muestra estado, contadores, aviso de topes y lista negra, sin formularios ni columna "Acción", con el aviso "El bot ahora se controla en el admin nuevo." y el enlace a `<ADMIN_NEW_URL>/bot`.
+- **Los 4 POST:** pasan por `access.post` (sesión, permiso, cuerpo y CSRF, cada uno con su lista de campos) y responden 410 con esa misma página, sin validar el contenido ni escribir. Registran `admin_bot_moved` con `action` y `userId`.
+- **Sin `ADMIN_NEW_URL`:** el controlador es el de siempre. Solo cambia `REACHED_MOVED_MESSAGE`: "La lista de números que alcanzaron un tope hoy está en el admin nuevo." (excepción aprobada a CA-17).
+- **Plantillas:** el formulario del interruptor y la sección de alta salen de `bot.html` a los parciales `bot-switch-form.html` y `bot-add-section.html`, para no duplicar la página. Nuevos: `bot-moved-link.html` y `bot-block-row-readonly.html`.
+- **Documentación (RF-14):** `docs/arquitectura.md` (§1, §6, §8 y §10), `docs/despliegue.md` (qué se despliega, regla del bot, aviso al personal, §6 y §8), `README.md` (monorepo, API propia, Admin nuevo, Bot, Topes) y `.claude/CLAUDE.md` §8 (solo las líneas de `api` e `inventory-manager`). `.claude/rules/` y `.claude/agents/` sin cambios: el plan no los pide.
+- **Pruebas:** `admin-bot-moved.test.ts` (nuevo, 7 pruebas). El texto nuevo sustituye al anterior en `bot-procesos-qa-req-f-042.test.ts` y `bot-protection-qa-req-f-025.test.ts`, con 4 líneas. El comentario de cabecera de `admin-users-moved.test.ts` deja de decir que el bot sigue igual.
+
+### Criterios de aceptación
+
+Estado final de todo el ticket:
+
+| CA | Estado |
+| --- | --- |
+| CA-1 a CA-15, CA-18 a CA-21 | Cumplidos en el PR 1 y el PR 2, con QA aprobado. Sin cambios en este PR. CA-11 y CA-9 son de la API |
+| CA-16 | Cumplido: sin formularios, con el enlace; los 4 POST dan 410 y `bot_control`, `bot_block`, `bot_audit` y `bot_usage` no cambian, con filas en las 4. Pendiente de QA |
+| CA-17 | Cumplido, con la excepción de texto aprobada: formularios, escrituras y 410 de la lista de topes siguen igual. `admin-bot.test.ts` (CA-12 de REQ-F-025) pasa sin cambios y cubre el plazo de 10 s. Pendiente de QA |
+| CA-22 | Cumplido en este PR |
+| RF-14 | Hecho. Se revisa en QA |
+
+### Validaciones ejecutadas
+
+| Comando | Resultado |
+| --- | --- |
+| `npm run typecheck` | 0 |
+| `npm run lint` | 0, sin avisos |
+| `npm run build:css` | 0 |
+| `npm test`, `api` | 40 archivos, 1049 pruebas pasan |
+| `npm test`, `inventory-manager` | 11 archivos, 182 pruebas pasan |
+| `npm test`, `landing-pages` | 151 archivos, 1557 pasan y 1 fallo esperado (1558), 103 s |
+
+- **Duración local:** `admin-bot-moved.test.ts`, 7 pruebas en 3,4 s de pruebas (4,8 s con la preparación). El límite acordado era ~10 s.
+- **Mutaciones (se restauró el código tras cada una):** dejar escribir el interruptor: 2 fallos. El alta: 1. La baja: 1. Pintar los formularios en `GET`: 1.
+- **Procedimiento de `despliegue.md` §6:** `docker compose config` con `RESTAURANTE_INVENTORY_IMAGE` en el entorno, sobre `deploy/compose.prod.yaml` y un archivo de variables de prueba, resuelve la imagen por digest. Sin `sudo`, sin `--env-file state/release.env` y sin arrancar nada.
+
+### Archivos afectados
+
+- `restaurante/landing-pages/src/controllers/admin-bot.ts`
+- `restaurante/landing-pages/src/views/admin/bot.ts`, `bot.html`
+- `restaurante/landing-pages/src/views/admin/partials/bot-switch-form.html`, `bot-add-section.html`, `bot-moved-link.html`, `bot-block-row-readonly.html` (nuevos)
+- `restaurante/landing-pages/tests/integration/admin-bot-moved.test.ts` (nuevo), `admin-users-moved.test.ts`, `bot-procesos-qa-req-f-042.test.ts`, `bot-protection-qa-req-f-025.test.ts`
+- `restaurante/docs/arquitectura.md`, `restaurante/docs/despliegue.md`, `restaurante/README.md`
+- `.claude/CLAUDE.md` (§8)
+- Este ticket
+
+### Desviaciones del plan
+
+- **Aviso extra en el 410:** además de la página, muestra "No se guardó nada: este cambio se hace en el admin nuevo." con `role="alert"`. El plan solo pide la misma página, pero una pestaña antigua con un formulario debe saber que su pausa no se aplicó.
+- **`?ok=` en solo lectura:** se ignora, para no anunciar un cambio que ya no se hace aquí.
+- **Motivo del log:** `admin_bot_moved` lleva `action` en lugar de `path`, a diferencia de `admin_users_moved`, para no guardar en esa línea el token de la ruta de topes. La línea `request` de siempre sí registra la ruta, y ese token ya no corresponde a ningún número en `landing-pages`.
+- **"Mientras tanto":** sin `ADMIN_NEW_URL` se conserva la frase "Mientras tanto, puedes bloquear un número…", porque el cambio aprobado es solo `REACHED_MOVED_MESSAGE`. Suena algo desfasada. En solo lectura se omite.
+- **`docs/arquitectura.md` §1:** no estaba en la lista del plan. Se actualizó porque describía `inventory-manager` sin el bot.
+- **`README.md`, "Bot de WhatsApp" y "Monorepo":** tampoco estaban en la lista. Tenían afirmaciones que dejaban de ser ciertas.
+
+### Riesgos o pendientes
+
+- **Sin ejecutar:** el despliegue real, el `revert` y `sudo env … up` de §6. Las comprobaciones nuevas de §8, incluida DT-3, se hacen en producción tras desplegar la épica.
+- **Sin pasada en navegador de `/admin/bot`:** la página usa el mismo diseño, con menos controles, pero no se midió a 375 px.
+- **Aviso al personal:** está documentado; darlo es tarea del usuario al desplegar.
+- **Duraciones en CI:** son locales.
+- **DEF-001 a DEF-004:** siguen abiertos, a la espera de la decisión del usuario.
+
+### Correcciones tras QA (DEF-005 a DEF-007)
+
+`QA_REJECTED` solo por documentación. Sin cambios de comportamiento.
+
+- **DEF-005:** `despliegue.md` §6 sigue el orden `inventory-manager`, app y `api`. El paso 3 (`inventory-manager`, solo si la `api` vuelve a una versión anterior a REQ-F-043) va antes de la app (paso 4) y de la `api` (paso 5). Los comandos no cambian.
+- **DEF-006:** el aviso al personal describe lo que pasa: el despliegue cierra las sesiones, el formulario antiguo lleva al acceso con "Tu sesión caducó. Vuelve a entrar. No se guardó ningún cambio." y la acción no se aplicó.
+- **DEF-007:** `landing-pages/.env.example`, `deploy/compose.prod.yaml` y `src/config/env.ts` incluyen el bot y las demás pantallas en solo lectura. §8 nombra `WHATSAPP_BOT_STAFF_MOLOTES` y `WHATSAPP_BOT_STAFF_BIRRIA`.
+- **Desviación:** el criterio de finalización "`deploy/` sin cambios" ya no se cumple al pie de la letra: `compose.prod.yaml` cambia solo en un comentario, a petición de QA. Ese archivo está en `DEPLOY_FILES` de `deploy.sh`, así que cambia la suma y un despliegue da código 4 hasta reinstalar `deploy/`. La épica ya lo exigía: `compose.prod.yaml` y `deploy.sh` difieren entre `origin/main` y `origin/epic/arquitectura`.
+- **Validación:** `typecheck` 0, `lint` 0. `npm test`: `api` 40 archivos y 1049 pruebas; `landing-pages` 155 archivos, 1570 pasan y 1 fallo esperado (1571), con las sondas de QA; `inventory-manager` 11 archivos y 182 pruebas.
+- **Sin ejecutar:** §6 en el VPS, con su nuevo orden.
 
 ## QA Action Plan
 
@@ -1434,6 +1516,457 @@ Quedan dos bases vacías, `restaurante_test_4d1754_9_2` y `restaurante_test_8abe
 
 QA_APPROVED
 
+## QA Action Plan (PR 3 de 3)
+
+Plan del PR 3 de 3 (`/admin/bot` en solo lectura y documentación), sobre el working tree sin commit de `feature/REQ-F-043-control-bot-admin-nuevo-3-solo-lectura` (base `epic/arquitectura`, `0391e86`). Aprobación de la implementación, textual: "si", a "¿Apruebas la implementación del PR 3 para pasarla a QA?", con las 6 desviaciones y el texto "Mientras tanto, puedes bloquear un número…" a la vista del usuario. NotebookLM no tiene herramientas disponibles en la sesión: no se consultó. `Calculadora.xlsx` queda fuera.
+
+Las 7 pruebas de `admin-bot-moved.test.ts` son del implementador: se ejecutan, pero no cuentan como evidencia independiente. Las sondas nuevas solo cubren lo que esas pruebas no prueban, o lo que CA-16 y CA-17 exigen demostrar por separado.
+
+### Objetivo
+
+Comprobar de forma independiente que `/admin/bot` no escribe con `ADMIN_NEW_URL`, que sin ella nada cambia salvo el texto aprobado, que conviven los procesos reales, que la documentación dice la verdad, y cerrar el ticket con CA-1 a CA-22.
+
+### Requisito bajo prueba
+
+RF-10, RF-11 y RF-14; CA-16 y CA-17; la excepción de texto de CA-17; la autorización de `.claude/CLAUDE.md` §8 ("Lo autorizo"); DT-3 solo como procedimiento escrito (su comprobación es en producción); y CA-22 sobre el estado final. CA-1 a CA-15 y CA-18 a CA-21 no se revalidan: el diff no toca `api`, `inventory-manager` ni `packages`, y QA3-40 lo demuestra.
+
+### Criterios de aceptación
+
+| Criterio | Casos |
+| --- | --- |
+| CA-16 | QA3-01 a QA3-12, QA3-30 a QA3-33, QA3-50 a QA3-56 |
+| CA-17 | QA3-13 a QA3-17, QA3-20 a QA3-23 |
+| RF-11 | QA3-30 a QA3-33 |
+| RF-14 y autorización | QA3-60 a QA3-69 |
+| CA-22 | QA3-41, QA3-42 |
+| Cierre del ticket | QA3-70 |
+
+### Riesgos identificados
+
+Hipótesis, no hechos, salvo donde se indica:
+
+- **R-1. Lectura con efectos.** `/admin/bot` no llama a un método de escritura, pero `snapshot()` e `init()` corren en el proceso de la landing. Lo observado: el modo `panel` no audita caducidades. Falta demostrarlo con un bloqueo caducado y con un reinicio.
+- **R-2. Una rama sin probar del guardián.** `access.post` empieza por `assertSameOrigin`, y corta por tamaño de cuerpo. Las pruebas del implementador no cubren otro origen, cuerpo excesivo ni un CSRF con valor incorrecto (solo ausente).
+- **R-3. Valores raros en la ruta.** Un id o token mal formado llega ahora a 410 en lugar de al 404 de antes. Debe dar 410 o un error sin escribir ni filtrar nada.
+- **R-4. Parciales.** El renderizador lanza error ante una clave ausente: un estado poco común (409, 422, `switchError`, base caída) podría romper la página al mover plantillas. Las pruebas existentes no comparan el HTML con la base.
+- **R-5. CSS.** `underline-offset-4` y `focus-visible:outline-*` son clases nuevas en un parcial: si el CSS generado no las incluye, el foco no se ve.
+- **R-6. Copia vieja en solo lectura.** Con el refresco por defecto, la página depende de la copia de `landing-pages`. Lo observado: `snapshot()` la refresca antes si tiene 10 s o más. El peor caso real está justo tras una lectura previa.
+- **R-7. Convivencia con refresco de 1 s.** `startStack` fija `BOT_CONTROL_REFRESH_SECONDS=1` por encima del `env`: lo ya probado no demuestra el plazo de 10 s por defecto.
+- **R-8. Documentación desfasada.** Quedan comentarios que hablan solo de productos (`deploy/compose.prod.yaml:119`) y frases por revisar (`despliegue.md:413`). En §6, el paso 3 pide volver `inventory-manager` "antes que la `api`", pero la `api` se nombra en el paso 2: el orden hay que seguirlo tal como está escrito.
+- **R-9. Alcance de `CLAUDE.md`.** La autorización cubre solo §8.
+
+### Pruebas funcionales
+
+Con `ADMIN_NEW_URL`, MySQL real y datos propios de la sonda (no los de `movedBot`):
+
+- **QA3-01.** `GET`: estado, los 5 contadores, aviso de topes y lista negra, con filas manual y automática, frente a los valores de la base.
+- **QA3-02.** El enlace es exactamente `<ADMIN_NEW_URL>/bot`, también con barra final en la variable, sin `//bot`.
+- **QA3-03.** Los 4 POST con sesión, permiso, cuerpo y CSRF válidos: 410, sin `Location`, página en solo lectura, aviso con `role="alert"`, y las 4 tablas con filas en cada una, idénticas antes y después, en volcado completo y con la copia en memoria.
+- **QA3-04.** Un formulario real, capturado de la página sin `ADMIN_NEW_URL` y reenviado tal cual con la variable: cada uno de los 4 da 410, sin 400 por campos.
+
+Sin `ADMIN_NEW_URL`:
+
+- **QA3-13.** Pausar, reanudar, alta, baja y 303 con `?ok=`: escriben y auditan.
+- **QA3-14.** El POST de topes sigue en 410 sin escribir.
+- **QA3-15.** Sigue la frase "Mientras tanto…" y no aparece el aviso del modo nuevo.
+
+Ver también los casos de base en "Pruebas de regresión".
+
+### Pruebas negativas y casos límite
+
+- **QA3-05.** Anónimo, editor, CSRF ausente, CSRF con valor incorrecto y token de otra sesión, en cada uno de los 4 POST: 303 o 403, sin `admin_bot_moved` y sin escritura. El editor recibe 403 antes de leer el cuerpo.
+- **QA3-06.** Otro origen en cada POST: 403, sin escritura.
+- **QA3-07.** Cuerpo por encima de 4 KiB: rechazo, sin escritura y sin 500. Campo desconocido: 400.
+- **QA3-08.** Id mal formado, inexistente o de otro formato en `/bloqueos/:id/quitar`, y token mal formado o de longitud rara en `/topes/:token/bloquear`: sin 500, sin escritura. Se registra la respuesta real (se espera 410, tras los controles).
+- **QA3-09.** Cuerpo con teléfono válido, motivo con teléfono y `duracion` inválida: 410 sin validar nada ni repetir el dato.
+- **QA3-10.** `GET` y los 4 POST con un bloqueo ya caducado en la base: sigue sin `block_expired` en `bot_audit`, sin cambios en las 4 tablas.
+- **QA3-11.** `?ok=` y `?n=` con cualquier valor: sin aviso de éxito.
+- **QA3-12.** Sin `botControl`: 503 en `GET` y POST, sin 410 ni escritura. Con `storeHealthy` falso, la página de solo lectura sigue pintando el aviso de última copia.
+- **QA3-16.** `ADMIN_NEW_URL` vacía: se comporta como sin la variable.
+- **QA3-17.** `?ok=` válido sin la variable: sigue mostrando el aviso de éxito.
+
+### Convivencia en procesos reales (RF-11, CA-16 y CA-17)
+
+- **QA3-30.** Pila real (`landing-pages` con `ADMIN_NEW_URL`, `api` e `inventory-manager`). Pausa, reanudar, alta y baja desde `inventory-manager`: `/admin/bot` las refleja sin formularios.
+- **QA3-31.** Con esa pila, un POST de `/admin/bot` da 410 sin alterar lo que escribió `inventory-manager`, y `bot_audit` solo crece por la `api`.
+- **QA3-32.** Reinicio de `landing-pages` con `ADMIN_NEW_URL`: arranca, sigue en solo lectura y no escribe en las 4 tablas. `landing-pages` conserva clave, personal y topes: arranca con ellos y muestra el uso.
+- **QA3-33. Medición con el refresco por defecto (10 s).** Se hace una lectura de `/admin/bot`, la escritura por `inventory-manager` a continuación (peor caso de R-6), y se mide cuándo aparece. 3 repeticiones de pausa y 3 de alta. Pasa si el máximo es ≤ 10 s, con el margen de la petición indicado aparte. Fuera de la suite, por duración.
+
+### Propagación sin `ADMIN_NEW_URL`, comparada con la base (CA-17)
+
+- **QA3-20.** `admin-bot.test.ts`, sin cambios, pasa en los dos árboles.
+- **QA3-21. Medición.** Procesos reales con el refresco por defecto. Pausar en `/admin/bot`, y medir cuándo la `api` deja de responder a un mensaje real por el webhook, en la base y en el PR, alternando. 3 repeticiones por árbol, y una de reanudar por árbol. Pasa si el máximo es ≤ 10 s, con el margen de la petición indicado aparte, y sin diferencia atribuible al PR.
+- **QA3-22.** Una baja en `/admin/bot` llega al bot en el mismo plazo. 1 repetición por árbol.
+
+**Comparación con la base (G-1).**
+
+- **QA3-23.** `renderBotPage` sobre una matriz fija, con un script en el scratchpad y el mismo reloj, en la base y en el PR. Estados: activo y pausado, con y sin cambio previo; con 0 bloqueos, manual, automático, permanente y pendiente de guardar; bot con y sin proveedor; sin clave; base caída; clave anterior; éxito; problema; errores de alta; `switchError`; topes alcanzados. Se compara la página completa, primero exacta y luego con los espacios normalizados. Pasa si **la única diferencia normalizada es `REACHED_MOVED_MESSAGE`** y toda diferencia exacta es de espacios.
+
+### Pruebas responsive
+
+Viewports 375×812, 768×1024 y 1440×900, con filas en la lista negra y un motivo largo, en `GET` y en la página 410:
+
+- **QA3-50.** Sin desplazamiento horizontal de la página (`scrollWidth` frente a `innerWidth`). La tabla solo se desplaza dentro de su contenedor.
+- **QA3-51.** El enlace al admin nuevo se ve y se pulsa con un área suficiente, sin cortes de texto.
+
+Si Chrome no baja a 375 px, se mide con Chrome headless por el protocolo de DevTools, como en el PR 2, y se deja constancia.
+
+### Pruebas de accesibilidad
+
+- **QA3-52.** Un `h1`, jerarquía correcta tras quitar secciones, landmarks, `aria-labelledby` sin referencias rotas, sin `id` huérfanos ni restos de `b-*`, y `caption` y `scope` en la tabla de 6 columnas.
+- **QA3-53.** Teclado: orden de tabulación del enlace, sin trampas, y foco visible medido en el estilo calculado, con la clase presente en el CSS generado (R-5).
+- **QA3-54.** Aviso del 410: `role="alert"` en el DOM, texto completo sin depender del color, y contraste del enlace y del aviso sobre su fondo.
+- **QA3-55.** Escenario real de pestaña antigua en el navegador: página con formularios, se reinicia la app con `ADMIN_NEW_URL` y se envía el formulario abierto. Se ve el aviso, no hay formularios y el enlace funciona por teclado.
+
+### Pruebas UX/UI
+
+- **QA3-56.** No hay diseño en `_stich_source_/` para el admin (P-4 de REQ-F-039): se compara con el aviso de Usuarios en solo lectura en tono, enlace y orden. Sin error en consola ni CSP en `GET` y 410.
+
+### Privacidad
+
+- **QA3-24.** `admin_bot_moved` lleva exactamente `action` y `userId`, más los campos comunes del logger, en los 4 POST. Ni número, ni motivo, ni token, ni ruta.
+- **QA3-25.** Con un teléfono de prueba en el cuerpo de cada POST y de cada rechazo (QA3-05 a QA3-09): no aparece en los logs reales, en stdout ni stderr, en sus formas completa y local, ni en el HTML.
+- **QA3-26. Token de topes en `request`.** Mismo POST en la base y en el PR: se compara la línea. Se documenta si es un riesgo con estos hechos: origen del token (aleatorio de 16 bytes), si `landing-pages` puede conocer uno válido (modo `panel`, memoria de `api`), su caducidad y su uso único. Se señala aparte, sin ampliar el alcance, la línea equivalente de `api` e `inventory-manager`.
+
+### Pruebas de regresión
+
+- **QA3-40.** `git diff 0391e86 --stat`: nada en `api/`, `inventory-manager/`, `packages/`, `deploy/` ni en el esquema.
+- **QA3-41.** `npm run build:css`, `typecheck`, `lint` y `npm test` en los 3 workspaces, sin y con sondas. El único fallo esperado admitido es el `it.fails` de `local-server.test.ts:88`.
+- **QA3-42.** `inventory-manager` sigue sin importar `core` ni `db`: regla de `lint`, comprobada con la salida.
+- **QA3-43.** Pruebas de QA modificadas: `git diff --word-diff` de `bot-procesos-qa-req-f-042.test.ts` y `bot-protection-qa-req-f-025.test.ts` solo cambia los 4 textos, con el mismo número de `expect`; `admin-users-moved.test.ts`, solo el comentario.
+- **QA3-44.** `admin-products-moved.test.ts` y `admin-users-moved.test.ts` pasan. El `/admin` de solo lectura de productos, usuarios y cuenta no cambia: sin archivos tocados en sus controladores y vistas.
+- **QA3-45.** Otra pantalla, `/molotes`, `/birria` y `/`: sin cambios en el diff; cubiertas por la suite.
+
+### Documentación (RF-14)
+
+Cada afirmación nueva se contrasta con el código o una prueba, y se anota como verdadera, falsa o no verificable.
+
+- **QA3-60.** `arquitectura.md` §1, §6, §8 y §10: misma instancia de `BotControl` en bot y rutas, sin esperar el refresco; escritor único con la variable; 10 s sin ella; baja sin liberar cupo en ese caso; contenido de los PR; "sin cambios de esquema ni variables nuevas".
+- **QA3-61.** `README.md`: las 5 rutas y sus métodos frente a `api/src/admin/router.ts`, respuestas sin número, seudónimo ni id de clave, pantalla, cupo devuelto y solo lectura.
+- **QA3-62.** `despliegue.md`: regla del bot, aviso al personal (texto "No se guardó nada" real, mismo usuario y contraseña), §8 y DT-3 (`WHATSAPP_BOT_STAFF_*`, `block_removed`, botón "Quitar").
+- **QA3-63.** `despliegue.md` §6: `docker compose config` con `RESTAURANTE_INVENTORY_IMAGE` por digest, archivos falsos de `.env` y `state/release.env` en el scratchpad y el `CE` tal como está escrito, en lugar de `sudo env` y `up`. Comprueba que `inventory-manager` resuelve la imagen, que no tiene variable de base y que `--no-deps` existe. Si el daemon local lo permite, `up --dry-run` sobre ese mismo archivo. El digest se busca en los archivos que el texto nombra, y se comprueba que `deploy.sh` los escribe. El orden `inventory-manager` → app → `api` se lee como lo haría quien lo ejecuta (R-8).
+- **QA3-64.** §8: las comprobaciones se leen y se hacen en local con URL local, sin producción.
+- **QA3-65.** Nombre de imagen frente al CI y `deploy.sh`.
+- **QA3-66.** Enlaces y anclas internas nuevas, incluidas `#6-volver-a-una-versión-anterior-a-mano` y `#10-riesgos`.
+- **QA3-67.** Búsqueda de lo desfasado: "ticket 4", "vuelve", "`/admin/bot`" y "Bot" de `/admin` en `docs/`, `README.md`, `.env.example` y comentarios de `deploy/`, con cada resultado revisado (R-8).
+- **QA3-68.** `.env.example`: se confirma que "no aplica".
+- **QA3-69.** `.claude/CLAUDE.md`: `git diff` solo con las 2 líneas de §8, frente al código. Sin cambios en `.claude/rules/` ni `.claude/agents/`.
+
+### Pruebas de performance
+
+- **QA3-46.** Duración por archivo con los workers por defecto, en la suite completa: `admin-bot-moved.test.ts`, S-1 y S-2, por debajo de ~10 s en local, frente al límite de 20 s del CI.
+- **QA3-47.** Peso del CSS generado frente a la base. `GET /admin/bot`: sin peticiones nuevas ni JavaScript añadido.
+
+### Pruebas SEO
+
+No aplica: página privada, sin cambios en su cabecera. QA3-23 lo cubriría si cambiara.
+
+### Pruebas automatizadas
+
+Reutilizan `setupAdmin`, `loginAs`, `TEST_BOT_KEYS`, `startStack`, `start`, `startInventory`, `signIn` y `waitFor`. Sin `retry`, sin subir tiempos de espera y sin esperas fijas. Las sondas son de caja negra respecto a las otras apps.
+
+| Id | Archivo o medio | Casos |
+| --- | --- | --- |
+| S-1 | `landing-pages/tests/integration/admin-bot-qa-req-f-043-solo-lectura.test.ts` (un proceso, MySQL real) | QA3-01 a QA3-12, QA3-16, QA3-17, QA3-24 y QA3-25 |
+| S-2 | `landing-pages/tests/integration/admin-bot-qa-req-f-043-solo-lectura-procesos.test.ts` (3 procesos reales, `BOT_CONTROL_REFRESH_SECONDS=1`) | QA3-13, QA3-14, QA3-30 a QA3-32 |
+| M-1 | Prueba temporal, fuera del repositorio al acabar (refresco por defecto) | QA3-21, QA3-22 y QA3-33 |
+| G-1 | Script en el scratchpad, sobre un `git worktree` de `0391e86` con su `npm ci` | QA3-23 y la línea de QA3-26 |
+| H-1 | Script en el scratchpad para Chrome headless, si hace falta | QA3-50 a QA3-55 |
+
+- **Soporte.** Para M-1, `startStack` necesita una opción, con `'1'` por defecto, para no forzar el refresco (R-7): cambio de una línea en `tests/support/bot-procesos-qa-req-f-042.ts`, sin efecto en las pruebas actuales.
+- **Sin duplicar.** S-1 no repite los 410 felices salvo QA3-03, la evidencia independiente de CA-16 que pide la validación.
+- **Sensibilidad.** Dos mutaciones en una copia temporal del árbol, nunca en el de trabajo: que `moved` no pase por `access.post`, y que deje escribir el alta. S-1 debe fallar en ambas.
+
+### Pruebas en navegador
+
+Claude in Chrome, en pestaña nueva y cerrada al terminar, con `localhost`, base de pruebas y un usuario de prueba creado por el soporte de esta ronda, sin valores de producción. Si la extensión no responde tras 2 o 3 intentos, o no baja a 375 px, Chrome headless con H-1. No se abre el enlace al admin nuevo hacia ningún dominio real: se valida el `href`. Sin `sudo`, sin VPS y sin producción.
+
+### Evidencia requerida
+
+- Salida de cada comando y de cada sonda, con volcado de tablas en cada fallo.
+- Tabla de QA3-21 y QA3-33 con cada tiempo.
+- Diff completo de G-1.
+- Líneas de log de QA3-24 a QA3-26, enmascaradas.
+- Medidas y capturas de navegador.
+- Tabla de QA3-60 a QA3-69, afirmación por afirmación.
+- `git status` antes y después, sin cambios fuera del ticket, de las sondas y del soporte. Sin procesos ni worktrees temporales.
+
+### Cierre del ticket (QA3-70)
+
+El QA Report tendrá la tabla final de CA-1 a CA-22 con PR, evidencia (sonda o ronda) y estado. Además, esta lista de lo que queda para producción:
+
+- despliegue real de la épica y comprobaciones nuevas de `despliegue.md` §8;
+- DT-3, comparación de la lista negra con los 4 últimos dígitos del personal;
+- aviso al personal, que da el usuario;
+- `revert` y `sudo env … up` de §6, sin ejecutar;
+- duración real en CI;
+- decisión sobre DEF-001 a DEF-004, todos `TRIVIAL` y abiertos.
+
+### Criterios de aprobación
+
+- CA-16 y CA-17 en PASS con evidencia independiente; RF-11 y RF-14 revisados.
+- En G-1, la única diferencia normalizada es `REACHED_MOVED_MESSAGE`.
+- Las mediciones dentro de 10 s, con el margen indicado aparte, y sin diferencia atribuible al PR.
+- `typecheck`, `lint` y `npm test` en 0 en los 3 workspaces.
+- Sin defectos `BLOCKER` ni `CRITICAL`; `MAJOR` solo con decisión del usuario.
+- Ninguna afirmación nueva de la documentación es falsa.
+- Sin regresión, y ninguna sonda por encima de ~10 s en local.
+
+## QA Report (PR 3 de 3)
+
+### Ronda
+
+1 del PR 3, sobre el working tree sin commit de `feature/REQ-F-043-control-bot-admin-nuevo-3-solo-lectura` (base `0391e86`). Plan aprobado por el usuario (cita textual: "Si", en respuesta a "¿Apruebas el plan de QA del PR 3 con esos 4 puntos?"). NotebookLM no tiene herramientas disponibles en la sesión: no se consultó.
+
+### Pruebas ejecutadas
+
+| Comando o acción | Resultado |
+| --- | --- |
+| `npm run build:css`, `typecheck`, `lint` (sin sondas) | 0, 0 y 0 |
+| `npm test`, sin sondas | 0. `api` 40 archivos, 1049; `landing-pages` 151 archivos, 1557 y 1 fallo esperado (1558); `inventory-manager` 11 archivos, 182 |
+| `typecheck` y `lint` finales, con sondas | 0 y 0, sin avisos |
+| `npm test`, con sondas | 0. `api` 1049; `landing-pages` 155 archivos, 1570 y 1 fallo esperado (1571), 101 s; `inventory-manager` 182 |
+| S-1 (3 archivos, 11 pruebas) | PASS. 3 repeticiones antes de partirla; en la suite final, PASS |
+| S-2 (2 pruebas, procesos reales) | PASS, 3 pasadas |
+| G-1, `renderBotPage`, 22 estados, base frente a PR | La única diferencia, sin contar espacios, es `REACHED_MOVED_MESSAGE` en los 22 |
+| M-1, refresco real de 10 s | Ver "Mediciones" |
+| Mutaciones (árbol temporal) | 3 de 3 detectadas |
+| H-1, Chrome headless real | PASS, ver "Responsive" |
+| `admin-bot.test.ts` en base y en PR | 8 de 8 en ambos, archivo sin cambios |
+| `admin-products-moved`, `admin-users-moved`, `admin-bot` | 27 de 27 |
+| `docker compose config` y `--dry-run up` de §6, con archivos falsos | Ver "Documentación" |
+| `git diff 0391e86 --stat` en `api`, `inventory-manager`, `packages` y `deploy` | Vacío |
+
+### Criterios de aceptación
+
+Cierre del ticket. "PR" es donde se validó cada parte. Los CA de PR 1 y PR 2 no se revalidan: este PR no toca su código (QA3-40), y la suite completa pasa.
+
+| CA | PR | Resultado | Evidencia |
+| --- | --- | --- | --- |
+| CA-1 | 1 y 2 | PASS | Más de 70 combinaciones de editor con 403; en pantalla, sin datos ni enlace |
+| CA-2 | 1 y 2 | PASS | CSRF ausente, inválido o de otra sesión, 403, tablas iguales |
+| CA-3 | 1 y 2 | PASS | `server.ts` real, refresco de 300 s, `bot_paused_dropped` y 0 envíos |
+| CA-4 | 1 y 2 | PASS | 8 dígitos y 201 caracteres, 422 sin cambio |
+| CA-5 | 1 y 2 | PASS | Alta real, `bot_blocked_message` y 0 salidas |
+| CA-6 | 1 y 2 | PASS | 422, 422 y 409 sin escribir; teléfono vacío al volver |
+| CA-7 | 1 y 2 | PASS | Baja de manual, tope y enfriamiento: vuelve a atender, `block_removed` |
+| CA-8 | 1 y 2 | PASS | Webhook firmado, lista enmascarada, bloqueo directo |
+| CA-9 | 1 y 2 | PASS | El personal no entra en la lista; también en navegador |
+| CA-10 | 1 y 2 | PASS | Token usado, inexistente, manipulado y de ayer, 404; ya bloqueado, 409 |
+| CA-11 | 1 | PASS | SIGTERM y arranque real: lista vacía; lo demás sigue |
+| CA-12 | 1 y 2 | PASS | 5 contadores iguales a `bot_usage`, sin controles |
+| CA-13 | 1 y 2 | PASS | Sin clave: sin formulario y 409 sin guardar |
+| CA-14 | 1 y 2 | PASS | Con 3 bloqueos, aviso; con 0, sin aviso |
+| CA-15 | 1 y 2 | PASS | 0 coincidencias en 183 KB de respuestas, logs, tablas y API |
+| CA-16 | 3 | **PASS** | S-1 y S-2: `<main>` sin controles (punto 3 del plan), enlace exacto, 4 POST en 410, 4 tablas y memoria idénticas; editor, anónimo, CSRF, otro origen, tamaño y token de topes rechazados sin escribir; navegador real |
+| CA-17 | 3 | **PASS** | G-1, con solo la excepción aprobada; `admin-bot.test.ts` igual; S-2 escribe y audita; máximo medido 9,983 s frente a 9,971 s de la base |
+| CA-18 | 2 | PASS | 8 fallos en lectura y en los 4 POST: 503, sin "no se guardó" |
+| CA-19 | 1 y 2 | PASS | `storeHealthy` falso: aviso de última copia |
+| CA-20 | 1 y 2 | PASS | "Desactivado", y pausa con `bot_paused` |
+| CA-21 | 2 | PASS | Sin desplazamiento en 3 viewports, sin JavaScript y con teclado |
+| CA-22 | 1, 2 y 3 | PASS | `typecheck`, `lint` y `npm test` en 0; `inventory-manager` sin `core` ni `db`, impuesto por `lint` |
+
+RF-11: PASS (S-2 y M-1). **RF-14: FAIL parcial**, por DEF-005 y DEF-006.
+
+### Mediciones (refresco por defecto, 10 s)
+
+Criterio aprobado: máximo medido ≤ 10 s, petición aparte, sin diferencia atribuible al PR.
+
+| Medida | Base | PR |
+| --- | --- | --- |
+| Llega a la copia del bot, peor fase, 7 cambios, sondeo de 40 ms | 9,845 a 9,971 s | 9,871 a 9,983 s |
+| Petición del cambio, aparte | 27 a 47 ms | 24 a 42 ms |
+| Sin tráfico: un mensaje a los 10,0 s tras el cambio, 6 casos | 6 de 6 correctos | 6 de 6 correctos |
+| Con tráfico: primer mensaje con el efecto nuevo, 3 pausas y 3 reanudar, un mensaje cada 250 ms | El cambio cae antes de 10,121 s | El cambio cae antes de 10,108 s |
+| Baja, primera respuesta al número, envío y sondeo cada 250 ms o más | 10,298 s | 10,278 s |
+
+- **Por qué hay dos filas por encima de 10 s:** son cotas superiores de un sondeo de 250 ms, no el plazo. En el peor caso, el último mensaje con el estado anterior fue a los 9,856 s (PR) y 9,869 s (base). La fila de 40 ms mide el mismo paso con precisión.
+- **El caso sin tráfico** importa porque un mensaje dispara además un refresco perezoso, que oculta el temporizador. Con silencio, a los 10,0 s ya estaba aplicado.
+- **Convivencia, `/admin/bot` en solo lectura (QA3-33), 8 cambios escritos por `inventory-manager`:** primera lectura que lo muestra, de 8,575 a 9,996 s tras la respuesta del cambio; escritura aparte, de 26 a 41 ms; lectura aparte, de 9 a 17 ms. Una pasada anterior medía el final de la lectura y dio un máximo de 10,013 s, incluida esa lectura: se repitió para separarla, como pide el criterio.
+
+### Veredicto de los hallazgos del análisis
+
+1. **Refresco de 1 s en `startStack`: confirmado.** Se añadió la opción aprobada (una línea, con `'1'` por defecto) y M-1 midió con 10 s reales.
+2. **Otro origen, cuerpo excesivo y CSRF incorrecto: sin cubrir, y correctos.** S-1 los cubre: 403, 413 y 403, sin escribir.
+3. **Orden en §6: confirmado.** Es DEF-005.
+4. **Comentario de `compose.prod.yaml:119`: confirmado, desfasado.** Es DEF-007.
+
+R-1 a R-9 del plan: R-1, sin efectos de escritura (bloqueo caducado sin `block_expired`, reinicio sin cambios). R-3, 12 ids y tokens raros dan 410. R-4, G-1 limpio. R-5, clases presentes en el CSS y foco medido. R-6, dentro del plazo. R-9, solo 2 líneas de §8.
+
+### Defectos encontrados
+
+Ninguno `BLOCKER`, `CRITICAL` ni `MAJOR`. Código sin defectos. DEF-001 a DEF-004 siguen abiertos por decisión del usuario.
+
+### DEF-005
+
+- Severidad: MINOR
+- Criterio de aceptación afectado: RF-14 (`restaurante/docs/despliegue.md` §6). Ningún CA funcional.
+- Descripción: el procedimiento de vuelta atrás a mano se contradice en el orden. El paso 2 ordena volver la app y luego la `api`; el paso 3, ya después, pide volver `inventory-manager` "**antes** que la `api`".
+- Pasos para reproducir: leer §6 en orden, como en un incidente. Al llegar al paso 3, la `api` ya se ha vuelto. El orden seguro de la revisión técnica es `inventory-manager` → app → `api`.
+- Resultado esperado: el orden de los pasos numerados coincide con el orden seguro.
+- Resultado actual: quien sigue la numeración hace app → `api` → `inventory-manager`, e incumple sin querer la instrucción.
+- Evidencia: `despliegue.md`, pasos 2 y 3 de §6. Los comandos en sí son correctos: ver "Documentación".
+- Impacto: no llega a `MAJOR`. Mientras tanto, solo la pantalla "Bot" da 503 con aviso (H-10, comprobado en el PR 2), sin pérdida de datos, y el estado final es correcto. No es `TRIVIAL` porque es un procedimiento de incidente y hace dudar cuando más importa.
+- Recomendación: que los pasos numerados sigan el orden seguro.
+
+### DEF-006
+
+- Severidad: MINOR
+- Criterio de aceptación afectado: RF-14 (`restaurante/docs/despliegue.md`, "Aviso al personal").
+- Descripción: dice que quien tenga abierto un formulario antiguo de `/admin/bot` recibirá "No se guardó nada" y el enlace. Tras el despliegue no es así: las sesiones de `/admin` están en memoria y el reinicio las cierra (`createSessionStore`; `README.md`, línea 1548).
+- Pasos para reproducir: abrir `/admin/bot` sin `ADMIN_NEW_URL`, reiniciar la app con la variable en el mismo puerto y pulsar "Pausar bot" en esa pestaña (H-1).
+- Resultado esperado: lo que dice el aviso.
+- Resultado actual: redirige a `/admin/login?next=%2Fadmin%2Fbot&expirada=1` con "Tu sesión caducó. Vuelve a entrar. No se guardó ningún cambio."; al entrar se llega a la página de solo lectura. Control sin cambios.
+- Evidencia: H-1, `pestanaAntiguaFinal`.
+- Impacto: reducido, y el resultado es seguro: nada se guarda y se avisa. Pero la frase es falsa, está en el aviso que se da al personal, y el plan aprobado no admite afirmaciones falsas. El 410 con `role="alert"` sigue siendo correcto para una sesión viva (S-1 y navegador).
+- Recomendación: que el aviso describa lo que verá el personal tras el despliegue.
+
+### DEF-007
+
+- Severidad: TRIVIAL
+- Criterio de aceptación afectado: RF-14 ("`.env.example` si aplica").
+- Descripción: tres textos quedan incompletos. `landing-pages/.env.example` lista lo que pasa a solo lectura con `ADMIN_NEW_URL` y omite el bot, así que sí aplicaba. `deploy/compose.prod.yaml:119` y el comentario de `src/config/env.ts:56` solo hablan de productos (ya desde REQ-F-040). `despliegue.md` §8 pide comparar "cada `WHATSAPP_BOT_STAFF_*`", y ese patrón incluye también `_TEMPLATE` y `_TEMPLATE_LANGUAGE`, que no son números.
+- Pasos para reproducir: leer esas líneas.
+- Resultado esperado: textos completos y precisos.
+- Resultado actual: los descritos.
+- Evidencia: las líneas citadas.
+- Impacto: muy bajo; ningún procedimiento falla.
+- Recomendación: completar esos textos.
+
+### Documentación (RF-14)
+
+| Afirmación o procedimiento | Resultado |
+| --- | --- |
+| `arquitectura.md`: misma instancia de `BotControl` en bot y rutas (`api/src/server.ts`) | Verdadera |
+| Escritor único con la variable; 10 s sin ella; baja sin liberar el cupo en ese caso | Verdaderas (S-1, M-1 y QA-64) |
+| `takeReleased` y `guard.release`, contenido de #130 y #131, sin esquema ni variables | Verdaderas |
+| §10, "sin pausa web" y consultas disponibles | Verdaderas |
+| `README.md`: 5 rutas y métodos frente a `api/src/admin/router.ts` | Verdaderas |
+| Pantalla, cupo devuelto, solo lectura, respuestas sin número, seudónimo ni clave | Verdaderas |
+| `despliegue.md`: qué se despliega, regla del bot, mismo usuario y contraseña | Verdaderas |
+| "Recibirá No se guardó nada" | **Falsa: DEF-006** |
+| §6, orden de los pasos | **Contradictorio: DEF-005** |
+| §6, comando: el digest de `sudo env` gana a `state/release.env`, sin variable se usa el del archivo | Verdadero (`config`, en bash, con el `CE` tal cual) |
+| §6, `inventory-manager` sin variables de base y sin `depends_on` | Verdadero: 5 variables, ninguna de base |
+| §6, `up -d --no-deps inventory-manager` | Válido: `--dry-run` llega a la descarga de la imagen y falla por el digest falso, como se esperaba |
+| §6, digests: `releases.log` tiene `inventory=` y `deploy.sh` escribe `release.env.previous` | Verdadero |
+| §6, sin `docker pull` previo, a diferencia de la `api` | Correcto hoy: ni `deploy/` ni `ops/` borran imágenes, y la anterior sigue en el host. Tras reconstruir el VPS fallaría, con un error visible, como el paso 2 ya existente. No se abre defecto |
+| §6, volver solo la app recupera la escritura | Verdadero (base sin modo de solo lectura, y M-1) |
+| §8 y DT-3: `block_removed`, botón "Quitar", URLs | Verdaderas; sin ejecutar en producción |
+| Anclas nuevas | Existen |
+| `.env.example` "no aplica" | **Incorrecto: DEF-007** |
+| `.claude/CLAUDE.md` | Un solo bloque, 2 líneas de §8, ciertas. Sin cambios en `rules/` ni `agents/` |
+
+`$CE` sin comillas solo se separa en bash: en zsh falla. Es el patrón ya existente; el VPS usa bash.
+
+### Regresión
+
+- `word-diff` de las 3 pruebas modificadas: solo los 4 textos y el comentario, con los mismos `expect` (37, 17 y 24).
+- Productos y usuarios en solo lectura, 27 de 27 con `admin-bot`, sin archivos tocados.
+- Único fallo esperado: el `it.fails` conocido.
+
+### Responsive
+
+Chrome headless real por el protocolo de DevTools, 2 bloqueos, uno con motivo largo, en `GET` y en 410.
+
+| Viewport | `scrollWidth` frente a `innerWidth` | Tablas | Enlace |
+| --- | --- | --- | --- |
+| 375×812 | 375 = 375 | La de bloqueos se desplaza dentro, 341 frente a 842 | 282×18 px, sin cortes |
+| 768×1024 | 768 = 768 | Igual, 718 frente a 842 | 282×18 px |
+| 1440×900 | 1440 = 1440 | Sin desplazamiento | 282×18 px |
+
+El enlace mide 18 px de alto: es un enlace dentro de un texto, exento del mínimo de 24 px, y no se abre defecto.
+
+### Accesibilidad
+
+- Un `h1` y 4 `h2`, en orden; `header`, `nav` y `main`; 0 referencias ARIA rotas; 0 `id` duplicados; 0 `b-*` restos; captions y 17 `th` con `scope`.
+- Teclado a 375 px: el enlace se alcanza en 9 tabulaciones, sin trampas, con `:focus-visible` y contorno de 3 px sólido azul.
+- 410: `role="alert"` con el texto completo; el aviso no depende del color. Contraste: enlace 14,47; alerta 9,16.
+
+### UX/UI
+
+Sin diseño en `_stich_source_/` para el admin. Mismos avisos y tono que Usuarios en solo lectura. Captura a 375 px revisada: enlace visible y alerta debajo. Consola sin errores ni CSP; los 2 mensajes son el 410 esperado.
+
+### Privacidad
+
+- `admin_bot_moved`: exactamente `action`, `level`, `msg` y `userId`, sin número, motivo, token ni ruta.
+- Logs reales de `landing-pages`, stdout y stderr: 0 coincidencias del número en sus 3 formas.
+- **Token de topes en `request`:** línea igual en base y PR (mismos campos, ruta y 410). **No es un riesgo.** El token son 16 bytes aleatorios, sin relación con el número. Solo existe en la memoria de `api`, y `landing-pages` (modo `panel`) no puede conocer uno válido ni tiene formulario que lo envíe. Fuera del alcance: las líneas `request` de `api` e `inventory-manager` sí llevan tokens reales. Son de un solo uso, del día y exigen sesión de administrador, y es igual desde el PR 1.
+
+### Performance
+
+- `GET /admin/bot`: 2 peticiones, documento y CSS, sin JavaScript.
+- `build:css` no cambió el CSS del admin: las clases ya existían.
+- Duración con los workers por defecto, suite completa: `solo-lectura` 7,1 s; `-procesos` 7,1 s; `-rechazos` 4,1 s; `-estados` 2,9 s; `admin-bot-moved` 6,9 s. S-1 sin partir llegó a 18,4 s en la suite (6,5 s sola), así que se partió en 3 archivos, sin cambiar sus casos.
+
+### Mutaciones
+
+En un árbol temporal, sobre S-1 antes de partirla. El árbol de trabajo no se tocó.
+
+| Mutación | Pruebas que fallan |
+| --- | --- |
+| `moved` no pasa por `access.post` (sin cuerpo ni CSRF) | 2: QA3-05, QA3-06 |
+| El 410 deja escribir el alta | 4: QA3-03, QA3-04, QA3-09, QA3-10 |
+| `moved` sin permiso | 1: QA3-05 |
+
+### Pendientes de revisión manual
+
+- Ninguno bloquea un criterio.
+- **Desviación:** la pasada de navegador se hizo solo con Chrome headless real. La extensión no se usó, porque habría que escribir una contraseña en un navegador por orden de un agente; headless además fija 375 px exactos.
+- **Desviación:** M-1, G-1 y H-1 no quedan en el repositorio (punto 2 del plan). El QA3-55 de "pestaña antigua" dio DEF-006, y el 410 en navegador se forzó con un formulario antiguo en una sesión viva.
+
+### Comprobaciones para producción
+
+- Desplegar la épica y hacer las comprobaciones 4 y 5 de `despliegue.md` §8.
+- DT-3: comparar la lista negra con los 4 últimos dígitos del personal.
+- Dar el aviso al personal (tarea del usuario), ya corregido por DEF-006.
+- CI del PR 3 (duraciones reales).
+- Decidir DEF-001 a DEF-004.
+
+### Sin ejecutar
+
+`revert`, `sudo env … up` real, §8 en producción, nada contra el VPS, Meta ni WhatsApp real. `compose up` solo en `--dry-run`. Las bases `restaurante_test_4d1754_9_2` y `restaurante_test_8abebf_2_x78284_1` no se tocaron.
+
+### Limpieza
+
+Sin procesos de servidor, Chrome ni Vitest. Solo el árbol principal en `git worktree list`. Bases de pruebas iguales que al empezar. Fuera del PR, solo se añadieron las sondas, `tests/support/admin-bot-qa-req-f-043-solo-lectura.ts` y una línea en `tests/support/bot-procesos-qa-req-f-042.ts`.
+
+### Resultado final
+
+QA_REJECTED
+
+Motivo: el plan aprobado exige que ninguna afirmación nueva de la documentación sea falsa, y DEF-005 y DEF-006 lo incumplen. Solo hay que corregir documentación (DEF-007, opcional en la misma pasada). Revalidación: solo esos textos; no hace falta repetir la suite, las sondas ni las mediciones si no cambia código.
+
+### Ronda 2 (PR 3): DEF-005 a DEF-007
+
+Correcciones aprobadas por el usuario (cita textual: "si apruebo las correciones"). Revalidación selectiva: solo cambiaron textos y comentarios.
+
+| Comprobación | Resultado |
+| --- | --- |
+| DEF-005, §6 | Corregido. Se sigue de arriba abajo: `inventory-manager` (paso 3), app (4), `api` (5). Los 3 comandos y `CE` no cambian frente a la ronda 1 |
+| `docker compose config`, archivos falsos, sin `sudo` | `config` completo idéntico byte a byte entre `HEAD` y el árbol (371 líneas). Con `sudo env` sustituido por `env`, `inventory-manager` y app toman el digest indicado; `DATABASE_ALLOW_NEWER_SCHEMA=true` llega a la app |
+| DEF-006, aviso al personal | Corregido. Reproducido: 303 a `/admin/login?next=%2Fadmin%2Fbot&expirada=1`, "Tu sesión caducó. Vuelve a entrar. No se guardó ningún cambio", tras entrar 303 a `/admin/bot`, 200, 0 formularios en `<main>`, con el enlace |
+| DEF-007 | Corregido. `.env.example`, `compose.prod.yaml:119` y `env.ts:56` incluyen el bot |
+| Solo comentarios | 0 líneas cambiadas que no sean comentario en `env.ts`, `compose.prod.yaml` y `.env.example` |
+| §8, variables | `WHATSAPP_BOT_STAFF_MOLOTES` y `_BIRRIA` son las de `STAFF_RULES`, con patrón de teléfono |
+| Código 4 y `DEPLOY_FILES` | Cierto: `deploy.sh:35` incluye `compose.prod.yaml`, `:95` compara la suma y da `fail 4`. `compose.prod.yaml` y `deploy.sh` difieren entre `origin/main` y `origin/epic/arquitectura`, así que la épica ya lo exigía. `despliegue.md` documenta el paso |
+| `typecheck`, `lint` | 0 y 0 |
+| Pruebas afectadas (las 11 que usan `ADMIN_NEW_URL`, `adminNewUrl` o `loadConfig`) | 11 archivos, 154 pruebas pasan, 15 s |
+
+**RF-14: PASS.** CA-1 a CA-22 no cambian. La línea de "Bases" de la ronda 1 queda sustituida por lo siguiente.
+
+**Sin repetir, y por qué:** la suite completa, S-1 y S-2, G-1, M-1, las mutaciones y el navegador. No cambió ningún código ejecutable: `env.ts` solo en un comentario, y `config` idéntico.
+
+**Bases de pruebas:** `restaurante_test_4d1754_9_2` y `restaurante_test_8abebf_2_x78284_1` ya no existen. Estaban al acabar la ronda 1. Ningún comando de QA hizo `DROP`, y el barrido de `tests/setup/database-global.ts` no las alcanza (solo mira bases con `_prisma_migrations`, y estas estaban vacías, y las de su ejecución). **Corrección:** las borró la sesión principal por orden del usuario (cita textual: "borra las bases de datos vacias"), tras confirmar 0 tablas en cada una. Ahora hay 0 bases `restaurante_test*`.
+
+**Limpieza:** sin servidores ni Vitest, solo el árbol principal, sin `zz-*`, y archivos temporales propios borrados.
+
+### Resultado final (ronda 2)
+
+QA_APPROVED
+
+Con DEF-001 a DEF-004 (`TRIVIAL`) abiertos por decisión del usuario.
+
 ## Historial de cambios
 
 ### Versión 1
@@ -1487,3 +2020,25 @@ PR #131 hacia `epic/arquitectura`, commit `e0364fb` (2026-11-05). Incluye 10 arc
 CI del commit `e0364fb` en verde (ejecución 42034148815): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion`. Duraciones en el CI, sin la preparación de cada archivo: `-lentitud` 5,9 s, `-flujo` 5,2 s, `-privacidad` 5,0 s, `-sinbot` 4,9 s, `-motivo` 4,9 s, `-topes` 4,5 s, `-acceso` 4,4 s, `-navegacion` 4,2 s, `-topes-bloqueado` 3,5 s, `-fallos` 1,4 s; `bot-failures` 3,4 s, `bot-actions` 2,8 s y `bot-access` 1,6 s. Ninguno pasa de 20 s, y no hizo falta partir ninguno. Estado: `READY_FOR_MERGE`.
 
 En el CI del commit de registro `ab84107` (ejecución 42036380511, en verde), el archivo existente `inventory-manager-qa-req-f-039-csrf` llegó a 20,1 s, por encima del límite; en la ejecución anterior fue 19,7 s. No es de este ticket, pero `.claude/rules/testing.md` lo exige: se parte por sus `describe`, sin cambiar los casos, y F-10 y S-10 pasan a `inventory-manager-qa-req-f-039-request-id.test.ts`. Sin cambios en código de producción.
+
+CI final del PR 2 sobre `8db0607` en verde (ejecución 42038289361, `success`). La sonda S-8 quedó fuera del repositorio por duración.
+
+### Implementación del PR 3
+
+`/admin/bot` en solo lectura, documentación y `.claude/CLAUDE.md` §8, rama `feature/REQ-F-043-control-bot-admin-nuevo-3-solo-lectura`, sin commit (2026-11-05). `typecheck`, `lint` y `npm test` en verde. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA Action Plan del PR 3
+
+Implementación del PR 3 aprobada por el usuario (cita textual: "si", en respuesta a "¿Apruebas la implementación del PR 3 para pasarla a QA?"). `senior-qa` escribe el plan del PR 3 (2026-11-05), sin ejecutarlo: sondas S-1 y S-2, mediciones M-1 con el refresco por defecto y comparación G-1 con la base. Estado: `NEEDS_QA_PLAN_APPROVAL`.
+
+### QA del PR 3, ronda 1
+
+Plan aprobado por el usuario (cita textual: "Si", en respuesta a "¿Apruebas el plan de QA del PR 3 con esos 4 puntos?"). QA ejecutado (2026-11-05): CA-16, CA-17, RF-11 y CA-22 en PASS; el código sin defectos. RF-14 falla en parte: DEF-005 y DEF-006 (`MINOR`) y DEF-007 (`TRIVIAL`), todos de documentación. Estado: `QA_REJECTED`.
+
+### Correcciones del PR 3 tras QA
+
+DEF-005, DEF-006 y DEF-007 corregidos, solo textos y comentarios (2026-11-05). Incluye un comentario en `deploy/compose.prod.yaml`, que altera la suma de `deploy/` (reinstalación ya necesaria para la épica). `typecheck`, `lint` y `npm test` en verde. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA del PR 3, ronda 2
+
+Correcciones de DEF-005 a DEF-007 aprobadas por el usuario (cita textual: "si apruebo las correciones"). Revalidación selectiva de textos (2026-11-05): los 3 corregidos, RF-14 en PASS, `typecheck` y `lint` en 0, y 154 pruebas afectadas en verde. Estado: `QA_APPROVED`.

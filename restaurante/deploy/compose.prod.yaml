@@ -116,8 +116,8 @@ services:
       SITE_URL: ${SITE_URL:-}
       # API propia por la red interna db (REQ-F-038): las landings leen de ella los productos.
       API_INTERNAL_URL: http://api:3001
-      # Admin nuevo (REQ-F-039): con ADMIN_NEW_URL, la edición de productos de /admin queda en solo
-      # lectura y enlaza ahí. El aviso interno de la API llega al puerto 3002 (red db; Traefik solo
+      # Admin nuevo (REQ-F-039): con ADMIN_NEW_URL, los productos, los usuarios, "Mi cuenta" y el control
+      # del bot de /admin quedan en solo lectura y enlazan ahí. El aviso interno de la API llega al puerto 3002 (red db; Traefik solo
       # enruta el 3000) con la credencial compartida.
       ADMIN_NEW_URL: https://${RESTAURANTE_ADMIN_DOMAIN:?Falta RESTAURANTE_ADMIN_DOMAIN en .env}
       INTERNAL_PORT: "3002"

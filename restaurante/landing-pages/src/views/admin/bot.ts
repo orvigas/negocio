@@ -12,7 +12,7 @@ import { ADMIN_CLASSES, BOT_ADMIN_PATH, adminAttrs, adminFieldError, adminInvali
  */
 
 /** Aviso que sustituye a la lista "Números que alcanzaron un tope hoy" (REQ-F-042, RF-8 y D-2). */
-export const REACHED_MOVED_MESSAGE = 'La lista de números que alcanzaron un tope hoy vuelve con el control del bot en el admin nuevo.';
+export const REACHED_MOVED_MESSAGE = 'La lista de números que alcanzaron un tope hoy está en el admin nuevo.';
 
 export const BOT_PATH = BOT_ADMIN_PATH;
 export const BOT_SWITCH_PATH = `${BOT_PATH}/interruptor`;
@@ -62,14 +62,31 @@ export interface BotPageOptions extends AdminPageContext {
   /** Formulario de alta con errores: duración y motivo se conservan; el teléfono, nunca. */
   form?: { duration: string; reason: string; errors: BotFormErrors } | undefined;
   switchError?: string | undefined;
+  /** Con `ADMIN_NEW_URL` (REQ-F-043, RF-10): la página queda en solo lectura, con enlace a esta URL. */
+  movedTo?: string | undefined;
 }
 
 const usd = (micros: number): string => (micros / 1_000_000).toFixed(2);
 
 const fieldIdOf = (name: string): string => `b-${name}`;
 
+/**
+ * Aviso del modo de solo lectura (REQ-F-043, RF-10 y D-2): el bot se controla en el admin nuevo
+ * (`ADMIN_NEW_URL`). Texto, no solo color, y un enlace con nombre.
+ */
+function renderBotMovedNotice(renderer: Renderer, movedTo: string): SafeHtml {
+  return renderAdminNotice(renderer, {
+    tone: 'warning',
+    role: 'status',
+    title: 'El bot ahora se controla en el admin nuevo.',
+    paragraphs: ['Aquí solo puedes consultarlo: la pausa y los bloqueos se hacen en el admin nuevo.'],
+    extra: renderer.render('admin/partials/bot-moved-link', { href: `${movedTo}/bot` }),
+  });
+}
+
 function renderNotices(renderer: Renderer, options: BotPageOptions): SafeHtml {
   const notices: SafeHtml[] = [];
+  if (options.movedTo) notices.push(renderBotMovedNotice(renderer, options.movedTo));
   if (options.success) notices.push(renderAdminNotice(renderer, { tone: 'success', role: 'status', title: options.success }));
   if (options.problem) notices.push(renderAdminNotice(renderer, { tone: 'error', role: 'alert', title: options.problem }));
   const errors = Object.entries(options.form?.errors ?? {}).filter((entry): entry is [string, string] => typeof entry[1] === 'string');
@@ -188,7 +205,7 @@ function renderAddForm(renderer: Renderer, options: BotPageOptions): SafeHtml {
 
 /** Página "Bot" (RF-6). */
 export function renderBotPage(renderer: Renderer, options: BotPageOptions): SafeHtml {
-  const { snapshot, timezone, csrfToken } = options;
+  const { snapshot, timezone, csrfToken, movedTo } = options;
   const date = (value: Date): string => formatDisplayDate(value.toISOString(), timezone);
   const paused = snapshot.control.paused;
   const pausedDetail = snapshot.control.changedAt
@@ -206,13 +223,13 @@ export function renderBotPage(renderer: Renderer, options: BotPageOptions): Safe
     })),
   );
 
-  // REQ-F-042 (D-2): la lista vivía en la memoria del proceso del bot, que ahora es la api. Vuelve
-  // con el control del bot en el admin nuevo (ticket 4).
+  // REQ-F-042 (D-2): la lista vivía en la memoria del proceso del bot, que ahora es la api. Se ve en
+  // el admin nuevo (REQ-F-043).
   const reached = renderAdminNotice(renderer, {
     tone: 'warning',
     role: 'status',
     title: REACHED_MOVED_MESSAGE,
-    paragraphs: ['Mientras tanto, puedes bloquear un número con el formulario "Bloquear un número".'],
+    paragraphs: movedTo ? [] : ['Mientras tanto, puedes bloquear un número con el formulario "Bloquear un número".'],
   });
 
   const blocks =
@@ -221,9 +238,9 @@ export function renderBotPage(renderer: Renderer, options: BotPageOptions): Safe
       : renderTable(
           renderer,
           'Números bloqueados',
-          ['Número', 'Origen', 'Motivo', 'Autor', 'Desde', 'Hasta', 'Acción'],
+          ['Número', 'Origen', 'Motivo', 'Autor', 'Desde', 'Hasta', ...(movedTo ? [] : ['Acción'])],
           renderer.renderEach(
-            'admin/partials/bot-block-row',
+            movedTo ? 'admin/partials/bot-block-row-readonly' : 'admin/partials/bot-block-row',
             snapshot.blocks.map((block) => {
               const masked = `*********${block.last4}`;
               return {
@@ -254,21 +271,25 @@ export function renderBotPage(renderer: Renderer, options: BotPageOptions): Safe
         : 'Desactivado: sin configuración (el webhook responde 503). La lista negra y el interruptor quedan guardados para cuando se active.',
       pausedLabel: paused ? 'Bot pausado' : 'Bot activo',
       pausedDetail,
-      switchAction: BOT_SWITCH_PATH,
-      switchValue: paused ? 'reanudar' : 'pausar',
-      switchLabel: paused ? 'Reanudar bot' : 'Pausar bot',
-      switchButtonClass: paused ? `admin-button--primary ${ADMIN_CLASSES.primaryButton}` : `admin-button--secondary ${ADMIN_CLASSES.secondaryButton}`,
-      switchReasonAttrs: adminAttrs(renderer, adminInvalidAttrs('b-motivo-interruptor', options.switchError)),
-      switchReasonError: adminFieldError(renderer, 'b-motivo-interruptor', options.switchError),
-      inputClass: ADMIN_CLASSES.input,
-      csrfToken,
+      switchForm: movedTo
+        ? renderer.join([])
+        : renderer.render('admin/partials/bot-switch-form', {
+            switchAction: BOT_SWITCH_PATH,
+            switchValue: paused ? 'reanudar' : 'pausar',
+            switchLabel: paused ? 'Reanudar bot' : 'Pausar bot',
+            switchButtonClass: paused ? `admin-button--primary ${ADMIN_CLASSES.primaryButton}` : `admin-button--secondary ${ADMIN_CLASSES.secondaryButton}`,
+            switchReasonAttrs: adminAttrs(renderer, adminInvalidAttrs('b-motivo-interruptor', options.switchError)),
+            switchReasonError: adminFieldError(renderer, 'b-motivo-interruptor', options.switchError),
+            inputClass: ADMIN_CLASSES.input,
+            csrfToken,
+          }),
       dayPeriod: snapshot.usage.day.period,
       monthPeriod: snapshot.usage.month.period,
       timezone,
       usageRows,
       reached,
       blocks,
-      addForm: renderAddForm(renderer, options),
+      addSection: movedTo ? renderer.join([]) : renderer.render('admin/partials/bot-add-section', { addForm: renderAddForm(renderer, options) }),
     }),
   });
 }

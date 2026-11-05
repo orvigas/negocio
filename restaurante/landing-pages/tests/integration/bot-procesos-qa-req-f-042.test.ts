@@ -89,7 +89,7 @@ describe('bot en la api y /admin en landing-pages, procesos reales', () => {
     const outbound = rows.find((row) => row.periodType === 'month')?.outbound ?? 0;
     const page = textOf((await admin.get(BOT_PATH)).text);
     expect(page).toContain(String(outbound));
-    expect(page).toContain('vuelve con el control del bot en el admin nuevo');
+    expect(page).toContain('está en el admin nuevo');
     expect(page).not.toContain('Números que alcanzaron un tope hoy');
   });
 
@@ -98,7 +98,7 @@ describe('bot en la api y /admin en landing-pages, procesos reales', () => {
     const audits = await stack.database.prisma.botAudit.count();
     const res = await stack.adminPost(admin, `${BOT_PATH}/topes/${'a'.repeat(32)}/bloquear`, { duracion: '7d', motivo: '' });
     expect(res.status).toBe(410);
-    expect(textOf(res.text)).toContain('vuelve con el control del bot en el admin nuevo');
+    expect(textOf(res.text)).toContain('está en el admin nuevo');
     expect(await stack.database.prisma.botBlock.count()).toBe(blocks);
     expect(await stack.database.prisma.botAudit.count()).toBe(audits);
   });

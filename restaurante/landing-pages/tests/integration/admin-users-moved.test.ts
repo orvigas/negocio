@@ -10,7 +10,7 @@ import { runNode } from '../support/process.ts';
  * "Como productos (Recomendado)"): con ADMIN_NEW_URL se gestionan en el admin nuevo. La lista se
  * consulta sin controles de escritura, con el aviso y el enlace; las pantallas de formulario y
  * cualquier POST responden 410 con el aviso y el enlace a la pantalla equivalente, sin leer el
- * formulario ni escribir nada. Bot, menú, el primer administrador y la recuperación por consola siguen
+ * formulario ni escribir nada. Menú, el primer administrador y la recuperación por consola siguen
  * igual. Sin la variable, el comportamiento es el de siempre (admin-users.test.ts y
  * admin-account.test.ts).
  */

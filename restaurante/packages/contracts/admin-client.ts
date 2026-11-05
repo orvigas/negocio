@@ -4,6 +4,9 @@ import {
   CSRF_HEADER,
   IDEMPOTENCY_HEADER,
   adminPaths,
+  botBlockResponseSchema,
+  botControlResponseSchema,
+  botStateResponseSchema,
   loginResponseSchema,
   passwordChangeResponseSchema,
   productFieldsResponseSchema,
@@ -16,6 +19,12 @@ import {
   userResponseSchema,
   userWriteResponseSchema,
   type AdminProduct,
+  type BotBlockRequest,
+  type BotBlockResponse,
+  type BotControlState,
+  type BotReachedBlockRequest,
+  type BotState,
+  type BotSwitchRequest,
   type Freshness,
   type LoginRequest,
   type LoginResponse,
@@ -101,6 +110,12 @@ export interface AdminApiClient {
   resetUserPassword(auth: AdminCredentials, id: number, input: UserPasswordRequest): Promise<AdminApiResult<UserWriteResponse>>;
   /** Cambia la propia contraseña; devuelve la sesión nueva (la de `auth` deja de valer). */
   changeOwnPassword(auth: AdminCredentials, input: PasswordChangeRequest): Promise<AdminApiResult<PasswordChangeResponse>>;
+  // Control del bot (solo administradores; REQ-F-043).
+  getBot(auth: AdminCredentials): Promise<AdminApiResult<{ bot: BotState }>>;
+  setBotPaused(auth: AdminCredentials, input: BotSwitchRequest): Promise<AdminApiResult<{ control: BotControlState }>>;
+  blockNumber(auth: AdminCredentials, input: BotBlockRequest): Promise<AdminApiResult<BotBlockResponse>>;
+  unblockNumber(auth: AdminCredentials, id: number): Promise<AdminApiResult<BotBlockResponse>>;
+  blockReached(auth: AdminCredentials, token: string, input: BotReachedBlockRequest): Promise<AdminApiResult<BotBlockResponse>>;
 }
 
 interface Schema<T> {
@@ -189,5 +204,10 @@ export function createAdminApiClient({ baseUrl, timeoutMs, fetch: fetchFn = (inp
       request('POST', adminPaths.userStatus(id, active ? 'reactivar' : 'desactivar'), { auth, body: {}, schema: userWriteResponseSchema }),
     resetUserPassword: (auth, id, input) => request('PUT', adminPaths.userPassword(id), { auth, body: input, schema: userWriteResponseSchema }),
     changeOwnPassword: (auth, input) => request('POST', adminPaths.accountPassword, { auth, body: input, schema: passwordChangeResponseSchema }),
+    getBot: (auth) => request('GET', adminPaths.bot, { auth, schema: botStateResponseSchema }),
+    setBotPaused: (auth, input) => request('PUT', adminPaths.botSwitch, { auth, body: input, schema: botControlResponseSchema }),
+    blockNumber: (auth, input) => request('POST', adminPaths.botBlocks, { auth, body: input, schema: botBlockResponseSchema, expect: 201 }),
+    unblockNumber: (auth, id) => request('POST', adminPaths.botUnblock(id), { auth, body: {}, schema: botBlockResponseSchema }),
+    blockReached: (auth, token, input) => request('POST', adminPaths.botBlockReached(token), { auth, body: input, schema: botBlockResponseSchema, expect: 201 }),
   });
 }

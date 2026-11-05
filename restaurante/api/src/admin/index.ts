@@ -1,4 +1,5 @@
 import type { Freshness } from '@restaurante/contracts';
+import type { BotControl, BotProvider } from '@restaurante/core/bot-control';
 import type { ProductRepository, ProductView } from '@restaurante/core/catalog';
 import {
   createLoginThrottle,
@@ -12,6 +13,7 @@ import { silentLogger, type Logger } from '@restaurante/core/shared';
 import type { LandingNotifier } from '../notifier.ts';
 import { createAccountRoutes, type AccountRoutes } from './account-routes.ts';
 import { createAdminAccess } from './access.ts';
+import { createBotRoutes, type BotRoutes } from './bot-routes.ts';
 import { createIdempotencyStore } from './idempotency.ts';
 import { createProductRoutes, type ProductRoutes } from './product-routes.ts';
 import { createSessionRoutes, type SessionRoutes } from './session-routes.ts';
@@ -22,11 +24,14 @@ import { createUserRoutes, type UserRoutes } from './user-routes.ts';
  * (una sola instancia, como el /admin actual, pero con su propio almacén: "Sesión aparte en cada
  * admin"), autenticador de core, repositorio de productos de core y aviso interno. Desde REQ-F-040,
  * también los usuarios (solo administradores) y la cuenta propia, con el repositorio de usuarios.
+ * Desde REQ-F-043, el control del bot (solo administradores), con la misma instancia que usa el bot.
  */
 export function createAdminRoutes({
   users,
   products,
   notifier,
+  botControl,
+  botProvider,
   timeZone,
   hashParams,
   now = () => new Date(),
@@ -35,12 +40,16 @@ export function createAdminRoutes({
   users: UserRepository;
   products: ProductRepository;
   notifier: LandingNotifier;
+  /** La misma instancia que usa el bot: un cambio le llega sin esperar el refresco. */
+  botControl: BotControl;
+  /** Proveedor del bot en marcha; null: desactivado. */
+  botProvider: BotProvider | null;
   timeZone: string;
   /** Costo de scrypt del hash ficticio y de las contraseñas nuevas (las pruebas lo bajan). */
   hashParams?: PasswordHashParams;
   now?: () => Date;
   logger?: Logger;
-}): { session: SessionRoutes; products: ProductRoutes; users: UserRoutes; account: AccountRoutes } {
+}): { session: SessionRoutes; products: ProductRoutes; users: UserRoutes; account: AccountRoutes; bot: BotRoutes } {
   const sessions = createSessionStore({ now });
   const access = createAdminAccess({ sessions, users, logger });
   return {
@@ -63,5 +72,6 @@ export function createAdminRoutes({
     }),
     users: createUserRoutes({ access, sessions, users, timeZone, ...(hashParams ? { hashParams } : {}), logger }),
     account: createAccountRoutes({ access, sessions, users, ...(hashParams ? { hashParams } : {}), logger }),
+    bot: createBotRoutes({ access, botControl, botProvider, timeZone, logger }),
   };
 }

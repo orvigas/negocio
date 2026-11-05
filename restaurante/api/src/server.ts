@@ -92,7 +92,15 @@ const stopControlTimers = startBotControlTimers({ botControl, refreshMs: config.
 const bot = createBotFromConfig({ config: config.whatsappBot, limits: config.botLimits, timeZone: config.timezone, products, botControl, logger });
 const stopCatalogReload = startCatalogReload({ products });
 
-const admin = createAdminRoutes({ users: createUserRepository({ prisma }), products, notifier, timeZone: config.timezone, logger });
+const admin = createAdminRoutes({
+  users: createUserRepository({ prisma }),
+  products,
+  notifier,
+  botControl,
+  botProvider: bot?.chatBot.provider ?? null,
+  timeZone: config.timezone,
+  logger,
+});
 const app = createApiApp({ store, admin, logger });
 const server = app.listen(config.port, config.host);
 try {

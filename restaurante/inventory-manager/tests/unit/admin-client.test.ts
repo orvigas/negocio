@@ -66,3 +66,57 @@ describe('createAdminApiClient', () => {
     expect(() => createAdminApiClient({ baseUrl: 'http://api', timeoutMs: 0 })).toThrow(TypeError);
   });
 });
+
+describe('control del bot (REQ-F-043)', () => {
+  const BOT = {
+    status: { enabled: true, provider: 'meta' },
+    control: { paused: false, changedAt: null, changedByName: null, reason: null },
+    usage: { day: '2026-11-04', month: '2026-11', timeZone: 'America/Mexico_City', counters: [{ id: 'budget', used: 0, limit: 20_000_000, reached: false }] },
+    reached: [{ token: 'a'.repeat(32), masked: '*********5678', cap: 'burst', at: '2026-11-04T12:00:00-06:00' }],
+    blocks: [{ id: null, pending: true, masked: '*********5678', origin: 'tope', reason: null, author: null, since: '2026-11-04T12:00:00-06:00', until: null }],
+    canBlock: true,
+    previousKeyBlocks: 0,
+    storeHealthy: true,
+  };
+  const AUTH = { sessionId: 's', csrfToken: 'c' };
+  const P = 'http://api:3001/api/v1/admin/bot';
+  const MASKED = { block: { masked: '*********5678' } };
+
+  it('lee el estado sin token CSRF y valida la respuesta', async () => {
+    const { api, calls } = client(() => json(200, { bot: BOT }));
+    expect(await api.getBot(AUTH)).toMatchObject({ ok: true, data: { bot: { canBlock: true } } });
+    expect(calls[0]?.url).toBe(P);
+    expect(header(calls[0]?.init, 'x-csrf-token')).toBeNull();
+  });
+
+  it('una respuesta que no cumple el contrato es `invalid_response`', async () => {
+    const { api } = client(() => json(200, { bot: { ...BOT, canBlock: 'si' } }));
+    expect(await api.getBot(AUTH)).toMatchObject({ ok: false, kind: 'invalid_response' });
+  });
+
+  it('las escrituras usan su método, su ruta y el token CSRF; el teléfono viaja solo en el cuerpo', async () => {
+    const replies: [number, unknown][] = [[200, { control: BOT.control }], [201, MASKED], [200, MASKED], [201, MASKED]];
+    const { api, calls } = client(() => {
+      const [status, body] = replies.shift() as [number, unknown];
+      return json(status, body);
+    });
+    expect((await api.setBotPaused(AUTH, { paused: true })).ok).toBe(true);
+    expect((await api.blockNumber(AUTH, { phone: '5215512345678', duration: '7d' })).ok).toBe(true);
+    expect((await api.unblockNumber(AUTH, 7)).ok).toBe(true);
+    expect((await api.blockReached(AUTH, 'a b', { duration: '7d' })).ok).toBe(true);
+    expect(calls.map(({ url, init }) => `${init.method} ${url}`)).toEqual([
+      `PUT ${P}/interruptor`,
+      `POST ${P}/bloqueos`,
+      `POST ${P}/bloqueos/7/quitar`,
+      `POST ${P}/topes/a%20b/bloquear`,
+    ]);
+    for (const call of calls) expect(header(call.init, 'x-csrf-token')).toBe('c');
+    expect(calls.map(({ url }) => url).join()).not.toContain('5215512345678');
+    expect(calls[1]?.init.body).toContain('5215512345678');
+  });
+
+  it('un error de dominio llega con su código', async () => {
+    const { api } = client(() => json(409, { error: { code: 'BOT_NUMBER_ALREADY_BLOCKED', message: 'Ya está.' } }));
+    expect(await api.blockNumber(AUTH, { phone: 'x', duration: '7d' })).toMatchObject({ ok: false, kind: 'http', status: 409, error: { code: 'BOT_NUMBER_ALREADY_BLOCKED' } });
+  });
+});

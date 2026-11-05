@@ -72,6 +72,8 @@ export function createBotProtection({ control, limits, timeZone, logger }: BotPr
         }
         return 'drop';
       }
+      // Quitar un bloqueo devuelve la atención aunque hoy tuviera el tope o un enfriamiento (DT-1).
+      if (control.takeReleased(canonical)) guard.release(canonical);
       if (guard.cooling(canonical, now)) return 'drop';
       const rate = guard.rate(canonical, now);
       if (rate !== 'ok') {

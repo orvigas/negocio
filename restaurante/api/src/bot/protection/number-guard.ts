@@ -137,6 +137,17 @@ export function createNumberGuard({ limits, timeZone, keyOf, maxTracked = 1000 }
       return true;
     },
 
+    /**
+     * Olvida el estado del número porque se le quitó un bloqueo (DT-1 de REQ-F-043): el día
+     * (mensajes, pedidos, enfriamientos y aviso diario), los textos repetidos y el enfriamiento en
+     * curso. Los limitadores de ráfaga y por minuto no cambian: caducan solos en segundos.
+     */
+    release(canonical: string): void {
+      const key = keyOf(canonical);
+      days.delete(key);
+      repeats.delete(key);
+    },
+
     /** Solo lectura (pruebas): números con estado. */
     get trackedCount(): number {
       return days.size;

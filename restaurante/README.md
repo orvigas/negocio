@@ -908,8 +908,8 @@ colas, límite por número y logs) existe una sola vez en el orquestador
 el webhook solo usan `ChatBot`. Cambiar de proveedor es cambiar las variables y reiniciar; al
 arrancar queda `bot_provider_selected` con el proveedor en el log.
 
-- **Negocio:** el del día en `BUSINESS_TIMEZONE`, con la misma regla que las landings (L-V
-  Moloteando, S-D Birria El Muñeco). Se fija con el primer mensaje y se mantiene hasta que el
+- **Negocio:** el del día en `BUSINESS_TIMEZONE`: L-V Moloteando, S-D Birria El Muñeco (el lunes
+  elige Moloteando aunque ese día no abre). Se fija con el primer mensaje y se mantiene hasta que el
   pedido se confirma o se cancela, o tras 2 h sin actividad. Si el cliente pide el otro negocio
   (p. ej. llega desde `/birria` un martes), el bot le indica sus días y atiende con el del día.
 - **Conversación (REQ-F-013):** solo texto. El cliente escribe su pedido como lo diría ("2

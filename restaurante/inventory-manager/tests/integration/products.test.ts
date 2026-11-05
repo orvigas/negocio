@@ -70,6 +70,15 @@ describe('alta (RF-7, CA-6)', () => {
     expect(h.api.products.filter((candidate) => candidate.name === 'Agua de Jamaica')).toHaveLength(1);
   });
 
+  it('una requestId forjada no llega a la API: el servidor la sustituye y el alta se hace una vez', async () => {
+    const { h, browser } = await loggedIn();
+    const fields = formFields(await (await browser.get('/molotes/productos/nuevo?categoria=bebida')).text(), '#product-form');
+    const res = await browser.post('/molotes/productos', { ...fields, requestId: 'corta', name: 'Agua de Tamarindo', action: 'create' });
+    expect(res.status).toBe(303);
+    expect(lastWrite(h)?.headers['idempotency-key']).toMatch(/^[A-Za-z0-9_-]{24}$/);
+    expect(h.api.products.filter((candidate) => candidate.name === 'Agua de Tamarindo')).toHaveLength(1);
+  });
+
   it('422: se vuelve a pintar con lo escrito, el error junto a su campo y un resumen con enlaces (CA-14)', async () => {
     const { browser } = await loggedIn();
     const fields = formFields(await (await browser.get('/molotes/productos/nuevo?categoria=platillo')).text(), '#product-form');

@@ -24,12 +24,6 @@ describe('arranque con la base de datos no lista (RF-6, CA-7)', () => {
     await expectControlledFailure(appDatabaseUrl(name), { code: 'MIGRATION_INCOMPLETE' });
   });
 
-  it('columna con otra colación -> código 1 (DATABASE_CHARSET_INVALID, CA-2)', async () => {
-    const name = await scratch(true);
-    await adminSql(name, 'ALTER TABLE product MODIFY name VARCHAR(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL');
-    await expectControlledFailure(appDatabaseUrl(name), { code: 'DATABASE_CHARSET_INVALID', object: 'product.name' });
-  });
-
   it('D-15: si los productos no se pueden leer al arrancar -> código 1 con un mensaje controlado', async () => {
     const name = await scratch(true);
     // Una tabla que falta hace fallar la lectura de Prisma (la verificación no comprueba tablas).

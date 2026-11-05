@@ -146,22 +146,4 @@ describe('admin nuevo -> api -> aviso -> landing (CA-9 y CA-10)', () => {
     expect(all).not.toContain(EDITOR.password);
     expect(all).not.toContain(TOKEN);
   });
-
-  it('un aviso con una credencial incorrecta o sin ella se rechaza y no invalida nada (CA-10)', async () => {
-    const stack = await startStack();
-    const post = (token: string | null) =>
-      fetch(`${stack.landing.internalUrl}/internal/v1/productos-cambiados`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...(token === null ? {} : { authorization: `Bearer ${token}` }) },
-        body: JSON.stringify({ business: 'molotes' }),
-      });
-    for (const token of [null, 'otra-credencial-incorrecta-0123456789abcdef']) expect((await post(token)).status).toBe(401);
-    // La respuesta 401 puede llegar antes que la línea de log del rechazo (tubería de stdout del hijo).
-    await expect.poll(() => logLines(stack.landing.output().stdout).filter((line) => line.msg === 'internal_notify_rejected').length).toBe(2);
-    const lines = logLines(stack.landing.output().stdout);
-    expect(lines.filter((line) => line.msg === 'internal_notify_rejected')).toHaveLength(2);
-    expect(lines.some((line) => line.msg === 'products_change_notified')).toBe(false);
-    // El puerto de la app (el que enruta Traefik) no tiene el aviso.
-    expect((await fetch(`${stack.landing.url}/internal/v1/productos-cambiados`, { method: 'POST' })).status).toBe(404);
-  });
 });

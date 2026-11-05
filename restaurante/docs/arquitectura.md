@@ -152,8 +152,7 @@ packages/core/inventory/
 - **La regla la aplica el lint**, no la memoria: `npm run lint` rechaza un import que la rompa,
   igual que rechaza los imports `./x.js` fuera de `public/js`. Desde el paso 2 (REQ-F-037) hay un
   único `eslint.config.ts` en la raíz, con un bloque de `no-restricted-imports` por paquete (sin
-  plugins adicionales), y la prueba `landing-pages/tests/unit/dependency-rule.test.ts` comprueba
-  cada caso. Además, el `exports` del `package.json` de cada paquete solo publica los `index.ts`
+  plugins adicionales). Además, el `exports` del `package.json` de cada paquete solo publica los `index.ts`
   de los módulos de `core` (y los archivos de `db`), así que `tsc` y Node rechazan también un
   import a un archivo interno. Los módulos de `core` y `packages/db/src` son planos (sin
   subcarpetas): los patrones de "sale del paquete" cuentan con ello.
@@ -403,8 +402,9 @@ Decisiones del usuario: "Dos PR (Recomendado)" y "Como productos (Recomendado)" 
   - con `ADMIN_NEW_URL`, usuarios y "Mi cuenta" del `/admin` actual quedan en solo lectura: la lista
     sin controles; el resto, GET o POST, con 410 y el enlace a la pantalla equivalente;
   - la prueba de extremo a extremo con los tres procesos y MySQL.
-- La concurrencia de D-7 entre los dos admins se prueba con el proceso real de la API y el `/admin`
-  actual sobre la misma base (`landing-pages/tests/integration/users-api-process.test.ts`).
+- La concurrencia de D-7 se prueba con el proceso real de la API sobre MySQL
+  (`landing-pages/tests/integration/users-api-qa-req-f-040-ultimo-admin.test.ts`) y en el repositorio
+  (`last-admin-concurrency.test.ts`).
 - No añade contenedores: la medición de memoria de §10 no cambia.
 
 ### Paso 4, ticket 1 aplicado (REQ-F-039)

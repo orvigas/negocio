@@ -95,8 +95,6 @@ const definedOnly = (env: Record<string, string | undefined>): Record<string, st
 export interface StartOptions {
   /** Argumentos de `node` (por defecto `src/server.ts`; p. ej. los de un script de package.json). */
   args?: string[];
-  /** Elige los puertos de cada intento (por defecto freePorts; una prueba puede forzar una colisión). */
-  pickPorts?: (count: number) => Promise<number[]>;
 }
 
 /** Intentos de arranque ante una colisión de puertos (uno y dos reintentos). */
@@ -132,11 +130,11 @@ export async function startServer(env: Record<string, string | undefined>, timeo
   }
 }
 
-async function startServerOnce(env: Record<string, string | undefined>, timeoutMs: number, { args = ['src/server.ts'], pickPorts = freePorts }: StartOptions) {
+async function startServerOnce(env: Record<string, string | undefined>, timeoutMs: number, { args = ['src/server.ts'] }: StartOptions) {
   // PORT, el puerto interno del aviso de la API (REQ-F-039) y el del webhook de la api (REQ-F-042,
   // WEBHOOK_PORT; landing-pages lo ignora): reservados a la vez, así que son distintos entre sí y de
   // los de otros procesos de la prueba (freePorts devuelve exactamente tres).
-  const [port, internalPort, webhookPort] = (await pickPorts(3)) as [number, number, number];
+  const [port, internalPort, webhookPort] = (await freePorts(3)) as [number, number, number];
   const database = env.DATABASE_URL === undefined && !('DATABASE_URL' in env) ? await makeDatabase() : null;
   const child = spawn(process.execPath, args, {
     cwd: PROJECT_DIR,

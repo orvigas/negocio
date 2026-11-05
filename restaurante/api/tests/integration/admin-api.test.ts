@@ -111,6 +111,31 @@ describe('acceso (RF-1 a RF-4)', () => {
     expect((await login(h.url, 'eli', PASSWORD, nextIp())).status).toBe(201);
   });
 
+  it('la IP del visitante admite IPv6 y espacios; un último valor que no es una IP da 400', async () => {
+    const h = await startAdmin();
+    for (const ip of ['2001:db8::1', '  203.0.113.79  ']) expect((await login(h.url, 'eli', PASSWORD, ip)).status).toBe(201);
+    for (const ip of ['', 'unknown', '203.0.113.80, no-es-ip']) {
+      const res = await login(h.url, 'eli', PASSWORD, ip);
+      expect(res.status, ip).toBe(400);
+      expect((await res.json()).error.code).toBe('CLIENT_IP_REQUIRED');
+    }
+  });
+
+  it('entrar nunca adopta un id recibido: cada acceso da un id nuevo de 256 bits y otro token CSRF', async () => {
+    const h = await startAdmin();
+    const first = await session(h.url, MOLOTES_EDITOR);
+    const res = await fetch(`${h.url}${P}/sesion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': nextIp(), Authorization: `Bearer ${first.id}` },
+      body: JSON.stringify({ username: 'eli', password: PASSWORD }),
+    });
+    expect(res.status).toBe(201);
+    const second = (await res.json()).session as typeof first;
+    expect(second.id).not.toBe(first.id);
+    expect(second.csrfToken).not.toBe(first.csrfToken);
+    for (const id of [first.id, second.id]) expect(id).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  });
+
   it('sesión vigente: usuario y token CSRF; sin sesión o con un id desconocido, 401', async () => {
     const h = await startAdmin();
     const auth = await session(h.url, MOLOTES_EDITOR);
@@ -333,6 +358,10 @@ describe('productos (RF-7 a RF-12)', () => {
     const overwrite = await call(h.url, `${P}/molotes/productos/${created.id}?sobrescribir=1`, eli, { method: 'PUT', body: edit('Molote de Eli', 2) });
     expect(overwrite.status).toBe(200);
     expect((await overwrite.json()).product).toMatchObject({ name: 'Molote de Eli', version: 3, available: true });
+    // Sobrescribir con una versión que ya quedó atrás: 409 y no se guarda nada (RF-9).
+    const late = await call(h.url, `${P}/molotes/productos/${created.id}?sobrescribir=1`, ana, { method: 'PUT', body: edit('Molote tardío', 2) });
+    expect(late.status).toBe(409);
+    expect((await h.store.listBusiness('molotes')).find((product) => product.id === created.id)).toMatchObject({ name: 'Molote de Eli', version: 3 });
   });
 
   it('producto inexistente o con id inválido: 404', async () => {

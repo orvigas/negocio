@@ -24,8 +24,7 @@ const RELATIVE_JS_DYNAMIC_IMPORT = {
 
 // Regla de dependencias entre paquetes (REQ-F-037; restaurante/docs/arquitectura.md §4). Las flechas
 // apuntan hacia core. Supuesto: los módulos de packages/core y packages/db/src son planos (sin
-// subcarpetas); si se añade una, hay que revisar los patrones de "sale del paquete". La prueba está en
-// landing-pages/tests/unit/dependency-rule.test.ts.
+// subcarpetas); si se añade una, hay que revisar los patrones de "sale del paquete".
 const DEPENDENCY_HINT = 'Regla de dependencias de restaurante/docs/arquitectura.md §4 (REQ-F-037).';
 const KOA_PATTERNS = [{ regex: '^(?:koa(?:-.+)?|@koa/.+)$', message: `Koa solo se usa en las apps, nunca en los paquetes. ${DEPENDENCY_HINT}` }];
 const LANDING_PATTERNS = [
@@ -249,8 +248,7 @@ export default defineConfig([
     },
   },
 
-  // Servidores de prueba en 127.0.0.1 (REQ-F-011, RF-7). La prueba de este control está en
-  // landing-pages/tests/unit/http-test-convention.test.ts.
+  // Servidores de prueba en 127.0.0.1 (REQ-F-011, RF-7).
   {
     files: ['landing-pages/tests/**/*.ts'],
     rules: {

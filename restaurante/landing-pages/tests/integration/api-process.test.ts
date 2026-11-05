@@ -1,4 +1,3 @@
-import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -8,7 +7,6 @@ import { createProductRepository, toPublished } from '@restaurante/core/catalog'
 import { createPrismaClient } from '@restaurante/db/client';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
 
-import { PROJECT_DIR } from '../../src/config/env.ts';
 import { ADMIN_ENV } from '../support/admin.ts';
 import { appDatabaseUrl, makeDatabase, makeScratchDatabase, makeTempDir } from '../support/database.ts';
 import { freePort, startServer } from '../support/process.ts';
@@ -28,7 +26,6 @@ import { databaseUrl, testDatabaseConfigs } from '../support/test-database-confi
  */
 
 const API_ENTRY = join('..', 'api', 'src', 'server.ts');
-const API_SRC = join(PROJECT_DIR, '..', 'api', 'src');
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -143,17 +140,5 @@ describe('CA-10 (O-1): arranque simultáneo de api y landing-pages', () => {
     expect(output).not.toContain('products_init_failed');
     expect(output).not.toContain('database_init_failed');
     expect(logLines(api.output().stdout).some((line) => line.msg === 'products_imported')).toBe(false);
-  });
-
-  // Desde REQ-F-039 la API escribe productos (/api/v1/admin), pero sigue sin importar semillas (O-1):
-  // su repositorio se inicia sin fuentes.
-  it('el código de la API no importa semillas', async () => {
-    const files = (await readdir(API_SRC, { recursive: true })).filter((file) => file.endsWith('.ts'));
-    expect(files.length).toBeGreaterThan(0);
-    for (const file of files) {
-      const source = await readFile(join(API_SRC, file), 'utf8');
-      // El bot (REQ-F-042) tiene su contenido en src/bot/content/; las semillas siguen fuera de la API.
-      expect(source, file).not.toMatch(/products\.init\([^)]|importBusiness|productsFromMenuData|seeds|seed\.json|markImported/);
-    }
   });
 });

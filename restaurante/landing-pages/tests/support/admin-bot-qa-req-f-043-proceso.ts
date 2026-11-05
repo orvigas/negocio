@@ -14,9 +14,7 @@ import { API_ENTRY, P, nextIp } from './users-api-process.ts';
 
 /**
  * Sonda S-1 de QA de REQ-F-043: `server.ts` real, con el webhook firmado y las rutas del admin en el
- * mismo proceso, MySQL y el doble de salida. Preparación compartida por
- * admin-bot-qa-req-f-043-{proceso,proceso-reinicio}.test.ts, partidos para no pasar de 20 s en el CI
- * (.claude/rules/testing.md), sin cambiar los casos. El refresco se fija en 300 s: un efecto inmediato
+ * mismo proceso, MySQL y el doble de salida. El refresco se fija en 300 s: un efecto inmediato
  * solo puede venir de la misma instancia de `BotControl`, no de la relectura de la base.
  */
 

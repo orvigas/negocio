@@ -3,6 +3,7 @@ import Router from '@koa/router';
 import type { AccountController } from './controllers/account.ts';
 import type { AdminController } from './controllers/admin.ts';
 import type { BotController } from './controllers/bot.ts';
+import type { PageController } from './controllers/page.ts';
 import type { UsersController } from './controllers/users.ts';
 
 /**
@@ -17,6 +18,10 @@ import type { UsersController } from './controllers/users.ts';
  * GET  /:negocio/productos/:id/editar | POST /:negocio/productos/:id         -> edición
  * GET|POST /:negocio/productos/:id/eliminar    -> confirmar y eliminar
  * POST /:negocio/productos/:id/subir | …/bajar -> orden (con JS, fragmento de la lista)
+ *
+ * Datos de página (REQ-F-044):
+ * GET  /:negocio/pagina | POST /:negocio/pagina -> edición, o el aviso "aún no está activa"
+ * GET|POST /:negocio/pagina/restaurar          -> confirmar y restaurar la versión anterior
  *
  * Usuarios y "Mi cuenta" (REQ-F-040):
  * GET  /usuarios                               -> lista (solo administradores)
@@ -33,7 +38,19 @@ import type { UsersController } from './controllers/users.ts';
  * POST /bot/bloqueos/:id/quitar                -> baja
  * POST /bot/topes/:token/bloquear              -> bloquear desde "alcanzaron un tope hoy"
  */
-export function createRouter({ admin: controller, users, account, bot }: { admin: AdminController; users: UsersController; account: AccountController; bot: BotController }): Router {
+export function createRouter({
+  admin: controller,
+  users,
+  account,
+  bot,
+  page,
+}: {
+  admin: AdminController;
+  users: UsersController;
+  account: AccountController;
+  bot: BotController;
+  page: PageController;
+}): Router {
   const router = new Router();
   router.get('/salud', (ctx) => {
     ctx.type = 'text';
@@ -71,5 +88,9 @@ export function createRouter({ admin: controller, users, account, bot }: { admin
   router.post('/:business/productos/:id/recuperar', controller.restore);
   router.post('/:business/productos/:id/subir', controller.moveUp);
   router.post('/:business/productos/:id/bajar', controller.moveDown);
+  router.get('/:business/pagina', page.edit);
+  router.post('/:business/pagina', page.save);
+  router.get('/:business/pagina/restaurar', page.restorePage);
+  router.post('/:business/pagina/restaurar', page.restore);
   return router;
 }

@@ -82,7 +82,7 @@ function reasonError(raw: unknown): string | null {
   return /\d{8,}/.test(raw.replace(/[\s().+-]/g, '')) ? 'No escribas números de teléfono en el motivo.' : null;
 }
 
-async function failWith(ctx: Context, failure: BotFailure): Promise<void> {
+export async function failWith(ctx: Context, failure: BotFailure): Promise<void> {
   if (failure === 'network') {
     ctx.respond = false;
     ctx.req.socket.destroy();

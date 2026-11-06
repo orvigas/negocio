@@ -5,7 +5,7 @@ import type { InventoryConfig } from '../config.ts';
 import { clearSessionId } from '../session.ts';
 import { BOT_PATH, type BotFormValues, type BotPageView } from '../views/bot.ts';
 import type { Views } from '../views/index.ts';
-import { createControllerKit, type Ctx, type Session } from './common.ts';
+import { createControllerKit, isHttpError, type Ctx, type Session } from './common.ts';
 
 /**
  * Control del bot en el admin nuevo (REQ-F-043), solo para administradores. Cada acción la decide la
@@ -50,9 +50,6 @@ const SUCCESS: Readonly<Record<string, string>> = Object.freeze({
 });
 
 const UNCONFIRMED = 'No pudimos confirmar el cambio. Revisa el estado antes de repetirlo.';
-
-const isHttpError = (result: AdminApiResult<unknown>, status: number, code: string): boolean =>
-  !result.ok && result.kind === 'http' && result.status === status && result.error.code === code;
 
 const apiMessage = (result: AdminApiResult<unknown>): string => (!result.ok && result.kind === 'http' ? result.error.message : UNCONFIRMED);
 

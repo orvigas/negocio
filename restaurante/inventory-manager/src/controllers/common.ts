@@ -23,6 +23,10 @@ export interface Session extends PageContext {
 }
 
 const ID_PATTERN = /^[1-9]\d{0,9}$/;
+const BUSINESSES: readonly PublicBusinessId[] = ['molotes', 'birria'];
+
+export const isHttpError = (result: AdminApiResult<unknown>, status: number, code: string): boolean =>
+  !result.ok && result.kind === 'http' && result.status === status && result.error.code === code;
 
 export function createControllerKit({ config, api, views, logger }: { config: InventoryConfig; api: AdminApiClient; views: Views; logger: Logger }) {
   const { isProduction } = config;
@@ -54,9 +58,9 @@ export function createControllerKit({ config, api, views, logger }: { config: In
     seeOther(ctx, '/acceso?ok=sesion_cerrada');
   }
 
-  function unavailable(ctx: Ctx, reason: string, context?: PageContext, business?: PublicBusinessId): void {
+  function unavailable(ctx: Ctx, reason: string, context?: PageContext, business?: PublicBusinessId, section?: HeaderSection): void {
     logger.warn('api_unavailable', { path: ctx.path, reason });
-    send(ctx, 503, views.message({ title: 'Servicio no disponible', notice: { tone: 'error', title: 'Servicio no disponible.', paragraphs: ['No se pudo conectar con el sistema. Inténtalo de nuevo en unos minutos.'] }, context, business }));
+    send(ctx, 503, views.message({ title: 'Servicio no disponible', notice: { tone: 'error', title: 'Servicio no disponible.', paragraphs: ['No se pudo conectar con el sistema. Inténtalo de nuevo en unos minutos.'] }, context, business, section }));
   }
 
   const failureReason = (result: AdminApiResult<unknown>): string => (result.ok ? 'ok' : result.kind === 'http' ? `http_${result.status}` : result.kind);
@@ -85,6 +89,40 @@ export function createControllerKit({ config, api, views, logger }: { config: In
     }
     unavailable(ctx, failureReason(result));
     return null;
+  }
+
+  /** Sesión de un POST de negocio: si la API no responde, `onUnavailable` recibe el negocio conocido. */
+  function businessSession(ctx: Ctx, returnTo: string, onUnavailable?: (business: PublicBusinessId) => boolean): Promise<Session | null> {
+    const known = BUSINESSES.find((candidate) => candidate === ctx.params.business);
+    return session(ctx, returnTo, onUnavailable && known ? () => onUnavailable(known) : undefined);
+  }
+
+  /** `:negocio` conocido (404) y permitido (403, sin datos; RF-6 y CA-4 de REQ-F-039). */
+  function businessOf(ctx: Ctx, auth: Session): PublicBusinessId | null {
+    const known = BUSINESSES.find((candidate) => candidate === ctx.params.business);
+    if (!known) {
+      notFound(ctx, { context: auth });
+      return null;
+    }
+    if (!auth.user.businesses.includes(known)) {
+      forbidden(ctx, auth, 'No tienes permiso sobre este negocio.');
+      return null;
+    }
+    return known;
+  }
+
+  /**
+   * Entrada común de los POST con sesión y negocio. Con `preserve`, si la API no responde al comprobar
+   * la sesión, se vuelve a pintar lo escrito en vez de perderlo (RF-10 de REQ-F-039).
+   */
+  async function postStart(ctx: Ctx, returnTo: (business: string) => string, limit?: number, preserve?: (business: PublicBusinessId, fields: Map<string, string>) => boolean) {
+    assertSameOrigin(ctx, logger);
+    const fields = await readFormBody(ctx, limit ? { limit } : undefined);
+    const auth = await businessSession(ctx, returnTo(String(ctx.params.business)), (business) => (preserve ? preserve(business, fields) : false));
+    if (!auth) return null;
+    const business = businessOf(ctx, auth);
+    if (!business) return null;
+    return { auth, business, fields };
   }
 
   function forbidden(ctx: Ctx, context: PageContext, message: string): void {
@@ -129,7 +167,7 @@ export function createControllerKit({ config, api, views, logger }: { config: In
 
   const credentials = (auth: Session, fields?: Map<string, string>): AdminCredentials => ({ sessionId: auth.sessionId, csrfToken: fields?.get('_csrf') ?? '' });
 
-  return Object.freeze({ send, seeOther, toLogin, toLoginClosed, unavailable, failureReason, isUnavailable, session, forbidden, adminSession, readClosedForm, fieldErrors, notFound, idOf, credentials });
+  return Object.freeze({ send, seeOther, toLogin, toLoginClosed, unavailable, failureReason, isUnavailable, session, businessOf, postStart, forbidden, adminSession, readClosedForm, fieldErrors, notFound, idOf, credentials });
 }
 
 export type ControllerKit = ReturnType<typeof createControllerKit>;

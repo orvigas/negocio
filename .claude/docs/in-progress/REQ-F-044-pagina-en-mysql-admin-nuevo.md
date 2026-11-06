@@ -2,7 +2,7 @@
 
 ## Estado
 
-PR 1 mergeado ([#134](https://github.com/orvigas/negocio/pull/134), `9dd95b1`) sin CI completo: ver "Incidencia del PR 1". Siguiente: PR 2.
+QA_APPROVED (PR 2, QA corta tras las correcciones). PR 2 abierto hacia `epic/arquitectura`, CI en curso. PR 1 mergeado ([#134](https://github.com/orvigas/negocio/pull/134), `9dd95b1`) sin CI completo y validado después en #135: ver "Incidencia del PR 1".
 
 ## Aprobación
 
@@ -33,6 +33,8 @@ Autorizada por el usuario (2026-11-05, transmitida por la sesión principal) la 
 
 - **D-10 — Aprobación del plan y protección de la semilla:** "si", en respuesta a "¿Apruebas el plan con los puntos 1 a 3, y añadimos esa protección al punto 4?" (2026-11-05, transmitida por la sesión principal). Puntos 1 a 3: importación conjunta; `/admin` sin `ADMIN_NEW_URL` sin aviso de "dañado" y con "restaurar semilla" en "no permitido"; `expectedVersion` obligatoria al restaurar. Protección del punto 4: la importación se niega a usar la semilla si ya hay productos importados en la base (instalación existente) y no publica semilla en silencio en producción; una instalación nueva sigue funcionando (CA-5).
 - **Aceptación sobre D-10 y D-2 — JSON dañado sin `previous` válido:** "Lo apruebo", en respuesta a "¿Apruebas la implementación del PR 1 para pasarla a QA, y aceptas que un JSON dañado sin `previous` válido detenga el despliegue?" (2026-11-05, transmitida por la sesión principal). Decisión del usuario que resuelve el conflicto con D-2: en una instalación existente, `current` dañado sin `previous` válido detiene el despliegue (CA-20). `current` dañado con `previous` válido sigue sin detener nada.
+- **D-11 — Implementación del PR 2 y aviso sin enlace:** "si", en respuesta a "¿Apruebas la implementación para pasarla a QA, con el aviso sin enlace?" (2026-11-05, transmitida por la sesión principal). El aviso de la puerta cerrada de "Página" no enlaza al `/admin` actual. El plan técnico pedía enlace, pero `inventory-manager` no conoce `RESTAURANTE_DOMAIN` y no se añaden variables. CA-18 y RF-4 no lo exigen.
+- **D-12 — QA del PR 2 reducido a lógica y choque entre RF-9 y CA-18:** "Plan reducido a lógica (Recomendado)", descrita como "Edición, conflicto, restauración, permisos, fallos y accesibilidad con MySQL real. Sin mutaciones ni diferenciales. Acepta perder lo escrito si se cierra la puerta en una vuelta atrás." (2026-11-05, transmitida por la sesión principal). Resuelve el choque: si la puerta se cierra con un formulario abierto, prevalece CA-18 y lo escrito puede perderse.
 
 Estas decisiones son propias de este ticket: no confundirlas con las D-x de otros tickets.
 
@@ -933,6 +935,30 @@ DEF-002 atendido solo con pruebas (recomendaciones 1 a 3 de QA); las mutaciones 
 
 PR 134 hacia `epic/arquitectura`, commit `2e59769`. CI en curso.
 
+### Implementación del PR 2 (2026-11-05)
+
+Pantalla "Página" en `inventory-manager`, rama `feature/REQ-F-044-pagina-en-mysql-2-pantalla`, desde `72658e2`. Se registra el CI de #135. Desviación: el aviso va sin enlace (ver `## Implementation Result del PR 2`). Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA Action Plan del PR 2 (2026-11-05)
+
+Se registra D-11 y se escribe `## QA Action Plan del PR 2`, sin ejecutar pruebas. Estado: `NEEDS_QA_PLAN_APPROVAL`.
+
+### QA del PR 2 reducido (2026-11-05)
+
+Se registra D-12 y se recorta el plan a la lógica. Se ejecuta la validación.
+
+### Correcciones del PR 2 tras QA sin veredicto (2026-11-05)
+
+Decisión del usuario: "Corrige..." y "retomalo". Se integra `epic/arquitectura` en la rama, se corrigen los 3 defectos y se reducen las pruebas de 98 a 66. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA corta del PR 2 (2026-11-05)
+
+Aprobación del usuario: "si", a "¿Apruebas la implementación y esa QA corta?". Defectos 1 a 3 corregidos en cadena real, navegador, R-3, H-P10, C-09 y suite completa. Resultado: `QA_APPROVED`, ver "QA Report del PR 2".
+
+### PR 2 abierto (2026-11-05)
+
+Tras `QA_APPROVED`, se corrige en `Implementation Result` lo dicho sobre el foco de los campos, sin cambios de código. PR 2 abierto hacia `epic/arquitectura`, CI en curso.
+
 ## Incidencia del PR 1
 
 El 2026-11-05, #134 se mergeó en `epic/arquitectura` sin que corrieran `calidad`, `docker`, `auditoria` ni `pruebas`. `git push && gh pr ready 134` se lanzaron seguidos, por una indicación errónea de la sesión principal: la ejecución 42122448914 (`ready_for_review`) se canceló y la 42122453025 (`fe7eeb6`) omitió las validaciones. GitHub permitió el merge con esas comprobaciones omitidas. Sin efecto en producción: un merge a la épica no despliega y `PAGE_CUTOVER` sigue en `false`.
@@ -940,3 +966,380 @@ El 2026-11-05, #134 se mergeó en `epic/arquitectura` sin que corrieran `calidad
 Validación local previa al merge: `typecheck`, `lint` y `build:css` en 0, y 2.908 pruebas (`api` 1.122, `landing-pages` 1.599 con 1 fallo esperado, `inventory-manager` 187). Las mutaciones 20, 21, 22 y 28 de QA se detectan. QA no revisó las 3 pruebas añadidas tras su aprobación (DEF-002).
 
 Decisión del usuario: "1 si, 2 si", a lanzar un PR para validar el árbol en CI y a añadir la regla a `.claude/rules/git.md`. El resultado del CI de ese PR se registra en el PR 2.
+
+**Resultado del CI de validación:** #135, ejecución 42123270135 sobre `e7bde63`, en verde. El árbol del PR 1 queda validado en CI.
+
+## Implementation Result del PR 2
+
+### Rama
+
+`feature/REQ-F-044-pagina-en-mysql-2-pantalla`, desde `epic/arquitectura` (`72658e2`) y avanzada a `c6b33d2` (#136, #137 y #138) por avance rápido, sin archivos en común ni conflictos.
+
+### Cambios realizados
+
+- `inventory-manager`: rutas `GET|POST /:negocio/pagina` y `GET|POST /:negocio/pagina/restaurar`, controlador `src/controllers/page.ts`, vistas `src/views/page.ts` y sus plantillas.
+- Navegación: secciones "Productos" y "Página" en la cabecera del negocio (`partials/business-nav.html`, `HeaderSection` con `page`). Es el único cambio en las pantallas existentes.
+- `controllers/common.ts`: `businessOf`, `postStart` e `isHttpError` pasan al kit compartido, sin cambio de comportamiento en productos ni en bot. `views/index.ts`: `errorSummary` se extrae de `productForm`.
+- `session.ts`: la vuelta tras el acceso admite `/:negocio/pagina` y `/restaurar`. Lo destapó una prueba: sin esto, entrar de nuevo llevaba al inicio.
+- Sin dependencias, variables ni cambios en `deploy/`, `api`, `core`, `db` ni `contracts`. `PAGE_CUTOVER` sigue en `false`.
+
+### Criterios de aceptación
+
+| Criterio | Estado | Evidencia |
+| --- | --- | --- |
+| CA-18, RF-4 | Cumplido | `page-unavailable.test.ts`. GET 200 y POST 409, `role="status"`, sin formulario ni acciones, nada escrito. Contra la API real con filas y `PAGE_CUTOVER` en `false`: mismos códigos y `pageStore` sin cambios. Una avería real sigue dando 503 común. Sin enlace: ver desviación |
+| CA-9 | Cumplido contra el doble y la API real | `page-conflict.test.ts`: quién y cuándo, lo escrito intacto, "Guardar mis cambios de todos modos" y "Descartar". La sobrescritura envía `overwrite: true` |
+| CA-11 | Cumplido | `page-edit.test.ts`: resumen enlazado, texto y `aria-invalid` por campo, nada escrito |
+| CA-12 | Cumplido | Confirmación, `expectedVersion`, intercambio y deshacer, sin anterior 409. El doble envío da 409 y no deshace |
+| CA-14 | Cumplido en Chrome real | 375 px y 1280 px sin desplazamiento horizontal, teclado y JavaScript desactivado: edición, conflicto, sobrescritura, errores y restauración. Foco sólido de 2 px en enlaces y botones; en los campos, cambio de color del borde de 1,5 px (3:1), según el QA Report (el parcial es común con productos y no cambia). QA debe repetirlo |
+| RF-6, RF-7 | Cumplido | Editor limitado a sus negocios, 403 sin llamar a la API por el otro negocio |
+| RF-9, H-4 | Cumplido | `page-failures.test.ts` deja 503, red y 413 tras el recorte de pruebas; 500, respuesta inválida, tiempo agotado, API anterior, 400 y 415 se comprobaron antes y siguen el mismo camino: conservan lo escrito y no afirman nada. `meta.freshness` llega a la pantalla: sin ese dato no se afirma nada de la landing |
+
+CA-1 a CA-8, CA-13, CA-15 a CA-17, CA-19 y CA-20 son del PR 3. CA-10 ya se cubrió en el PR 1 y aquí se repite en la pantalla.
+
+### Validaciones ejecutadas
+
+- `npm run build:css`: correcto. `npm run typecheck`: 0. `npm run lint`: 0.
+- `npm test`: `api` 1.122; `landing-pages` 1.598 más el fallo esperado que ya existía; `inventory-manager` 285, 98 de ellas nuevas. Sin fallos.
+- Duración local de los archivos nuevos: `page-conflict` 0,52 s, `page-edit` 0,73 s, `page-failures` 1,65 s, `page-unavailable` 0,78 s.
+- Mutaciones: 28 de 30 detectadas. La 06 no cambiaba nada. La 20 reveló una condición muerta (`!conflict` en `hasRestore`), que se eliminó.
+- Sondas temporales, ya borradas: Chrome real por CDP y `inventory-manager` contra las rutas reales de `api` (almacén en memoria), con la puerta cerrada y abierta.
+
+### Desviaciones del plan
+
+- **Aviso sin enlace.** El plan pide enlace al `/admin` actual. `inventory-manager` vive en `RESTAURANTE_ADMIN_DOMAIN` y `/admin`, en `RESTAURANTE_DOMAIN`; no conoce el segundo y el plan prohíbe variables nuevas. Un enlace relativo daría 404 en el propio admin. CA-18 y RF-4 no exigen enlace. El texto es el del plan.
+- **Frescura en la URL:** `?ok=saved&landing=confirmed|pending` en vez de `&pendiente=1`, para no afirmar que la landing está al día si falta el dato.
+- **Texto de frescura:** habla solo de la landing, porque el bot no muestra estos datos.
+
+### Archivos afectados
+
+`restaurante/inventory-manager/`: `src/app.ts`, `src/routes.ts`, `src/session.ts`, `src/controllers/{admin,bot,common,page}.ts`, `src/views/{index,page}.ts`, `src/views/pages/page-{closed,form,restore}.html`, `src/views/partials/{header,business-nav,subnav-link,aria-current-true,page-discard,page-last-change,page-restore-form,page-restore-link}.html`, `tests/integration/page-{unavailable,edit,conflict,failures}.test.ts`, `tests/support/{api-double,api-double-bot,api-double-page,page-browser}.ts`.
+
+### Riesgos o pendientes
+
+- **PR 3:** `PAGE_UNAVAILABLE` también sale de una fila dañada. Tras el corte, el aviso "la edición sigue en /admin" sería falso en ese caso: hay que revisar el texto en el PR 3, al retirar `PAGE_CUTOVER`.
+- Si la pantalla se cierra con un formulario abierto (vuelta atrás), el POST responde el aviso y lo escrito no se conserva: CA-18 pide no mostrar formulario.
+- Con la API caída y un proceso recién arrancado, lo escrito vuelve en cajas con el nombre técnico del campo. Es feo, pero no se pierde.
+- Sigue sin cubrir: cadena completa con MySQL real (recomendación 4 de QA, para el PR 3).
+- DEF-001 no se corrige: `inventory-manager` retira esos campos antes de llamar a la API.
+- En el navegador solo se probó Chrome.
+
+### QA sin veredicto y correcciones (2026-11-05)
+
+QA del PR 2 quedó **sin veredicto**. Pasaron: suite, puerta cerrada (48 de 48), edición, conflicto, carreras, permisos y redirecciones. Sin ejecutar: navegador, R-3, H-P10 y C-09.
+
+Defectos confirmados y su corrección, en `src/controllers/page.ts`:
+
+| Defecto | Corrección |
+| ------- | ---------- |
+| Restaurar: un doble envío daba 409 con "Otra persona [...] no se restauró nada [...] confirma de nuevo", y confirmar deshacía la restauración con aviso de éxito | El 409 muestra la versión vigente, sin formulario de confirmar: decidir pasa otra vez por "Restaurar versión anterior". Título: "La página cambió desde que abriste la confirmación." Sigue: "Puede ser tu propia restauración, si ya se aplicó, o un cambio posterior. Revisa la versión vigente antes de decidir: si ya se aplicó, restaurar otra vez la desharía." |
+| Guardar: con la escritura aplicada y la respuesta perdida, repetir daba "Otra persona [...] no se guardó nada" | Si `updatedBy` del 409 es quien guarda: "La página ya cambió: el último cambio lleva tu nombre." y "Puede ser un guardado tuyo anterior que sí se aplicó, o un cambio desde otra pestaña." Con quién y cuándo, lo escrito y las mismas opciones de conflicto |
+| Guardado correcto y GET posterior fallido: se perdía el aviso de éxito | 503 con el aviso de éxito, la frescura y "No pudimos cargar la página ahora. Inténtalo de nuevo en unos minutos." |
+
+`overwrite` manipulado sin conflicto real (TRIVIAL): no se corrige.
+
+Pruebas: de las 98 nuevas de este PR quedan 66, tras quitar 33 repetidas y añadir 1 del defecto de la lectura; los otros dos defectos modifican pruebas existentes. Se conservan puerta cerrada, permisos, conflicto, restauración y RF-9.
+
+Resultado: `typecheck`, `lint` y `build:css` en 0. `npm test`: `api` 1.124, `landing-pages` 1.309, `inventory-manager` 257 (66 de `page-*`), todas en verde.
+
+Límite: la comparación del autor es por nombre visible, lo único que trae el 409. Dos cuentas con el mismo nombre verían el texto "lleva tu nombre", que sigue siendo cierto.
+
+## QA Action Plan del PR 2
+
+Plan para aprobación. Todavía no se ha ejecutado ninguna prueba de este plan. El plan y el informe del PR 1 no se tocan.
+
+### Recorte aprobado (D-12)
+
+- **Se ejecuta:** C-01 a C-10, E, K, T, M-01, P, X, N2-01 a N2-03, F-01 a F-14, R-1 a R-3, N-01 a N-09 y la suite completa una vez, con S-P1 a S-P4. H-P1 y H-P2 son las prioritarias.
+- **No se ejecuta:** mutaciones (S-P6), pruebas de `72658e2` contra el código nuevo (S-P5), diferenciales ni repeticiones de medición.
+- **G-01 a G-06:** basta la suite existente en verde. **D:** basta la duración de esa pasada.
+- Los puntos de abajo sobre esas pruebas quedan sin efecto. Sobre R-2, ver D-12.
+
+### Objetivo
+
+Comprobar con la cadena real, y no solo con dobles, que la pantalla "Página" de `inventory-manager` muestra en producción únicamente la puerta cerrada, y que detrás de la puerta edita, resuelve conflictos y restaura sin perder lo escrito ni afirmar nada falso, sin regresión en las pantallas existentes.
+
+### Requisito bajo prueba
+
+RF-4, RF-6, RF-7 y RF-9, con el diseño de "Frontend" del Technical Action Plan y la decisión D-11 (aviso sin enlace). Fuera: CA-1 a CA-8, CA-13, CA-15 a CA-17, CA-19 y CA-20 (PR 3). `_stich_source_/` no define esta pantalla: la referencia visual es P-4 de REQ-F-039 y el patrón de productos.
+
+### Criterios de aceptación
+
+| Criterio | Casos |
+| --- | --- |
+| CA-18, RF-4 | C-01 a C-10 |
+| CA-9 | K-01 a K-05 |
+| CA-10, RF-7 | P-01 a P-05 |
+| CA-11 | E-03 a E-05 |
+| CA-12 | T-01 a T-07 |
+| CA-14 | N-01 a N-09 |
+| RF-6 | E-01, E-02, E-06, E-07 |
+| RF-9 | F-01 a F-14 |
+
+### Riesgos identificados
+
+1. Una afirmación falsa tras una escritura aplicada sin confirmación: es lo más grave que puede pasar detrás de la puerta (H-P1, H-P2).
+2. La puerta solo se ha probado con el doble o con el almacén en memoria en el recorrido por `inventory-manager`.
+3. La subnavegación y el refactor tocan todas las pantallas de negocio.
+4. `sanitizeNext` se amplió: es una lista de redirecciones.
+5. Los riesgos declarados en `## Implementation Result del PR 2` (R-1 a R-3 de este plan).
+
+### Hipótesis por confirmar
+
+Salen de leer el código. No son defectos hasta tener evidencia:
+
+- **H-P1:** si un guardado se aplica pero su respuesta se pierde (tiempo agotado de 5 s), repetirlo da 409 y la pantalla dice "Otra persona cambió esta página [...]: no se guardó nada", cuando sí se guardó, y lo hizo la misma persona (`controllers/page.ts:200`). Contradiría RF-9. El doble no lo reproduce: aplica y responde a la vez.
+- **H-P2:** lo mismo en el doble envío de restaurar: "Otra persona [...] no se restauró nada" (`page.ts:235`), texto que `page-conflict.test.ts:132` da por bueno.
+- **H-P3:** guardado correcto y fallo en el GET del redirect: se pierde el aviso de éxito y solo se ve "Servicio no disponible".
+- **H-P4:** el 413 del propio `readFormBody` (`MAX_FORM_BYTES`, `MAX_FORM_FIELDS`) no pasa por el repintado: lo escrito se pierde. Hay que medir también si la página más grande legítima, con acentos codificados, cabe en ambos límites y en los 64 KiB de la API.
+- **H-P5:** con la sesión caducada o un 403 de CSRF de la API, un POST pierde lo escrito. RF-9 no lo cubre expresamente: se compara con productos antes de clasificar.
+- **H-P6:** con la puerta cerrada, un POST sin `action` válida responde 400, no 409. Nada se escribe; se comprueba y, si es así, no es defecto de CA-18.
+- **H-P7:** `confirmed` dice "La landing ya muestra el cambio", pero hasta el PR 3 la landing lee los JSON. Solo sería falso con la puerta abierta; hay que comprobar que producción no puede llegar ahí.
+- **H-P8:** forzar `action=overwrite` con una versión vieja no debe saltarse el conflicto, y un `overwrite` sin conflicto previo registraría `overwrite_after_conflict`.
+- **H-P9:** carrera mixta guardar y restaurar (sin ejecutar en el PR 1) con MySQL real: sin 503 por interbloqueo (H-2 del PR 1).
+- **H-P10:** tras un repintado con nombres técnicos, cuando vuelve la API, reenviar el formulario guarda bien y sin perder saltos de línea.
+
+### Pruebas funcionales
+
+**Puerta cerrada, proceso real (S-P1).** Administrador y editor, sin filas y con filas en `page_version`:
+
+- **C-01** GET `/:negocio/pagina`: 200, texto exacto del plan, `role="status"`, sin `form`, `input`, `textarea` ni enlace a restaurar.
+- **C-02** GET `/:negocio/pagina/restaurar`: 200, igual.
+- **C-03** POST de guardar y de restaurar, con CSRF válido: 409, mismo aviso.
+- **C-04** Antes y después de todos los POST: suma de comprobación de `page_version` y recuento de `page_change` idénticos.
+- **C-05** Comprobación con filas: la API real responde 503 `PAGE_UNAVAILABLE`, no los datos.
+- **C-06** Otra causa (API detenida): 503 común, sin el aviso "aún no activa".
+- **C-07** Sin sesión: redirige al acceso y vuelve a "Página". CSRF inválido: 403, antes de la disponibilidad.
+- **C-08** POST sin `action` válida (H-P6): nada escrito.
+- **C-09** El texto no da a entender avería ni pérdida de datos, y D-11 se cumple: sin enlace roto.
+- **C-10** `PAGE_CUTOVER` sigue en `false`, `server.ts` no pasa `cutover` y `git diff` no toca `api`, `core`, `db`, `contracts` ni `deploy/`.
+
+**Puerta abierta, cadena completa (S-P2).** `inventory-manager`, `api`, Prisma y MySQL de pruebas, procesos reales, en copia temporal:
+
+- **E-01** Editar y guardar en ambos negocios: 303, aviso, MySQL con los valores, acentos y saltos de línea, autor de la sesión y una fila en `page_change` con acción `save`.
+- **E-02** "Último cambio", con autor, sin autor y sin registrar (fila con `NULL`).
+- **E-03** Precio inválido: 422, resumen enlazado al `id` real, texto y `aria-invalid`; nada escrito.
+- **E-04** Texto de longitud máxima y máxima + 1, también con caracteres multibyte.
+- **E-05** Los errores no dependen solo del color.
+- **E-06** Sin acción "restaurar semilla" en ninguna pantalla.
+- **E-07** `?ok=` y `?landing=` con valores desconocidos, `__proto__` y HTML: no pintan nada ni reflejan el valor.
+- **K-01** Dos sesiones con la misma versión: la segunda ve 409, quién y cuándo, y lo escrito intacto.
+- **K-02** "Guardar mis cambios de todos modos": MySQL queda con lo escrito y el historial con `overwrite_after_conflict`.
+- **K-03** "Descartar": queda la versión vigente, sin escribir.
+- **K-04** Un tercero guarda entre el conflicto y la sobrescritura: nuevo 409, sin pisar.
+- **K-05** Conflicto seguido de un error de validación: conserva la opción de sobrescribir.
+- **T-01** Confirmación por GET y restauración: intercambio exacto de vigente y anterior, `restore_previous` en el historial.
+- **T-02** Restaurar otra vez lo deshace.
+- **T-03** Sin anterior válida: 409 sin cambios y sin ofrecer el enlace.
+- **T-04** Doble envío real, secuencial y en paralelo: un solo intercambio.
+- **T-05** Sin `expectedVersion` o con una vieja: 409 o 422, sin cambios.
+- **T-06** Otro guarda antes de confirmar: 409, sin restaurar, y la confirmación muestra la versión vigente.
+- **T-07** El texto de T-04 no afirma nada falso (H-P2).
+- **M-01** Carrera real: dos guardados y guardar frente a restaurar, 20 veces cada una: sin 503, sin pérdida silenciosa, una fila de historial por escritura aplicada (H-P9).
+
+### Pruebas negativas y casos límite
+
+**Permisos (con la puerta cerrada y abierta):**
+
+- **P-01** Editor de Molotes en Birria: GET y POST 403 en ambas rutas, sin llamada a la API por ese negocio (traza del proxy S-P3) y sin cambios.
+- **P-02** Administrador en ambos negocios.
+- **P-03** La navegación del editor no muestra el otro negocio.
+- **P-04** Permiso retirado con la sesión abierta: el 403 de la API no escribe ni filtra datos.
+- **P-05** `/usuarios/pagina`, `/bot/pagina`, `/__proto__/pagina`, `/constructor/pagina`, `/MOLOTES/pagina`: 404, sin llamar a la API.
+
+**CSRF, origen y lista cerrada:**
+
+- **X-01** Sin `_csrf`, con uno ajeno o con otra sesión: 403 sin escribir.
+- **X-02** `Origin` ajeno, `null` y sin `Origin`, según la regla existente: 403 antes de leer el cuerpo.
+- **X-03** Campo desconocido, `updatedBy`, `authorId`, `version`, `__proto__`, `constructor`, nombre repetido y campo que falta: sin efecto en datos ni autor.
+- **X-04** `action=overwrite` forzado con versión vieja (H-P8).
+- **X-05** Nombre y valor de campo con HTML en todos los repintados, incluido el de nombres técnicos sin sesión comprobada: escapados.
+- **X-06** Con la API caída, un POST a otro negocio no revela datos: solo devuelve lo enviado.
+
+**`sanitizeNext`:**
+
+- **N2-01** Valores que no deben pasar: `//evil.example`, `/\evil.example`, `https://evil.example`, `/molotes/pagina/../..//evil.example`, `/molotes/pagina\n`, `/molotes/pagina%0a`, `/molotes/pagina/`, `/molotes/pagina?x=1`, `/otro/pagina`, `/molotes/pagina/restaurar/x`, array y vacío.
+- **N2-02** Los que sí: `/molotes/pagina`, `/birria/pagina`, `/molotes/pagina/restaurar`, y todas las rutas de antes del cambio.
+- **N2-03** Con navegador: sesión caducada, volver a entrar y acabar en "Página", en GET y en POST.
+
+### Pruebas de fallos (RF-9)
+
+Con S-P3, proxy entre `inventory-manager` y la `api` real. Cada caso se ejecuta en guardar y en restaurar. Se comprueba que lo escrito sigue, que el texto no afirma ni niega la escritura, y lo que hay en MySQL:
+
+- **F-01** 503 antes de la API. **F-02** 500. **F-03** Conexión cortada.
+- **F-04** Tiempo agotado **sin** llegar a la API.
+- **F-05** Tiempo agotado **con** la escritura aplicada, y repetición (H-P1, H-P2).
+- **F-06** Respuesta inválida con 200.
+- **F-07** 400 `INVALID_JSON`. **F-08** 413. **F-09** 415.
+- **F-10** `api` anterior: 404 en las rutas de página, en GET y POST.
+- **F-11** 413 propio y límite de campos (H-P4).
+- **F-12** Guardado correcto y GET fallido (H-P3).
+- **F-13** Sesión caducada y 403 de CSRF (H-P5).
+- **F-14** `meta.freshness`: con receptor del aviso que confirma, que falla y que no responde: `confirmed`, `pending`, `pending`, con el tiempo del guardado; sin `landing` en la URL, nada se afirma. Un fallo del aviso no convierte en error una escritura aplicada (H-P7).
+
+### Riesgos declarados
+
+Valoración previa, por leer el código. El juicio definitivo irá en el QA Report con evidencia:
+
+- **R-1 Fila dañada con `PAGE_UNAVAILABLE`.** Hoy no llega a producción: la puerta cerrada no lee filas. Aceptable en este PR **si** queda como trabajo obligatorio del PR 3, porque tras el corte el aviso sería falso. Caso: dañar una fila en S-P2 y registrar qué se ve y si se pierde lo escrito.
+- **R-2 Lo escrito tras una vuelta atrás.** Solo ocurre con el PR 3 ya desplegado y un formulario abierto durante la vuelta atrás. Aceptable por raro, pero RF-9 ("un 503 [...] se conserva lo escrito") y CA-18 ("sin formulario") chocan. Punto 5 de abajo: lo decide el usuario. Caso: abrir el formulario con la copia de puerta abierta, cerrar la puerta y enviar.
+- **R-3 API caída y proceso recién arrancado.** Aceptable si no se pierde nada, porque es un caso raro y dura lo que un despliegue. Caso: H-P10, y un repintado sin cabecera que deje salir de la pantalla.
+
+### Pruebas responsive
+
+Chrome headless (S-P4), en 375×812, 768×1024 y 1440×900, con la puerta cerrada y abierta: sin desplazamiento horizontal (`scrollWidth` frente a `clientWidth`) en cerrada, formulario, errores, conflicto, confirmación y aviso de fallo; textos largos sin cortes; áreas táctiles de la subnavegación y los botones.
+
+### Pruebas de accesibilidad
+
+- **N-01** Un solo `h1`, sin saltos de encabezado, en todas las pantallas nuevas.
+- **N-02** Landmarks y `fieldset` con `legend`.
+- **N-03** Solo con teclado: editar, guardar, conflicto, sobrescribir, descartar, restaurar y confirmar.
+- **N-04** Foco visible, medido con el estilo calculado y captura, en enlaces, botones y campos.
+- **N-05** JavaScript desactivado (`Emulation.setScriptExecutionDisabled`), con todo el flujo de N-03 y CA-14 en 375 px.
+- **N-06** Contraste calculado de textos, avisos, errores, enlaces de la subnavegación y foco: 4,5:1, y 3:1 en texto grande y foco.
+- **N-07** `role="status"` en la puerta cerrada, y sin `role="alert"` donde no hay error; el aviso urgente del conflicto se anuncia.
+- **N-08** Enlaces del resumen de errores: mueven el foco al campo.
+- **N-09** `aria-current` en la subnavegación, un único elemento marcado.
+
+### Pruebas UX/UI
+
+Contraste visual con productos (P-4 de REQ-F-039): tipografía, espaciado, avisos y botones. Capturas de cada estado. "Productos / Página" no desplaza ni rompe la cabecera en móvil.
+
+### Pruebas de regresión
+
+- **G-01** `npm test`, `npm run typecheck`, `npm run lint` y `npm run build:css`.
+- **G-02** Pruebas de `72658e2` de `inventory-manager` contra el código nuevo (S-P5), para probar que no se rebajó ninguna expectativa, y revisión del `diff` de `api-double.ts` y `api-double-bot.ts`.
+- **G-03** Refactor de `common.ts` y `admin.ts`: revisión del `diff` y flujos reales de productos (crear, editar, conflicto, eliminar y recuperar, mover), usuarios (crear, editar, 403 de editor), "Mi cuenta" (cambiar contraseña) y "Bot" (interruptor, bloquear), con S-P2.
+- **G-04** `errorSummary` extraído: misma salida en productos con y sin campo conocido. El de `views/bot.ts` no cambió.
+- **G-05** Subnavegación en cada pantalla de negocio y ausente en usuarios, cuenta y bot; `aria-current` correcto; orden de rutas sin capturar `/usuarios` ni `/bot`.
+- **G-06** `/admin` y las landings no cambian: `landing-pages` sin archivos en el `diff`.
+
+### Pruebas de performance
+
+- **D-01** Reporte JSON de Vitest con los workers por defecto: cada archivo de `inventory-manager` por debajo de ~10 s, y los cuatro nuevos individualmente. Se comparan con 0,52, 0,73, 1,65 y 0,78 s.
+- **D-02** Número de llamadas a la API por pantalla, con la traza de S-P3: sin lecturas duplicadas en el GET ni en un guardado correcto.
+- **D-03** Sin JavaScript ni CSS nuevos en la pantalla; errores de consola en Chrome.
+
+### Pruebas automatizadas
+
+Sin pruebas permanentes nuevas: todo son sondas temporales. Si un hueco exige una prueba permanente, se indicará para `senior-fullstack`.
+
+| Sonda | Qué hace | Dónde |
+| --- | --- | --- |
+| S-P1 | Puerta cerrada: `api` e `inventory-manager` reales, sin y con filas | Árbol de la rama, sin modificarlo; scripts en el scratchpad |
+| S-P2 | Puerta abierta, cadena completa | Copia temporal con `PAGE_CUTOVER = true` |
+| S-P3 | Proxy de fallos y traza de llamadas | Scratchpad, usado con S-P1 y S-P2 |
+| S-P4 | Chrome headless por CDP, con perfil temporal | Scratchpad, sobre S-P1 y S-P2 |
+| S-P5 | Pruebas de `72658e2` contra el código nuevo | Copia temporal |
+| S-P6 | Mutaciones | Copia temporal |
+
+**Base:** `restaurante_test_qa044p2_*`, con la salvaguarda de pruebas y las credenciales de `TEST_*`. Usuarios y contraseñas generados por la sonda, solo para esa base.
+
+**Mutaciones (S-P6).** El ticket afirma 28 de 30 pero solo identifica la 06 y la 20: **no se pueden contrastar una a una**. Se usará un catálogo propio de unas 25, escrito antes de ejecutar, sobre `controllers/page.ts`, `session.ts`, `views/page.ts` y `common.ts`: `isClosed` por `503`, GET y POST de la puerta, orden de permisos, `writtenOf`, `overwrite` y su repintado, `expectedVersion`, `postedFields`, `FRESHNESS`, `SUCCESS`, `hasRestore`, cada patrón de `RETURN_PATTERNS` y cada rama de error. El informe dirá cuántas detecta la suite y cuáles sobreviven, sin presentar esa cifra como confirmación de las 28.
+
+### Pruebas en navegador
+
+Chrome headless con perfil temporal, sobre `127.0.0.1`: no usa el navegador ni las contraseñas del usuario. La extensión no se usa porque no baja de 1280 px. Solo Chrome.
+
+### Evidencia requerida
+
+Salida de cada comando, conteos antes y después en MySQL, códigos y texto por caso, capturas de cada estado y viewport (en el scratchpad, resumidas en el informe; se borran al terminar), tabla de duración y de mutaciones.
+
+### Limpieza
+
+Al terminar, también si algo falla: bases `restaurante_test_qa044p2_*`, procesos, puertos, Chrome headless, copias, capturas y scripts. Se comprueba con la lista de procesos, los puertos, `git worktree list` y las bases del MySQL de pruebas. Además, `git diff` de `api/src/page-cutover.ts` vacío y sin ninguna forma nueva de abrir la puerta en el repositorio. `git status` igual que al empezar, salvo este ticket.
+
+### Criterios de aprobación
+
+`QA_APPROVED` solo si:
+
+1. CA-9 a CA-12, CA-14 y CA-18 pasan con evidencia, y CA-18 con la `api` real y MySQL.
+2. Ninguna escritura indebida, en ningún caso de puerta cerrada, permisos, CSRF o lista cerrada.
+3. Ninguna pantalla afirma algo falso sobre si se guardó (F-05, T-07) ni pierde lo escrito en los casos de RF-9.
+4. Ninguna redirección abierta.
+5. Suite, `typecheck` y `lint` en 0, sin regresión en productos, usuarios, "Mi cuenta" y "Bot".
+6. Sin defectos `BLOCKER` ni `CRITICAL`, y los `MAJOR` aceptados por el usuario.
+7. Cada archivo por debajo de ~10 s, y limpieza comprobada.
+
+## QA Report del PR 2
+
+### Ronda
+
+Ronda 2 (QA corta, sobre las correcciones). Suma lo que pasó en la QA detenida: puerta cerrada (48 de 48), edición, conflicto, carreras, permisos y redirecciones. Sin mutaciones ni diferenciales, por decisión del usuario.
+
+### Pruebas ejecutadas
+
+Cadena real: `inventory-manager` de la rama, `api` real, proxy de fallos y MySQL 8.4 en `restaurante_test_qa044p2_1`. Puerta abierta solo en una copia temporal de `api/src` con `PAGE_CUTOVER = true`; puerta cerrada con el árbol de la rama.
+
+| Prueba | Resultado |
+| --- | --- |
+| Restaurar con respuesta cortada y repetición | 503 "No pudimos confirmar el cambio [...]", solo con "Revisar la página". Repetición: 409 "La página cambió desde que abriste la confirmación", sin formulario de confirmar y sin "Otra persona". MySQL igual tras repetir |
+| Doble envío de restaurar en paralelo | 303 y 409; un solo intercambio en MySQL |
+| Guardado con respuesta cortada y repetición | 503 con lo escrito. Repetición: 409 "La página ya cambió: el último cambio lleva tu nombre", lo escrito intacto, sin "Otra persona" ni "no se guardó nada". Control con otra cuenta: sigue diciendo "Otra persona" |
+| Guardado correcto y GET fallido | 503 con "Cambios guardados.", la frescura y "No pudimos cargar la página ahora" |
+| R-3 | Proceso recién arrancado y API caída: 503, sin cabecera, 9 cajas con el nombre técnico, valores, `_csrf` y versión conservados, enlace para salir, sin desplazamiento horizontal en los 3 anchos, MySQL sin cambios. Restaurar: 503 con "Revisar la página" |
+| H-P10 | Al volver la API, reenviar da 303; MySQL guarda los dos saltos de línea, `ñ`, `&`, `<b>` y 9500 centavos, con autor y acción `save` |
+| C-09 | Texto sin avería ni pérdida de datos. Sin enlaces en `main`. Los 8 enlaces de la pantalla responden 200 |
+| CA-18 con API real y filas | GET 200 y POST 409 con el aviso, `role="status"`, sin formulario ni acciones. Suma de `page_version` y recuento de `page_change` idénticos |
+| `npm run typecheck`, `npm run lint`, `npm run build:css` | 0 |
+| `npm test` | 0. `api` 1.124, `landing-pages` 1.309, `inventory-manager` 257 |
+
+### Criterios de aceptación
+
+| Criterio | Estado | Evidencia |
+| --- | --- | --- |
+| CA-9 | PASS | QA detenida, y flujo de conflicto en Chrome con teclado |
+| CA-10, RF-7 | PASS | QA detenida |
+| CA-11 | PASS | QA detenida; resumen enlazado en Chrome, mueve el foco al campo con y sin JavaScript |
+| CA-12 | PASS | Restaurar, deshacer y doble envío en cadena real |
+| CA-14 | PASS | Chrome a 375 px sin JavaScript: acceso, editar, error, conflicto, sobrescribir, descartar, restaurar y su 409, solo con teclado, sin desplazamiento horizontal |
+| CA-18, RF-4 | PASS | Ver tabla |
+| RF-6 | PASS | QA detenida |
+| RF-9 | PASS | Defectos 1 a 3, R-3 y H-P10 |
+
+### Defectos encontrados
+
+Ninguno `BLOCKER`, `CRITICAL` ni `MAJOR`. Los 3 defectos de la QA detenida no se reproducen. `overwrite` manipulado sin conflicto real sigue como `TRIVIAL` no corregido.
+
+Observaciones, sin bloqueo:
+
+- **Foco de los campos.** No es el "foco sólido de 2 px" que dice el Implementation Result: `outline` es transparente y solo cambia el color del borde de 1,5 px. Contraste 3,26:1 con la página y 3,5:1 con el campo, sobre el 3:1 del plan, pero sutil en la captura. El parcial es común con productos y no cambia en este PR.
+- **Enlaces sueltos de 17 px de alto** ("Volver a la página", "Revisar la página", "Volver al inicio", enlace del resumen). Sin objetivos cercanos, así que entran en la excepción de espaciado de WCAG 2.5.8. Cabecera, subnavegación y botones miden 44 px.
+
+### Regresión
+
+Suite completa, `typecheck` y `lint` en 0. `git status` igual antes y después de la suite, salvo este ticket. Sin errores en los registros de `api` e `inventory-manager`.
+
+### Responsive
+
+375×812, 768×1024 y 1440×900, en 18 estados con la puerta cerrada y abierta: `scrollWidth` igual a `clientWidth` en todos.
+
+### Accesibilidad
+
+- Un `h1` y sin saltos de encabezado en todos los estados; `main` único; todos los campos con `label`; cada `fieldset` con `legend`.
+- Contraste de textos: sin incumplimientos con 4,5:1 y 3:1 en texto grande.
+- `role="status"` en la puerta cerrada y en el éxito; `role="alert"` en error, conflicto y fallo.
+- `aria-current="true"` único en la subnavegación, más `page` en el negocio.
+- Foco de enlaces y botones: sólido de 2 px, 8,81:1 o 9,45:1. Campos: ver observación.
+
+### UX/UI
+
+Capturas revisadas de la puerta cerrada, el 409 de restaurar y el foco de campo a 375 px: coherentes con el patrón de productos. La subnavegación no rompe la cabecera en móvil.
+
+### Performance
+
+Consola sin errores de JavaScript; solo el 422 esperado de la prueba de error. Sin JavaScript ni CSS nuevos en la pantalla.
+
+### Pendientes de revisión manual
+
+- N2-03 (sesión caducada y vuelta a "Página") no se recorrió en Chrome; está cubierto por HTTP en `page-unavailable.test.ts` y `page-failures.test.ts`.
+- Solo Chrome. La aplicación real por el proxy de Traefik queda fuera de esta QA.
+- La primera pasada de navegador pidió Google Fonts, que las pantallas cargan como el resto del admin: 3 peticiones sin datos de la prueba. Después se bloquearon.
+
+### Limpieza
+
+Comprobado: sin procesos ni puertos 31000-31500, sin Chrome headless, base `restaurante_test_qa044p2_1` borrada y ninguna `restaurante_test*` restante, un solo worktree, scripts, copia y capturas borrados. `PAGE_CUTOVER` en `false` y sin diferencias en `api/src/page-cutover.ts`.
+
+### Resultado final
+
+QA_APPROVED

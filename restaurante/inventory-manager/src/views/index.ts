@@ -2,6 +2,7 @@ import type { AdminProduct, AdminUser, ProductFormField, PublicBusinessId } from
 import type { Renderer, SafeHtml } from '@restaurante/web';
 
 import { BOT_PATH, createBotViews } from './bot.ts';
+import { createPageViews, pagePath } from './page.ts';
 import { ACCOUNT_PATH, USERS_PATH, createUserViews } from './users.ts';
 
 /**
@@ -48,8 +49,8 @@ export interface NoticeOptions {
   urgent?: boolean;
 }
 
-/** Sección de la cabecera fuera de un negocio (REQ-F-040 y REQ-F-043): usuarios, bot o "Mi cuenta". */
-export type HeaderSection = 'users' | 'bot' | 'account';
+/** Sección de la cabecera (REQ-F-040 y REQ-F-043): usuarios, bot o "Mi cuenta"; "Página" es de un negocio (REQ-F-044). */
+export type HeaderSection = 'users' | 'bot' | 'account' | 'page';
 
 export interface PageOptions {
   title: string;
@@ -94,6 +95,7 @@ export function createViews(renderer: Renderer) {
       userName: context.user.name,
       csrfToken: context.csrfToken,
       accountCurrent: ariaCurrent(section === 'account'),
+      businessNav: current ? businessNav(current, section) : join([]),
       links: join([
         ...context.user.businesses.map((business) =>
           render('partials/nav-link', { href: productsPath(business), label: BUSINESS_NAMES[business], current: ariaCurrent(business === current) }),
@@ -106,6 +108,34 @@ export function createViews(renderer: Renderer) {
             ]
           : []),
       ]),
+    });
+  }
+
+  /** Secciones del negocio que se está editando (REQ-F-044). `aria-current="true"`: el enlace del negocio ya es la página actual. */
+  function businessNav(business: PublicBusinessId, section: HeaderSection | undefined): SafeHtml {
+    const link = (href: string, label: string, active: boolean) => render('partials/subnav-link', { href, label, current: active ? render('partials/aria-current-true') : join([]) });
+    return render('partials/business-nav', {
+      businessName: BUSINESS_NAMES[business],
+      links: join([link(productsPath(business), 'Productos', section === undefined), link(pagePath(business), 'Página', section === 'page')]),
+    });
+  }
+
+  /** Resumen de errores (RF-16): enlaces a cada campo con error y, sin campo, el texto. */
+  function errorSummary(errors: Record<string, string>, fields: readonly { name: string; label: string }[]): SafeHtml | null {
+    const entries = Object.entries(errors);
+    if (entries.length === 0) return null;
+    const labelOf = new Map(fields.map((field) => [field.name, field.label]));
+    return notice({
+      tone: 'error',
+      title: 'No se guardó nada: revisa los campos marcados.',
+      extra: render('partials/error-summary', {
+        items: join(
+          entries.map(([name, message]) => {
+            const label = labelOf.get(name);
+            return label === undefined ? render('partials/error-summary-text', { message }) : render('partials/error-summary-item', { id: fieldId(name), label, message });
+          }),
+        ),
+      }),
     });
   }
 
@@ -125,6 +155,7 @@ export function createViews(renderer: Renderer) {
     page,
     ...createUserViews({ render, join, attrs, page, notice, displayDate }),
     ...createBotViews({ render, join, attrs, page, notice, displayDate }),
+    ...createPageViews({ render, join, page, notice, renderField, errorSummary, displayDate, businessNames: BUSINESS_NAMES }),
 
     login({ next, problem }: { next: string; problem?: 'invalid' | 'locked' | 'expired' | 'unavailable' | 'closed' | undefined }): SafeHtml {
       const notices: Record<string, NoticeOptions> = {
@@ -226,26 +257,7 @@ export function createViews(renderer: Renderer) {
 
     productForm(options: ProductFormView): SafeHtml {
       const { context, business, mode, fields, values, errors = {}, hidden, notices = [], conflict = false } = options;
-      const known = new Set(fields.map((field) => field.name));
-      const labelOf = new Map(fields.map((field) => [field.name, field.label]));
-      // Resumen de errores (RF-16): enlaces a cada campo con error y, sin campo, el texto.
-      const errorEntries = Object.entries(errors);
-      const summary =
-        errorEntries.length > 0
-          ? notice({
-              tone: 'error',
-              title: 'No se guardó nada: revisa los campos marcados.',
-              extra: render('partials/error-summary', {
-                items: join(
-                  errorEntries.map(([name, message]) =>
-                    known.has(name)
-                      ? render('partials/error-summary-item', { id: fieldId(name), label: labelOf.get(name) ?? name, message })
-                      : render('partials/error-summary-text', { message }),
-                  ),
-                ),
-              }),
-            })
-          : null;
+      const summary = errorSummary(errors, fields);
 
       const fieldHtml = (field: ProductFormField): SafeHtml => renderField(field, values[field.name] ?? '', errors[field.name]);
       const sections: SafeHtml[] = [];

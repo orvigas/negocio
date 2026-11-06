@@ -66,7 +66,6 @@ const PROBLEMS: Readonly<Record<string, string>> = Object.freeze({
   orden: 'El producto cambió mientras ordenabas la lista: no se movió nada. Revisa el orden actual e inténtalo de nuevo.',
 });
 const UNAVAILABLE = { tone: 'error' as const, title: 'Servicio no disponible.', paragraphs: ['No se pudo conectar con el sistema: no se guardó nada. Lo que escribiste sigue en el formulario; inténtalo de nuevo en unos minutos.'] };
-const BUSINESSES: readonly PublicBusinessId[] = ['molotes', 'birria'];
 const LOGIN_BODY_LIMIT = 4 * 1024;
 const SMALL_BODY_LIMIT = 4 * 1024;
 
@@ -83,29 +82,7 @@ export function createAdminController({
 }): AdminController {
   const { isProduction } = config;
   const kit = createControllerKit({ config, api, views, logger });
-  const { send, seeOther, unavailable, failureReason, isUnavailable, idOf, credentials, toLogin } = kit;
-
-  /** Sesión de la API (D-1). Con `onUnavailable`, si la API no responde se vuelve a pintar lo escrito del negocio. */
-  function session(ctx: Ctx, returnTo: string, onUnavailable?: (business: PublicBusinessId) => boolean): Promise<Session | null> {
-    const known = BUSINESSES.find((candidate) => candidate === ctx.params.business);
-    return kit.session(ctx, returnTo, onUnavailable && known ? () => onUnavailable(known) : undefined);
-  }
-
-  /** `:negocio` conocido (404) y permitido (403, sin datos; RF-6 y CA-4). */
-  function businessOf(ctx: Ctx, auth: Session): PublicBusinessId | null {
-    const { business } = ctx.params;
-    const known = BUSINESSES.find((candidate) => candidate === business);
-    if (!known) {
-      notFound(ctx, auth);
-      return null;
-    }
-    if (!auth.user.businesses.includes(known)) {
-      logger.warn('admin_forbidden', { path: ctx.path, userId: auth.user.id });
-      send(ctx, 403, views.message({ title: 'Sin permiso', notice: { tone: 'error', title: 'No tienes permiso sobre este negocio.' }, context: auth }));
-      return null;
-    }
-    return known;
-  }
+  const { send, seeOther, unavailable, failureReason, isUnavailable, idOf, credentials, toLogin, session, businessOf, postStart } = kit;
 
   function notFound(ctx: Ctx, context?: PageContext, business?: PublicBusinessId): void {
     kit.notFound(ctx, { context, business, ...(business ? { backHref: productsPath(business), backLabel: 'Volver a productos' } : {}) });
@@ -128,20 +105,6 @@ export function createAdminController({
 
   const okUrl = (business: PublicBusinessId, key: keyof typeof SUCCESS, freshness?: Freshness): string =>
     `${productsPath(business)}?ok=${key}${freshness === 'pending' ? '&pendiente=1' : ''}`;
-
-  /**
-   * Entrada común de los POST con sesión y negocio. Con `preserve`, si la API no responde al comprobar
-   * la sesión, se vuelve a pintar lo escrito en vez de perderlo (RF-10).
-   */
-  async function postStart(ctx: Ctx, returnTo: (business: string) => string, limit?: number, preserve?: (business: PublicBusinessId, fields: Map<string, string>) => boolean) {
-    assertSameOrigin(ctx, logger);
-    const fields = await readFormBody(ctx, limit ? { limit } : undefined);
-    const auth = await session(ctx, returnTo(String(ctx.params.business)), (business) => (preserve ? preserve(business, fields) : false));
-    if (!auth) return null;
-    const business = businessOf(ctx, auth);
-    if (!business) return null;
-    return { auth, business, fields };
-  }
 
   async function renderList(ctx: Ctx, auth: Session, business: PublicBusinessId, extraNotices: SafeHtml[] = []): Promise<void> {
     const result = await api.listProducts(credentials(auth), business);

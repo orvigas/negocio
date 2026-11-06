@@ -42,6 +42,8 @@ const RETURN_PATTERNS: readonly RegExp[] = [
   /^\/(?:molotes|birria)\/productos$/,
   /^\/(?:molotes|birria)\/productos\/(?:nuevo|eliminados)$/,
   /^\/(?:molotes|birria)\/productos\/[1-9]\d{0,9}\/(?:editar|eliminar)$/,
+  // Datos de página (REQ-F-044).
+  /^\/(?:molotes|birria)\/pagina(?:\/restaurar)?$/,
   // Usuarios y "Mi cuenta" (REQ-F-040, RF-14).
   /^\/usuarios(?:\/nuevo)?$/,
   /^\/usuarios\/[1-9]\d{0,9}\/(?:editar|contrasena)$/,

@@ -13,6 +13,7 @@ import {
 import { readJsonBody } from '@restaurante/web';
 
 import { createBotDouble, handleBot, type BotDouble } from './api-double-bot.ts';
+import { createPageDouble, handlePage, type PageDouble } from './api-double-page.ts';
 import { listenLocal } from './http.ts';
 
 /**
@@ -26,7 +27,7 @@ import { listenLocal } from './http.ts';
  * repetido y por contraseñas que no coinciden, 409 `LAST_ADMIN`, cierre de las sesiones del usuario
  * (D-8) con `meta.ownSessionClosed`, y la sesión nueva al cambiar la propia contraseña.
  *
- * Control del bot (REQ-F-043): `api-double-bot.ts`.
+ * Control del bot (REQ-F-043): `api-double-bot.ts`. Datos de página (REQ-F-044): `api-double-page.ts`.
  */
 
 export interface DoubleUser {
@@ -128,6 +129,8 @@ export interface ApiDouble {
   freshness: 'confirmed' | 'pending';
   /** Control del bot (REQ-F-043). */
   bot: BotDouble;
+  /** Datos de página (REQ-F-044): cerrados por defecto, como con `PAGE_CUTOVER = false`. */
+  page: PageDouble;
   /** Cambia un producto "desde otra sesión" (para el 409). */
   touch(id: number, by: string): void;
 }
@@ -157,6 +160,7 @@ export async function startApiDouble(initialUsers: DoubleUser[], products: Admin
     passwords: new Map(users.map((entry) => [entry.user.id, entry.password])),
     freshness: 'confirmed',
     bot: createBotDouble(),
+    page: createPageDouble(),
     touch(id, by) {
       const found = state.products.find((candidate) => candidate.id === id);
       if (found) Object.assign(found, { version: found.version + 1, updatedAt: '2026-10-28T12:30:00-06:00', updatedBy: { id: 9, name: by } });
@@ -222,6 +226,14 @@ export async function startApiDouble(initialUsers: DoubleUser[], products: Admin
     if (path === '/bot' || path.startsWith('/bot/')) {
       if (user.role !== 'admin') return fail(403, 'FORBIDDEN_ROLE', 'No tienes permiso para gestionar el bot.');
       return handleBot(ctx, state.bot, user, path.slice('/bot'.length), record);
+    }
+
+    const pageMatch = /^\/([^/]+)\/pagina(\/restaurar)?$/.exec(path);
+    if (pageMatch) {
+      const business = pageMatch[1] as PublicBusinessId;
+      if (business !== 'molotes' && business !== 'birria') return fail(404, 'BUSINESS_NOT_FOUND', 'Negocio desconocido.');
+      if (!user.businesses.includes(business)) return fail(403, 'FORBIDDEN_BUSINESS', 'No tienes permiso sobre este negocio.');
+      return handlePage(ctx, state.page, { business, actor: user, restoring: pageMatch[2] !== undefined, record, freshness: state.freshness });
     }
 
     const match = /^\/([^/]+)\/productos(?:\/(campos|orden|\d+))?(?:\/(recuperar|mover))?$/.exec(path);

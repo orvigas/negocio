@@ -175,7 +175,7 @@ Para correcciones o cambios pequeños delegados por la sesión principal sin tic
 
 1. Lee `CLAUDE.md` y las reglas aplicables.
 2. Implementa el cambio mínimo necesario.
-3. Agrega o actualiza pruebas y ejecuta `npm run typecheck`, `npm run lint` y `npm test` (y `npm run build:css` si tocaste estilos o plantillas).
+3. Prueba el cambio, deja pruebas permanentes solo si `.claude/rules/testing.md` lo permite, y ejecuta `npm run typecheck`, `npm run lint` y `npm test` (y `npm run build:css` si tocaste estilos o plantillas).
 4. Devuelve un resumen de cambios, archivos afectados y resultados de pruebas.
 
 No crees ramas, commits ni Pull Requests salvo que el prompt lo pida explícitamente.
@@ -255,7 +255,7 @@ Requiere la aprobación explícita del Technical Action Plan en el prompt.
 2. Crea la rama desde `main` actualizado: `feature/REQ-F-<NNN>-<slug>` (el mismo slug del archivo del ticket).
 3. Mueve el ticket con `git mv` de `backlog/` a `in-progress/` y pon el estado `IN_PROGRESS`. Un ticket existe en una sola carpeta.
 4. Implementa **solo el alcance aprobado**. Si descubres algo que exige cambiar el alcance funcional, detente y devuelve `NEEDS_TECHNICAL_CLARIFICATION` explicando el motivo.
-5. Agrega o actualiza pruebas según `.claude/rules/testing.md`.
+5. Prueba el cambio y deja pruebas permanentes solo si son funcionales o el usuario las pidió (`.claude/rules/testing.md`).
 6. Valida (ver "Validación de resultados").
 7. Agrega al ticket la sección `## Implementation Result` y devuelve `NEEDS_IMPLEMENTATION_APPROVAL`.
 

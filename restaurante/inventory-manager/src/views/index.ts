@@ -90,7 +90,7 @@ export function createViews(renderer: Renderer) {
   }
 
   function header(context: PageContext, current: PublicBusinessId | undefined, section: HeaderSection | undefined): SafeHtml {
-    const ariaCurrent = (active: boolean) => (active ? render('partials/aria-current') : join([]));
+    const ariaCurrent = (active: boolean) => (active ? render('partials/aria-current', { value: 'page' }) : join([]));
     return render('partials/header', {
       userName: context.user.name,
       csrfToken: context.csrfToken,
@@ -113,7 +113,7 @@ export function createViews(renderer: Renderer) {
 
   /** Secciones del negocio que se está editando (REQ-F-044). `aria-current="true"`: el enlace del negocio ya es la página actual. */
   function businessNav(business: PublicBusinessId, section: HeaderSection | undefined): SafeHtml {
-    const link = (href: string, label: string, active: boolean) => render('partials/subnav-link', { href, label, current: active ? render('partials/aria-current-true') : join([]) });
+    const link = (href: string, label: string, active: boolean) => render('partials/subnav-link', { href, label, current: active ? render('partials/aria-current', { value: 'true' }) : join([]) });
     return render('partials/business-nav', {
       businessName: BUSINESS_NAMES[business],
       links: join([link(productsPath(business), 'Productos', section === undefined), link(pagePath(business), 'Página', section === 'page')]),
@@ -155,7 +155,7 @@ export function createViews(renderer: Renderer) {
     page,
     ...createUserViews({ render, join, attrs, page, notice, displayDate }),
     ...createBotViews({ render, join, attrs, page, notice, displayDate }),
-    ...createPageViews({ render, join, page, notice, renderField, errorSummary, displayDate, businessNames: BUSINESS_NAMES }),
+    ...createPageViews({ render, join, page, notice, renderField, errorSummary, fieldId, displayDate, businessNames: BUSINESS_NAMES }),
 
     login({ next, problem }: { next: string; problem?: 'invalid' | 'locked' | 'expired' | 'unavailable' | 'closed' | undefined }): SafeHtml {
       const notices: Record<string, NoticeOptions> = {

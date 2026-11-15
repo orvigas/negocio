@@ -5,7 +5,7 @@ import type { InventoryConfig } from '../config.ts';
 import { clearSessionId } from '../session.ts';
 import type { NoticeOptions, Views } from '../views/index.ts';
 import { DEFAULT_GROUP, pagePath, pageRestorePath } from '../views/page.ts';
-import { createControllerKit, isHttpError, type Ctx, type Session } from './common.ts';
+import { SMALL_BODY_LIMIT, createControllerKit, isHttpError, type Ctx, type Session } from './common.ts';
 
 /**
  * Sección "Página" del admin nuevo (REQ-F-044, RF-4, RF-6, RF-7 y RF-9). Las reglas son de la API: aquí
@@ -35,7 +35,6 @@ export interface PageController {
   restore: Handler;
 }
 
-const SMALL_BODY_LIMIT = 4 * 1024;
 /** Campos del formulario que no son de la página. */
 const FORM_META_FIELDS: readonly string[] = Object.freeze(['_csrf', 'expectedVersion', 'action']);
 
@@ -96,6 +95,12 @@ export function createPageController({ config, api, views, logger }: { config: I
   const readFailure = (ctx: Ctx, result: AdminApiResult<unknown>, auth: Session, business: PublicBusinessId) =>
     apiFailure(ctx, result, auth, business, ctx.path, () => unavailable(ctx, failureReason(result), auth, business, 'page'));
 
+  /** La API no respondió: se registra sin detalles internos y se sigue con `respond`. */
+  const down = (ctx: Ctx, result: AdminApiResult<unknown>, respond: () => void | Promise<void>) => () => {
+    logger.warn('api_unavailable', { path: ctx.path, reason: failureReason(result) });
+    return respond();
+  };
+
   function successOf(ctx: Ctx): NoticeOptions | null {
     const { ok, landing } = ctx.query;
     if (typeof ok !== 'string' || !Object.hasOwn(SUCCESS, ok)) return null;
@@ -109,8 +114,8 @@ export function createPageController({ config, api, views, logger }: { config: I
     send(ctx, status, views.pageForm({ context: auth, csrfToken: auth.csrfToken, business, fields, values: page.values, version: page.version, current: page, notices }));
   }
 
-  const pageMessage = (ctx: Ctx, status: number, auth: Session, business: PublicBusinessId, notice: NoticeOptions) =>
-    send(ctx, status, views.message({ title: 'Página', notice, context: auth, business, section: 'page', backHref: pagePath(business), backLabel: 'Revisar la página' }));
+  const pageMessage = (ctx: Ctx, status: number, auth: Session | null, business: PublicBusinessId, notice: NoticeOptions) =>
+    send(ctx, status, views.message({ title: 'Página', notice, context: auth ?? undefined, business, section: 'page', backHref: pagePath(business), backLabel: 'Revisar la página' }));
 
   /** Vuelve a pintar lo escrito, con la versión recibida salvo que se indique otra (409). */
   function repaint(
@@ -148,8 +153,7 @@ export function createPageController({ config, api, views, logger }: { config: I
       links: [{ href: pagePath(business), label: 'Revisar la versión vigente (descarta lo escrito aquí)' }],
     });
 
-  const unconfirmedRestore = (ctx: Ctx, auth: Session | null, business: PublicBusinessId) =>
-    send(ctx, 503, views.message({ title: 'Página', notice: { tone: 'error', title: UNCONFIRMED }, context: auth ?? undefined, business, section: 'page', backHref: pagePath(business), backLabel: 'Revisar la página' }));
+  const unconfirmedRestore = (ctx: Ctx, auth: Session | null, business: PublicBusinessId) => pageMessage(ctx, 503, auth, business, { tone: 'error', title: UNCONFIRMED });
 
   /** Campos del formulario para volver a pintar: los conocidos, los de la API o los recibidos. */
   async function pageFieldsOf(auth: Session, business: PublicBusinessId, fields: Map<string, string>): Promise<readonly PageFormField[]> {
@@ -161,24 +165,24 @@ export function createPageController({ config, api, views, logger }: { config: I
     return result.data.fields;
   }
 
-  /** La confirmación con la versión vigente (exige confirmar de nuevo), con el aviso del intento fallido. */
-  async function renderRestore(ctx: Ctx, status: number, auth: Session, business: PublicBusinessId, notices: SafeHtml[], title: string): Promise<void> {
+  /** Lee la versión vigente y la pinta con `onOk`; si no se puede, "cerrada" (409) o el aviso `fallback`. */
+  async function withCurrentPage(ctx: Ctx, status: number, auth: Session, business: PublicBusinessId, fallback: NoticeOptions, onOk: (state: PageStateResponse) => void): Promise<void> {
     const result = await api.getPage(credentials(auth), business);
-    if (result.ok) return send(ctx, status, views.pageRestore(auth, business, result.data.page, notices));
+    if (result.ok) return onOk(result.data);
     if (isClosed(result)) return closed(ctx, 409, auth, business);
-    return pageMessage(ctx, status, auth, business, { tone: 'warning', title });
+    return pageMessage(ctx, status, auth, business, fallback);
   }
+
+  /** La confirmación con la versión vigente (exige confirmar de nuevo), con el aviso del intento fallido. */
+  const renderRestore = (ctx: Ctx, status: number, auth: Session, business: PublicBusinessId, notices: SafeHtml[], title: string) =>
+    withCurrentPage(ctx, status, auth, business, { tone: 'warning', title }, (state) => send(ctx, status, views.pageRestore(auth, business, state.page, notices)));
 
   /**
    * Tras un 409 de restaurar: la versión vigente, sin el formulario de confirmar. Decidir pasa otra vez
    * por "Restaurar versión anterior": un doble envío confirmado a ciegas desharía la restauración.
    */
-  async function renderCurrent(ctx: Ctx, status: number, auth: Session, business: PublicBusinessId, notice: NoticeOptions): Promise<void> {
-    const result = await api.getPage(credentials(auth), business);
-    if (result.ok) return currentForm(ctx, status, auth, business, result.data, [views.notice(notice)]);
-    if (isClosed(result)) return closed(ctx, 409, auth, business);
-    return pageMessage(ctx, status, auth, business, notice);
-  }
+  const renderCurrent = (ctx: Ctx, status: number, auth: Session, business: PublicBusinessId, notice: NoticeOptions) =>
+    withCurrentPage(ctx, status, auth, business, notice, (state) => currentForm(ctx, status, auth, business, state, [views.notice(notice)]));
 
   return Object.freeze<PageController>({
     async edit(ctx) {
@@ -192,10 +196,9 @@ export function createPageController({ config, api, views, logger }: { config: I
       if (result.ok) return currentForm(ctx, 200, auth, business, result.data, success ? [views.notice(success)] : []);
       if (!success) return readFailure(ctx, result, auth, business);
       // La escritura ya se confirmó: que falle esta lectura no debe ocultarlo.
-      return apiFailure(ctx, result, auth, business, ctx.path, () => {
-        logger.warn('api_unavailable', { path: ctx.path, reason: failureReason(result) });
-        pageMessage(ctx, 503, auth, business, { ...success, paragraphs: [...(success.paragraphs ?? []), 'No pudimos cargar la página ahora. Inténtalo de nuevo en unos minutos.'] });
-      });
+      return apiFailure(ctx, result, auth, business, ctx.path, down(ctx, result, () =>
+        pageMessage(ctx, 503, auth, business, { ...success, paragraphs: [...(success.paragraphs ?? []), 'No pudimos cargar la página ahora. Inténtalo de nuevo en unos minutos.'] }),
+      ));
     },
 
     async save(ctx) {
@@ -232,10 +235,7 @@ export function createPageController({ config, api, views, logger }: { config: I
         });
         return repaintWith(409, { notices: [conflict], version: currentPage.version });
       }
-      return apiFailure(ctx, result, auth, business, pagePath(business), () => {
-        logger.warn('api_unavailable', { path: ctx.path, reason: failureReason(result) });
-        return repaintWith(503, { notices: [unconfirmedNotice(business)] });
-      });
+      return apiFailure(ctx, result, auth, business, pagePath(business), down(ctx, result, () => repaintWith(503, { notices: [unconfirmedNotice(business)] })));
     },
 
     async restorePage(ctx) {
@@ -270,10 +270,7 @@ export function createPageController({ config, api, views, logger }: { config: I
         });
       }
       if (fieldErrors(result)) return failed(422, 'No se restauró nada: recarga la página e inténtalo de nuevo.');
-      return apiFailure(ctx, result, auth, business, pageRestorePath(business), () => {
-        logger.warn('api_unavailable', { path: ctx.path, reason: failureReason(result) });
-        unconfirmedRestore(ctx, auth, business);
-      });
+      return apiFailure(ctx, result, auth, business, pageRestorePath(business), down(ctx, result, () => unconfirmedRestore(ctx, auth, business)));
     },
   });
 }

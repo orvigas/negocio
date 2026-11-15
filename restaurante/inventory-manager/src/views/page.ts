@@ -15,8 +15,6 @@ export const pageRestorePath = (business: PublicBusinessId): string => `${pagePa
 /** Grupo de los campos sin grupo y de lo escrito cuando no se conocen los campos (ver `postedFields`). */
 export const DEFAULT_GROUP = 'Contenido';
 
-const fieldId = (name: string): string => `f-${name.replaceAll('.', '-')}`;
-
 export interface PageFormView {
   /** null cuando la API no responde y no se pudo comprobar la sesión: la página va sin cabecera. */
   context: PageContext | null;
@@ -39,12 +37,13 @@ interface PageViewHelpers {
   page: (options: PageOptions) => SafeHtml;
   notice: (options: NoticeOptions) => SafeHtml;
   renderField: (field: ProductFormField, value: string, error: string | undefined) => SafeHtml;
+  fieldId: (name: string) => string;
   errorSummary: (errors: Record<string, string>, fields: readonly { name: string; label: string }[]) => SafeHtml | null;
   displayDate: (iso: string | null) => string;
   businessNames: Readonly<Record<PublicBusinessId, string>>;
 }
 
-export function createPageViews({ render, join, page, notice, renderField, errorSummary, displayDate, businessNames }: PageViewHelpers) {
+export function createPageViews({ render, join, page, notice, renderField, errorSummary, fieldId, displayDate, businessNames }: PageViewHelpers) {
   /** "Ana, el 05/11/2026 10:00"; `who`, si la versión no tiene autor. */
   function changeText({ updatedBy, updatedAt }: Pick<AdminPage, 'updatedBy' | 'updatedAt'>, who: string): string {
     const date = displayDate(updatedAt);

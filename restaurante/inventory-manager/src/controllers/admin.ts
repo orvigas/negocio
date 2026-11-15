@@ -17,7 +17,7 @@ import { assertSameOrigin, readFormBody, type Logger, type SafeHtml } from '@res
 
 import type { InventoryConfig } from '../config.ts';
 import { clearSessionId, readSessionId, sanitizeNext, writeSessionId } from '../session.ts';
-import { createControllerKit, type Ctx, type Session } from './common.ts';
+import { SMALL_BODY_LIMIT, createControllerKit, type Ctx, type Session } from './common.ts';
 import { BUSINESS_NAMES, NEW_TITLES, displayDate, productPath, productsPath, type PageContext, type Views } from '../views/index.ts';
 
 /**
@@ -67,7 +67,6 @@ const PROBLEMS: Readonly<Record<string, string>> = Object.freeze({
 });
 const UNAVAILABLE = { tone: 'error' as const, title: 'Servicio no disponible.', paragraphs: ['No se pudo conectar con el sistema: no se guardó nada. Lo que escribiste sigue en el formulario; inténtalo de nuevo en unos minutos.'] };
 const LOGIN_BODY_LIMIT = 4 * 1024;
-const SMALL_BODY_LIMIT = 4 * 1024;
 
 export function createAdminController({
   config,

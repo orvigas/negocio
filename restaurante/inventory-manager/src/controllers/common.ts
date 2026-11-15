@@ -1,6 +1,6 @@
 import type { RouterContext } from '@koa/router';
 
-import type { AdminApiClient, AdminApiResult, AdminCredentials, PublicBusinessId } from '@restaurante/contracts';
+import { isPublicBusinessId, type AdminApiClient, type AdminApiResult, type AdminCredentials, type PublicBusinessId } from '@restaurante/contracts';
 import { assertSameOrigin, readFormBody, type Logger, type SafeHtml } from '@restaurante/web';
 
 import type { InventoryConfig } from '../config.ts';
@@ -23,7 +23,11 @@ export interface Session extends PageContext {
 }
 
 const ID_PATTERN = /^[1-9]\d{0,9}$/;
-const BUSINESSES: readonly PublicBusinessId[] = ['molotes', 'birria'];
+
+/** Tope del cuerpo de los formularios pequeños (sin textos largos). */
+export const SMALL_BODY_LIMIT = 4 * 1024;
+
+const knownBusiness = (ctx: Ctx): PublicBusinessId | undefined => (isPublicBusinessId(ctx.params.business) ? ctx.params.business : undefined);
 
 export const isHttpError = (result: AdminApiResult<unknown>, status: number, code: string): boolean =>
   !result.ok && result.kind === 'http' && result.status === status && result.error.code === code;
@@ -93,13 +97,13 @@ export function createControllerKit({ config, api, views, logger }: { config: In
 
   /** Sesión de un POST de negocio: si la API no responde, `onUnavailable` recibe el negocio conocido. */
   function businessSession(ctx: Ctx, returnTo: string, onUnavailable?: (business: PublicBusinessId) => boolean): Promise<Session | null> {
-    const known = BUSINESSES.find((candidate) => candidate === ctx.params.business);
+    const known = knownBusiness(ctx);
     return session(ctx, returnTo, onUnavailable && known ? () => onUnavailable(known) : undefined);
   }
 
   /** `:negocio` conocido (404) y permitido (403, sin datos; RF-6 y CA-4 de REQ-F-039). */
   function businessOf(ctx: Ctx, auth: Session): PublicBusinessId | null {
-    const known = BUSINESSES.find((candidate) => candidate === ctx.params.business);
+    const known = knownBusiness(ctx);
     if (!known) {
       notFound(ctx, { context: auth });
       return null;

@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 1: dominio, contrato y API)
+READY_FOR_MERGE (PR 1: dominio, contrato y API) — Pull Request https://github.com/orvigas/negocio/pull/151 hacia `main`, con el CI (`calidad`, `docker`, `auditoria` y `pruebas`) comprobado en `pass` tras marcarlo como listo. El PR 2 (pantalla) sigue pendiente.
 
 ## Aprobación
 
@@ -951,4 +951,4 @@ El usuario aprueba el QA Action Plan, la sonda temporal en `api/tests/integratio
 
 ### Correcciones y Pull Request del PR 1 (2026-11-16)
 
-El usuario pide corregir los dos defectos antes del commit ("Si corrigelos"). senior-fullstack corrige DEF-001 (el contrato rechaza `__proto__` en `ajustes` con 422) y DEF-002 (75 en la tabla de ejemplo), vuelve a validar, hace el commit y abre el Pull Request hacia `main`. Estado: `QA_APPROVED` hasta que el CI del PR esté en verde.
+El usuario pide corregir los dos defectos antes del commit ("Si corrigelos"). senior-fullstack corrige DEF-001 (el contrato rechaza `__proto__` en `ajustes` con 422) y DEF-002 (75 en la tabla de ejemplo), vuelve a validar, hace el commit `2f257bc` y abre el Pull Request https://github.com/orvigas/negocio/pull/151 hacia `main` (en borrador hasta este commit; se marca como listo después de su push y se comprueba el CI). Estado: `READY_FOR_MERGE` (PR 1).

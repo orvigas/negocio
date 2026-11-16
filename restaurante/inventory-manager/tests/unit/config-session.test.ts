@@ -68,6 +68,20 @@ describe('sesión', () => {
     ['/\\evil.example', '/'],
     ['/tacos/productos', '/'],
     ['/molotes/productos?x=1', '/'],
+    // Cotizador (REQ-F-046): vuelve con la misma query, sin caracteres fuera de una query codificada y
+    // acotada a 3 000 caracteres ya codificada como campo del formulario de acceso (DEF-004).
+    ['/birria/cotizador', '/birria/cotizador'],
+    ['/birria/cotizador?n=60&p.tradicional.f=110&m.extra=150%2C+200', '/birria/cotizador?n=60&p.tradicional.f=110&m.extra=150%2C+200'],
+    [`/birria/cotizador?n=${'1'.repeat(2972)}`, `/birria/cotizador?n=${'1'.repeat(2972)}`],
+    [`/birria/cotizador?n=${'1'.repeat(2973)}`, '/'],
+    [`/birria/cotizador?m.extra=${'%2C'.repeat(590)}`, `/birria/cotizador?m.extra=${'%2C'.repeat(590)}`],
+    [`/birria/cotizador?m.extra=${'%2C'.repeat(600)}`, '/'],
+    ['/birria/cotizador?n=60#x', '/'],
+    ['/birria/cotizador?n=<script>', '/'],
+    ['/birria/cotizador?next=//evil.example', '/'],
+    ['/birria/cotizador/', '/'],
+    ['/molotes/cotizador', '/'],
+    ['/birria/cotizadorx', '/'],
     [undefined, '/'],
   ])('sanitizeNext(%s) = %s', (value, expected) => {
     expect(sanitizeNext(value)).toBe(expected);

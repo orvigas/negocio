@@ -4,6 +4,7 @@ import type { AccountController } from './controllers/account.ts';
 import type { AdminController } from './controllers/admin.ts';
 import type { BotController } from './controllers/bot.ts';
 import type { PageController } from './controllers/page.ts';
+import type { QuoteController } from './controllers/quote.ts';
 import type { UsersController } from './controllers/users.ts';
 
 /**
@@ -31,6 +32,9 @@ import type { UsersController } from './controllers/users.ts';
  * GET|POST /usuarios/:id/contrasena            -> restablecer la contraseña
  * GET|POST /cuenta                             -> cambiar la propia contraseña (cualquier usuario)
  *
+ * Cotizador de taquizas (REQ-F-046, solo administradores y solo Birria; ruta fija: /molotes/cotizador da 404):
+ * GET  /birria/cotizador                       -> formulario GET; con `calcular=1`, 303 a la URL de diferencias
+ *
  * Control del bot (REQ-F-043, solo administradores):
  * GET  /bot                                    -> estado, uso, topes y lista negra
  * POST /bot/interruptor                        -> pausar o reanudar
@@ -44,12 +48,14 @@ export function createRouter({
   account,
   bot,
   page,
+  quote,
 }: {
   admin: AdminController;
   users: UsersController;
   account: AccountController;
   bot: BotController;
   page: PageController;
+  quote: QuoteController;
 }): Router {
   const router = new Router();
   router.get('/salud', (ctx) => {
@@ -88,6 +94,7 @@ export function createRouter({
   router.post('/:business/productos/:id/recuperar', controller.restore);
   router.post('/:business/productos/:id/subir', controller.moveUp);
   router.post('/:business/productos/:id/bajar', controller.moveDown);
+  router.get('/birria/cotizador', quote.page);
   router.get('/:business/pagina', page.edit);
   router.post('/:business/pagina', page.save);
   router.get('/:business/pagina/restaurar', page.restorePage);

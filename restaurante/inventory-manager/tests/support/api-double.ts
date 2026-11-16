@@ -14,6 +14,7 @@ import { readJsonBody } from '@restaurante/web';
 
 import { createBotDouble, handleBot, type BotDouble } from './api-double-bot.ts';
 import { createPageDouble, handlePage, type PageDouble } from './api-double-page.ts';
+import { createQuoteDouble, handleQuote, type QuoteDouble } from './api-double-quote.ts';
 import { listenLocal } from './http.ts';
 
 /**
@@ -28,6 +29,7 @@ import { listenLocal } from './http.ts';
  * (D-8) con `meta.ownSessionClosed`, y la sesión nueva al cambiar la propia contraseña.
  *
  * Control del bot (REQ-F-043): `api-double-bot.ts`. Datos de página (REQ-F-044): `api-double-page.ts`.
+ * Cotizador (REQ-F-046): `api-double-quote.ts`.
  */
 
 export interface DoubleUser {
@@ -131,6 +133,8 @@ export interface ApiDouble {
   bot: BotDouble;
   /** Datos de página (REQ-F-044): "no disponibles" por defecto, como la API sin datos importados. */
   page: PageDouble;
+  /** Cotizador de taquizas (REQ-F-046). */
+  quote: QuoteDouble;
   /** Cambia un producto "desde otra sesión" (para el 409). */
   touch(id: number, by: string): void;
 }
@@ -161,6 +165,7 @@ export async function startApiDouble(initialUsers: DoubleUser[], products: Admin
     freshness: 'confirmed',
     bot: createBotDouble(),
     page: createPageDouble(),
+    quote: createQuoteDouble(),
     touch(id, by) {
       const found = state.products.find((candidate) => candidate.id === id);
       if (found) Object.assign(found, { version: found.version + 1, updatedAt: '2026-10-28T12:30:00-06:00', updatedBy: { id: 9, name: by } });
@@ -226,6 +231,12 @@ export async function startApiDouble(initialUsers: DoubleUser[], products: Admin
     if (path === '/bot' || path.startsWith('/bot/')) {
       if (user.role !== 'admin') return fail(403, 'FORBIDDEN_ROLE', 'No tienes permiso para gestionar el bot.');
       return handleBot(ctx, state.bot, user, path.slice('/bot'.length), record);
+    }
+
+    const quoteMatch = /^\/([^/]+)\/cotizador(\/calculos)?$/.exec(path);
+    if (quoteMatch) {
+      if (user.role !== 'admin') return fail(403, 'FORBIDDEN_ROLE', 'Solo los administradores pueden usar el cotizador.');
+      return handleQuote(ctx, state.quote, quoteMatch[1] as string, quoteMatch[2] !== undefined, record);
     }
 
     const pageMatch = /^\/([^/]+)\/pagina(\/restaurar)?$/.exec(path);

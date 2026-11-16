@@ -1,22 +1,18 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { JSDOM } from 'jsdom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { BRANCH_LOCATION, type BusinessId, type Logger } from '@restaurante/core/shared';
-import type { MenuDocument } from '@restaurante/core/catalog';
 
 import { createApp } from '../../src/app.ts';
 import type { Config } from '../../src/config/env.ts';
 import { commonContent, getBusinessContent } from '../../src/content/index.ts';
-import { loadSeedDocument } from '../../src/content/seeds.ts';
-import { createFileMenuRepository } from '../../src/repositories/file-menu-repository.ts';
 import { makeConfig, makeRepository, type CorruptibleData } from '../helpers.ts';
 import { listenLocal } from '../support/http.ts';
 import { makeProductRepository, makeProductsFor, seedSources } from '../support/products.ts';
-import { landingProductsFrom } from '../support/landing-products.ts';
+import { fixedLandingPage, landingProductsFrom } from '../support/landing-products.ts';
 
 const FRIDAY_NOON_MX = new Date('2026-10-09T18:00:00Z');
 const SATURDAY_NOON_MX = new Date('2026-10-10T18:00:00Z');
@@ -33,7 +29,7 @@ async function agent({
   config = makeConfig(),
   logger = makeLogger(),
 }: { now?: Date | (() => Date); config?: Config; logger?: Logger } = {}) {
-  const app = createApp({ config, repository, products, landingProducts: landingProductsFrom(products), logger, now: typeof now === 'function' ? now : () => now });
+  const app = createApp({ config, products, landingProducts: landingProductsFrom(products), landingPage: fixedLandingPage(), logger, now: typeof now === 'function' ? now : () => now });
   return (await listenLocal(app)).request();
 }
 
@@ -954,11 +950,10 @@ describe('errores', () => {
 describe('landings con productos guardados (REQ-F-001 y REQ-F-008)', () => {
   /** Productos importados desde datos cambiados: equivale a productos guardados con esos valores. */
   async function agentWith(mutate: { businessId: BusinessId; change: (data: CorruptibleData) => unknown }) {
-    const repo = await makeRepository();
     const sources = seedSources();
     mutate.change(sources[mutate.businessId].data);
     const { repository: productRepo } = await makeProductRepository({ sources });
-    const app = createApp({ config: makeConfig(), repository: repo, products: productRepo, landingProducts: landingProductsFrom(productRepo), now: () => FRIDAY_NOON_MX });
+    const app = createApp({ config: makeConfig(), products: productRepo, landingProducts: landingProductsFrom(productRepo), landingPage: fixedLandingPage(), now: () => FRIDAY_NOON_MX });
     return (await listenLocal(app)).request();
   }
 
@@ -1006,51 +1001,5 @@ describe('landings con productos guardados (REQ-F-001 y REQ-F-008)', () => {
     const section = text.slice(text.indexOf('id="bebidas-seccion"'), text.indexOf('<!-- EL RITUAL'));
     expect(section.match(/<li class=/g)).toHaveLength(1);
     expect(section).not.toContain('Refrescos Familia Coca-Cola');
-  });
-});
-
-describe('archivo dañado al arrancar con el repositorio de archivos (CA-34, CA-35)', () => {
-  let dataDir: string;
-
-  beforeEach(async () => {
-    dataDir = await mkdtemp(join(tmpdir(), 'landing-data-'));
-    await mkdir(join(dataDir, 'molotes'), { recursive: true });
-  });
-
-  afterEach(async () => {
-    await rm(dataDir, { recursive: true, force: true });
-  });
-
-  async function start() {
-    const repo = createFileMenuRepository({ dataDir, timezone: 'America/Mexico_City' });
-    await repo.init();
-    const productRepo = await makeProductsFor(repo);
-    return (await listenLocal(createApp({ config: makeConfig(), repository: repo, products: productRepo, landingProducts: landingProductsFrom(productRepo), now: () => FRIDAY_NOON_MX }))).request();
-  }
-
-  it('CA-34: con JSON inválido y una versión anterior válida, /molotes responde 200 con la versión anterior', async () => {
-    const previous = loadSeedDocument('molotes') as MenuDocument<'molotes'>;
-    previous.data.menu.highlight = 'Destacado de la versión anterior';
-    await writeFile(join(dataDir, 'molotes', 'previous.json'), JSON.stringify(previous));
-    await writeFile(join(dataDir, 'molotes', 'current.json'), '{ roto');
-
-    const res = await (await start()).get('/molotes');
-    expect(res.status).toBe(200);
-    expect(res.text).toContain('Destacado de la versión anterior');
-    expect((await readdir(join(dataDir, 'molotes'))).some((name) => /^damaged-\d{4}-.*\.json$/.test(name))).toBe(true);
-  });
-
-  it('CA-35: sin una versión anterior válida, /molotes muestra la semilla', async () => {
-    await writeFile(join(dataDir, 'molotes', 'current.json'), '{ roto');
-    const res = await (await start()).get('/molotes');
-    expect(res.status).toBe(200);
-    expect(res.text).toContain((loadSeedDocument('molotes') as MenuDocument<'molotes'>).data.menu.highlight);
-  });
-
-  it('CA-4: en una instalación nueva crea los archivos desde la semilla y la landing no cambia', async () => {
-    const res = await (await start()).get('/birria');
-    expect(res.status).toBe(200);
-    expect(JSON.parse(await readFile(join(dataDir, 'birria', 'current.json'), 'utf8'))).toEqual(loadSeedDocument('birria'));
-    await expect(res.text).toMatchFileSnapshot('../snapshots/landing-birria.html');
   });
 });

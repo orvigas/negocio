@@ -1,5 +1,5 @@
 import { DatabaseUnavailableError, type BusinessId } from '../shared/index.ts';
-import type { PageChangeEntry, PageStore, PageStoreTx, StoredPage, StoredPages } from './page-store.ts';
+import type { PageChangeEntry, PageImportMark, PageStore, PageStoreTx, StoredPage, StoredPages } from './page-store.ts';
 
 /**
  * Store de página en memoria (REQ-F-044), doble de las pruebas: misma semántica que Prisma/MySQL. Cada
@@ -9,6 +9,11 @@ import type { PageChangeEntry, PageStore, PageStoreTx, StoredPage, StoredPages }
 interface MemoryPageState {
   pages: Map<BusinessId, StoredPages>;
   changes: PageChangeEntry[];
+  /** Entradas importadas de `changes.jsonl` (columna `imported`). */
+  importedChanges: PageChangeEntry[];
+  imports: Map<BusinessId, PageImportMark>;
+  /** Como `product_import` con filas (D-10). */
+  productImports: boolean;
 }
 
 export interface MemoryPageStore extends PageStore {
@@ -22,7 +27,7 @@ export interface MemoryPageStore extends PageStore {
 const copyPages = (pages: StoredPages | undefined): StoredPages => structuredClone(pages ?? { current: null, previous: null });
 
 export function createMemoryPageStore(): MemoryPageStore {
-  const state: MemoryPageState = { pages: new Map(), changes: [] };
+  const state: MemoryPageState = { pages: new Map(), changes: [], importedChanges: [], imports: new Map(), productImports: false };
   let failures = 0;
   let queue: Promise<unknown> = Promise.resolve();
 
@@ -33,7 +38,7 @@ export function createMemoryPageStore(): MemoryPageStore {
     }
   }
 
-  function txOn(pages: MemoryPageState['pages'], changes: PageChangeEntry[]): PageStoreTx {
+  function txOn({ pages, changes, importedChanges, imports }: Omit<MemoryPageState, 'productImports'>): PageStoreTx {
     return {
       async read(business) {
         return copyPages(pages.get(business));
@@ -51,6 +56,16 @@ export function createMemoryPageStore(): MemoryPageStore {
       async addChange(entry) {
         changes.push(structuredClone(entry));
       },
+      async putCurrent(business, current: StoredPage) {
+        pages.set(business, { ...copyPages(pages.get(business)), current: structuredClone(current) });
+      },
+      async addImportedChanges(entries) {
+        for (const entry of entries) importedChanges.push(structuredClone(entry));
+      },
+      async markImported(mark) {
+        if (imports.has(mark.business)) throw new Error(`Importación duplicada: ${mark.business}`);
+        imports.set(mark.business, structuredClone(mark));
+      },
     };
   }
 
@@ -66,14 +81,21 @@ export function createMemoryPageStore(): MemoryPageStore {
       maybeFail();
       return copyPages(state.pages.get(business));
     },
+    async readImports() {
+      maybeFail();
+      return [...state.imports.values()].map((mark) => structuredClone(mark));
+    },
+    async hasProductImports() {
+      maybeFail();
+      return state.productImports;
+    },
     transaction<T>(task: (tx: PageStoreTx) => Promise<T>): Promise<T> {
       const run = queue.then(async () => {
         maybeFail();
-        const pages = structuredClone(state.pages);
-        const changes = structuredClone(state.changes);
-        const result = await task(txOn(pages, changes));
-        state.pages = pages;
-        state.changes = changes;
+        const { productImports, ...rest } = state;
+        const copy = structuredClone(rest);
+        const result = await task(txOn(copy));
+        Object.assign(state, copy, { productImports });
         return result;
       });
       queue = run.catch(() => {});

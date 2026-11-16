@@ -549,6 +549,42 @@ Para volver a escribir en `/admin/bot` basta con la app: una versión anterior a
 tener los formularios, y una `api` nueva recoge esos cambios en 10 s
 (`BOT_CONTROL_REFRESH_SECONDS`).
 
+### Vuelta atrás tras el corte de la página (REQ-F-044)
+
+Desde el PR 3 de REQ-F-044 la página (hero, texto destacado y promociones) vive en MySQL. La `app`
+la importa una sola vez desde `app-data` al arrancar, antes de escuchar, y deja la marca en
+`page_import`. Los JSON no se modifican.
+
+- **Si la importación falla o se niega** (`page_import_failed` en `$C logs app`), la `app` termina
+  con 1 y `deploy.sh` vuelve atrás solo (código 21): no queda nada importado y los visitantes siguen
+  como antes. Con `PAGE_IMPORT_SEED_REFUSED` faltan o están dañados los JSON de un negocio y la
+  base ya tenía productos. **Restaura `app-data` desde un respaldo antes de reintentar**
+  ([11.7](#117-restaurar-runbook)): la `app` anterior, con el volumen vacío, escribiría la semilla y
+  el siguiente intento la importaría como dato real. Otra salida es el "restaurar semilla" del
+  `/admin` anterior, que deja una elección explícita con autor en `current.json`.
+- **Para volver a la versión anterior al corte**, vuelve los tres servicios, en el orden de arriba:
+  `inventory-manager`, app y `api`. La `api` anterior responde "no disponible" aunque haya filas, así
+  que el admin nuevo deja de editar la página y el `/admin` anterior vuelve a ser el único escritor,
+  sobre los JSON de antes del corte. Las ediciones hechas en MySQL no se ven mientras tanto (D-3).
+- **No combines una `app` del corte con una `api` anterior:** las landings mostrarían la semilla de
+  la página (precio del hero de $195 en Birria y $145 en Molotes). El flujo automático no lo produce.
+  Tampoco una `api` del corte con un `inventory-manager` y una app anteriores tras dos despliegues
+  fallidos seguidos: el admin nuevo editaría MySQL mientras el `/admin` anterior escribe los JSON.
+- **Al volver a avanzar**, la importación no se repite. Si algún JSON cambió durante la vuelta atrás,
+  el arranque registra `page_json_diverged` (con el negocio, sin contenido) y MySQL no cambia:
+  - **Si la vuelta atrás fue en el mismo despliegue del corte** (nadie pudo escribir en MySQL),
+    antes de avanzar puedes vaciar las tablas de la página para que la importación se repita con los
+    JSON actuales:
+
+    ```sh
+    $C exec -T mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" restaurante -e "DELETE FROM page_change; DELETE FROM page_version; DELETE FROM page_import;"'
+    ```
+
+    Compruébalo antes: `SELECT COUNT(*) FROM page_change WHERE imported = 0` debe dar `0` (ninguna
+    edición hecha en el admin nuevo).
+  - **Si ya hubo ediciones en el admin nuevo**, no vacíes nada: pasa a mano, en la pantalla "Página",
+    los cambios que se hicieron en el `/admin` anterior durante la vuelta atrás.
+
 ### Arrancar la `api` a mano
 
 Úsalo siempre que recrees la `api` fuera de `deploy.sh`: el router del webhook debe coincidir con la
@@ -634,7 +670,28 @@ valores por defecto (ver `README.md`, "Topes de gasto, lista negra e interruptor
 4. **Control del bot (REQ-F-043), como administrador:**
    - `https://admin.birriaelmuneco.com/bot` muestra el estado, los contadores y la lista negra.
    - `https://birriaelmuneco.com/admin/bot` no tiene formularios y enlaza a esa pantalla.
-5. **Primer despliegue de REQ-F-043, una sola vez (fila histórica del personal):** el botón de
+5. **Despliegue del corte de la página (REQ-F-044), una sola vez:**
+   - **Antes de desplegar**, en el VPS: el tamaño de `changes.jsonl` y que existan los
+     `current.json` de los dos negocios en `app-data` (sin mirar su contenido):
+
+     ```sh
+     $C exec -T app sh -c 'cd /var/lib/restaurante && ls -l changes.jsonl molotes/current.json birria/current.json && wc -l changes.jsonl'
+     ```
+
+     Si falta un `current.json`, no despliegues: la importación se negaría
+     ([§6](#vuelta-atrás-tras-el-corte-de-la-página-req-f-044)).
+   - **Después:** `$C logs app` tiene dos `page_import_done` (con `source` `current`, salvo un JSON
+     dañado) y ningún `page_import_failed`; `page_import` tiene dos filas:
+
+     ```sh
+     $C exec -T mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" restaurante -e "SELECT business, source, source_version, history_count, skipped_lines FROM page_import"'
+     ```
+
+   - `/`, `/molotes` y `/birria` muestran el mismo hero, destacado y promoción que antes.
+   - `https://birriaelmuneco.com/admin/molotes` muestra la página sin formulario y enlaza a
+     `https://admin.birriaelmuneco.com/molotes/pagina`, que permite editarla. Un cambio de prueba
+     se ve en la landing y se deshace con "Restaurar versión anterior".
+6. **Primer despliegue de REQ-F-043, una sola vez (fila histórica del personal):** el botón de
    "alcanzaron un tope hoy" estuvo activo hasta REQ-F-042 y un número del personal pudo quedar
    bloqueado, porque la lista negra no exime al personal. Compara la lista negra de la pantalla "Bot"
    con los 4 últimos dígitos de `WHATSAPP_BOT_STAFF_MOLOTES` y `WHATSAPP_BOT_STAFF_BIRRIA`, sin copiarlos en un ticket ni en el
@@ -688,6 +745,9 @@ gzip -dc backups/<archivo>.sql.gz | $C exec -T mysql sh -c 'exec mysql -uroot -p
    `sudo env RESTAURANTE_INVENTORY_IMAGE=<imagen> $CE up -d --no-deps inventory-manager`.
 
 2. Los permisos de los usuarios (`GRANT ... ON restaurante.*`) sobreviven al `DROP DATABASE`.
+   La página (REQ-F-044) vuelve con el volcado, incluida su marca `page_import`: un volcado
+   posterior a la importación no reimporta nada, y uno anterior la repite al arrancar con los JSON
+   de `app-data`.
 3. Comprueba `$C ps` (healthy) y el [paso 8](#8-comprobaciones-después-de-cada-despliegue).
 4. Si el siguiente despliegue desde `main` vuelve a fallar en la migración, corrige la migración
    antes de volver a desplegar.
@@ -745,7 +805,10 @@ REQ-F-019. Objetivo: perder como mucho 24 h de datos (RPO) y recuperar el servic
   está en UTC). Si el VPS estaba apagado a esa hora, se ejecuta al arrancar.
 - **Qué guarda:**
   - un `mysqldump` de `restaurante` hecho con el usuario de solo lectura `restaurante_backup`;
-  - el volumen `restaurante_app-data` completo, sin los temporales;
+  - el volumen `restaurante_app-data` completo, sin los temporales. Desde REQ-F-044 la página está en
+    el volcado (`page_version`, `page_change` y `page_import`) y los JSON de `app-data` solo sirven
+    para repetir la importación desde un volcado anterior a ella; se siguen guardando hasta el
+    ticket 6;
   - un manifiesto con los conteos de `user` y `product`, la última migración, las imágenes y el
     commit de `state/release.env`, y las sumas sha256.
 - **Integridad:** un volcado incompleto o dañado (o un `app-data` sin `molotes/` y `birria/`) no se

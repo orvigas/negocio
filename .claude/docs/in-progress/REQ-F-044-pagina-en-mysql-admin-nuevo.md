@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 2, QA corta tras las correcciones). PR 2 mergeado en `epic/arquitectura`: [#139](https://github.com/orvigas/negocio/pull/139), `5fe54ce`, CI verde (ejecución 42136143089). Simplificaciones posteriores en [#140](https://github.com/orvigas/negocio/pull/140) (`dd459ec`). La épica llegó a `main` con [#141](https://github.com/orvigas/negocio/pull/141) (merge `49bcf4a`, desplegado el 2026-11-16): la pantalla "Página" existe en producción cerrada (`PAGE_CUTOVER=false`). PR 1 mergeado ([#134](https://github.com/orvigas/negocio/pull/134), `9dd95b1`) sin CI completo y validado después en #135: ver "Incidencia del PR 1". Siguiente: PR 3 (el corte), antes comprobar el tamaño de `changes.jsonl` y que `app-data` tenga `current.json` de ambos negocios.
+QA_APPROVED (PR 3, el corte, ronda 1; ver "QA Report del PR 3"). DEF-PR3-001 corregido. Commit y PR hacia `epic/arquitectura` desde `feature/REQ-F-044-pagina-en-mysql-3-corte` (ver "Pull Request del PR 3" en el historial): pasa a `READY_FOR_MERGE` cuando su CI (`calidad`, `docker`, `auditoria`, `pruebas`) quede en `pass`. Pendiente: `ops/backup/ci/smoke.sh` (CA-17) solo corre en el PR de la épica hacia `main`; se comprueba allí. Antes de desplegar: las comprobaciones de `despliegue.md` §8 en el VPS. El ticket sigue en `in-progress/` hasta que el usuario confirme el merge a `main`. Antes: PR 1 ([#134](https://github.com/orvigas/negocio/pull/134)) y PR 2 ([#139](https://github.com/orvigas/negocio/pull/139), simplificado en [#140](https://github.com/orvigas/negocio/pull/140)) mergeados en `epic/arquitectura`; la épica llegó a `main` con [#141](https://github.com/orvigas/negocio/pull/141) y se desplegó el 2026-11-16 con la pantalla "Página" cerrada.
 
 ## Aprobación
 
@@ -35,6 +35,12 @@ Autorizada por el usuario (2026-11-05, transmitida por la sesión principal) la 
 - **Aceptación sobre D-10 y D-2 — JSON dañado sin `previous` válido:** "Lo apruebo", en respuesta a "¿Apruebas la implementación del PR 1 para pasarla a QA, y aceptas que un JSON dañado sin `previous` válido detenga el despliegue?" (2026-11-05, transmitida por la sesión principal). Decisión del usuario que resuelve el conflicto con D-2: en una instalación existente, `current` dañado sin `previous` válido detiene el despliegue (CA-20). `current` dañado con `previous` válido sigue sin detener nada.
 - **D-11 — Implementación del PR 2 y aviso sin enlace:** "si", en respuesta a "¿Apruebas la implementación para pasarla a QA, con el aviso sin enlace?" (2026-11-05, transmitida por la sesión principal). El aviso de la puerta cerrada de "Página" no enlaza al `/admin` actual. El plan técnico pedía enlace, pero `inventory-manager` no conoce `RESTAURANTE_DOMAIN` y no se añaden variables. CA-18 y RF-4 no lo exigen.
 - **D-12 — QA del PR 2 reducido a lógica y choque entre RF-9 y CA-18:** "Plan reducido a lógica (Recomendado)", descrita como "Edición, conflicto, restauración, permisos, fallos y accesibilidad con MySQL real. Sin mutaciones ni diferenciales. Acepta perder lo escrito si se cierra la puerta en una vuelta atrás." (2026-11-05, transmitida por la sesión principal). Resuelve el choque: si la puerta se cierra con un formulario abierto, prevalece CA-18 y lo escrito puede perderse.
+
+- **D-13 — Plan técnico del PR 3:** "Apruebo, implementar" (2026-11-16, transmitida por la sesión principal).
+- **D-14 — Aviso de "no disponible" tras el corte:** "Texto neutro (Recomendado)": "La página no está disponible en este momento. No se cambió nada. Inténtalo en unos minutos; si sigue igual, avisa al administrador." Mismo código, sin distinguir "sin datos" de "dañado".
+- **D-15 — Pruebas del PR 3:** "Solo la unitaria pura (Recomendado)". Solo queda permanente la unitaria de `core/catalog/page-import.ts`; MySQL real, proceso, vuelta atrás, smoke y cadena completa se ejecutan en QA y se descartan. Las pruebas existentes que cambian de comportamiento se modifican y se borra `landing-pages/tests/integration/api-page-process.test.ts`.
+- **D-16 — Ensayo con datos reales:** "Sí, ensayar (Recomendado)". Lo hace QA.
+- **D-17 — Vuelta atrás con `page_json_diverged`:** "Vaciar y reimportar (Recomendado)". Solo documentación (`despliegue.md` §6).
 
 Estas decisiones son propias de este ticket: no confundirlas con las D-x de otros tickets.
 
@@ -895,6 +901,301 @@ Ninguno de este PR.
 
 QA_APPROVED
 
+## Implementation Result del PR 3
+
+### Rama
+
+`feature/REQ-F-044-pagina-en-mysql-3-corte`, desde `origin/main` (`4db1413`), que ya incluye la épica. El PR irá a `epic/arquitectura`. Sin commit, push ni PR. `Calculadora.xlsx` (sin seguimiento) es ajeno y no se toca.
+
+### Cambios realizados
+
+- **`core/catalog/page-import.ts` (nuevo, puro):** `choosePageSource` y `planPageImport` (origen `current` → `previous` → semilla; `current` con `previous` válido importa los dos; `previous` como vigente deja el anterior vacío; semilla de primera ejecución en los dos huecos; semilla por daño con el anterior vacío; semilla en una instalación existente: `PAGE_IMPORT_SEED_REFUSED` con motivo `missing` o `damaged`). Un documento que no cabe en las columnas (fecha > 64, revisión fuera de INT, autor > 60 o texto mal formado) cuenta como dañado. `parseChangeLog` y `parseChangeLine` reparten `changes.jsonl` por negocio, cuentan las ilegibles por número de línea y dejan `authorId` nulo si falta.
+- **Store de página:** `PageStoreTx` gana `putCurrent`, `addImportedChanges` y `markImported`; `PageStore`, `readImports`, `hasProductImports` y un `timeoutMs` opcional en `transaction`. Prisma: `createMany` por lotes de 500 con `imported: true`, marca con clave primaria por negocio. Memoria: `importedChanges`, `imports` y `productImports` separados de `changes`, para no tocar las expectativas existentes.
+- **`api`:** se borra `src/page-cutover.ts`; `server.ts` usa `createPageRepository`. Soporte y pruebas sin `pageCutover`.
+- **`landing-pages`:**
+  - `server.ts`: verificar la base → primer administrador → `hasProductImports` (instalación existente) → `repository.init({ seedMissing: !existing })` → `importPages` → `products.init` → control del bot → `warmUp` de productos y página → `listen`. Un fallo o una negativa de la importación registra `page_import_failed` (solo códigos, negocio y motivo) y termina con 1.
+  - `services/page-import.ts` (nuevo): una transacción de 60 s para los negocios sin marca; con marca no escribe y registra `page_json_diverged` si cambió la versión del JSON; logs `page_import_done`, `page_import_from_seed`, `page_import_from_previous` y `page_import_lines_skipped`, sin contenido.
+  - `repositories/menu-repository.ts`: `init({ seedMissing })` (sin la semilla, no escribe y publica `previous` o la semilla solo en memoria; log `menu_data_missing`), `getImportSource` y `readChangeLog`; `readChanges` en los storages de archivos y memoria.
+  - `services/landing-cache.ts` (nuevo): la caché común, movida de `landing-products.ts`. `landing-products.ts` queda como envoltorio con sus nombres de log; `landing-page.ts` (nuevo) es el envoltorio de la página (`landing_page_*`), con `loadSeedMenus`, `loadSeedPages` y `withPage`.
+  - `controllers/landing.ts`: `withProducts(withPage(semilla, página de la API), productos)`, sin el repositorio de menús. `routes/index.ts` y `app.ts`: `createApp` ya no recibe el repositorio de menús; recibe `landingPage` y, con usuarios, `pages`.
+  - `internal-app.ts`: el aviso invalida productos y página; `landing` solo es `true` si los dos quedaron al día.
+  - `/admin`: la página sale de MySQL (`pages`). Sin `ADMIN_NEW_URL`, guarda y restaura en MySQL, invalida la caché de la landing y, si la API no lo confirma, redirige con `?ok=save_pending`. Restaurar exige la versión confirmada (campo oculto en la confirmación; 409 si cambió). "Restaurar semilla" responde siempre 409 "no permitido" (D-10). Desaparece el estado "dañado" (`damaged.html` y `restore-form.html` borrados). Con `ADMIN_NEW_URL`: GET con los valores vigentes en un `fieldset` deshabilitado fuera de cualquier formulario (`business-readonly.html`), aviso y enlace a `<ADMIN_NEW_URL>/<negocio>/pagina`; los tres POST pasan sesión → permiso → cuerpo → CSRF y responden 410 sin escribir (`admin_page_moved`); la confirmación de restaurar redirige a la página. `admin-guard.ts` responde 503 ante `PageUnavailableError`.
+- **`inventory-manager`:** el aviso de "no disponible" usa el texto neutro de D-14 (título "La página no está disponible en este momento." y párrafo "No se cambió nada. Inténtalo en unos minutos; si sigue igual, avisa al administrador."). Comentarios y soporte de pruebas sin `PAGE_CUTOVER`.
+- **`contracts/page.ts`:** solo el comentario de `PAGE_UNAVAILABLE`.
+- **`eslint.config.ts`:** `landing-page.ts` y `landing-cache.ts` en `LANDING_CODE_FILES`; prohibidos en ellos `createPageRepository`, `PageRepository`, `PageRepositoryOptions`, `PageStore`, `PageStoreTx`, `createMemoryPageStore`, `MemoryPageStore` y cualquier `repositories/*menu-repository`. Comprobado con un import temporal: dos errores, revertido.
+- **Documentación (RF-11):** `arquitectura.md` §1, §6 (endpoints y consumo de la página), §8 (fila del ticket 5 y sección "Paso 4, ticket 5 aplicado") y §10 (riesgos); `README.md` (endpoints de página, incluidos 400, 413 y 415 de H-4; landings; aviso interno; admin nuevo; `/admin` en solo lectura; tabla de menús; `DATA_DIR` solo de lectura y la edición manual de JSON que deja de aplicar; JSON dañados; base de datos); `desarrollo.md` §4; `despliegue.md` §6 (vuelta atrás tras el corte, con el vaciado de D-17), §8 (comprobaciones antes y después del corte), §9 (la marca vuelve con el volcado) y §11.1 (qué cubre cada respaldo); `.env.example` (comentario de `DATA_DIR`); `.claude/CLAUDE.md` §8 (D-8). `deploy/`, `ops/` y la migración no cambian.
+
+### Pruebas
+
+- **Nueva y permanente (D-15):** `landing-pages/tests/unit/page-import.test.ts`, 15 casos: origen con `current` y `previous`, sin `previous`, CA-4, falta `current` con `previous` válido, documento que no cabe (fecha y revisión), copia de la semilla en una instalación existente, CA-5, semilla por daño en una instalación nueva, CA-20 (`missing` y `damaged`, y `current` que no cabe sin `previous`), reparto de líneas con `restore_seed` y sin `authorId`, diez líneas ilegibles por número, archivo ausente. Está en `landing-pages` porque `core` no tiene ejecutor de pruebas.
+- **Borradas:** `landing-pages/tests/integration/api-page-process.test.ts` (D-15: probaba la puerta cerrada, que ya no existe) y `landing-pages/tests/integration/admin-file-repository.test.ts` (probaba que `/admin` escribe los JSON; desde el corte no los escribe, RN-2). También dos casos de `api/tests/integration/page-unavailable.test.ts` (la imagen anterior al corte con filas y la constante), la `describe` "archivo dañado al arrancar" de `app.test.ts` (la landing ya no lee los JSON) y la `describe` "archivo dañado (RF-8)" de `admin-produccion.test.ts` (sin estado "dañado" en MySQL, D-10).
+- **Modificadas por cambio de comportamiento:** el soporte (`setupAdmin` con store de página en memoria e importación real; `landingPageFrom`, `fixedLandingPage`, `restoreFields`, `pageOf`; `versionOf` sobre `pages`) y las pruebas de `/admin` que leían los JSON (acceso, CSRF, guardar, producción, autorización, seguridad de la base); `admin-products-moved` y `admin-users-moved` (con `ADMIN_NEW_URL` la página queda en solo lectura: el caso existente comprueba ahora CA-13: valores de MySQL, enlace, sin formulario, 410 en los tres POST, 403 sin CSRF y nada escrito); `internal-app.test.ts` (invalida los dos recursos); `createApp` sin repositorio en las pruebas de landings; textos de `inventory-manager`.
+- **Comprobaciones descartadas (no quedan en el repositorio):** un archivo temporal con MySQL real y procesos reales: CA-20 con dos arranques seguidos y el volumen vacío (exit 1, `PAGE_IMPORT_SEED_REFUSED`, sin JSON escritos, sin filas ni marca) y con Birria dañado (ningún negocio importado); CA-1 (filas con revisión, fecha y autor; JSON y `changes.jsonl` con el mismo SHA-256; línea ilegible 3 contada; logs sin contenido); CA-2 y CA-16 (segundo arranque sin reimportar, un `page_json_diverged`, MySQL sin cambios); cadena real api + landing (la landing muestra lo editado en MySQL, no lo editado en el JSON); CA-3 con el store de Prisma (fallo en la marca del segundo negocio: nada escrito; el reintento importa los dos); CA-5 en proceso (`page_import_from_seed`, cuatro filas). 5 de 5 en verde. También un caso de `/admin` restaurando tras un cambio posterior a la confirmación (409, nada escrito), en verde y descartado.
+
+### Criterios de aceptación
+
+| Criterio | Estado |
+| --- | --- |
+| CA-1 | Cumplido en la comprobación descartada (MySQL real y proceso). Ensayo con datos reales: QA (D-16) |
+| CA-2 | Cumplido (segundo arranque, comprobación descartada) |
+| CA-3 | Cumplido (fallo en el segundo negocio con Prisma, comprobación descartada) |
+| CA-4 | Cumplido (unitaria permanente) |
+| CA-5 | Cumplido (unitaria y proceso) |
+| CA-6 | `landing-html-reference.test.ts` sigue byte a byte con la página de la semilla servida como la API. 375 px y escritorio en navegador, y datos reales: QA |
+| CA-7 | Misma caché que los productos (`landing-cache.ts`), cubierta por `landing-products*.test.ts` sin cambios de expectativa. Sin prueba propia de la página (D-15) |
+| CA-8 | Aviso común (`internal-app.test.ts`); `save_pending` en `/admin`; `pending` en `api` sin cambios |
+| CA-9 a CA-12, CA-14 | Sin cambios desde PR 1 y 2 |
+| CA-13 | Cumplido (`admin-products-moved.test.ts`) |
+| CA-15 | Por diseño: la importación solo lee y los JSON quedan intactos (SHA-256 comprobado). Vuelta atrás real: QA |
+| CA-16 | Cumplido (comprobación descartada) |
+| CA-17 | Por diseño (la marca va en el volcado); `smoke.sh` no cambia (decisión del plan). QA |
+| CA-18 | Texto neutro (D-14); `inventory-manager/tests/integration/page-unavailable.test.ts` en verde |
+| CA-19 | Por diseño: lo guardado en el `/admin` anterior queda en `current.json`, que es lo que se importa (CA-1) |
+| CA-20 | Cumplido (unitaria y dos arranques reales) |
+
+### Validaciones ejecutadas
+
+- `npm run build:css`: correcto.
+- `npm run typecheck`: código 0 en los cinco workspaces.
+- `npm run lint`: código 0, sin errores ni avisos.
+- `npm test`: código 0. `api` 46 archivos y 1.118 pruebas; `landing-pages` 95 archivos y 1.314 pruebas (56 s); `inventory-manager` 15 archivos y 257 pruebas. Sin fallos.
+- `git diff` revisado: solo archivos del ticket; `Calculadora.xlsx` fuera.
+
+### Desviaciones del plan
+
+- `readChangeLog` en el repositorio de menús (y `readChanges` en sus storages), además de `getImportSource`: la importación lee `changes.jsonl` por el mismo repositorio, sin rutas propias.
+- `PageStore.hasProductImports` hace la consulta de `product_import` (el plan no fijaba dónde).
+- `createApp` deja de recibir el repositorio de menús: ya ningún código de la app lo usa (solo `server.ts`).
+- Las líneas ilegibles se cuentan una vez para el archivo y ese total va en `skipped_lines` de cada negocio importado: una línea ilegible no se puede atribuir a un negocio.
+- `/admin` sin `ADMIN_NEW_URL`, tras guardar sin confirmación de la API, muestra el aviso nuevo `save_pending` en lugar de afirmar que la landing ya lo muestra.
+- La unitaria permanente vive en `landing-pages/tests/unit/` (plan: `page-import-source.test.ts`), porque `core` no tiene ejecutor de pruebas.
+
+### Archivos afectados
+
+Nuevos: `packages/core/catalog/page-import.ts`, `landing-pages/src/services/{landing-cache,landing-page,page-import}.ts`, `landing-pages/src/views/admin/business-readonly.html`, `landing-pages/src/views/admin/partials/page-moved-link.html`, `landing-pages/tests/unit/page-import.test.ts`.
+
+Borrados: `api/src/page-cutover.ts`, `landing-pages/src/views/admin/partials/{damaged,restore-form}.html`, `landing-pages/tests/integration/{api-page-process,admin-file-repository}.test.ts`.
+
+Modificados: `packages/core/catalog/{index,page-store,memory-page-store}.ts`, `packages/db/src/prisma-page-store.ts`, `packages/contracts/page.ts`, `api/src/server.ts`, `api/tests/{support/admin,integration/page-unavailable.test,integration/public-page-endpoint.test}.ts`, `inventory-manager/src/{routes,views/page}.ts`, `inventory-manager/tests/{support/page-browser,support/api-double-page,support/api-double,integration/page-unavailable.test,integration/page-failures.test}.ts`, `landing-pages/src/{app,server,internal-app}.ts`, `landing-pages/src/controllers/{admin,admin-business-view,admin-products,landing}.ts`, `landing-pages/src/middleware/admin-guard.ts`, `landing-pages/src/repositories/{menu,file-menu,memory-menu}-repository.ts`, `landing-pages/src/routes/index.ts`, `landing-pages/src/services/landing-products.ts`, `landing-pages/src/views/admin/{index.ts,business.html,confirm-restore.html}`, el soporte y las pruebas de `landing-pages` listadas arriba, `landing-pages/.env.example`, `eslint.config.ts`, `README.md`, `docs/{arquitectura,desarrollo,despliegue}.md` y `.claude/CLAUDE.md` (§8).
+
+### Riesgos o pendientes
+
+- **Ensayo con datos reales (D-16), para QA:** copia de `app-data` y un volcado de producción en local; comprobar CA-1 y CA-6. En particular, que las partes del JSON que no son de página coincidan con la semilla: la landing pinta ahora la semilla más la página, así que un texto no de página editado a mano en `current.json` antes de REQ-F-008 dejaría de verse.
+- **Procedimientos documentados sin ejecutar:** los comandos nuevos de `despliegue.md` (§6, vaciado de tablas; §8, comprobaciones con `$C exec`) no se ejecutaron contra el VPS (prohibido en esta fase). Se ejecutaron sus equivalentes en local en las comprobaciones descartadas. QA debe ensayar la vuelta atrás y el vaciado en local.
+- **Código sin uso hasta el ticket 6:** `save`, `restorePrevious`, `restoreSeed` y `getForEdit` del repositorio de menús ya no los usa la app (siguen probados en `file-menu-repository.test.ts`). Se retiran con `/admin` en el ticket 6.
+- `ops/backup/ci/smoke.sh` no cambia (decisión del plan): CA-17 queda para QA.
+- Limpieza comprobada: sin bases `restaurante_test*`, sin procesos de Vitest ni servidores, sin worktrees, y el archivo temporal de comprobación borrado. El MySQL local se levantó para las pruebas y se detuvo al terminar (`npm run db:down`; los datos siguen en su volumen).
+
+## QA Action Plan del PR 3
+
+Implementación aprobada por el usuario para pasar a QA: "Si" (2026-11-16). Análisis de solo lectura del árbol sin commit de `feature/REQ-F-044-pagina-en-mysql-3-corte` (76 entradas en `git status`) con CodeGraph, el diff y el ticket. NotebookLM no está disponible en esta sesión (sin herramientas MCP `notebooklm`): no se consultó.
+
+### Objetivo
+
+Confirmar con evidencia que el corte importa la página real de producción a MySQL una sola vez, sin pérdidas ni cambios en los JSON, que las landings siguen idénticas, que `/admin` queda en solo lectura y que la vuelta atrás y los procedimientos de `despliegue.md` §6 y §8 funcionan como están escritos.
+
+### Requisito bajo prueba
+
+RF-2, RF-3 (con D-10), RF-5, RF-10 y RF-11; CA-1 a CA-8, CA-13, CA-15 a CA-17, CA-19 y CA-20. De regresión: CA-9 a CA-12, CA-14 y CA-18 (texto neutro, D-14).
+
+### Criterios de aceptación
+
+| CA | Pruebas |
+| --- | --- |
+| CA-1 | P-3, P-4 (datos reales: filas = JSON en valores, revisión, fecha y autor; SHA-256 de todo `app-data` igual antes y después) |
+| CA-2, CA-16 | P-5 (segundo arranque), P-9 (vuelta atrás con JSON editado: `page_json_diverged`, MySQL igual) |
+| CA-3 | P-7 (sonda: fallo en la marca del segundo negocio con Prisma real; nada escrito; el reintento importa los dos) |
+| CA-4 | Unitaria permanente + P-6 (copia de datos reales con `current` de un negocio dañado y `previous` válido) |
+| CA-5 | P-6 (base nueva sin JSON: semilla en los dos huecos y `page_import_from_seed`) |
+| CA-6 | P-8 (HTML de `/`, `/molotes` y `/birria` de `main` con JSON reales frente al PR 3 tras importar, byte a byte salvo nonce) y P-13 (navegador a 375 px y 1440 px) |
+| CA-7 | P-10 (API detenida con copia buena: 200 con la copia; arranque sin API: 200 con la semilla y `landing_page_fallback`) |
+| CA-8 | P-10 (guardado en el admin nuevo visible en la siguiente visita; aviso fallido: `pending` y visible en ≤ 60 s) |
+| CA-13 | P-11 (`/admin/<negocio>` con `ADMIN_NEW_URL`: valores de MySQL, sin formulario, enlace; tres POST 410 tras sesión, permiso y CSRF; nada escrito) |
+| CA-15 | P-9 (`main` sobre la misma base y una copia de `app-data`: sirve los JSON de antes, sin marcarlos dañados, filas intactas) |
+| CA-17 | P-12 (volcado posterior a la importación, edición, restauración del volcado: la página vuelve sin reimportar) y `ops/backup/ci/smoke.sh` |
+| CA-19 | P-4 (lo último guardado en el `/admin` de producción es el `current.json` importado) |
+| CA-20 | P-6 (copia real sin los JSON de un negocio, y con los dos dañados: dos arranques seguidos, salida 1, `PAGE_IMPORT_SEED_REFUSED`, sin marca, sin filas, sin archivos escritos) |
+| CA-9 a CA-12, CA-14, CA-18 | `npm test` + P-13 y P-14 (navegador) |
+
+### Riesgos identificados
+
+1. **Partes no de página:** la landing pinta ahora semilla + página. Un texto no de página editado a mano en un `current.json` de producción dejaría de verse sin error (P-2).
+2. **RN-2 en `repository.init`:** con `seedMissing: false` no escribe la semilla, pero sigue pudiendo aislar un `current.json` dañado (renombrar). Si los JSON reales están sanos no cambia nada; hay que comprobarlo con SHA-256 de todo `app-data` (P-3).
+3. **Negocio marcado y otro negado:** si un negocio ya tiene marca y el otro no tiene JSON utilizables, cada arranque termina con 1 de forma indefinida. Se comprueba que el mensaje y `despliegue.md` §6 dan una salida (P-6).
+4. **Vaciado de D-17 (`despliegue.md` §6):** son tres `DELETE` sin transacción. Si fallara tras borrar `page_version` y antes de `page_import`, quedaría la marca sin datos: sin reimportación y la página "no disponible" en el admin nuevo y la semilla en la landing al reiniciar. Se ensaya el comando y su comprobación previa tal como están escritos (P-9) y se revisa ese caso.
+5. **Comandos de §8:** dependen de que `DATA_DIR` sea `/var/lib/restaurante` (lo es en `compose.prod.yaml`), de que `changes.jsonl` esté en su raíz y de que la imagen tenga `ls` y `wc` (Alpine: sí). Se verifican en un contenedor local de la imagen `production` (P-15).
+6. **Duración:** la importación corre antes de `listen`, dentro del `start_period` de 90 s; se mide con el `changes.jsonl` real (P-4).
+7. **Privacidad:** los datos reales llevan nombres del personal (autores del historial y `updatedBy`) y el volcado, usuarios y hashes. Ningún informe, ticket ni chat lleva contenido: solo sumas, conteos, nombres de campos y resultados.
+8. **`smoke.sh` en macOS:** `ops/backup/ci/smoke.sh` y `deploy/ci/smoke.sh` exigen GNU coreutils y `flock` (Linux), que este Mac no tiene. Si no se pueden ejecutar en un contenedor Linux local, quedan como evidencia del job `docker` del CI del PR (ver Pendientes).
+9. **Orden de arranque documentado:** el Implementation Result dice "primer administrador → `hasProductImports`", pero `server.ts` ejecuta `bootstrapAdmin` después de la importación. Solo es una discrepancia del texto; se confirma que no cambia el comportamiento (instalación nueva sin usuarios).
+
+### Pruebas funcionales y de migración (ensayo con datos reales, D-16)
+
+1. **P-1 Copia de solo lectura:** con `ssh root@179.236.68.95`, empaquetar en solo lectura el volumen `restaurante_app-data` (`docker run --rm -v restaurante_app-data:/d:ro … tar`) y copiar el último volcado de `backups/` a `<scratchpad>/ensayo/` con permisos `700`. Sin comandos que escriban en el VPS, sin tocar contenedores. Sumas SHA-256 en el VPS y en local para comprobar la copia.
+2. **P-2 Partes no de página:** script en el scratchpad que compara, por negocio, `current.json` (y `previous.json`) con `seed.json`, sin los campos de página (`PAGE_SCHEMAS`) ni las listas congeladas. Salida: "iguales" o la lista de rutas de campo distintas, nunca sus valores.
+3. **P-3 Integridad de archivos:** SHA-256 de cada archivo de la copia antes y después de cada arranque del PR 3.
+4. **P-4 Importación real:** base `restaurante_test_ensayo` en el MySQL local de pruebas, con el volcado cargado (y `npm run db:migrate` contra ella si el volcado es anterior a la migración de página). `api` y `landing-pages` del PR 3 con `DATABASE_URL` y `DATA_DIR` apuntando a la base y a una copia, por variables de entorno, sin tocar los `.env`. Comprobar: dos `page_import_done` con `source` `current`; `page_import` con dos filas; `page_version` igual a los JSON (valores, `revision@updatedAt`, autor) comparado por programa; `history_count` igual a las líneas válidas de cada negocio y `skipped_lines` igual a las ilegibles; logs sin ningún valor de la página ni del historial (búsqueda por programa, solo el conteo); duración del arranque y de la importación.
+5. **P-5 Segundo arranque:** no reimporta, filas iguales, sin `page_json_diverged`.
+6. **P-6 Casos límite sobre copias:** `current` de un negocio dañado con `previous` válido (CA-4); sin los JSON de un negocio y con los dos dañados en la base existente (CA-20, dos arranques seguidos); base nueva sin JSON (CA-5); un negocio ya marcado y el otro sin JSON (riesgo 3).
+7. **P-7 CA-3:** sonda temporal en `landing-pages/tests/` con MySQL real que falla en la marca del segundo negocio; nada escrito y el reintento importa completo.
+8. **P-8 CA-6:** `git worktree` temporal de `origin/main` (`4db1413`). `main` (`api` y `app`) sobre la copia real y la base del volcado: HTML de `/`, `/molotes` y `/birria`. Después, el PR 3 tras importar: mismo HTML, normalizando solo el nonce de CSP si cambia por petición.
+9. **P-9 Vuelta atrás PR 3 → PR 2 → PR 3 sobre la misma base:** tras importar, una edición en el admin nuevo; volver a `main` (`api`, `inventory-manager` y `app`): "Página" no disponible, la landing con los JSON de antes, `/admin` sin aviso de dañado y escribiendo los JSON; editar un JSON desde ese `/admin`; avanzar al PR 3: sin reimportación, un `page_json_diverged`, MySQL sin cambios y la landing con MySQL. Ensayar el vaciado de §6 tal como está escrito (con la comprobación `imported = 0`, que debe dar distinto de 0 con la edición y 0 en una segunda pasada sin ediciones) y comprobar que el siguiente arranque reimporta los JSON actuales.
+10. **P-10 CA-7 y CA-8:** cadena real `api` + `inventory-manager` + `app`: guardar en "Página" y ver el cambio en la siguiente visita (`confirmed`); con el aviso interno fallando, `pending` y visible en ≤ 60 s; detener la `api`: 200 con la copia buena; arrancar la `app` sin `api`: 200 con la semilla y el log.
+11. **P-11 CA-13 y D-6:** `/admin/molotes` y `/admin/birria` con y sin `ADMIN_NEW_URL`, como administrador y como editor (403 en el otro negocio).
+12. **P-12 CA-17:** volcado local tras la importación, una edición, restauración del volcado: la página vuelve a lo del volcado y el arranque no reimporta. `ops/backup/ci/smoke.sh` (riesgo 8).
+
+### Pruebas negativas y casos límite
+
+Incluidas en P-6, P-7, P-9 y P-11: JSON dañados, faltantes, marca parcial, fallo a mitad, aviso interno caído, API caída, POST sin CSRF o de otro negocio.
+
+### Pruebas responsive y de accesibilidad
+
+13. **P-13 Navegador (Claude in Chrome), 375×812, 768×1024 y 1440×900:** `/`, `/molotes` y `/birria` tras la importación (sin desplazamiento horizontal, CTA de WhatsApp visible sin scroll en móvil, aviso del día de hoy); `/admin/<negocio>` en solo lectura (un `h1`, jerarquía, `fieldset` deshabilitado legible, enlace con foco visible y texto significativo, sin formularios); "Página" del admin nuevo en estado neutro (`role="status"`, texto de D-14, sin formulario ni acciones).
+14. **P-14 CA-14:** edición, conflicto y restauración en "Página" con teclado a 375 px y escritorio, y sin JavaScript (bloqueado para `127.0.0.1` en el navegador si la extensión lo permite; si no, flujo PRG por HTTP y revisión manual).
+
+### Pruebas de integración (WhatsApp)
+
+`href` del CTA en las dos landings (dominio, número y `text` codificado), `target` y `rel`, igual que en `main` (P-8 y P-13). No se sigue el enlace.
+
+### Pruebas de performance
+
+Duración de la importación real frente al `start_period` de 90 s (P-4); peticiones de la landing a la `api` con la caché fresca (ninguna por visita, comprobado en los logs de la `api`); consola sin errores (P-13).
+
+### Pruebas SEO
+
+`title`, meta description, canonical y Open Graph incluidos en la comparación byte a byte de P-8.
+
+### Pruebas de regresión
+
+`npm run build:css`, `npm run typecheck`, `npm run lint` (sin `lint:fix`) y `npm test` completos; avisos del día y selección de landing por la suite; `/admin` de productos, usuarios y bot sin cambios; `deploy/` sin cambios (`git diff --stat`); revisión del diff de documentación (§6, §8, §9, §11.1, `README.md`, `arquitectura.md`, `.claude/CLAUDE.md` §8).
+
+### Pruebas de despliegue (`despliegue.md` §6 y §8)
+
+15. **P-15:** revisión de cada comando nuevo y ejecución de su equivalente local contra la imagen `production` construida del árbol (`docker build --target production`) y el MySQL local: el `ls -l … && wc -l` de §8 dentro del contenedor con la copia montada en `/var/lib/restaurante`; el `SELECT … FROM page_import`; el `DELETE` y el `SELECT COUNT(*) … imported = 0` de §6. Nada contra producción.
+
+### Pruebas automatizadas
+
+- Existentes: la suite completa y la unitaria permanente `landing-pages/tests/unit/page-import.test.ts`, revisando que sus casos cubran CA-4, CA-5 y CA-20 sin reproducir la implementación.
+- Sondas temporales (D-15, se borran al terminar): P-7 en `landing-pages/tests/`, y los scripts de P-2, P-3, P-4 y P-8 en el scratchpad. No quedan en el repositorio otras pruebas.
+
+### Evidencia requerida
+
+Códigos de salida y resúmenes de cada comando; sumas y conteos; nombres de eventos de log (sin valores); diferencias de HTML (vacías o normalizadas); capturas de navegador sin datos personales; duración medida. Ningún contenido de los JSON, del historial ni del volcado.
+
+### Limpieza
+
+Al terminar, también si algo falla: borrar la copia de `app-data`, el volcado, la base `restaurante_test_ensayo` y cualquier `restaurante_test*` sobrante, el `git worktree` de `main`, las imágenes y contenedores de la prueba, la sonda de P-7, los scripts y capturas; detener servidores y el MySQL local si lo levanta QA; cerrar las pestañas. Comprobado con `git worktree list`, `docker ps -a`, `lsof` de los puertos y la lista de bases.
+
+### Criterios de aprobación
+
+- CA-1 a CA-8, CA-13, CA-15 a CA-17, CA-19 y CA-20 en PASS con evidencia, incluidos los datos reales.
+- Partes no de página iguales a la semilla en los dos negocios, o una decisión del usuario sobre cada diferencia.
+- `typecheck`, `lint` y `npm test` en 0; sin regresión en landings ni en `/admin`.
+- Comandos de §6 y §8 correctos en su equivalente local.
+- Sin defectos `BLOCKER` ni `CRITICAL`; cada `MAJOR`, con decisión del usuario.
+- Limpieza comprobada.
+
+### Pendientes posibles
+
+- `smoke.sh` (backup y deploy) si no corre en local: se toma el job `docker` del CI del PR como evidencia; si CA-17 dependiera solo de él, P-12 lo cubre a nivel de base.
+- CA-14 sin JavaScript si la extensión no permite bloquearlo: revisión manual del usuario.
+
+## QA Report del PR 3
+
+### Ronda
+
+1 (2026-11-16), sobre el árbol sin commit de `feature/REQ-F-044-pagina-en-mysql-3-corte` (76 entradas en `git status`, sin cambios al terminar). Plan aprobado: "Apruebo el plan"; `smoke.sh`: "Sí, acepto el CI (Recomendado)"; CA-14 sin JS: "Sí, revisión manual (Recomendado)". NotebookLM no disponible en la sesión: no se consultó.
+
+### Pruebas ejecutadas
+
+Datos reales: copia de solo lectura de `restaurante_app-data` (5 archivos: dos `current.json`, dos `previous.json` y `changes.jsonl` de 3 líneas) y del volcado `20261116T011751Z-49bcf4ac21f9.sql.gz`, en una carpeta 700 del scratchpad. El volcado es anterior a la migración de página (como en `deploy.sh`): se cargó en `restaurante_test_ensayo` del MySQL local (sin sus líneas `CREATE DATABASE`/`USE restaurante`) y se migró. Procesos reales (`node src/server.ts` con entorno explícito, sin los `.env`). Ningún contenido de datos en este informe.
+
+| Paso | Resultado |
+| --- | --- |
+| Regresión | `build:css` 0, `typecheck` 0, `lint` 0, `npm test` 0: `api` 46 archivos/1.118, `landing-pages` 95/1.314 (58 s), `inventory-manager` 15/257 |
+| P-1 | OK. SHA-256 de los 5 archivos y del volcado iguales en el VPS y en local. En el VPS solo `docker run --rm --network none -v …:/d:ro` (tar y sha256sum) y `scp` de lectura |
+| P-2 | OK. Fuera de `hero`, `menu.highlight`, `promo` y las listas congeladas, `current` y `previous` de los dos negocios son iguales a `seed.json` (las cuatro comparaciones, "iguales") |
+| P-3 | OK. SHA-256 de `app-data` igual tras el primer y el segundo arranque, y tras arrancar la imagen `production` |
+| P-4 | OK. Dos `page_import_done` con `source` `current`; `page_import` 2 filas; `page_version` 4 filas iguales a los JSON en valores, revisión, `updatedAt` y autor (comparado por programa); `source_version` = `revision@updatedAt`; `history_count` = líneas válidas por negocio (1 y 2), `skipped_lines` 0; historial importado = `changes.jsonl` (negocio, fecha, autor, id, acción y cambios). 138 valores de los datos buscados en los logs: 0 apariciones. Arranque hasta `server_started`: 0,62 s (frente al `start_period` de 90 s) |
+| P-5 | OK. Segundo arranque: sin `page_import_done` ni `page_json_diverged`; `CHECKSUM TABLE` de las tres tablas igual |
+| P-6 | OK. CA-4: `page_import_from_previous`, vigente = `previous.json` (datos, revisión y fecha), sin anterior; el `current` dañado queda como `damaged-<fecha>.json` byte a byte (igual que `main`). CA-20 sin JSON de Birria y con los dos de Birria dañados, dos arranques cada uno: salida 1, `page_import_failed` `PAGE_IMPORT_SEED_REFUSED` (`missing`/`damaged`), 0 filas y 0 marcas, sin semilla escrita. CA-5 (base nueva, volumen vacío): `page_import_from_seed` en los dos, vigente y anterior = semilla. Riesgo 3 (Molotes marcado y Birria sin JSON): salida 1 en cada arranque con el mensaje que remite a §6; restaurando los JSON, el siguiente arranque importa Birria |
+| P-7 | OK. Sonda temporal con Prisma real y los JSON reales: fallo en la marca de Birria → 0/0/0 filas; reintento → los dos importados (4/3/2). Borrada |
+| P-8 | OK. `origin/main` (`4db1413`) en `git worktree` sobre la misma copia y el volcado frente al PR 3 tras importar: HTML de `/`, `/molotes` y `/birria` idéntico byte a byte (sin normalizar nada) |
+| P-9 | OK. Edición en el admin nuevo → vuelta a `main` (`api`, `inventory-manager`, `app`; misma base): API 503 `PAGE_UNAVAILABLE`, "Página" sin formulario, landings iguales a antes del corte, `/admin` sin "dañado" y guardando en los JSON; tablas sin cambios. Avance al PR 3: sin reimportar, un `page_json_diverged` (Molotes), tablas iguales y la landing con lo de MySQL. §6: `COUNT(*) … imported = 0` dio 1 con la edición; en una segunda pasada sin ediciones dio 0, el `DELETE` tal como está escrito dejó 0/0/0 y el siguiente arranque reimportó los JSON actuales (datos, marca e historial iguales a los JSON) |
+| P-10 | OK. CA-8: guardado → `landing=confirmed` y la siguiente visita lo muestra; con el aviso interno roto → `landing=pending` y visible a los 35,8 s (sondeo de 0,5 s). CA-7: API detenida → 200 con la última copia (`landing_page_fallback` `last_good`); arranque sin API → 200 en las tres rutas con la semilla (`landing_page_fallback` `seed`) |
+| P-11 | OK. Con `ADMIN_NEW_URL`, administrador y editor: `/admin/molotes` y `/admin/birria` con valores de MySQL (no los del JSON), `fieldset` deshabilitado fuera de formularios, enlace a `<ADMIN_NEW_URL>/<negocio>/pagina`; guardar, restaurar anterior y restaurar semilla: 410 con CSRF, 403 sin CSRF, 303 al acceso sin sesión; editor en Birria: 403. Tablas y JSON sin cambios. Sin `ADMIN_NEW_URL`: guarda en MySQL (la landing lo muestra), restaurar semilla 409, restaurar anterior con la versión confirmada; JSON intactos |
+| P-12 | OK a nivel de base: volcado tras la importación, edición, `DROP` y carga del volcado → tablas iguales al volcado, arranque sin `page_import_done` y la landing con lo del volcado |
+| P-13 | OK (Chrome headless por CDP, porque la ventana de la extensión no baja de 606 px). 375×812, 768×1024 y 1440×900 en `/`, `/molotes` y `/birria`: sin desplazamiento horizontal, un `h1`, sin saltos de encabezado, `header`/`main`/`footer`/`nav`, CTA de WhatsApp visible sin desplazar (2 o 3), imágenes con `alt` y sin deformar, 0 errores de consola; domingo: sin aviso en `/` y "Hoy toca birria" en `/molotes`. `/admin/molotes` en solo lectura y "Página" del admin nuevo en estado neutro (texto de D-14 en `role="status"`, sin formulario ni acciones) en los tres tamaños, con capturas revisadas; enlace del `/admin` alcanzable con Tab y foco visible |
+| P-14 | OK. Con teclado (Tab/Enter) a 375 px sin JavaScript (`Emulation.setScriptExecutionDisabled`), a 375 px con JS y a 1440 px con JS: acceso, edición, 409 con quién y cuándo, lo escrito conservado, "Guardar mis cambios de todos modos" y "Descartar…", confirmación y restauración; 66 pasos de Tab sin ninguno sin foco visible, sin desplazamiento horizontal. Único error de consola: el 409 esperado |
+| P-15 | OK. Imagen `production` construida del árbol: el `ls -l … && wc -l` de §8 con la copia en `/var/lib/restaurante` (`DATA_DIR` de `compose.prod.yaml`) sale 0 con los tres archivos; el `SELECT … FROM page_import` de §8 y el `COUNT`/`DELETE` de §6 ejecutados con su `sh -c` en el contenedor MySQL local. La imagen arrancó sobre el volcado y la copia: dos `page_import_done` `current`, archivos intactos |
+| WhatsApp, SEO, performance | `href` `https://wa.me/<número>`, `target="_blank"`, `rel="noopener noreferrer"` y `title`, canonical y Open Graph dentro de la comparación byte a byte de P-8. 20 visitas con la caché fresca: 0 peticiones de página a la `api` |
+| Regresión de alcance | `git diff 4db1413 -- deploy ops packages/db/prisma landing-pages/public`: vacío. Revisados `despliegue.md` §6, §8 y §9 (ejecutados), `README.md` ("JSON dañados en la importación") y `.env.example` |
+
+### Criterios de aceptación
+
+| CA | Estado | Evidencia |
+| --- | --- | --- |
+| CA-1 | PASS | P-3, P-4 (datos reales) |
+| CA-2 | PASS | P-5, P-9 |
+| CA-3 | PASS | P-7 |
+| CA-4 | PASS | P-6 y la unitaria permanente |
+| CA-5 | PASS | P-6 |
+| CA-6 | PASS | P-8 (byte a byte) y P-13 |
+| CA-7 | PASS | P-10 |
+| CA-8 | PASS | P-10 |
+| CA-13 | PASS | P-11 |
+| CA-15 | PASS | P-9 |
+| CA-16 | PASS | P-9 |
+| CA-17 | PASS a nivel de base (P-12); `smoke.sh` pendiente del CI | Ver Pendientes |
+| CA-19 | PASS | P-4: la última entrada de cada negocio en `changes.jsonl` coincide en fecha y autor con su `current.json`, que es lo importado |
+| CA-20 | PASS | P-6 |
+| CA-9 a CA-12, CA-14, CA-18 | PASS | `npm test`, P-13 y P-14 (CA-14 sin JS comprobado, no queda para revisión manual) |
+
+### Defectos encontrados
+
+Sin `BLOCKER`, `CRITICAL`, `MAJOR` ni `MINOR`.
+
+- **DEF-PR3-001 (TRIVIAL), documentación.** `landing-pages/.env.example` dice que los JSON "solo se leen al arrancar", pero un `current.json` dañado se renombra a `damaged-<fecha>.json` al arrancar (comportamiento previo, igual en `main` y descrito en `README.md`). Recomendación: matizarlo en el comentario.
+
+Observaciones sin defecto: con los JSON de un negocio ausentes, el arranque negado deja la carpeta vacía del negocio (sin semilla; CA-20 se cumple). Los tres `DELETE` de §6 van sin transacción, pero repetir el comando completa un vaciado a medias. La frescura de la página sigue la regla de los productos (RF-5): un cambio `pending` se ve en la primera visita tras vencer los 60 s desde la última carga. El orden "primer administrador → `hasProductImports`" del Implementation Result no es el del código (va después de la importación), sin efecto en el comportamiento (P-6, CA-5).
+
+### Regresión
+
+Suite completa en verde, landings idénticas a `main` con datos reales, `/admin` de productos sin cambios (P-11 y suite), `deploy/`, `ops/`, migraciones y `public/` sin cambios.
+
+### Responsive
+
+Sin desplazamiento horizontal en 375, 768 y 1440 px en landings, `/admin/<negocio>` y "Página" (P-13 y P-14).
+
+### Accesibilidad
+
+Un `h1` y sin saltos de encabezado, landmarks, `alt`, foco visible en todos los pasos de Tab, avisos en `role="status"`/`role="alert"`, flujo completo sin JavaScript.
+
+### UX/UI
+
+Landings sin cambios visuales (HTML idéntico). Las capturas de `/admin` en solo lectura y del aviso neutro se revisaron y se borraron.
+
+### Performance
+
+Arranque con importación real: 0,62 s. Sin peticiones a la `api` por visita con la caché fresca. Sin errores de consola en las landings.
+
+### SEO
+
+Incluido en la comparación byte a byte de P-8.
+
+### Pendientes de revisión manual
+
+- **CA-17, `ops/backup/ci/smoke.sh`:** no se ejecutó en local (exige Linux con `flock` y GNU coreutils, y descargar la imagen de versitygw). Queda para el job `docker` del CI, como aceptó el usuario. **Ojo:** en `.github/workflows/ci.yml` las dos pruebas de humo solo corren en PR hacia `main`; en el PR del PR 3 hacia `epic/arquitectura` se omiten, así que la evidencia llegará con el PR de la épica a `main`.
+- Antes de desplegar: las comprobaciones de `despliegue.md` §8 en el VPS.
+
+### Limpieza
+
+Comprobada: servidores detenidos (puertos 3100 a 3104 y 9333 a 9336 libres), Chrome headless cerrado y sus perfiles borrados, pestañas de la extensión cerradas; bases `restaurante_test_ensayo`, `_main`, `_p6`, `_p6m`, `_p9c` e `_img` borradas (no queda ninguna `restaurante_test*`); `git worktree` de `main` eliminado (`git worktree list`: solo el principal); imágenes `qa-req-f-044:production` y `:migrate` y el contenedor `qa-req-f-044-app` borrados; copias de `app-data`, el volcado, los volcados locales, scripts, logs y capturas borrados del scratchpad; la sonda de P-7 borrada; MySQL local detenido (`npm run db:down`). En el VPS no quedó ningún contenedor temporal ni archivo.
+
+### Resultado final
+
+QA_APPROVED
+
 ## Notas para los siguientes PR
 
 - **DEF-001 (TRIVIAL), registrado sin corregir:** dentro de `fields`, `_csrf`, `action`, `expectedVersion` y `__proto__` se ignoran en silencio. Sin efecto en datos ni historial.
@@ -958,6 +1259,22 @@ Aprobación del usuario: "si", a "¿Apruebas la implementación y esa QA corta?"
 ### PR 2 abierto (2026-11-05)
 
 Tras `QA_APPROVED`, se corrige en `Implementation Result` lo dicho sobre el foco de los campos, sin cambios de código. PR 2 abierto hacia `epic/arquitectura`, CI en curso.
+
+### Implementación del PR 3 (2026-11-16)
+
+Decisiones D-13 a D-17 registradas (aprobación del plan: "Apruebo, implementar"). Rama `feature/REQ-F-044-pagina-en-mysql-3-corte` desde `origin/main`. Importación única, landings por la API, `/admin` en solo lectura, retirada de `PAGE_CUTOVER`, texto neutro, lint y documentación. `typecheck`, `lint` y `npm test` (2.689 pruebas) en verde. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA Action Plan del PR 3 (2026-11-16)
+
+Implementación aprobada por el usuario, cita textual: "Si". `senior-qa` escribe el "QA Action Plan del PR 3" (ensayo con datos reales en solo lectura, vuelta atrás, §6 y §8 en local), sin ejecutar pruebas ni tocar el VPS. Estado: `NEEDS_QA_PLAN_APPROVAL`.
+
+### QA del PR 3, ronda 1 (2026-11-16)
+
+Plan aprobado por el usuario: "Apruebo el plan"; `smoke.sh` por el CI: "Sí, acepto el CI (Recomendado)"; CA-14 sin JS: "Sí, revisión manual (Recomendado)". `senior-qa` ejecuta P-1 a P-15 con una copia de solo lectura de los datos reales: todos en OK, sin diferencias con `main` en las landings y sin defectos salvo DEF-PR3-001 (`TRIVIAL`, documentación). `smoke.sh` queda pendiente del CI del PR de la épica a `main`. Estado: `QA_APPROVED`.
+
+### Pull Request del PR 3 (2026-11-16)
+
+Se corrige DEF-PR3-001 en `landing-pages/.env.example` (al arrancar, un `current.json` dañado se conserva como `damaged-<fecha>.json`; los JSON ya no se reimportan). `typecheck` 0, `lint` 0 y `npm test` 0 (`api` 46/1.118, `landing-pages` 95/1.314, `inventory-manager` 15/257). Única prueba permanente nueva: `landing-pages/tests/unit/page-import.test.ts`. Un commit y PR hacia `epic/arquitectura`, que también integra en la épica el commit de documentación de #146. CA-17 (`smoke.sh`) queda para el CI del PR de la épica a `main`.
 
 ## Incidencia del PR 1
 

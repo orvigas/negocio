@@ -119,6 +119,16 @@ export function createFileStorage({ dataDir, fs = nodeFs }: { dataDir: string; f
       }
     },
 
+    async readChanges() {
+      try {
+        return await fs.readFile(join(dataDir, CHANGE_LOG_FILE), 'utf8');
+      } catch (err) {
+        // Sin registro: historial vacío. Cualquier otro error (permisos, E/S) sí es un fallo.
+        if (errorProp(err, 'code') === 'ENOENT') return null;
+        throw err;
+      }
+    },
+
     async appendChange(line) {
       const handle = await fs.open(join(dataDir, CHANGE_LOG_FILE), 'a', FILE_MODE);
       try {

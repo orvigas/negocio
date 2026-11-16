@@ -17,7 +17,7 @@ import { FRIDAY_NOON_MX } from '../support/admin.ts';
 import { makeDatabase, makeTempDir, type TestDatabase } from '../support/database.ts';
 import { listenLocal } from '../support/http.ts';
 import { ANA, VALID_INPUTS } from '../support/products.ts';
-import { landingProductsFrom } from '../support/landing-products.ts';
+import { fixedLandingPage, landingProductsFrom } from '../support/landing-products.ts';
 
 /**
  * Landings con los productos de la base de datos (REQ-F-008, RF-3 y RF-4): DATA_DIR temporal con
@@ -68,7 +68,7 @@ async function start(dataDir: string, { wrapStore = (store: ProductStore) => sto
     logger,
   });
   await products.init({ molotes: await menus.getStartupSource('molotes'), birria: await menus.getStartupSource('birria') });
-  const client = (await listenLocal(createApp({ config: makeConfig(), repository: menus, products, landingProducts: landingProductsFrom(products), logger, now: () => FRIDAY_NOON_MX }))).request();
+  const client = (await listenLocal(createApp({ config: makeConfig(), products, landingProducts: landingProductsFrom(products), landingPage: fixedLandingPage(), logger, now: () => FRIDAY_NOON_MX }))).request();
   return { client, products, prisma, logger };
 }
 

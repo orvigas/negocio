@@ -1,0 +1,10 @@
+<h1 class="text-2xl font-bold text-slate-900">{{ title }}</h1>
+      <p class="admin__last-change mt-1 mb-6 text-sm text-slate-700">{{ lastChange }}</p>
+      {{{ notices }}}
+      {{{ products }}}
+      <section class="admin-page-readonly" aria-labelledby="page-readonly-title">
+        <h2 id="page-readonly-title" class="mt-10 mb-4 text-xl font-bold text-slate-900">Hero, texto destacado y promociones</h2>
+        <fieldset class="admin-form__data space-y-6" disabled>
+          <legend class="sr-only">Datos de la página (solo lectura)</legend>{{{ sections }}}
+        </fieldset>
+      </section>

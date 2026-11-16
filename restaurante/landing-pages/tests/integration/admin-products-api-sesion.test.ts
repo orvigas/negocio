@@ -7,7 +7,7 @@ import { makeConfig, makeRepository } from '../helpers.ts';
 import { createUser, loginAs, setupAdmin } from '../support/admin.ts';
 import { listenLocal } from '../support/http.ts';
 import { VALID_INPUTS, makeProductsFor } from '../support/products.ts';
-import { landingProductsFrom } from '../support/landing-products.ts';
+import { fixedLandingPage, landingProductsFrom } from '../support/landing-products.ts';
 import { API, products, apiSession, adminApi, molotesDrink } from '../support/admin-products-api.ts';
 
 /**
@@ -219,7 +219,7 @@ describe('disponibilidad (CA-23, CA-24, M-1, M-6)', () => {
   it('CA-23: con la administración deshabilitada la API responde 503 y las landings funcionan', async () => {
     const repository = await makeRepository();
     const productRepository = await makeProductsFor(repository);
-    const client = (await listenLocal(createApp({ config: makeConfig(), repository, products: productRepository, landingProducts: landingProductsFrom(productRepository) }))).request();
+    const client = (await listenLocal(createApp({ config: makeConfig(), products: productRepository, landingProducts: landingProductsFrom(productRepository), landingPage: fixedLandingPage() }))).request();
     for (const path of [`${API}/sesion`, products('molotes')]) {
       const res = await client.get(path);
       expect(res.status).toBe(503);

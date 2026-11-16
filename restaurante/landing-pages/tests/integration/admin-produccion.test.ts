@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../../src/app.ts';
 import { makeConfig, makeRecordingLogger, makeRepository, seedData } from '../helpers.ts';
-import { ADMIN_PASSWORD, ADMIN_PASSWORD_HASH, ADMIN_USER, createUser, csrfFrom, formFields, login, loginAs, openForm, setupAdmin, submitForm, textOf } from '../support/admin.ts';
+import { ADMIN_PASSWORD, ADMIN_PASSWORD_HASH, ADMIN_USER, createUser, csrfFrom, formFields, login, loginAs, openForm, restoreFields, setupAdmin, submitForm, textOf } from '../support/admin.ts';
 import { listenLocal } from '../support/http.ts';
 import { makeProductsFor } from '../support/products.ts';
-import { landingProductsFrom } from '../support/landing-products.ts';
-import { ADMIN_PAGES, loggedIn, versionOf } from '../support/admin-page.ts';
+import { fixedLandingPage, landingProductsFrom } from '../support/landing-products.ts';
+import { ADMIN_PAGES, loggedIn, pageOf, versionOf } from '../support/admin-page.ts';
 
 /**
  * REQ-F-041: parte de admin.test.ts (preparación en tests/support/admin-page.ts).
@@ -16,7 +16,7 @@ describe('acceso protegido (RF-5)', () => {
   it('CA-24: sin credenciales configuradas la administración responde "no disponible" y las landings funcionan', async () => {
     const repository = await makeRepository();
     const products = await makeProductsFor(repository);
-    const app = createApp({ config: makeConfig(), repository, products, landingProducts: landingProductsFrom(products) });
+    const app = createApp({ config: makeConfig(), products, landingProducts: landingProductsFrom(products), landingPage: fixedLandingPage() });
     const client = (await listenLocal(app)).request();
     for (const path of ['/admin', '/admin/login', ...ADMIN_PAGES]) {
       const res = await client.get(path);
@@ -106,12 +106,12 @@ describe('edición simultánea (RF-7)', () => {
   }
 
   it('CA-32: B no guarda nada y ve quién y cuándo cambió el menú, con dos opciones', async () => {
-    const { b, formB, repository } = await twoEditors();
-    const version = await versionOf(repository, 'birria');
+    const { b, formB, pages } = await twoEditors();
+    const version = await versionOf(pages, 'birria');
     const res = await submitForm(b, 'birria', formB.fields, { 'promo.title': 'Título de Beto' });
 
     expect(res.status).toBe(409);
-    expect(await versionOf(repository, 'birria')).toBe(version);
+    expect(await versionOf(pages, 'birria')).toBe(version);
     const text = textOf(res.text);
     expect(text).toContain('El menú cambió mientras lo editabas');
     expect(text).toContain('Ana guardó otra versión el 09/10/2026 12:03.');
@@ -122,24 +122,24 @@ describe('edición simultánea (RF-7)', () => {
   });
 
   it('CA-33: "Guardar mis cambios de todos modos" sobrescribe y la versión de A queda como anterior', async () => {
-    const { b, formB, repository, request: client } = await twoEditors();
+    const { b, formB, pageStore, request: client } = await twoEditors();
     const conflict = await submitForm(b, 'birria', formB.fields, { 'promo.title': 'Título de Beto' });
     const res = await submitForm(b, 'birria', formFields(conflict.text), { action: 'overwrite_after_conflict' });
 
     expect(res.status).toBe(303);
     expect(res.headers.location).toBe('/admin/birria?ok=overwrite_after_conflict');
     expect((await client().get('/birria')).text).toContain('Título de Beto');
-    expect(JSON.parse(repository.storage.files.get('birria/previous')!).data.promo.title).toBe('Título de Ana');
-    expect(repository.storage.changes.at(-1)).toMatchObject({ author: 'Beto', action: 'overwrite_after_conflict' });
+    expect(pageOf({ data: JSON.parse(pageStore.state.pages.get('birria')!.previous!.data) }).promo.title).toBe('Título de Ana');
+    expect(pageStore.state.changes.at(-1)).toMatchObject({ author: 'Beto', action: 'overwrite_after_conflict' });
   });
 
   it('CA-33: "Descartar" muestra los datos de A y no escribe nada', async () => {
-    const { b, formB, repository } = await twoEditors();
+    const { b, formB, pageStore } = await twoEditors();
     await submitForm(b, 'birria', formB.fields, { 'promo.title': 'Título de Beto' });
-    const changes = repository.storage.changes.length;
+    const changes = pageStore.state.changes.length;
     const page = await b.get('/admin/birria');
     expect(formFields(page.text)['promo.title']).toBe('Título de Ana');
-    expect(repository.storage.changes).toHaveLength(changes);
+    expect(pageStore.state.changes).toHaveLength(changes);
   });
 
   it('RN-6: si otra persona vuelve a guardar antes de sobrescribir, aparece un nuevo aviso', async () => {
@@ -154,7 +154,7 @@ describe('edición simultánea (RF-7)', () => {
 
 describe('restaurar versión anterior (RF-6.5)', () => {
   it('CA-30: pide confirmación, restaura, intercambia versiones y lo registra', async () => {
-    const { browser, request: client, repository } = await loggedIn();
+    const { browser, request: client, pageStore } = await loggedIn();
     const { fields } = await openForm(browser, 'molotes');
     await submitForm(browser, 'molotes', fields, { 'menu.highlight': 'Destacado nuevo' });
 
@@ -167,13 +167,13 @@ describe('restaurar versión anterior (RF-6.5)', () => {
     const res = await browser
       .post('/admin/molotes/restaurar-anterior')
       .type('form')
-      .send({ _csrf: csrfFrom(confirm.text) });
+      .send(restoreFields(confirm.text));
     expect(res.status).toBe(303);
     expect(res.headers.location).toBe('/admin/molotes?ok=restore_previous');
 
     expect((await client().get('/molotes')).text).toContain(seedData('molotes').menu.highlight);
-    expect(JSON.parse(repository.storage.files.get('molotes/previous')!).data.menu.highlight).toBe('Destacado nuevo');
-    expect(repository.storage.changes.at(-1)).toMatchObject({ author: ADMIN_USER, action: 'restore_previous' });
+    expect(pageOf({ data: JSON.parse(pageStore.state.pages.get('molotes')!.previous!.data) }).menu.highlight).toBe('Destacado nuevo');
+    expect(pageStore.state.changes.at(-1)).toMatchObject({ author: ADMIN_USER, action: 'restore_previous' });
   });
 
   it('restaurar la semilla sin datos dañados no está permitido', async () => {
@@ -182,47 +182,6 @@ describe('restaurar versión anterior (RF-6.5)', () => {
     const res = await browser.post('/admin/molotes/restaurar-semilla').type('form').send({ _csrf: csrfFrom(page.text) });
     expect(res.status).toBe(409);
     expect(textOf(res.text)).toContain('solo se puede restaurar cuando los datos están dañados');
-  });
-});
-
-describe('archivo dañado (RF-8)', () => {
-  it('CA-36: aviso, edición bloqueada y opciones; la elección queda en el registro y desbloquea', async () => {
-    const { browser, repository, request: client } = await loggedIn();
-    repository.storage.files.set('molotes/current', '{ dañado');
-
-    const page = await browser.get('/admin/molotes');
-    expect(page.status).toBe(200);
-    expect(textOf(page.text)).toContain('Los datos guardados están dañados; la landing está mostrando la última versión válida.');
-    expect(page.text).toMatch(/<fieldset class="admin-form__data space-y-6" disabled>/);
-    expect(page.text).not.toContain('value="save">Guardar cambios</button>');
-    expect(page.text).toContain('action="/admin/molotes/restaurar-anterior"');
-    expect(page.text).toContain('action="/admin/molotes/restaurar-semilla"');
-    expect((await client().get('/molotes')).status).toBe(200);
-
-    // Un guardado forzado tampoco escribe.
-    const forced = await browser
-      .post('/admin/molotes')
-      .type('form')
-      .send({ ...formFields(page.text), action: 'save' });
-    expect(forced.status).toBe(409);
-    expect(repository.storage.changes).toHaveLength(0);
-
-    const restore = await browser.post('/admin/molotes/restaurar-semilla').type('form').send({ _csrf: csrfFrom(page.text) });
-    expect(restore.status).toBe(303);
-    expect(repository.storage.changes.at(-1)).toMatchObject({ author: ADMIN_USER, action: 'restore_seed', business: 'molotes' });
-
-    const unlocked = await browser.get('/admin/molotes');
-    expect(unlocked.text).not.toContain('disabled>');
-    expect(unlocked.text).toContain('value="save">Guardar cambios</button>');
-  });
-
-  it('CA-36: "Restaurar versión anterior" solo se ofrece si es válida', async () => {
-    const { browser, repository } = await loggedIn();
-    repository.storage.files.set('molotes/current', '[]');
-    repository.storage.files.set('molotes/previous', 'nada');
-    const page = await browser.get('/admin/molotes');
-    expect(page.text).not.toContain('action="/admin/molotes/restaurar-anterior"');
-    expect(page.text).toContain('action="/admin/molotes/restaurar-semilla"');
   });
 });
 

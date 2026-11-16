@@ -17,7 +17,7 @@ function expectUnconfirmed(html: string): void {
   expect(text).toContain(UNCONFIRMED);
   expect(text).not.toMatch(/no se guardó|no se restauró|se guardó|guardado/i);
   expect(text).not.toContain('secreto');
-  expect(text).not.toContain('aún no está activa');
+  expect(text).not.toContain('no está disponible en este momento');
 }
 
 describe('guardar sin confirmación', () => {

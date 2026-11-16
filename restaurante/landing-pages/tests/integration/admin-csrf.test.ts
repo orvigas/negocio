@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { ADMIN_PASSWORD, csrfFrom, type FormFields, openForm, setupAdmin, submitForm } from '../support/admin.ts';
-import { loggedIn, versionOf } from '../support/admin-page.ts';
+import { ADMIN_PASSWORD, csrfFrom, type FormFields, openForm, restoreFields, setupAdmin, submitForm } from '../support/admin.ts';
+import { loggedIn, pageOf, versionOf } from '../support/admin-page.ts';
 
 /**
  * REQ-F-041: parte de admin.test.ts (preparación en tests/support/admin-page.ts).
@@ -13,20 +13,20 @@ describe('acceso protegido (RF-5)', () => {
       ['sin token', (fields: FormFields) => delete fields._csrf],
       ['con un token incorrecto', (fields: FormFields) => (fields._csrf = 'x'.repeat(43))],
     ])('rechaza un guardado %s', async (_label, mutate) => {
-      const { browser, repository } = await loggedIn();
+      const { browser, pages } = await loggedIn();
       const { fields } = await openForm(browser, 'molotes');
       mutate(fields);
-      const before = await versionOf(repository, 'molotes');
+      const before = await versionOf(pages, 'molotes');
       const res = await submitForm(browser, 'molotes', fields, {});
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('CSRF_INVALID');
-      expect(await versionOf(repository, 'molotes')).toBe(before);
+      expect(await versionOf(pages, 'molotes')).toBe(before);
     });
 
     it('rechaza peticiones con un Origin ajeno o Sec-Fetch-Site cross-site', async () => {
-      const { browser, repository } = await loggedIn();
+      const { browser, pages } = await loggedIn();
       const { fields } = await openForm(browser, 'molotes');
-      const before = await versionOf(repository, 'molotes');
+      const before = await versionOf(pages, 'molotes');
       const foreign = await browser
         .post('/admin/molotes')
         .set('Origin', 'https://evil.example')
@@ -41,7 +41,7 @@ describe('acceso protegido (RF-5)', () => {
       expect(crossSite.status).toBe(403);
       const loginCsrf = await browser.post('/admin/login').set('Origin', 'https://evil.example').type('form').send({ username: 'x' });
       expect(loginCsrf.status).toBe(403);
-      expect(await versionOf(repository, 'molotes')).toBe(before);
+      expect(await versionOf(pages, 'molotes')).toBe(before);
     });
 
     it('acepta el Origin propio', async () => {
@@ -61,7 +61,7 @@ describe('acceso protegido (RF-5)', () => {
     const BROWSER_NO_REFERRER = { Origin: 'null', 'Sec-Fetch-Site': 'same-origin' };
 
     it('DEF-001: acepta el flujo completo con Origin: null + Sec-Fetch-Site: same-origin (acceso, guardar, restaurar, cerrar sesión)', async () => {
-      const { browser, repository } = await setupAdmin().then((context) => ({ ...context, browser: context.browser() }));
+      const { browser, pages } = await setupAdmin().then((context) => ({ ...context, browser: context.browser() }));
       const loginRes = await browser
         .post('/admin/login')
         .set(BROWSER_NO_REFERRER)
@@ -76,14 +76,14 @@ describe('acceso protegido (RF-5)', () => {
         .type('form')
         .send({ ...fields, 'menu.highlight': 'Desde el navegador', action: 'save' });
       expect(save.status).toBe(303);
-      expect((await repository.getPublished('molotes')).data.menu.highlight).toBe('Desde el navegador');
+      expect(pageOf(await pages.get('molotes')).menu.highlight).toBe('Desde el navegador');
 
       const confirm = await browser.get('/admin/molotes/restaurar-anterior');
       const restore = await browser
         .post('/admin/molotes/restaurar-anterior')
         .set(BROWSER_NO_REFERRER)
         .type('form')
-        .send({ _csrf: csrfFrom(confirm.text) });
+        .send(restoreFields(confirm.text));
       expect(restore.status).toBe(303);
 
       const page = await browser.get('/admin/molotes');
@@ -110,9 +110,9 @@ describe('acceso protegido (RF-5)', () => {
       ['Origin: null con Sec-Fetch-Site: same-site', { Origin: 'null', 'Sec-Fetch-Site': 'same-site' }],
       ['Origin: null sin Sec-Fetch-Site', { Origin: 'null' }],
     ])('DEF-001 / CA-23: rechaza %s (acceso y guardado)', async (_label, headers) => {
-      const { browser, repository } = await loggedIn();
+      const { browser, pages } = await loggedIn();
       const { fields } = await openForm(browser, 'molotes');
-      const before = await versionOf(repository, 'molotes');
+      const before = await versionOf(pages, 'molotes');
 
       const save = await browser
         .post('/admin/molotes')
@@ -121,7 +121,7 @@ describe('acceso protegido (RF-5)', () => {
         .send({ ...fields, 'menu.highlight': 'Ataque', action: 'save' });
       expect(save.status).toBe(403);
       expect(save.body.error.code).toBe('CSRF_INVALID');
-      expect(await versionOf(repository, 'molotes')).toBe(before);
+      expect(await versionOf(pages, 'molotes')).toBe(before);
 
       const loginRes = await browser.post('/admin/login').set(headers).type('form').send({ username: 'dueno', password: ADMIN_PASSWORD });
       expect(loginRes.status).toBe(403);

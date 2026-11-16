@@ -104,7 +104,10 @@ export function createPageViews({ render, join, page, notice, renderField, error
       });
     },
 
-    /** Aviso de RF-4 y CA-18: la edición sigue en `/admin`. Sin formulario ni acciones. */
+    /**
+     * "No disponible" (RF-4 y CA-18): datos aún sin importar o una fila dañada. Texto neutro, el mismo en
+     * los dos casos: tras el corte, la edición ya no está en el `/admin` actual. Sin formulario ni acciones.
+     */
     pageClosed(context: PageContext, business: PublicBusinessId): SafeHtml {
       return page({
         title: `Página de ${businessNames[business]}`,
@@ -115,8 +118,8 @@ export function createPageViews({ render, join, page, notice, renderField, error
           businessName: businessNames[business],
           notice: notice({
             tone: 'info',
-            title: 'La edición de esta pantalla aún no está activa.',
-            paragraphs: ['Por ahora, los cambios de la página se hacen en el /admin actual. Los datos no se han perdido.'],
+            title: 'La página no está disponible en este momento.',
+            paragraphs: ['No se cambió nada. Inténtalo en unos minutos; si sigue igual, avisa al administrador.'],
           }),
         }),
       });

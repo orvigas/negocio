@@ -25,9 +25,9 @@ Según el día se abre además un aviso (modal) en `/` (REQ-F-028) y en `/molote
 
 El día se calcula en la zona horaria del negocio (`BUSINESS_TIMEZONE`),
 no en la del servidor ni en la del dispositivo. Cada landing tiene un CTA de pedido por WhatsApp configurable. El contenido estático
-vive en `src/content/`; los menús, precios, showcase del hero y promociones se editan desde
-`/admin/molotes` y `/admin/birria` y se guardan en archivos JSON (ver
-[Administración de menús](#administración-de-menús)).
+vive en `src/content/`; los productos, el showcase del hero, el texto destacado y las promociones
+se guardan en MySQL, se editan en el admin nuevo (`inventory-manager`) y las landings los reciben
+de la `api` (ver [Menús](#menús) y [Administración de menús](#administración-de-menús)).
 
 Un solo **bot de WhatsApp** (opcional, conectado a la WhatsApp Cloud API de Meta) atiende a
 los clientes de los dos negocios con la misma regla de días, muestra el menú del día, arma el
@@ -41,8 +41,8 @@ estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md)
 | Workspace | Contenido |
 | --- | --- |
 | `landing-pages/` | La app Koa descrita en este README (las landings, `/admin` y `/admin/api`). Las landings leen los productos de `api/` (REQ-F-038) |
-| `api/` | API propia (REQ-F-038, REQ-F-039 y REQ-F-040): `GET /api/v1/public/{molotes,birria}/productos` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos y, con `ADMIN_NEW_URL`, la única vía web para gestionar usuarios y controlar el bot. Solo en la red interna; ver [API propia](#api-propia-api). También ejecuta el [bot de WhatsApp](#bot-de-whatsapp) (REQ-F-042), con su webhook en un puerto propio, lo único de `api` que se alcanza desde internet |
-| `inventory-manager/` | Admin nuevo (REQ-F-039, REQ-F-040 y REQ-F-043): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos, los usuarios, "Mi cuenta" y el control del bot con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
+| `api/` | API propia (REQ-F-038, REQ-F-039, REQ-F-040 y REQ-F-044): `GET /api/v1/public/{molotes,birria}/productos` y `/pagina` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos y, con `ADMIN_NEW_URL`, la única vía web para gestionar usuarios y controlar el bot. Solo en la red interna; ver [API propia](#api-propia-api). También ejecuta el [bot de WhatsApp](#bot-de-whatsapp) (REQ-F-042), con su webhook en un puerto propio, lo único de `api` que se alcanza desde internet |
+| `inventory-manager/` | Admin nuevo (REQ-F-039, REQ-F-040 y REQ-F-043): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos, los usuarios, "Mi cuenta", el control del bot y la página con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
 | `packages/web/` (`@restaurante/web`) | Utilidades HTTP y SSR sin dominio que comparten las apps Koa (REQ-F-039): plantillas, lectura de formularios y JSON, mismo origen y logger JSON |
 | `packages/core/` (`@restaurante/core`) | Dominio en TypeScript puro, sin Koa ni Prisma: módulos `catalog`, `schedule`, `identity`, `bot-control` y `shared`. Cada módulo se importa solo por su `index.ts` (`@restaurante/core/catalog`) |
 | `packages/db/` (`@restaurante/db`) | Persistencia: `prisma/` (schema y migraciones), `prisma.config.ts`, el cliente de Prisma generado (`src/generated/prisma`), la conexión, la verificación al arrancar y las implementaciones Prisma de los repositorios de `core` |
@@ -129,13 +129,14 @@ npm run dev            # api (127.0.0.1:3001) y landing-pages (http://127.0.0.1:
 
 `npm run dev` levanta los dos procesos, la API (`npm run dev:api`) y las landings
 (`npm run dev:landing`); también se pueden levantar por separado. Las landings leen los productos
-de `API_INTERNAL_URL` (en `landing-pages/.env`, `http://127.0.0.1:3001`). Si la API no está en
-marcha, las landings sirven la semilla de `content/seeds.ts` y lo registran
-(`landing_products_fallback`); en cuanto la API responde, muestran sus datos sin reiniciar.
+y los datos de página de `API_INTERNAL_URL` (en `landing-pages/.env`, `http://127.0.0.1:3001`). Si
+la API no está en marcha, las landings sirven la semilla de `content/seeds.ts` y lo registran
+(`landing_products_fallback` y `landing_page_fallback`); en cuanto la API responde, muestran sus
+datos sin reiniciar.
 
 En la primera ejecución se crea la carpeta de datos (`DATA_DIR`, por defecto `landing-pages/data/`) con
-una copia de la semilla de cada negocio, y los productos se importan una sola vez a la base de
-datos MySQL. La app no migra: verifica al arrancar que la base esté lista. Ver
+una copia de la semilla de cada negocio, y los productos y los datos de página se importan una sola
+vez a la base de datos MySQL (REQ-F-008 y REQ-F-044). La app no migra: verifica al arrancar que la base esté lista. Ver
 [Base de datos](#base-de-datos).
 
 `npm install` solo ejecuta los scripts de instalación aprobados en `allowScripts` del
@@ -361,6 +362,12 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
   - cuenta propia (REQ-F-040): `POST /cuenta/contrasena` con la contraseña actual; cierra todas las
     sesiones del usuario y devuelve una sesión nueva para el navegador actual. Un fallo en la actual
     no cuenta para el límite de intentos;
+  - datos de página (REQ-F-044): `GET|PUT /<negocio>/pagina` y `POST /<negocio>/pagina/restaurar`,
+    con el permiso del negocio. Guardar y restaurar exigen `expectedVersion` (409 `PAGE_CONFLICT`
+    con quién y cuándo; 409 `PAGE_NO_PREVIOUS` sin versión anterior); un campo inválido responde 422
+    `VALIDATION_FAILED` con `fields`. Sin datos importados o con una fila dañada, 503
+    `PAGE_UNAVAILABLE` sin escribir nada. Cuerpo JSON de hasta 64 KiB: 400 `INVALID_JSON`, 413
+    `PAYLOAD_TOO_LARGE` y 415 `UNSUPPORTED_MEDIA_TYPE`. El historial queda en `page_change`;
   - control del bot (REQ-F-043), solo para administradores: `GET /bot`, `PUT /bot/interruptor`, `POST /bot/bloqueos`,
     `POST /bot/bloqueos/<id>/quitar` y `POST /bot/topes/<token>/bloquear`. La auditoría queda en
     `bot_audit`. Las respuestas nunca llevan el número completo, su seudónimo ni el id de la clave;
@@ -378,6 +385,9 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
   base en cada petición (sin caché propia). Errores con `{ "error": { "code", "message" } }`: 404
   (`BUSINESS_NOT_FOUND` o `NOT_FOUND`), 405 (`METHOD_NOT_ALLOWED`, con `Allow: GET, HEAD`), 503
   (`DATABASE_UNAVAILABLE`) y 500. Ningún error lleva stack, SQL ni credenciales.
+- `GET /api/v1/public/{molotes|birria}/pagina` (REQ-F-044) responde `200 { "data": ... }` con el
+  hero, el texto destacado y la promoción vigentes en MySQL, con los mismos errores y 503
+  `PAGE_UNAVAILABLE` si aún no hay datos importados o la fila no es válida.
 - Variables (`api/.env.example`): `NODE_ENV` (obligatoria), `HOST` (127.0.0.1 por defecto),
   `PORT` (3001 por defecto), `DATABASE_URL` (el usuario solo DML de la app) y
   `DATABASE_ALLOW_NEWER_SCHEMA` (solo la vuelta atrás de `deploy.sh`). Al arrancar verifica la
@@ -386,8 +396,9 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
 - En producción va en su propio contenedor (`api`), solo en las redes internas `db` y `admin`: sin
   puertos publicados ni router de Traefik. `landing-pages` la alcanza en
   `API_INTERNAL_URL=http://api:3001`, igual que `inventory-manager` por la red `admin`.
-- **Landings:** leen los productos de la API con una caché en memoria
-  (`src/services/landing-products.ts`). Una escritura de productos de `/admin` (HTML o
+- **Landings:** leen los productos y, desde REQ-F-044, los datos de página de la API con una caché
+  en memoria común (`src/services/landing-cache.ts`, con `landing-products.ts` y `landing-page.ts`;
+  los logs de la página son `landing_page_*`). Una escritura de productos de `/admin` (HTML o
   `/admin/api`) invalida la caché de ese negocio y la siguiente visita espera los datos nuevos
   (como mucho 1,5 s); sin escrituras, se refrescan en segundo plano cada 60 s. Si la API no
   responde, tarda más del límite o devuelve algo que no cumple el contrato, se sirve la última
@@ -399,7 +410,8 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
   repetir el valor.
 - **Aviso interno** (REQ-F-039): `landing-pages` escucha en `INTERNAL_PORT` (3002 por defecto; nunca
   el de `PORT`, que es el que enruta Traefik) solo `POST /internal/v1/productos-cambiados`, con
-  `Authorization: Bearer <INTERNAL_NOTIFY_TOKEN>`. Invalida la caché de la landing de ese negocio. Si
+  `Authorization: Bearer <INTERNAL_NOTIFY_TOKEN>`. Invalida las cachés de productos y de página de la
+  landing de ese negocio (REQ-F-044), y `landing` solo es `true` si las dos quedaron al día. Si
   el aviso se pierde, la red de seguridad es la caducidad de 60 s de la caché. El bot, en `api`, usa
   la misma caché de productos que escribe `/api/v1/admin`, así que no necesita aviso (REQ-F-042, RF-10);
   si esa recarga falla, tiene su propia red de seguridad de 60 s.
@@ -416,7 +428,10 @@ El admin nuevo de REQ-F-039, REQ-F-040 y REQ-F-043 (paso 4 de [Arquitectura](doc
   restablecer la contraseña; `/usuarios`, `/usuarios/nuevo`, `/usuarios/<id>/editar` y
   `/usuarios/<id>/contrasena`) y «Mi cuenta» (`/cuenta`, cualquier usuario: cambiar la propia
   contraseña). Desde REQ-F-043, también «Bot» (`/bot`, solo administradores): estado e interruptor,
-  contadores frente a sus topes, "alcanzaron un tope hoy", lista negra y alta de bloqueos. Todo funciona sin JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el
+  contadores frente a sus topes, "alcanzaron un tope hoy", lista negra y alta de bloqueos. Desde
+  REQ-F-044, también «Página» (`/<negocio>/pagina`): hero, texto destacado y promoción, con
+  "Último cambio", conflicto y "Restaurar versión anterior" con confirmación. Si la API responde
+  `PAGE_UNAVAILABLE`, muestra un aviso neutro sin formulario. Todo funciona sin JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el
   doble envío y reordena sin recargar.
 - **Cambio de la propia contraseña:** la API devuelve una sesión nueva y el admin reescribe su cookie;
   las demás sesiones del usuario (también las del `/admin` actual) se cierran. Si un administrador
@@ -832,7 +847,7 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `API_INTERNAL_URL`         | Sí                      | Base de la API propia de la que las landings leen los productos (REQ-F-038): `http`/`https`, sin usuario, contraseña, parámetros ni fragmento. En local `http://127.0.0.1:3001`; en producción la fija el compose (`http://api:3001`). Ver [API propia](#api-propia-api) |
 | `MIGRATION_DATABASE_URL`   | Solo para migrar        | Conexión con DDL para `npm run db:migrate`, `db:migrate:dev` y la imagen `migrate`. La app no la lee: en local va en `packages/db/.env` (plantilla `packages/db/.env.example`), que carga el CLI de Prisma |
 | `SHADOW_DATABASE_URL`      | Solo `db:migrate:dev`   | Base sombra de Prisma para crear migraciones (desarrollo y CI). En local, en `packages/db/.env` |
-| `DATA_DIR`                 | Solo en producción (ruta absoluta) | Carpeta de los datos editables: JSON de página y `changes.jsonl` (por defecto `data/` del proyecto fuera de producción). No puede estar dentro de `src/` ni de `public/` |
+| `DATA_DIR`                 | Solo en producción (ruta absoluta) | Carpeta de los JSON de página y `changes.jsonl`, que solo lee la importación única al arrancar (REQ-F-044; por defecto `data/` del proyecto fuera de producción). No puede estar dentro de `src/` ni de `public/` |
 | `ADMIN_USER`               | No                      | Usuario del **primer administrador** (1-60 caracteres). Solo se usa si la base de datos no tiene usuarios; después se ignora (aviso `admin_bootstrap_ignored` en el log, sin valores). Sin usuarios ni estas variables, `/admin` responde 503 "no disponible"; con solo una de las dos o un hash inválido, la app no arranca |
 | `ADMIN_PASSWORD_HASH`      | No                      | Hash scrypt de la contraseña del primer administrador (`npm run admin:hash-password`). Nunca la contraseña en claro |
 | `TRUST_PROXY`              | No (`false`)            | `true` detrás de un proxy con TLS (Traefik en producción): Koa usa `X-Forwarded-Proto` (HTTPS) y la última IP de `X-Forwarded-For` (límite de intentos y log) |
@@ -1375,7 +1390,7 @@ Los datos editables de cada landing están en dos sitios (REQ-F-008):
 | Qué | Dónde | Semilla versionada |
 | --- | ----- | ------------------ |
 | **Productos**: platillos y bebidas de Molotes, platillos de Birria (con sus variantes o chips) | Base de datos MySQL (tablas `product`, `product_variant`, `product_chip`) | Las listas de `src/content/<negocio>/seed.json` (solo para la importación inicial) |
-| **Página**: showcase del hero, texto destacado del menú ("8 Sabores de Barrio") y promoción | JSON por negocio (`DATA_DIR/<negocio>/current.json`) | `src/content/<negocio>/seed.json` |
+| **Página**: showcase del hero, texto destacado del menú ("8 Sabores de Barrio") y promoción | Base de datos MySQL (tablas `page_version`, `page_change` y `page_import`; REQ-F-044) | `src/content/<negocio>/seed.json` (importación inicial y respaldo de las landings sin API) |
 
 - **Modelo común de producto** (`core/catalog/product-schema.ts`): negocio, categoría
   (`platillo` o `bebida`; Birria solo tiene platillos), slug, nombre, descripción, etiqueta
@@ -1401,22 +1416,31 @@ Los datos editables de cada landing están en dos sitios (REQ-F-008):
   productos, conserva su encabezado y muestra un aviso con el CTA de WhatsApp.
 - En Birria, `slug` forma los id del DOM (`card-`, `title-`, `price-`, `desc-`, `variants-`)
   que usa el selector de variantes (`public/js/modules/variant-selector.js`).
-- La landing combina los datos de página del repositorio de menús con los productos del
-  repositorio de productos (`src/repositories/`). Los dos los mantienen en memoria: las landings
-  nunca consultan la base de datos, y un cambio guardado se ve en la siguiente petición. Si la
-  base de datos falla con el servidor en marcha, las landings siguen mostrando los últimos
-  productos válidos.
+- La landing pinta la semilla de `src/content/` con los datos de página y los productos que recibe
+  de la `api` (`/api/v1/public/<negocio>/pagina` y `/productos`), con una caché en memoria de 60 s,
+  la última copia buena y, sin ninguna, la semilla (`src/services/landing-cache.ts`). Las landings
+  nunca consultan la base de datos ni los JSON de `DATA_DIR`; un cambio guardado se ve en la
+  siguiente petición tras el aviso de la `api` (o en 60 s como mucho).
 - **Importación única:** en el primer arranque con una base sin productos, cada negocio importa
   sus productos (orden, disponibilidad, variantes y chips) desde `current.json` si es válido; si
   no, desde `previous.json`; si tampoco, desde la semilla. Los `id` de Molotes pasan a ser slugs
   y los slugs de Birria se conservan. Queda en el log (`products_imported`, con la fuente) y en
   el registro de productos con el autor `sistema`. No se repite nunca (tabla `product_import`),
   aunque después se vacíe el negocio.
+- **Importación única de la página (REQ-F-044):** al arrancar, la `app` lleva a MySQL los datos de
+  página de cada negocio sin marca en `page_import`: vigente y anterior desde `current.json` y
+  `previous.json` (con su revisión, fecha y autor) y el historial de `changes.jsonl`. Si
+  `current.json` no sirve, usa `previous.json`; si tampoco, la semilla, pero solo en una instalación
+  nueva: en una con productos ya importados se niega (`page_import_failed`,
+  `PAGE_IMPORT_SEED_REFUSED`) y la `app` termina con 1. Es todo o nada para los dos negocios, no
+  modifica los archivos y no se repite. Si un JSON cambia después, solo registra
+  `page_json_diverged`. Detalle en [docs/despliegue.md §6](docs/despliegue.md#6-volver-a-una-versión-anterior-a-mano).
 
 ## Administración de menús
 
 `/admin/molotes` y `/admin/birria` permiten gestionar los productos (crear, editar, eliminar,
-recuperar y ordenar) y editar los datos de página, con formularios HTML (sin JavaScript). No hay diseño en `_stich_source_/` para estas páginas: la
+recuperar y ordenar) y editar los datos de página (en MySQL desde REQ-F-044), con formularios HTML
+(sin JavaScript). Con `ADMIN_NEW_URL`, todo eso queda en solo lectura y se edita en el admin nuevo. No hay diseño en `_stich_source_/` para estas páginas: la
 interfaz es sencilla, con su propia hoja (`public/css/admin/main.css`).
 
 Cada persona entra con su **cuenta personal** (REQ-F-007), guardada en la base de datos:
@@ -1438,8 +1462,8 @@ Cada persona entra con su **cuenta personal** (REQ-F-007), guardada en la base d
 | `GET` / `POST /admin/<negocio>/productos/<id>/eliminar` | Confirmar y eliminar |
 | `POST /admin/<negocio>/productos/<id>/subir` y `…/bajar` | Mover una posición |
 | `GET /admin/<negocio>/productos/eliminados`, `POST …/<id>/recuperar` | Productos eliminados y recuperar |
-| `GET` / `POST /admin/<negocio>/restaurar-anterior` | Confirmación y restauración de la versión anterior |
-| `POST /admin/<negocio>/restaurar-semilla` | Solo con datos dañados: vuelve a la semilla |
+| `GET` / `POST /admin/<negocio>/restaurar-anterior` | Confirmación y restauración de la versión anterior (con la versión confirmada: si la página cambió antes, 409 sin cambios) |
+| `POST /admin/<negocio>/restaurar-semilla` | Siempre 409 "no permitido": en MySQL no hay estado "dañado" (REQ-F-044, D-10) |
 | `GET /admin/usuarios` | Lista de usuarios (solo administradores) |
 | `GET /admin/usuarios/nuevo`, `POST /admin/usuarios` | Crear usuario |
 | `GET` / `POST /admin/usuarios/<id>` | Editar usuario, nombre visible, rol y negocios |
@@ -1449,7 +1473,10 @@ Cada persona entra con su **cuenta personal** (REQ-F-007), guardada en la base d
 
 Con `ADMIN_NEW_URL` (REQ-F-040), las rutas de usuarios y de "Mi cuenta" quedan en solo lectura: la
 lista sin controles y el resto, GET o POST, con 410 y el enlace a la pantalla equivalente del admin
-nuevo.
+nuevo. Desde REQ-F-044, también la página: `/admin/<negocio>` muestra los valores vigentes de MySQL
+sin formulario, con un aviso y el enlace a `<ADMIN_NEW_URL>/<negocio>/pagina`, y sus POST de guardar
+y restaurar pasan sesión, permiso, cuerpo y CSRF y responden 410 sin escribir (log
+`admin_page_moved`). Sin `ADMIN_NEW_URL` (en local), `/admin` escribe la página en MySQL.
 
 ### Productos en la administración
 
@@ -1566,6 +1593,12 @@ habilita sin reiniciar.
 
 ### Archivos de datos (`DATA_DIR`)
 
+Desde REQ-F-044 los datos de página viven en MySQL y estos archivos **solo se leen**: los usa la
+importación única de la página y la de productos al arrancar. Ni las landings ni `/admin` los
+escriben, y **editarlos a mano ya no tiene efecto** (si cambian después de importar, el arranque
+registra `page_json_diverged`). Siguen en el volumen hasta el ticket 6 (retirada de `/admin`), que
+decide su destino. Lo que sigue describe su formato.
+
 ```text
 DATA_DIR/
 ├── molotes/
@@ -1583,31 +1616,24 @@ DATA_DIR/
   archivos se traten como dañados. Por la misma razón, las listas de productos de
   `src/content/<negocio>/seed.json` no deben cambiar.
 
-- **Primera ejecución:** si no existe `current.json`, se copia la semilla a `current.json` y
-  `previous.json` (log `menu_data_seeded`).
-- **Guardado:** el contenido vigente pasa a `previous.json` y el nuevo se escribe de forma
-  atómica (archivo temporal, `fsync` y `rename`): un fallo nunca deja el archivo a medias.
-- **Registro (`changes.jsonl`, datos de página):** fecha ISO en la zona del negocio, autor (nombre visible del
+- **Primera ejecución:** si no existe `current.json` en una instalación nueva, se copia la semilla a
+  `current.json` y `previous.json` (log `menu_data_seeded`). En una instalación existente no se
+  escribe nada (`menu_data_missing`).
+- **Registro (`changes.jsonl`, datos de página, hasta REQ-F-044):** fecha ISO en la zona del negocio, autor (nombre visible del
   usuario de la sesión, `author`, y su identificador, `authorId`; las entradas anteriores a
   REQ-F-007 solo tienen el nombre escrito a mano), negocio, acción (`save`, `overwrite_after_conflict`,
   `restore_previous`, `restore_seed`) y campos modificados con su valor anterior y el nuevo.
-  La página solo muestra "Último cambio: <fecha> por <nombre>". El archivo crece sin límite:
-  rótalo o respáldalo con las herramientas de la VM. Los cambios de productos se registran en la
-  tabla `product_change` de la base de datos (ver abajo).
-- **Edición simultánea:** cada formulario lleva la versión con la que empezó. Si otra persona
-  guardó antes, no se escribe nada y se ofrece "Guardar mis cambios de todos modos" o
-  "Descartar y cargar la versión actual".
-- **Restaurar versión anterior:** intercambia `current.json` y `previous.json` (se puede
-  deshacer repitiendo la acción).
-- **Ediciones manuales:** editar los JSON a mano se aplica al reiniciar el servidor. La vía
-  recomendada es la administración; si se guarda desde ella antes de reiniciar, la edición
-  manual queda como versión anterior. Haz respaldos de `DATA_DIR` con las herramientas de la VM.
+  La importación lo lleva a `page_change` (`imported`); las líneas ilegibles se cuentan y se omiten.
+  Desde entonces, cada guardado o restauración de la página se registra en `page_change` en la
+  misma transacción, con el autor de la sesión.
+- **Respaldos:** `DATA_DIR` sigue en los respaldos (`ops/backup/`) hasta el ticket 6.
 
 ### Base de datos
 
 - **Motor:** MySQL 8.4 LTS (REQ-F-014) con Prisma 7 y el adaptador oficial
   `@prisma/adapter-mariadb` (driver `mariadb`). Guarda los usuarios de `/admin`, sus negocios, su
-  auditoría y los productos. Los JSON de página y `changes.jsonl` siguen en `DATA_DIR`.
+  auditoría, los productos y, desde REQ-F-044, los datos de página (`page_version`: vigente y
+  anterior por negocio; `page_change`: historial; `page_import`: la importación única).
 - **Español completo:** utf8mb4 con la colación `utf8mb4_es_0900_as_cs` (español moderno: la ñ va
   después de la n; distingue acentos y mayúsculas) en la base, las tablas y las columnas, y en la
   conexión. Cualquier texto con ñ, acentos, ¿¡«», € o emojis se guarda y se devuelve idéntico. La
@@ -1657,18 +1683,15 @@ DATA_DIR/
   anterior** (añadir antes de quitar). Respaldos cifrados fuera del VPS, restauración y prueba
   mensual (REQ-F-019; scripts en `ops/backup/`): [docs/despliegue.md](docs/despliegue.md#11-respaldos-fuera-del-vps).
 
-### Recuperación de datos dañados
+### JSON dañados en la importación
 
-Si `current.json` no es JSON válido o no cumple el esquema (por ejemplo, un precio de
-6000.00 escrito a mano):
-
-1. El servidor arranca igual y la landing muestra la versión anterior si es válida o, si no,
-   la semilla. Si se daña con el servidor en marcha, la landing sigue con la última versión
-   válida en memoria. El log registra `menu_data_damaged` (sin contenido ni rutas).
-2. El archivo dañado se conserva como `damaged-<fecha>.json` y se crea `damaged.marker.json`.
-3. La página de administración del negocio avisa del daño, bloquea la edición y ofrece
-   "Restaurar versión anterior" (si es válida) y "Restaurar semilla original". La elección
-   queda en el registro, borra el marcador y desbloquea la edición.
+Si al arrancar `current.json` no es JSON válido o no cumple el esquema, el archivo se conserva como
+`damaged-<fecha>.json` (log `menu_data_damaged`, sin contenido ni rutas) y la importación de la página
+usa `previous.json`. Sin `previous.json` válido, en una instalación existente la importación se
+niega y la `app` no arranca: restaura `DATA_DIR` desde un respaldo
+([docs/despliegue.md §6](docs/despliegue.md#6-volver-a-una-versión-anterior-a-mano)). Una vez
+importada, la página no tiene estado "dañado": una fila inválida en MySQL hace que la `api`
+responda `PAGE_UNAVAILABLE` (log `page_data_invalid`) y las landings sigan con su última copia.
 
 ## Estructura
 
@@ -1701,7 +1724,7 @@ restaurante/                  # Raíz de los npm workspaces (REQ-F-036, REQ-F-03
 │   └── .env.example          # NODE_ENV, HOST, PORT (3001) y DATABASE_URL
 ├── landing-pages/            # Workspace de la app Koa: landings, /admin y /admin/api
 │   ├── src/
-│   │   ├── server.ts             # Entrada del proceso: valida config, prepara DATA_DIR y la base de datos, primer administrador, importación de productos, escucha en PORT, cierre ordenado
+│   │   ├── server.ts             # Entrada del proceso: valida config, verifica la base, primer administrador, prepara DATA_DIR, importación de página y de productos, escucha en PORT, cierre ordenado
 │   │   ├── app.ts                # createApp(): app Koa testeable (config, repositorio, logger y `now` inyectables)
 │   │   ├── config/               # env.ts (carga/validación y tipo Config), business-paths.ts (ruta de cada landing)
 │   │   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests),

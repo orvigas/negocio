@@ -10,7 +10,7 @@ import {
 import type { Renderer } from '@restaurante/web';
 
 import type { Config } from '../config/env.ts';
-import type { MenuRepository } from '../repositories/menu-repository.ts';
+import { loadSeedMenus, withPage, type LandingPage, type SeedMenus } from '../services/landing-page.ts';
 import { withProducts, type LandingProducts } from '../services/landing-products.ts';
 import { renderLandingPage } from '../views/landings/index.ts';
 
@@ -33,40 +33,44 @@ function noticeFor(fixedBusinessId: BusinessId | undefined, options: NoticeOptio
  * En desarrollo, `?dia=lunes|...|domingo` fuerza el día en / y en /molotes (RF-11); en test y
  * producción se ignora.
  *
- * `repository`: hero, texto destacado y promociones (JSON; REQ-F-001).
- * `landingProducts`: productos publicados, de la API propia con su caché en memoria (REQ-F-038):
- *   nunca de la base de datos ni del repositorio de productos.
+ * `landingPage`: hero, texto destacado y promociones, de la API propia con su caché (REQ-F-044, RF-5),
+ *   sobre la semilla (`seeds`), que pone el resto del documento.
+ * `landingProducts`: productos publicados, de la API propia con su caché en memoria (REQ-F-038).
+ * Nunca la base de datos, un repositorio ni los JSON de DATA_DIR.
  */
 export function createLandingController({
   config,
   renderer,
   now,
-  repository,
+  landingPage,
   landingProducts,
+  seeds = loadSeedMenus(),
   businessId: fixedBusinessId,
 }: {
   config: Pick<Config, 'timezone' | 'whatsapp' | 'siteUrl' | 'nodeEnv'>;
   renderer: Renderer;
   now: () => Date;
-  repository: Pick<MenuRepository, 'getPublished'>;
+  landingPage: Pick<LandingPage, 'get'>;
   landingProducts: Pick<LandingProducts, 'get'>;
+  /** Datos completos de la semilla (por defecto, los de src/content/). */
+  seeds?: SeedMenus;
   businessId?: BusinessId | undefined;
 }): Middleware {
   if (fixedBusinessId !== undefined && !isBusinessId(fixedBusinessId)) {
     throw new TypeError(`Negocio desconocido: ${String(fixedBusinessId)}`);
   }
 
-  if (typeof repository?.getPublished !== 'function') throw new TypeError('createLandingController requiere el repositorio de menús');
+  if (typeof landingPage?.get !== 'function') throw new TypeError('createLandingController requiere los datos de página de la API');
   if (typeof landingProducts?.get !== 'function') throw new TypeError('createLandingController requiere los productos de la API');
 
   return async function renderLanding(ctx) {
     const businessId = fixedBusinessId ?? BUSINESS.BIRRIA;
     const forcedDay = config.nodeEnv === 'development' ? parseForcedDay(ctx.query.dia) : undefined;
     const homeNotice = noticeFor(fixedBusinessId, { now: now(), timeZone: config.timezone, forcedDay });
-    // Productos de la API con su caché (REQ-F-038): sin E/S mientras están frescos, nunca la base de
-    // datos; si la API falla, la última copia buena o la semilla (nunca un 5xx por la API).
-    const { data } = await repository.getPublished(businessId);
-    const menu = withProducts(businessId, data, await landingProducts.get(businessId));
+    // Página y productos de la API con su caché (REQ-F-038 y REQ-F-044): sin E/S mientras están frescos,
+    // nunca la base de datos; si la API falla, la última copia buena o la semilla (nunca un 5xx por la API).
+    const [page, products] = await Promise.all([landingPage.get(businessId), landingProducts.get(businessId)]);
+    const menu = withProducts(businessId, withPage(businessId, seeds[businessId], page), products);
     const html = renderLandingPage({ renderer, config, businessId, menu, homeNotice });
 
     ctx.type = 'html';

@@ -14,8 +14,9 @@ import { listenLocal } from '../support/http.ts';
 
 const TOKEN = 'token-interno-de-prueba-0123456789abcdef';
 
-function setup({ fresh = true }: { fresh?: boolean } = {}) {
+function setup({ fresh = true, pageFresh = true }: { fresh?: boolean; pageFresh?: boolean } = {}) {
   const invalidated: BusinessId[] = [];
+  const pageInvalidated: BusinessId[] = [];
   const logger = makeRecordingLogger();
   const app = createInternalApp({
     token: TOKEN,
@@ -23,9 +24,14 @@ function setup({ fresh = true }: { fresh?: boolean } = {}) {
       invalidate: (business) => invalidated.push(business),
       confirmFresh: async () => fresh,
     },
+    // REQ-F-044: el mismo aviso invalida también los datos de página.
+    landingPage: {
+      invalidate: (business) => pageInvalidated.push(business),
+      confirmFresh: async () => pageFresh,
+    },
     logger,
   });
-  return { app, invalidated, logger };
+  return { app, invalidated, pageInvalidated, logger };
 }
 
 const notify = (server: Awaited<ReturnType<typeof listenLocal>>, { token = TOKEN, business = 'birria' }: { token?: string | null; business?: unknown } = {}) => {
@@ -36,19 +42,23 @@ const notify = (server: Awaited<ReturnType<typeof listenLocal>>, { token = TOKEN
 
 describe('aviso interno de la API (POST /internal/v1/productos-cambiados)', () => {
   it('con la credencial: invalida la landing y responde { landing }', async () => {
-    const { app, invalidated, logger } = setup();
+    const { app, invalidated, pageInvalidated, logger } = setup();
     const server = await listenLocal(app);
     const res = await notify(server);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ landing: true });
     expect(res.headers['cache-control']).toBe('no-store');
     expect(invalidated).toEqual(['birria']);
+    expect(pageInvalidated).toEqual(['birria']);
     expect(logger.lines).toContainEqual(expect.objectContaining({ msg: 'products_change_notified', business: 'birria', landing: true }));
   });
 
   it('la landing aún sin los datos nuevos: landing false (la API lo marca como pendiente)', async () => {
     const server = await listenLocal(setup({ fresh: false }).app);
     expect((await notify(server)).body).toEqual({ landing: false });
+    // Basta con que uno de los dos recursos no esté al día (REQ-F-044).
+    const pageServer = await listenLocal(setup({ pageFresh: false }).app);
+    expect((await notify(pageServer)).body).toEqual({ landing: false });
   });
 
   it.each([

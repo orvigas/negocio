@@ -4,7 +4,7 @@ import { csrfOf, textOf } from '../support/bot-page.ts';
 import { ELI, dom, startInventory } from '../support/browser.ts';
 import { MOLOTES, MOLOTES_RESTORE, closedSession, expectClosed, pageRequests } from '../support/page-browser.ts';
 
-/** REQ-F-044, CA-18 y RF-4: lo único que ve el personal hasta el corte (`PAGE_CUTOVER = false`). */
+/** REQ-F-044, CA-18 y RF-4: "no disponible" (datos sin importar o fila dañada), con el texto neutro. */
 
 const WRITES: readonly [string, Record<string, string>][] = [
   [MOLOTES, { action: 'save', expectedVersion: '2@x', 'hero.showcase.title': 'Otro título' }],
@@ -58,7 +58,7 @@ describe('sin importar: escrituras', () => {
     const { h, browser } = await closedSession();
     const response = await browser.post(MOLOTES, { _csrf: 'otro', action: 'save', expectedVersion: '2@x' });
     expect(response.status).toBe(403);
-    expect(textOf(await response.text())).not.toContain('aún no está activa');
+    expect(textOf(await response.text())).not.toContain('no está disponible en este momento');
     expect(h.api.page.writes).toEqual([]);
   });
 
@@ -86,7 +86,7 @@ describe('permisos, con la puerta cerrada', () => {
     expect(response.status).toBe(403);
     const text = textOf(await response.text());
     expect(text).toContain('No tienes permiso sobre este negocio.');
-    expect(text).not.toContain('aún no está activa');
+    expect(text).not.toContain('no está disponible en este momento');
     expect(pageRequests(h)).toEqual([]);
   });
 
@@ -121,7 +121,7 @@ describe('una avería real no se disfraza de "aún no activa"', () => {
     expect(response.status).toBe(503);
     const text = textOf(await response.text());
     expect(text).toContain('Servicio no disponible');
-    expect(text).not.toContain('aún no está activa');
+    expect(text).not.toContain('no está disponible en este momento');
   });
 });
 

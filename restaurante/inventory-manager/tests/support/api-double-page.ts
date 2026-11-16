@@ -9,8 +9,8 @@ import { failWith, type BotFailure } from './api-double-bot.ts';
  * permiso y CSRF (en `api-double.ts`) -> disponibilidad -> fallo simulado -> cuerpo -> versión. Los
  * campos y los mensajes son los de `pageFormFields` y `parsePageForm` de core.
  *
- * Empieza cerrado (`open: false`), como la API con `PAGE_CUTOVER = false`: responde 503
- * `PAGE_UNAVAILABLE` y no escribe. Solo las pruebas abren la puerta.
+ * Empieza cerrado (`open: false`), como la API sin datos importados: responde 503
+ * `PAGE_UNAVAILABLE` y no escribe. Las pruebas lo abren.
  */
 
 export type PageFailure = BotFailure | '413';

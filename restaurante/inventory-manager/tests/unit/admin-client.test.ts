@@ -66,3 +66,104 @@ describe('createAdminApiClient', () => {
     expect(() => createAdminApiClient({ baseUrl: 'http://api', timeoutMs: 0 })).toThrow(TypeError);
   });
 });
+
+describe('control del bot (REQ-F-043)', () => {
+  const BOT = {
+    status: { enabled: true, provider: 'meta' },
+    control: { paused: false, changedAt: null, changedByName: null, reason: null },
+    usage: { day: '2026-11-04', month: '2026-11', timeZone: 'America/Mexico_City', counters: [{ id: 'budget', used: 0, limit: 20_000_000, reached: false }] },
+    reached: [{ token: 'a'.repeat(32), masked: '*********5678', cap: 'burst', at: '2026-11-04T12:00:00-06:00' }],
+    blocks: [{ id: null, pending: true, masked: '*********5678', origin: 'tope', reason: null, author: null, since: '2026-11-04T12:00:00-06:00', until: null }],
+    canBlock: true,
+    previousKeyBlocks: 0,
+    storeHealthy: true,
+  };
+  const AUTH = { sessionId: 's', csrfToken: 'c' };
+  const P = 'http://api:3001/api/v1/admin/bot';
+  const MASKED = { block: { masked: '*********5678' } };
+
+  it('lee el estado sin token CSRF y valida la respuesta', async () => {
+    const { api, calls } = client(() => json(200, { bot: BOT }));
+    expect(await api.getBot(AUTH)).toMatchObject({ ok: true, data: { bot: { canBlock: true } } });
+    expect(calls[0]?.url).toBe(P);
+    expect(header(calls[0]?.init, 'x-csrf-token')).toBeNull();
+  });
+
+  it('una respuesta que no cumple el contrato es `invalid_response`', async () => {
+    const { api } = client(() => json(200, { bot: { ...BOT, canBlock: 'si' } }));
+    expect(await api.getBot(AUTH)).toMatchObject({ ok: false, kind: 'invalid_response' });
+  });
+
+  it('las escrituras usan su método, su ruta y el token CSRF; el teléfono viaja solo en el cuerpo', async () => {
+    const replies: [number, unknown][] = [[200, { control: BOT.control }], [201, MASKED], [200, MASKED], [201, MASKED]];
+    const { api, calls } = client(() => {
+      const [status, body] = replies.shift() as [number, unknown];
+      return json(status, body);
+    });
+    expect((await api.setBotPaused(AUTH, { paused: true })).ok).toBe(true);
+    expect((await api.blockNumber(AUTH, { phone: '5215512345678', duration: '7d' })).ok).toBe(true);
+    expect((await api.unblockNumber(AUTH, 7)).ok).toBe(true);
+    expect((await api.blockReached(AUTH, 'a b', { duration: '7d' })).ok).toBe(true);
+    expect(calls.map(({ url, init }) => `${init.method} ${url}`)).toEqual([
+      `PUT ${P}/interruptor`,
+      `POST ${P}/bloqueos`,
+      `POST ${P}/bloqueos/7/quitar`,
+      `POST ${P}/topes/a%20b/bloquear`,
+    ]);
+    for (const call of calls) expect(header(call.init, 'x-csrf-token')).toBe('c');
+    expect(calls.map(({ url }) => url).join()).not.toContain('5215512345678');
+    expect(calls[1]?.init.body).toContain('5215512345678');
+  });
+
+  it('un error de dominio llega con su código', async () => {
+    const { api } = client(() => json(409, { error: { code: 'BOT_NUMBER_ALREADY_BLOCKED', message: 'Ya está.' } }));
+    expect(await api.blockNumber(AUTH, { phone: 'x', duration: '7d' })).toMatchObject({ ok: false, kind: 'http', status: 409, error: { code: 'BOT_NUMBER_ALREADY_BLOCKED' } });
+  });
+});
+
+describe('datos de página (REQ-F-044)', () => {
+  const auth = { sessionId: 'sesion', csrfToken: 'csrf' };
+  const PAGE = { version: '3@2026-10-26T12:00:00-06:00', updatedAt: '2026-10-26T12:00:00-06:00', updatedBy: 'Ana', hasPrevious: true, values: { 'promo.title': 'Promo' } };
+  const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+  function clientReturning(response: Response) {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const fetch: AdminFetch = async (url, init) => {
+      calls.push({ url, init });
+      return response;
+    };
+    return { client: createAdminApiClient({ baseUrl: 'http://api:3001', timeoutMs: 100, fetch }), calls };
+  }
+
+  it('lee la página con sus campos', async () => {
+    const fields = [{ name: 'promo.title', group: 'Promoción', kind: 'text', label: 'Título', max: 120, optional: false }];
+    const { client, calls } = clientReturning(jsonResponse({ page: PAGE, fields }));
+    await expect(client.getPage(auth, 'birria')).resolves.toEqual({ ok: true, status: 200, data: { page: PAGE, fields } });
+    expect(calls[0]?.url).toBe('http://api:3001/api/v1/admin/birria/pagina');
+  });
+
+  it('guarda con PUT y el token CSRF', async () => {
+    const { client, calls } = clientReturning(jsonResponse({ page: PAGE, meta: { freshness: 'pending' } }));
+    const input = { expectedVersion: '2@x', fields: { 'promo.title': 'Nueva' } };
+    await expect(client.savePage(auth, 'molotes', input)).resolves.toMatchObject({ ok: true, data: { meta: { freshness: 'pending' } } });
+    expect(calls[0]).toMatchObject({ url: 'http://api:3001/api/v1/admin/molotes/pagina', init: { method: 'PUT', body: JSON.stringify(input) } });
+    expect(new Headers(calls[0]?.init.headers).get('x-csrf-token')).toBe('csrf');
+  });
+
+  it('restaura por POST con la versión esperada', async () => {
+    const { client, calls } = clientReturning(jsonResponse({ page: PAGE, meta: { freshness: 'confirmed' } }));
+    await client.restorePage(auth, 'molotes', { expectedVersion: '2@x' });
+    expect(calls[0]).toMatchObject({ url: 'http://api:3001/api/v1/admin/molotes/pagina/restaurar', init: { method: 'POST', body: '{"expectedVersion":"2@x"}' } });
+  });
+
+  it('un 409 conserva quién y cuándo guardó', async () => {
+    const currentPage = { version: '4@y', updatedAt: 'y', updatedBy: 'Eli' };
+    const { client } = clientReturning(jsonResponse({ error: { code: 'PAGE_CONFLICT', message: 'x', currentPage } }, 409));
+    await expect(client.savePage(auth, 'molotes', { expectedVersion: '2@x', fields: {} })).resolves.toMatchObject({ ok: false, kind: 'http', status: 409, error: { code: 'PAGE_CONFLICT', currentPage } });
+  });
+
+  it('el 503 "no disponible" llega con su código, distinto de una caída', async () => {
+    const { client } = clientReturning(jsonResponse({ error: { code: 'PAGE_UNAVAILABLE', message: 'x' } }, 503));
+    await expect(client.getPage(auth, 'birria')).resolves.toMatchObject({ ok: false, kind: 'http', status: 503, error: { code: 'PAGE_UNAVAILABLE' } });
+  });
+});

@@ -304,3 +304,62 @@ model BotControl {
 
   @@map("bot_control")
 }
+
+// --- Datos de página (REQ-F-044) -------------------------------------------------------------
+
+enum PageSlot {
+  current
+  previous
+}
+
+/// Versión vigente y anterior de los datos de página de un negocio (RN-3). Las fechas son texto:
+/// conservan el desplazamiento y mantienen `revision@updatedAt`, el control de versión de los JSON.
+model PageVersion {
+  business    Business
+  slot        PageSlot
+  revision    Int
+  updatedAt   String?  @map("updated_at") @db.VarChar(64)
+  /// Nombre visible en el momento del cambio; null en la semilla.
+  updatedBy   String?  @map("updated_by") @db.VarChar(60)
+  /// Sin clave foránea: los documentos importados no traen id de autor.
+  updatedById Int?     @map("updated_by_id")
+  /// JSON de los datos de página.
+  data        String   @db.MediumText
+
+  @@id([business, slot])
+  @@map("page_version")
+}
+
+/// Historial de la página (RF-8), escrito en la misma transacción que el cambio.
+model PageChange {
+  id       Int      @id @default(autoincrement())
+  at       String?  @db.VarChar(64)
+  business Business
+  /// Nombre visible en el momento del cambio.
+  author   String   @db.VarChar(60)
+  /// Sin clave foránea: un id histórico de `changes.jsonl` no debe impedir la importación.
+  authorId Int?     @map("author_id")
+  /// save | overwrite_after_conflict | restore_previous | restore_seed (esta, solo importada)
+  action   String   @db.VarChar(32)
+  /// JSON: [{ field, before, after }].
+  changes  String   @db.MediumText
+  /// Viene de `changes.jsonl`.
+  imported Boolean  @default(false)
+
+  @@index([business, id])
+  @@map("page_change")
+}
+
+/// Importación única de los datos de página de un negocio (RF-2). Viaja con los volcados.
+model PageImport {
+  business      Business @id
+  importedAt    DateTime @map("imported_at")
+  /// current | previous | seed
+  source        String   @db.VarChar(16)
+  /// `revision@updatedAt` del documento importado: delata un JSON editado después (CA-16).
+  sourceVersion String   @map("source_version") @db.VarChar(96)
+  historyCount  Int      @map("history_count")
+  skippedLines  Int      @map("skipped_lines")
+
+  @@map("page_import")
+}

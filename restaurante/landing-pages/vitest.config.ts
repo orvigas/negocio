@@ -6,8 +6,9 @@ export default defineConfig({
     env: { NODE_ENV: 'test' },
     // Base de pruebas MySQL (REQ-F-014): salvaguarda, MySQL disponible e id de ejecución.
     globalSetup: ['tests/setup/database-global.ts'],
-    // Ninguna prueba llama a Meta (REQ-F-009, RF-11.1); ninguna usa una base que no sea de pruebas.
-    setupFiles: ['tests/setup/no-meta.ts', 'tests/setup/database-guard.ts'],
+    // Ninguna prueba usa una base que no sea de pruebas. La red de seguridad contra Meta y Twilio
+    // (no-meta.ts) está en la api, con el bot (REQ-F-042).
+    setupFiles: ['tests/setup/database-guard.ts'],
     // La primera base de cada trabajador se migra con el CLI de Prisma (unos segundos).
     testTimeout: 30_000,
     hookTimeout: 60_000,

@@ -28,6 +28,15 @@ describe('entrar (RF-1, CA-1)', () => {
     expect(loginRequest?.headers['x-forwarded-for']).toBe('203.0.113.9');
   });
 
+  it('sin TRUST_PROXY, un X-Forwarded-For del navegador no llega a la API: cuenta la IP del socket', async () => {
+    const h = await startInventory();
+    const browser = h.browser();
+    Object.assign(browser.headers, { 'x-forwarded-for': '203.0.113.99' });
+    expect((await browser.login(ANA)).status).toBe(303);
+    const loginRequest = h.api.requests.find((request) => request.path === '/api/v1/admin/sesion' && request.method === 'POST');
+    expect(loginRequest?.headers['x-forwarded-for']).toMatch(/127\.0\.0\.1$/);
+  });
+
   it('en producción sin HTTPS: 503 sin formulario; /salud responde igual (HEALTHCHECK por HTTP, DEF-005)', async () => {
     const h = await startInventory({ env: { NODE_ENV: 'production', TRUST_PROXY: 'true' } });
     const browser = h.browser();

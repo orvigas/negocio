@@ -2,7 +2,7 @@
   "name": "api",
   "version": "0.1.0",
   "private": true,
-  "description": "API propia (REQ-F-038 y REQ-F-039; restaurante/docs/arquitectura.md): GET /api/v1/public/<negocio>/productos y la administración de productos en /api/v1/admin, en la red interna. Usa core, db, contracts y web.",
+  "description": "API propia (REQ-F-038, REQ-F-039 y REQ-F-042; restaurante/docs/arquitectura.md): GET /api/v1/public/<negocio>/productos y la administración de productos en /api/v1/admin, en la red interna, y el bot de WhatsApp con su webhook en un puerto propio. Usa core, db, contracts y web.",
   "type": "module",
   "main": "src/server.ts",
   "engines": {
@@ -12,6 +12,7 @@
     "start": "node --env-file-if-exists=.env src/server.ts",
     "dev": "node --watch --env-file-if-exists=.env scripts/dev-server.ts",
     "test": "vitest run",
+    "bot:chat": "node scripts/bot-chat.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

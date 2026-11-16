@@ -11,7 +11,7 @@ import { DEFAULT_MIGRATIONS_DIR } from '@restaurante/db/verify';
 import { createDatabase, dropDatabase, migrate, schemaFingerprint, truncateAll } from './database-admin.ts';
 import { TEST_DATABASE_PREFIX, databaseUrl, testDatabaseConfigs, withDatabase } from './test-database-config.ts';
 
-export { adminDatabaseUrl, adminSql, runMigrateDeploy, spawnPrisma } from './database-admin.ts';
+export { adminSql } from './database-admin.ts';
 
 /**
  * Bases de datos de prueba sobre MySQL 8.4 real (REQ-F-014, RF-13). Nunca una base real: la

@@ -33,10 +33,15 @@ describe('puerto interno del aviso', () => {
     expect((await post(server.url, TOKEN)).status).toBe(404);
     const ok = await post(server.internalUrl, TOKEN);
     expect(ok.status).toBe(200);
-    // Sin API en marcha la landing no puede confirmar los datos nuevos; el bot sí recarga.
-    expect(await ok.json()).toEqual({ landing: false, bot: true });
+    // Sin API en marcha la landing no puede confirmar los datos nuevos (el bot vive en la api; REQ-F-042).
+    expect(await ok.json()).toEqual({ landing: false });
     expect((await post(server.internalUrl, null)).status).toBe(401);
     expect((await post(server.internalUrl, 'otra-credencial-incorrecta-0123456789abcd')).status).toBe(401);
+
+    // El rechazo queda en el log y no invalida nada; la línea puede llegar después de la respuesta.
+    const lines = (msg: string) => server.output().stdout.split('\n').filter((line) => line.includes(`"msg":"${msg}"`));
+    await expect.poll(() => lines('internal_notify_rejected').length).toBe(2);
+    expect(lines('products_change_notified')).toHaveLength(1);
 
     const { stdout, stderr } = server.output();
     expect(stdout).toContain(`"internalPort":${server.internalPort}`);

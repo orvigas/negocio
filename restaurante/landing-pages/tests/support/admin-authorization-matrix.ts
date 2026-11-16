@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect } from 'vitest';
 
 import { BUSINESS_IDS, type BusinessId } from '@restaurante/core/shared';
 
@@ -64,56 +64,4 @@ export async function setupMatrix() {
 export function expectLoginRedirect(res: { status: number; headers: Record<string, string> }, label: string) {
   expect(res.status, label).toBe(303);
   expect(res.headers.location, label).toMatch(/^\/admin\/login(\?|$)/);
-}
-
-/** Las tres carreras entre dos administradores (D-7, CA-10). REQ-F-041: se reparten en dos archivos. */
-export const LAST_ADMIN_RACES = [
-  ['se desactivan', 'deactivate'],
-  ['se degradan a editor', 'demote'],
-  ['uno desactiva y el otro degrada', 'mixed'],
-] as const;
-
-/**
- * Las carreras de `rows` (cada una, 5 rondas con una base nueva). Se llama dentro del describe de
- * los archivos admin-authorization-matrix-concurrencia*.test.ts.
- */
-export function lastAdminRaces(rows: readonly (typeof LAST_ADMIN_RACES)[number][]): void {
-  async function twoAdmins() {
-    const context = await setupAdmin();
-    const second = await createUser(context.users, { username: 'segunda', displayName: 'Segunda', role: 'admin' });
-    const owner = (await context.users.findCredentials(ADMIN_USER))?.user;
-    if (!owner) throw new Error('Falta el primer administrador');
-    const a1 = await loginAs(context.browser(), ADMIN_USER, ADMIN_PASSWORD);
-    const a2 = await loginAs(context.browser(), 'segunda');
-    const token1 = csrfFrom((await a1.get('/admin/usuarios')).text);
-    const token2 = csrfFrom((await a2.get('/admin/usuarios')).text);
-    const activeAdmins = () => context.prisma.user.count({ where: { role: 'admin', active: true } });
-    return { ...context, owner, second, a1, a2, token1, token2, activeAdmins };
-  }
-
-  const demote = (username: string, displayName: string) => ({ username, displayName, role: 'editor', 'business-molotes': 'on' });
-
-  it.each(rows)('dos administradores que %s el uno al otro a la vez: nunca quedan cero', async (_label, mode) => {
-    for (let round = 0; round < 5; round++) {
-      const { owner, second, a1, a2, token1, token2, activeAdmins, prisma } = await twoAdmins();
-      const auditBefore = await prisma.userAudit.count();
-      const first =
-        mode === 'demote'
-          ? a1.post(`/admin/usuarios/${second.id}`).type('form').send({ _csrf: token1, ...demote('segunda', 'Segunda') })
-          : a1.post(`/admin/usuarios/${second.id}/desactivar`).type('form').send({ _csrf: token1 });
-      const other =
-        mode === 'deactivate'
-          ? a2.post(`/admin/usuarios/${owner.id}/desactivar`).type('form').send({ _csrf: token2 })
-          : a2.post(`/admin/usuarios/${owner.id}`).type('form').send({ _csrf: token2, ...demote(ADMIN_USER, owner.displayName) });
-      const results = await Promise.all([first, other]);
-
-      expect(await activeAdmins(), `${mode} ronda ${round}`).toBe(1);
-      const applied = results.filter((res) => res.status === 303 && res.headers.location?.startsWith('/admin/usuarios?ok='));
-      expect(applied, `${mode} ronda ${round}: ${results.map((res) => res.status).join(',')}`).toHaveLength(1);
-      // La otra se rechaza por D-7 (409) o porque su sesión ya se cerró (303 al acceso); nunca 5xx.
-      for (const res of results) expect(res.status).toBeLessThan(500);
-      // Solo la operación aplicada queda en la auditoría.
-      expect(await prisma.userAudit.count()).toBe(auditBefore + 1);
-    }
-  });
 }

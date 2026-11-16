@@ -73,8 +73,8 @@ ella (o con un valor que no sea una URL `http(s)` sin credenciales, parámetros 
 no arranca.
 
 **Admin nuevo (REQ-F-039).** `inventory-manager/.env` también viene lista (`PORT=3003` y
-`API_INTERNAL_URL=http://127.0.0.1:3001`). Para que la landing y el bot vean al instante los cambios
-de productos que hagas en el admin nuevo, conecta el aviso interno con la misma credencial en los
+`API_INTERNAL_URL=http://127.0.0.1:3001`). El bot, en `api`, ve al instante los cambios de productos
+que hagas en el admin nuevo. Para que la landing también, conecta el aviso interno con la misma credencial en los
 dos lados (`openssl rand -hex 32`):
 
 ```sh
@@ -85,7 +85,7 @@ INTERNAL_NOTIFY_TOKEN=<la misma credencial>
 INTERNAL_NOTIFY_TOKEN=<la misma credencial>
 ```
 
-Sin ellas todo funciona igual, pero la landing y el bot ven el cambio como mucho en 60 s. En
+Sin ellas todo funciona igual, pero la landing ve el cambio como mucho en 60 s. En
 producción las dos son obligatorias. Si además quieres probar el modo de solo lectura de productos,
 usuarios y "Mi cuenta" del `/admin` actual (REQ-F-039 y REQ-F-040), pon
 `ADMIN_NEW_URL=http://127.0.0.1:3003` en `landing-pages/.env`. "Usuarios" del admin nuevo solo
@@ -103,7 +103,7 @@ SHADOW_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/res
   arranca. Si cambias la contraseña, codifica los caracteres especiales (`@` -> `%40`).
 
 - Deja vacías las variables `WHATSAPP_BOT_*`: con todas vacías el bot queda deshabilitado y las
-  landings funcionan igual (el webhook responde 503).
+  landings funcionan igual (el webhook de `api` responde 503).
 - **Primer administrador de `/admin`** (opcional): genera el hash con
   `npm run admin:hash-password` (pide la contraseña sin mostrarla, mínimo 12 caracteres) y
   rellena `ADMIN_USER` y `ADMIN_PASSWORD_HASH`. Escribe el hash **entre comillas simples**
@@ -173,7 +173,8 @@ recargar la landing.
 | `http://127.0.0.1:3003/` | Admin nuevo (REQ-F-039): productos de cada negocio, con las mismas cuentas de `/admin`. Necesita la API en marcha; sin ella, cada pantalla avisa con un 503 |
 
 - `npm run dev` reinicia al editar cualquier `.ts` importado. Un reinicio cierra las sesiones de
-  `/admin` y borra las conversaciones del bot (están en memoria).
+  `/admin`. Reiniciar la `api` cierra las sesiones del admin nuevo y borra las conversaciones del
+  bot (están en memoria).
 - `npm run dev` arranca siempre con `NODE_ENV=development`, aunque el `.env` diga otra cosa.
   `npm start` no lo fija: lo toma del `.env` o del entorno, y sin él la app no arranca.
 - La app solo escucha en `127.0.0.1` (esta máquina). Para probarla desde otro dispositivo de tu
@@ -224,7 +225,7 @@ npm run bot:chat -- --ahora 2026-10-09T16:00  # fija la hora del negocio
 npm run bot:chat -- --proveedor twilio        # simula Twilio
 ```
 
-No usa tu `.env` ni `DATA_DIR`, y ninguna petición sale a internet. Comandos y detalles en
+Corre en el workspace `api`. No usa tu `.env` ni la base, y ninguna petición sale a internet. Comandos y detalles en
 [Probar el bot en local](../README.md#probar-el-bot-en-local).
 
 ## 8. Bot real con el sandbox de Twilio
@@ -247,18 +248,21 @@ la app no arranca. Referencia completa en [Twilio (desarrollo)](../README.md#twi
 
 ### 8.2 Abrir el túnel HTTPS
 
-Twilio necesita una URL pública con HTTPS que llegue a tu `127.0.0.1:3000`. En otra terminal:
+Twilio necesita una URL pública con HTTPS que llegue al puerto del webhook de `api`
+(`WEBHOOK_PORT`, 3004 por defecto, REQ-F-042). En otra terminal:
 
 ```sh
-cloudflared tunnel --url http://127.0.0.1:3000
+cloudflared tunnel --url http://127.0.0.1:3004
 ```
 
 Copia la URL `https://<algo>.trycloudflare.com` que imprime. **Cambia en cada reinicio del
-túnel.** Con `ngrok http 3000` funciona igual.
+túnel.** Con `ngrok http 3004` funciona igual.
 
-El túnel publica toda la app, incluida `/admin`: ciérralo cuando termines.
+El túnel solo publica el webhook: ese puerto no tiene ninguna otra ruta.
 
 ### 8.3 Variables en `.env`
+
+El bot corre en `api`, así que todo esto va en `api/.env`:
 
 ```sh
 WHATSAPP_MOLOTES=14155238886          # número del sandbox: emisor del bot y chat de los botones
@@ -269,10 +273,15 @@ WHATSAPP_BOT_ACCESS_TOKEN=<Auth Token>
 WHATSAPP_BOT_STAFF_MOLOTES=<WhatsApp del personal de Molotes, solo dígitos>
 WHATSAPP_BOT_STAFF_BIRRIA=<WhatsApp del personal de Birria, solo dígitos>
 WHATSAPP_BOT_WEBHOOK_URL=https://<túnel>/webhooks/whatsapp
+WHATSAPP_BOT_BLOCKLIST_KEY=<openssl rand -base64 32>
 ```
 
+En `landing-pages/.env`, con los **mismos valores**, pon `WHATSAPP_MOLOTES`, `WHATSAPP_BIRRIA`,
+`WHATSAPP_BOT_PROVIDER`, `WHATSAPP_BOT_STAFF_MOLOTES`, `WHATSAPP_BOT_STAFF_BIRRIA` y
+`WHATSAPP_BOT_BLOCKLIST_KEY`: los usan los botones y la página "Bot" de `/admin`.
+
 - `WHATSAPP_MOLOTES` y `WHATSAPP_BIRRIA` deben ser **el mismo número** y `WHATSAPP_MOLOTES`
-  debe estar como número (no solo como `_URL`): si no, la app no arranca. Con el sandbox ese
+  debe estar como número (no solo como `_URL`): si no, la `api` no arranca. Con el sandbox ese
   número es `14155238886`; con otro, Twilio no acepta los envíos del bot.
 - Las variables que solo usa Meta (`WHATSAPP_BOT_APP_SECRET`, `WHATSAPP_BOT_VERIFY_TOKEN`, …) se
   ignoran con Twilio.
@@ -293,27 +302,27 @@ WHATSAPP_BOT_WEBHOOK_URL=https://<túnel>/webhooks/whatsapp
 npm run dev
 ```
 
-1. En el log debe aparecer `bot_provider_selected` con el proveedor `twilio`.
+1. En el log de `api` debe aparecer `bot_provider_selected` con el proveedor `twilio`.
 2. Escribe al sandbox desde tu teléfono de prueba: el bot responde con el negocio del día.
 3. Haz un pedido completo y comprueba que el personal recibe el aviso.
 
 **Cada vez que cambie la URL del túnel** actualiza las dos cosas (`WHATSAPP_BOT_WEBHOOK_URL` en
-`.env` y "When a message comes in" en Twilio) y reinicia `npm run dev`. Si solo cambias una, el
+`api/.env` y "When a message comes in" en Twilio) y reinicia `npm run dev`. Si solo cambias una, el
 webhook responde 403.
 
 ### 8.6 Problemas frecuentes
 
 | Síntoma | Causa probable | Qué hacer |
 | ------- | -------------- | --------- |
-| La app no arranca: "WHATSAPP_MOLOTES y WHATSAPP_BIRRIA deben ser el mismo número" | Con el bot habilitado, los dos números difieren | Pon el número del sandbox (`14155238886`) en los dos |
-| La app no arranca: "Con twilio, WHATSAPP_MOLOTES es obligatoria como número" | Solo definiste `WHATSAPP_MOLOTES_URL` | Define `WHATSAPP_MOLOTES` con el número del sandbox |
-| La app no arranca: "`WHATSAPP_BOT_WEBHOOK_URL` no es válida" | Falta `https://`, la ruta no termina en `/webhooks/whatsapp` o lleva query | Copia la URL del túnel y agrega `/webhooks/whatsapp` |
-| La app no arranca: "`WHATSAPP_BOT_PHONE_NUMBER_ID` ya no se usa" | Variable antigua en `.env` | Renómbrala a `WHATSAPP_BOT_ACCOUNT_ID` |
-| La app no arranca: "twilio no se permite con NODE_ENV=production" | `npm start` con `NODE_ENV=production` en tu `.env` | Usa `npm run dev` (siempre `development`) o `NODE_ENV=development` |
+| La `api` o la app no arrancan: "WHATSAPP_MOLOTES y WHATSAPP_BIRRIA deben ser el mismo número" | Con el bot habilitado, los dos números difieren | Pon el número del sandbox (`14155238886`) en los dos |
+| La `api` no arranca: "Con twilio, WHATSAPP_MOLOTES es obligatoria como número" | Solo definiste `WHATSAPP_MOLOTES_URL` | Define `WHATSAPP_MOLOTES` con el número del sandbox |
+| La `api` no arranca: "`WHATSAPP_BOT_WEBHOOK_URL` no es válida" | Falta `https://`, la ruta no termina en `/webhooks/whatsapp` o lleva query | Copia la URL del túnel y agrega `/webhooks/whatsapp` |
+| La `api` no arranca: "`WHATSAPP_BOT_PHONE_NUMBER_ID` ya no se usa" | Variable antigua en `.env` | Renómbrala a `WHATSAPP_BOT_ACCOUNT_ID` |
+| La `api` no arranca: "twilio no se permite con NODE_ENV=production" | `npm start` con `NODE_ENV=production` en `api/.env` | Usa `npm run dev` (siempre `development`) o `NODE_ENV=development` |
 | La app no arranca: "NODE_ENV es obligatorio" | `npm start` sin `NODE_ENV` en el `.env` ni en el entorno | Usa `npm run dev` o define `NODE_ENV=development` en `.env` |
 | La app no arranca: "HOST debe ser una IP literal IPv4 o IPv6" | `HOST=localhost` u otro nombre en `.env`, o un `HOST` exportado por tu shell (p. ej. `tcsh` exporta el nombre de la máquina) | Usa `127.0.0.1` (o `0.0.0.0` para tu red), o `unset HOST` en la terminal |
-| El bot no contesta y en el log no aparece nada | El túnel se cerró, la app no corre o la URL de Twilio es otra | Revisa el túnel y la URL de "When a message comes in" |
-| `bot_webhook_signature_invalid` (403) | La URL del túnel cambió y una de las dos no se actualizó, o no coinciden letra por letra | Actualiza `.env` y Twilio con la misma URL y reinicia |
+| El bot no contesta y en el log no aparece nada | El túnel se cerró o no apunta al 3004, la `api` no corre o la URL de Twilio es otra | Revisa el túnel y la URL de "When a message comes in" |
+| `bot_webhook_signature_invalid` (403) | La URL del túnel cambió y una de las dos no se actualizó, o no coinciden letra por letra | Actualiza `api/.env` y Twilio con la misma URL y reinicia |
 | `GET /webhooks/whatsapp` responde 405 | Normal con Twilio: no verifica el webhook por `GET` | Nada |
 | `bot_api_error` con `status` 401 y `errorCode` 20003 | Twilio rechazó la autenticación del envío. Puede ser un SID o token que no corresponden, **o una restricción de la cuenta de Twilio** (fue el caso al configurarlo): no siempre son las credenciales | Comprueba que SID y token son de la misma cuenta; si lo son, revisa el estado de la cuenta en la consola de Twilio o con su soporte |
 | `bot_staff_send_failed` o `bot_staff_delivery_failed` | El personal no está unido al sandbox o no escribió en las últimas 24 h | Que el personal repita `join <palabra>` y escriba al sandbox; el cliente recibe el contacto directo mientras tanto |

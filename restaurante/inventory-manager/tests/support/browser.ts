@@ -28,11 +28,12 @@ export async function startInventory({
   products = [],
   env = {},
   apiUrl,
-}: { products?: Parameters<typeof startApiDouble>[1]; env?: Record<string, string>; apiUrl?: string } = {}): Promise<Harness> {
+  apiTimeoutMs = 2000,
+}: { products?: Parameters<typeof startApiDouble>[1]; env?: Record<string, string>; apiUrl?: string; apiTimeoutMs?: number } = {}): Promise<Harness> {
   const api = await startApiDouble([ANA, ELI], products);
   const logger = recordingLogger();
   const config = loadInventoryConfig({ NODE_ENV: 'test', API_INTERNAL_URL: apiUrl ?? api.url, ...env });
-  const client = createAdminApiClient({ baseUrl: config.apiInternalUrl, timeoutMs: 2000 });
+  const client = createAdminApiClient({ baseUrl: config.apiInternalUrl, timeoutMs: apiTimeoutMs });
   const { url } = await listenLocal(createInventoryApp({ config, api: client, logger }));
   return { url, api, logger, browser: () => new Browser(url) };
 }

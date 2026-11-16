@@ -26,7 +26,6 @@
     "db:down": "docker compose stop mysql-dev",
     "admin:hash-password": "node scripts/hash-password.ts",
     "admin:recover": "node --env-file-if-exists=.env scripts/admin-recover.ts",
-    "bot:chat": "node scripts/bot-chat.ts",
     "audit:deps": "node scripts/audit-deps.ts"
   },
   "dependencies": {

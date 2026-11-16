@@ -1,3 +1,5 @@
+import { BRANCH_LOCATION } from '@restaurante/core/shared';
+
 import { image } from '../images.ts';
 
 /** Contenido compartido por ambas landing pages. */
@@ -17,7 +19,7 @@ export const commonContent = Object.freeze({
   // mapa embebido) y el bot ("Horario y ubicación"). El origen del iframe (www.google.com) es el
   // único permitido en `frame-src` de la CSP (src/app.ts).
   location: Object.freeze({
-    mapsUrl: 'https://www.google.com/maps/search/?api=1&query=18.81823603166285,-98.96914471124853',
+    mapsUrl: BRANCH_LOCATION.mapsUrl,
     embedSrc:
       'https://www.google.com/maps/embed?pb=!4v1792064722212!6m8!1m7!1sCliD7xRS-mkCpf6MwseHcQ!2m2!1d18.81823603166285!2d-98.96914471124853!3f189.613958693852!4f-9.01272483181998!5f0.7820865974627469',
     label: 'Cómo llegar',

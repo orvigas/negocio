@@ -2,13 +2,14 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Database } from '@restaurante/db/client';
 import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
+import { createBotControl, DEFAULT_BOT_LIMITS, MS } from '@restaurante/core/bot-control';
 
-import { createBotControl } from '../../src/services/bot-control.ts';
-import { DEFAULT_BOT_LIMITS, MS } from '../../src/services/whatsapp-bot/protection/limits.ts';
 import { makeRecordingLogger } from '../helpers.ts';
 import { TEST_BOT_KEYS } from '../support/admin.ts';
 import { makeDatabase, type TestDatabase } from '../support/database.ts';
-import { mx } from '../support/whatsapp.ts';
+
+/** Fecha y hora locales de México (UTC-6). */
+const mx = (local: string): Date => new Date(`${local}:00-06:00`);
 
 /**
  * Store de la protección del bot sobre MySQL 8.4 real (REQ-F-025): lista negra sin dos bloqueos

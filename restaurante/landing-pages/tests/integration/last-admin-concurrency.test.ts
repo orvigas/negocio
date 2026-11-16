@@ -13,8 +13,6 @@ import { runNode } from '../support/process.ts';
  * RN-1 con concurrencia real sobre MySQL (REQ-F-014, RF-7 y CA-5): ninguna combinación de
  * operaciones simultáneas deja cero administradores activos. Las escrituras de usuarios son
  * SERIALIZABLE: el interbloqueo revierte una de las dos, que se reintenta y ve el estado confirmado.
- * El caso de dos administradores que se desactivan a sí mismos por HTTP está en
- * last-admin-concurrency-http.test.ts (REQ-F-041).
  * Cada caso se repite 50 veces con dos clientes de Prisma (dos pools, como dos procesos).
  */
 

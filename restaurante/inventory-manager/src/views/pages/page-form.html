@@ -1,0 +1,13 @@
+<p class="font-label text-xs font-bold tracking-widest text-(--accent-soft) uppercase">{{ businessName }}</p>
+      <h1 class="font-headline text-3xl font-black tracking-tight uppercase">Página</h1>
+      <p class="mt-2 text-sm text-masa">Hero, texto destacado y promoción de la landing.</p>
+      {{{ lastChange }}}
+      {{{ notices }}}
+      <form id="page-form" class="page-form mt-6 space-y-6" method="post" action="{{ action }}" novalidate data-submit-guard>
+        <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+        <input type="hidden" name="expectedVersion" value="{{ version }}" />
+        {{{ sections }}}
+        <div class="page-form__actions flex flex-wrap items-center gap-3">{{{ buttons }}}
+        </div>
+      </form>
+      {{{ restore }}}

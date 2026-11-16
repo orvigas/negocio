@@ -97,6 +97,11 @@ export interface ProductRepository {
    * recarga periódica del catálogo del bot). true si pudo; si falla conserva la caché anterior.
    */
   reload(business: BusinessId): Promise<boolean>;
+  /**
+   * ¿La caché de este proceso refleja la última escritura? false si falló su recarga y aún no se
+   * recuperó (`getPublished` sigue con la versión anterior). Sin E/S.
+   */
+  isCacheFresh(business: BusinessId): boolean;
   /** Productos que pinta la landing (de memoria, sin E/S). */
   getPublished<Id extends BusinessId>(business: Id): PublishedProducts[Id];
   list(business: BusinessId, options?: { includeDeleted?: boolean; category?: ProductCategory }): Promise<ProductView[]>;
@@ -405,6 +410,10 @@ export function createProductRepository({ store, imageExists, now = () => new Da
     async reload(business) {
       ensureReady();
       return refresh(business);
+    },
+
+    isCacheFresh(business) {
+      return !stale.has(business);
     },
 
     onChange(listener) {

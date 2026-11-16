@@ -10,6 +10,7 @@
     "./errors": "./src/errors.ts",
     "./paths": "./src/paths.ts",
     "./prisma-bot-control-store": "./src/prisma-bot-control-store.ts",
+    "./prisma-page-store": "./src/prisma-page-store.ts",
     "./prisma-product-store": "./src/prisma-product-store.ts",
     "./user-repository": "./src/user-repository.ts",
     "./verify": "./src/verify.ts",

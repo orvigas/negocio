@@ -15,7 +15,7 @@ import { projectMigrationChecksums } from '../support/migrations.ts';
 /**
  * Lógica de la verificación al arrancar (REQ-F-014, RF-6 y CA-7) con dobles: reintentos dentro de
  * 60 s con un reloj falso, fallos inmediatos y comprobaciones que no se pueden provocar en un MySQL
- * compartido (modo estricto). Los casos sobre MySQL real están en tests/integration/db-verify.test.ts.
+ * compartido (modo estricto).
  */
 
 const COLLATION = 'utf8mb4_es_0900_as_cs';

@@ -91,3 +91,32 @@ describe('createPublicApiClient', () => {
     expect(() => createPublicApiClient({ baseUrl: 'http://api:3001', timeoutMs: 0 })).toThrow(TypeError);
   });
 });
+
+describe('getPage (REQ-F-044)', () => {
+  const PAGE = { data: { hero: { showcase: { title: 'Birria', description: 'De res', priceCents: 19500 } }, promo: { badge: 'Hoy', title: 'Promo', description: 'Dos por uno' } } };
+  const clientWith = (response: Response) => {
+    const paths: string[] = [];
+    const fetchFn: FetchFn = async (input) => {
+      paths.push(input);
+      return response;
+    };
+    return { client: createPublicApiClient({ baseUrl: 'http://api:3001', timeoutMs: 100, fetch: fetchFn }), paths };
+  };
+
+  it('pide la ruta de página y devuelve los datos validados', async () => {
+    const { client, paths } = clientWith(json(PAGE));
+    await expect(client.getPage('birria')).resolves.toEqual({ ok: true, data: PAGE.data });
+    expect(paths).toEqual(['http://api:3001/api/v1/public/birria/pagina']);
+  });
+
+  it('un cuerpo que no cumple el contrato del negocio es un fallo', async () => {
+    // Molotes exige `menu.highlight`, que la página de Birria no tiene.
+    const { client } = clientWith(json(PAGE));
+    await expect(client.getPage('molotes')).resolves.toEqual({ ok: false, reason: 'invalid_body' });
+  });
+
+  it('el 503 "no disponible" es un fallo con su estado, nunca lanza', async () => {
+    const { client } = clientWith(json({ error: { code: 'PAGE_UNAVAILABLE', message: 'x' } }, { status: 503 }));
+    await expect(client.getPage('birria')).resolves.toEqual({ ok: false, reason: 'http_status', status: 503 });
+  });
+});

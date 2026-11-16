@@ -1,7 +1,7 @@
 import type Koa from 'koa';
 import type { Middleware } from 'koa';
 
-import type { ApiError } from '@restaurante/contracts';
+import { PAGE_UNAVAILABLE_CODE, type ApiError } from '@restaurante/contracts';
 import { DatabaseUnavailableError, errorProp, type Logger } from '@restaurante/core/shared';
 
 /**
@@ -22,6 +22,9 @@ export class ApiHttpError extends Error {
     this.headers = headers;
   }
 }
+
+/** Datos de página aún sin importar o edición sin activar (REQ-F-044, RF-4): nada se escribió. */
+export const pageUnavailable = (): ApiHttpError => new ApiHttpError(503, PAGE_UNAVAILABLE_CODE, 'Los datos de página aún no están disponibles: no se cambió nada.');
 
 export function sendError(ctx: Koa.Context, status: number, code: string, message: string): void {
   const body: ApiError = { error: { code, message } };

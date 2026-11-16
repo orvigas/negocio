@@ -1,6 +1,5 @@
 import Koa from 'koa';
 
-import type { ProductRepository } from '@restaurante/core/catalog';
 import { safeEqualStrings } from '@restaurante/core/identity';
 import { errorProp, isBusinessId, silentLogger, type Logger } from '@restaurante/core/shared';
 import { readJsonBody } from '@restaurante/web';
@@ -9,17 +8,17 @@ import type { LandingProducts } from './services/landing-products.ts';
 
 /**
  * Puerto interno de landing-pages (REQ-F-039, RF-12 a RF-14): solo el aviso de la API tras cada
- * escritura confirmada de productos.
+ * escritura confirmada de productos. Desde REQ-F-042 el bot vive en la api (con su propia caché, ya
+ * recargada por la escritura): el aviso solo invalida la caché de la landing.
  *
  *   POST /internal/v1/productos-cambiados  { "business": "molotes" | "birria" }
  *   Authorization: Bearer <INTERNAL_NOTIFY_TOKEN>
- *   -> 200 { landing, bot }  (la landing ya tiene los datos nuevos / el catálogo del bot se recargó)
+ *   -> 200 { landing }  (true si la landing ya tiene los datos nuevos)
  *
  * - Se sirve en INTERNAL_PORT, nunca en el puerto de la app: Traefik solo enruta al de la app, así que
  *   el aviso no es accesible desde internet. Una petición con X-Forwarded-For (pasó por un proxy)
  *   recibe 404, igual que cualquier otra ruta.
  * - Sin credencial o con una incorrecta: 401 y no se invalida nada (RF-14).
- * - Si la recarga del catálogo del bot falla: 503 (la API reintenta).
  * - El log nunca lleva la credencial.
  */
 
@@ -28,7 +27,6 @@ const BEARER = /^Bearer (\S+)$/;
 
 export interface InternalAppOptions {
   token: string;
-  products: Pick<ProductRepository, 'reload'>;
   landingProducts: Pick<LandingProducts, 'invalidate' | 'confirmFresh'>;
   logger?: Logger;
 }
@@ -38,7 +36,7 @@ function sendError(ctx: Koa.Context, status: number, code: string, message: stri
   ctx.body = { error: { code, message } };
 }
 
-export function createInternalApp({ token, products, landingProducts, logger = silentLogger }: InternalAppOptions): Koa {
+export function createInternalApp({ token, landingProducts, logger = silentLogger }: InternalAppOptions): Koa {
   if (typeof token !== 'string' || token === '') throw new TypeError('createInternalApp requiere la credencial');
   const app = new Koa();
   app.silent = true;
@@ -72,13 +70,11 @@ export function createInternalApp({ token, products, landingProducts, logger = s
     const business = body !== null && typeof body === 'object' ? (body as Record<string, unknown>).business : undefined;
     if (!isBusinessId(business)) return sendError(ctx, 400, 'INVALID_BUSINESS', 'Negocio desconocido.');
 
-    // La landing espera los datos nuevos en su siguiente visita y el bot recarga su catálogo.
+    // La landing espera los datos nuevos en su siguiente visita.
     landingProducts.invalidate(business);
-    const bot = await products.reload(business);
     const landing = await landingProducts.confirmFresh(business);
-    logger.info('products_change_notified', { business, landing, bot });
-    if (!bot) return sendError(ctx, 503, 'RELOAD_FAILED', 'No se pudo recargar el catálogo del bot.');
-    ctx.body = { landing, bot };
+    logger.info('products_change_notified', { business, landing });
+    ctx.body = { landing };
     return undefined;
   });
 

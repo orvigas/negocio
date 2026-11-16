@@ -2,6 +2,8 @@ import Router from '@koa/router';
 
 import type { AccountController } from './controllers/account.ts';
 import type { AdminController } from './controllers/admin.ts';
+import type { BotController } from './controllers/bot.ts';
+import type { PageController } from './controllers/page.ts';
 import type { UsersController } from './controllers/users.ts';
 
 /**
@@ -17,6 +19,10 @@ import type { UsersController } from './controllers/users.ts';
  * GET|POST /:negocio/productos/:id/eliminar    -> confirmar y eliminar
  * POST /:negocio/productos/:id/subir | …/bajar -> orden (con JS, fragmento de la lista)
  *
+ * Datos de página (REQ-F-044):
+ * GET  /:negocio/pagina | POST /:negocio/pagina -> edición, o el aviso "aún no está activa"
+ * GET|POST /:negocio/pagina/restaurar          -> confirmar y restaurar la versión anterior
+ *
  * Usuarios y "Mi cuenta" (REQ-F-040):
  * GET  /usuarios                               -> lista (solo administradores)
  * GET  /usuarios/nuevo | POST /usuarios        -> alta
@@ -24,8 +30,27 @@ import type { UsersController } from './controllers/users.ts';
  * POST /usuarios/:id/desactivar | …/reactivar  -> estado
  * GET|POST /usuarios/:id/contrasena            -> restablecer la contraseña
  * GET|POST /cuenta                             -> cambiar la propia contraseña (cualquier usuario)
+ *
+ * Control del bot (REQ-F-043, solo administradores):
+ * GET  /bot                                    -> estado, uso, topes y lista negra
+ * POST /bot/interruptor                        -> pausar o reanudar
+ * POST /bot/bloqueos                           -> alta manual
+ * POST /bot/bloqueos/:id/quitar                -> baja
+ * POST /bot/topes/:token/bloquear              -> bloquear desde "alcanzaron un tope hoy"
  */
-export function createRouter({ admin: controller, users, account }: { admin: AdminController; users: UsersController; account: AccountController }): Router {
+export function createRouter({
+  admin: controller,
+  users,
+  account,
+  bot,
+  page,
+}: {
+  admin: AdminController;
+  users: UsersController;
+  account: AccountController;
+  bot: BotController;
+  page: PageController;
+}): Router {
   const router = new Router();
   router.get('/salud', (ctx) => {
     ctx.type = 'text';
@@ -35,7 +60,7 @@ export function createRouter({ admin: controller, users, account }: { admin: Adm
   router.post('/acceso', controller.login);
   router.post('/salir', controller.logout);
   router.get('/', controller.home);
-  // Usuarios antes que productos: `/usuarios/productos` no es el negocio "usuarios".
+  // Usuarios y bot antes que productos: `/usuarios/productos` no es el negocio "usuarios".
   router.get('/usuarios', users.list);
   router.post('/usuarios', users.create);
   router.get('/usuarios/nuevo', users.newPage);
@@ -45,6 +70,11 @@ export function createRouter({ admin: controller, users, account }: { admin: Adm
   router.post('/usuarios/:id/reactivar', users.reactivate);
   router.get('/usuarios/:id/contrasena', users.passwordPage);
   router.post('/usuarios/:id/contrasena', users.resetPassword);
+  router.get('/bot', bot.page);
+  router.post('/bot/interruptor', bot.toggle);
+  router.post('/bot/bloqueos', bot.block);
+  router.post('/bot/bloqueos/:id/quitar', bot.unblock);
+  router.post('/bot/topes/:token/bloquear', bot.blockReached);
   router.get('/cuenta', account.page);
   router.post('/cuenta', account.changePassword);
   router.get('/:business/productos', controller.products);
@@ -58,5 +88,9 @@ export function createRouter({ admin: controller, users, account }: { admin: Adm
   router.post('/:business/productos/:id/recuperar', controller.restore);
   router.post('/:business/productos/:id/subir', controller.moveUp);
   router.post('/:business/productos/:id/bajar', controller.moveDown);
+  router.get('/:business/pagina', page.edit);
+  router.post('/:business/pagina', page.save);
+  router.get('/:business/pagina/restaurar', page.restorePage);
+  router.post('/:business/pagina/restaurar', page.restore);
   return router;
 }

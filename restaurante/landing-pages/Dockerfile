@@ -128,8 +128,8 @@ COPY --from=build /app/packages/contracts /app/packages/contracts
 COPY --from=build /app/packages/web /app/packages/web
 COPY --from=build /app/packages/db/src /app/packages/db/src
 COPY --from=build /app/packages/db/prisma/migrations /app/packages/db/prisma/migrations
-# Comandos de consola: admin:recover y admin:hash-password y su soporte. scripts/bot-chat.ts
-# (simulador del bot de WhatsApp, REQ-F-009) es solo de desarrollo: usa el doble de tests/.
+# Comandos de consola: admin:recover y admin:hash-password y su soporte. El simulador del bot de
+# WhatsApp (api/scripts/bot-chat.ts, REQ-F-042) es solo de desarrollo: no va en ninguna imagen.
 COPY --from=build /app/landing-pages/scripts/admin-recover.ts /app/landing-pages/scripts/hash-password.ts ./scripts/
 COPY --from=build /app/landing-pages/scripts/support ./scripts/support
 # Punto de montaje sugerido para DATA_DIR (JSON de página y changes.jsonl): un volumen con nombre
@@ -145,12 +145,15 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 CMD ["node", "src/server.ts"]
 
 FROM base AS api
-# API propia (REQ-F-038; administración de productos desde REQ-F-039): solo en la red interna de Docker
-# (sin puertos publicados ni router de Traefik; deploy/compose.prod.yaml). Misma instalación de
-# producción que `production`.
+# API propia (REQ-F-038; administración de productos desde REQ-F-039) y bot de WhatsApp (REQ-F-042). Sin
+# puertos publicados (deploy/compose.prod.yaml): Traefik solo enruta /webhooks/whatsapp al puerto del
+# webhook; el 3001 sigue siendo interno. Misma instalación de producción que `production`.
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3001
+# deploy.sh lee esta etiqueta para saber si esta imagen atiende el webhook (RF-13): una api anterior no
+# la tiene, y entonces Traefik no le enruta nada y la ruta vuelve a la app anterior, que tiene el bot.
+LABEL org.restaurante.webhook="whatsapp"
 WORKDIR /app/api
 COPY package.json package-lock.json /app/
 COPY landing-pages/package.json /app/landing-pages/
@@ -169,7 +172,7 @@ COPY --from=build /app/landing-pages/public/img /app/landing-pages/public/img
 COPY --from=build /app/packages/db/src /app/packages/db/src
 COPY --from=build /app/packages/db/prisma/migrations /app/packages/db/prisma/migrations
 USER node
-EXPOSE 3001
+EXPOSE 3001 3004
 # Comprueba que la API responde con su propio endpoint (wget de busybox; sin rutas adicionales).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -q -O /dev/null "http://127.0.0.1:${PORT:-3001}/api/v1/public/birria/productos" || exit 1

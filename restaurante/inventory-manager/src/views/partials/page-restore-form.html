@@ -1,0 +1,10 @@
+<section class="confirm-panel mt-6 rounded-2xl border border-rim bg-surface p-6" aria-labelledby="confirm-title">
+        <h2 id="confirm-title" class="font-headline text-xl font-bold">¿Restaurar la versión anterior?</h2>
+        <p class="mt-2 text-masa">La versión vigente pasa a ser la anterior y la anterior se publica en la landing. Si restauras otra vez, se deshace.</p>
+        <form class="confirm-panel__form mt-6 flex flex-wrap items-center gap-3" method="post" action="{{ action }}" data-submit-guard>
+          <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+          <input type="hidden" name="expectedVersion" value="{{ version }}" />
+          <button class="button button--primary inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg bg-(--accent) px-5 py-2.5 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-(--accent-strong) aria-busy:opacity-70" type="submit" data-busy-text="Restaurando…">Restaurar</button>
+          <a class="button button--ghost inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg px-3 py-2 font-label text-sm font-bold tracking-wider text-maiz uppercase hover:bg-surface-high" href="{{ backHref }}">Cancelar</a>
+        </form>
+      </section>

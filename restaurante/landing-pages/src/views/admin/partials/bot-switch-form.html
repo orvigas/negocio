@@ -1,0 +1,10 @@
+<form class="bot-panel__switch mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" method="post" action="{{ switchAction }}" novalidate>
+            <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+            <input type="hidden" name="accion" value="{{ switchValue }}" />
+            <div class="admin-field sm:flex-1">
+              <label class="admin-field__label block text-sm font-semibold text-slate-800" for="b-motivo-interruptor">Motivo (opcional)</label>
+              <input class="admin-field__input {{ inputClass }}" id="b-motivo-interruptor" name="motivo" type="text" value="" maxlength="200" autocomplete="off"{{{ switchReasonAttrs }}} />
+              {{{ switchReasonError }}}
+            </div>
+            <button class="admin-button {{ switchButtonClass }}" type="submit">{{ switchLabel }}</button>
+          </form>

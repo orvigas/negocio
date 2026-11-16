@@ -305,6 +305,15 @@ check 'app-data vuelve al del respaldo' test "$(docker exec "$(compose ps -q app
 check 'la app está healthy' test "$(docker inspect -f '{{.State.Health.Status}}' "$(compose ps -q app)")" = healthy
 check 'release.env apunta a la imagen del respaldo' grep -qx "RESTAURANTE_APP_IMAGE=$APP_SRC" "$BASE/state/release.env"
 check 'releases.log registra la restauración' grep -q 'result=restored' "$BASE/state/releases.log"
+# REQ-F-042 (DEF-002): esta app no tiene webhook y aquí no hay api, así que el bot queda sin servicio.
+check 'restore.sh avisa de que nadie atiende el webhook' grep -q 'AVISO: el bot queda SIN SERVICIO' "$WORK/logs/restore.log"
+# Con una api con el router encendido no hay aviso.
+docker build --quiet -t bksmoke/api-en-marcha - >/dev/null <<<"FROM $APP_SRC
+CMD [\"sleep\", \"300\"]"
+RESTAURANTE_API_IMAGE=bksmoke/api-en-marcha RESTAURANTE_API_WEBHOOK=true compose up -d --no-deps api >/dev/null 2>&1
+check 'restore.sh con una api con router termina con 0' run restore-api sh -c "printf '%s\n' '$IDENTITY' | '$OPS/restore.sh' latest --confirm restaurante"
+check 'y sin aviso' bash -c "! grep -q 'AVISO: el bot' '$WORK/logs/restore-api.log'"
+compose rm -sf api >/dev/null 2>&1
 
 # --- Prueba mensual y simulacro (RF-11, CA-7, CA-8) ----------------------------------------------
 say 'prueba mensual con --drill (RF-11)'

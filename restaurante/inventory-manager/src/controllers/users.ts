@@ -1,5 +1,5 @@
 import type { AdminApiClient, AdminApiResult } from '@restaurante/contracts';
-import { assertSameOrigin, readFormBody, type Logger, type SafeHtml } from '@restaurante/web';
+import type { Logger, SafeHtml } from '@restaurante/web';
 
 import type { InventoryConfig } from '../config.ts';
 import { clearSessionId } from '../session.ts';
@@ -60,37 +60,18 @@ const SUCCESS: Readonly<Record<string, string>> = Object.freeze({
   reactivated: 'Usuario reactivado: ya puede volver a entrar.',
   password_reset: 'Contraseña restablecida: sus sesiones se cerraron.',
 });
+const FORBIDDEN = 'No tienes permiso para gestionar usuarios.';
 const UNAVAILABLE = { tone: 'error' as const, title: 'Servicio no disponible.', paragraphs: ['No se pudo conectar con el sistema: no se guardó nada. Lo que escribiste sigue en el formulario (salvo las contraseñas); inténtalo de nuevo en unos minutos.'] };
 
 export function createUsersController({ config, api, views, logger }: { config: InventoryConfig; api: AdminApiClient; views: Views; logger: Logger }): UsersController {
   const kit = createControllerKit({ config, api, views, logger });
-  const { send, seeOther, toLogin, toLoginClosed, unavailable, failureReason, isUnavailable, idOf, credentials } = kit;
+  const { send, seeOther, toLogin, toLoginClosed, unavailable, failureReason, isUnavailable, readClosedForm, fieldErrors, idOf, credentials } = kit;
 
-  function forbidden(ctx: Ctx, context: PageContext): void {
-    logger.warn('admin_forbidden', { path: ctx.path, userId: context.user.id });
-    send(ctx, 403, views.message({ title: 'Sin permiso', notice: { tone: 'error', title: 'No tienes permiso para gestionar usuarios.' }, context }));
-  }
-
+  const forbidden = (ctx: Ctx, context: PageContext) => kit.forbidden(ctx, context, FORBIDDEN);
   const notFound = (ctx: Ctx, context?: PageContext) => kit.notFound(ctx, { context, section: 'users', backHref: USERS_PATH, backLabel: 'Volver a usuarios' });
 
   /** Sesión y rol administrador (RF-1). null si ya respondió. */
-  async function adminSession(ctx: Ctx, returnTo: string, onUnavailable?: () => boolean): Promise<Session | null> {
-    const auth = await kit.session(ctx, returnTo, onUnavailable);
-    if (!auth) return null;
-    if (auth.user.role !== 'admin') {
-      forbidden(ctx, auth);
-      return null;
-    }
-    return auth;
-  }
-
-  /** Mismo origen y formulario con una lista cerrada de campos (DEF-004 de REQ-F-007): otro campo, 400. */
-  async function readClosedForm(ctx: Ctx, allowed: readonly string[], limit: number): Promise<Map<string, string>> {
-    assertSameOrigin(ctx, logger);
-    const fields = await readFormBody(ctx, { limit });
-    if ([...fields.keys()].some((name) => !allowed.includes(name))) ctx.throw(400, 'El formulario tiene campos desconocidos.', { code: 'INVALID_FORM' });
-    return fields;
-  }
+  const adminSession = (ctx: Ctx, returnTo: string, onUnavailable?: () => boolean) => kit.adminSession(ctx, returnTo, FORBIDDEN, onUnavailable);
 
   /** Respuestas de la API que no son de dominio: 401 -> acceso, 403, 404 y el resto -> 503. */
   function apiFailure(ctx: Ctx, result: AdminApiResult<unknown>, auth: Session, returnTo: string): void {
@@ -112,9 +93,6 @@ export function createUsersController({ config, api, views, logger }: { config: 
     views.notice({ tone: 'warning', urgent: true, title: message, paragraphs: ['Lo que escribiste sigue en el formulario.'] });
   const isLastAdmin = (result: AdminApiResult<unknown>): result is { ok: false; kind: 'http'; status: number; error: { code: string; message: string } } =>
     !result.ok && result.kind === 'http' && result.status === 409 && result.error.code === 'LAST_ADMIN';
-  const fieldErrors = (result: AdminApiResult<unknown>): Record<string, string> | null =>
-    !result.ok && result.kind === 'http' && result.status === 422 ? (result.error.fields ?? { '': result.error.message }) : null;
-
   const userInput = (values: UserFormValues) => ({ username: values.username, displayName: values.displayName, role: values.role, businesses: values.businesses });
   const passwords = (fields: Map<string, string>) => ({ password: fields.get('password') ?? '', passwordConfirmation: fields.get('passwordConfirmation') ?? '' });
 

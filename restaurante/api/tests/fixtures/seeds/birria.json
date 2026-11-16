@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "business": "birria",
+  "revision": 0,
+  "updatedAt": null,
+  "updatedBy": null,
+  "data": {
+    "hero": {
+      "showcase": {
+        "title": "Tostado de Comal",
+        "description": "Con costra de queso fundido & adobo",
+        "priceCents": 19500
+      }
+    },
+    "menu": {
+      "items": [
+        {
+          "slug": "quesabirria",
+          "name": "Quesabirria con Tortilla de Mano",
+          "tag": "La Favorita del Comal",
+          "description": "Tortilla hecha a mano dorada en grasa de adobo, abundante queso asadero fundido y carne deshebrada de birria. Crujiente por fuera y jugosa por dentro con caldo para chopear.",
+          "priceCents": 6500,
+          "priceUnit": "c/u",
+          "available": true,
+          "image": {
+            "src": "/img/birria/quesabirria.jpg",
+            "alt": "Quesabirria con tortilla de mano y queso asadero",
+            "width": 512,
+            "height": 382
+          },
+          "detailsType": "chips",
+          "detailsLabel": "Preparación:",
+          "chips": [
+            {
+              "text": "Tortilla a mano",
+              "highlight": false
+            },
+            {
+              "text": "Queso asadero fundido",
+              "highlight": false
+            },
+            {
+              "text": "Consomé para chopear",
+              "highlight": true
+            }
+          ]
+        },
+        {
+          "slug": "taco-de-birria",
+          "name": "Taco de Birria con Tortilla de Mano",
+          "tag": "Sabor Tradicional",
+          "description": "Carne jugosa de birria tatemada sobre tortilla de maíz recién echada a mano en comal, cilantro criollo, cebolla y limón fresco, acompañado de vasito de consomé para sopear.",
+          "priceCents": 4000,
+          "priceUnit": "c/u",
+          "available": true,
+          "image": {
+            "src": "/img/birria/taco-de-birria.jpg",
+            "alt": "Taco de birria con tortilla de maíz hecha a mano",
+            "width": 512,
+            "height": 382
+          },
+          "detailsType": "chips",
+          "detailsLabel": "Incluye:",
+          "chips": [
+            {
+              "text": "Cilantro criollo",
+              "highlight": false
+            },
+            {
+              "text": "Cebolla picada",
+              "highlight": false
+            },
+            {
+              "text": "Limón fresco",
+              "highlight": false
+            },
+            {
+              "text": "Caldito para sopear",
+              "highlight": true
+            }
+          ]
+        },
+        {
+          "slug": "consome-grande",
+          "name": "Tazón de Consomé Grande",
+          "tag": "Porción Grande",
+          "description": "500ml de consomé de cocción lenta con 150g de carne maciza y surtida, tuétano a la brasa, cilantro, cebolla picada y orden de tortillas a mano recién hechas en comal.",
+          "priceCents": 14000,
+          "priceUnit": "",
+          "available": true,
+          "image": {
+            "src": "/img/birria/consome-grande.jpg",
+            "alt": "Tazón de consomé con carne grande humeante",
+            "width": 512,
+            "height": 279
+          },
+          "detailsType": "portion",
+          "detailsLabel": "Porción & Gramaje:",
+          "portion": "500ml caldo + 150g carne",
+          "portionExtra": "Con Tuétano"
+        },
+        {
+          "slug": "consome-chico",
+          "name": "Tazón de Consomé Chico",
+          "tag": "Individual",
+          "available": true,
+          "image": {
+            "src": "/img/birria/consome-chico.jpg",
+            "alt": "Tazón de consomé chico con y sin carne",
+            "width": 512,
+            "height": 279
+          },
+          "detailsType": "variants",
+          "detailsLabel": "Selecciona Variante:",
+          "variants": [
+            {
+              "label": "Con Carne",
+              "priceCents": 8000,
+              "description": "250ml de consomé concentrado + 80g de carne de res maciza deshebrada, acompañado de cebollitas y orégano.",
+              "available": true
+            },
+            {
+              "label": "Sin Carne",
+              "priceCents": 4500,
+              "description": "Solo caldito hirviendo con especias tradicionales, hierbas de olor, cilantro y cebolla al gusto.",
+              "available": true
+            }
+          ]
+        },
+        {
+          "slug": "birriamen",
+          "name": "Birriamen Artesanal",
+          "tag": "Fusión Japonesa-Mexicana",
+          "available": true,
+          "image": {
+            "src": "/img/birria/birriamen.jpg",
+            "alt": "Tazón humeante de Birriamen",
+            "width": 512,
+            "height": 382
+          },
+          "detailsType": "variants",
+          "detailsLabel": "Tamaño de Porción:",
+          "variants": [
+            {
+              "label": "Grande",
+              "priceCents": 15500,
+              "description": "Fusión japonesa-mexicana en tazón hondo, fideos ramen artesanales sumergidos en rico consomé concentrado de birria, carne deshebrada, huevo cocido marinado, rábano, cilantro y toque de salsa macha.",
+              "available": true
+            },
+            {
+              "label": "Chica",
+              "priceCents": 11000,
+              "description": "Porción individual reconfortante con los mismos ingredientes y fideos ramen en caldo espeso de birria.",
+              "available": true
+            }
+          ]
+        },
+        {
+          "slug": "bebidas",
+          "name": "Bebidas Frías del Comal",
+          "tag": "Para Acompañar",
+          "available": true,
+          "image": {
+            "src": "/img/common/bebidas-aguas-frescas-refrescos.jpg",
+            "alt": "Aguas frescas de horchata y Coca-Cola fría",
+            "width": 512,
+            "height": 382
+          },
+          "detailsType": "variants",
+          "detailsLabel": "Selecciona tu Bebida:",
+          "variants": [
+            {
+              "label": "Aguas Frescas",
+              "priceCents": 3500,
+              "description": "Aguas frescas artesanales del día: Horchata fresca con canela de Ceilán o Jamaica natural, servidas con hielo escarchado.",
+              "available": true
+            },
+            {
+              "label": "Coca-Cola Vidrio",
+              "priceCents": 3500,
+              "description": "Refrescos Familia Coca-Cola: Coca-Cola de vidrio de 355ml bien helada, Sidral Mundet o Coca-Cola Sin Azúcar.",
+              "available": true
+            }
+          ]
+        }
+      ]
+    },
+    "promo": {
+      "badge": "Club El Muñeco",
+      "title": "Domingos de Birria Familiar",
+      "description": "Recibe promociones de litros al 2x1 en tu primer pedido del mes y asegura tu paquete con tortillas ilimitadas antes de que se agote el cazo dominical."
+    }
+  }
+}

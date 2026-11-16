@@ -97,20 +97,48 @@ export interface StartOptions {
   args?: string[];
 }
 
+/** Intentos de arranque ante una colisión de puertos (uno y dos reintentos). */
+const MAX_START_ATTEMPTS = 3;
+
+/**
+ * Variable del puerto que ya estaba ocupado, según el registro `server_listen_failed` del proceso
+ * (`server` nombra el servidor secundario: `internal` es INTERNAL_PORT y `webhook`, WEBHOOK_PORT), o null si no fue eso.
+ */
+function collidedPortVariable({ stdout, stderr }: { stdout: string; stderr: string }): string | null {
+  const failure = `${stdout}\n${stderr}`.split('\n').find((line) => line.includes('"msg":"server_listen_failed"') && line.includes('"code":"EADDRINUSE"'));
+  if (failure === undefined) return null;
+  const server = /"server":"(\w+)"/.exec(failure)?.[1];
+  return server === undefined ? 'PORT' : `${server.toUpperCase()}_PORT`;
+}
+
 /**
  * Arranca `node src/server.ts` (u otros `args`) y espera a `server_started` (o a que termine). Sin
  * DATABASE_URL en `env`, usa una base de pruebas migrada y vacía del trabajador (REQ-F-014), que se
  * libera cuando el proceso termina. Un valor undefined en `env` quita esa variable (REQ-F-015).
  * El proceso va en su propio grupo y `stop()` detiene el grupo entero (p. ej. `node --watch` y su hijo).
+ *
+ * Un puerto se elige y se cierra antes de que el hijo lo abra, y otro proceso (otro trabajador, una
+ * conexión saliente) puede tomarlo en ese intervalo. Si le pasa a un puerto elegido aquí, se reintenta
+ * con puertos nuevos. El que la prueba fija en `env` no se cambia: otro proceso puede estar configurado
+ * con él, así que esa colisión llega a la prueba, como cualquier fallo de arranque.
  */
-export async function startServer(env: Record<string, string | undefined>, timeoutMs = 30_000, { args = ['src/server.ts'] }: StartOptions = {}) {
-  // PORT y el puerto interno del aviso de la API (REQ-F-039): reservados a la vez, así que son
-  // distintos entre sí y de los de otros procesos de la prueba (freePorts devuelve exactamente dos).
-  const [port, internalPort] = (await freePorts(2)) as [number, number];
+export async function startServer(env: Record<string, string | undefined>, timeoutMs = 30_000, options: StartOptions = {}) {
+  for (let attempt = 1; ; attempt += 1) {
+    const server = await startServerOnce(env, timeoutMs, options);
+    const collided = server.started ? null : collidedPortVariable(server.output());
+    if (collided === null || collided in env || attempt === MAX_START_ATTEMPTS) return server;
+  }
+}
+
+async function startServerOnce(env: Record<string, string | undefined>, timeoutMs: number, { args = ['src/server.ts'] }: StartOptions) {
+  // PORT, el puerto interno del aviso de la API (REQ-F-039) y el del webhook de la api (REQ-F-042,
+  // WEBHOOK_PORT; landing-pages lo ignora): reservados a la vez, así que son distintos entre sí y de
+  // los de otros procesos de la prueba (freePorts devuelve exactamente tres).
+  const [port, internalPort, webhookPort] = (await freePorts(3)) as [number, number, number];
   const database = env.DATABASE_URL === undefined && !('DATABASE_URL' in env) ? await makeDatabase() : null;
   const child = spawn(process.execPath, args, {
     cwd: PROJECT_DIR,
-    env: baseEnv(definedOnly({ ...VALID_ENV, PORT: String(port), INTERNAL_PORT: String(internalPort), ...(database ? { DATABASE_URL: appDatabaseUrl(database.name) } : {}), ...env })),
+    env: baseEnv(definedOnly({ ...VALID_ENV, PORT: String(port), INTERNAL_PORT: String(internalPort), WEBHOOK_PORT: String(webhookPort), ...(database ? { DATABASE_URL: appDatabaseUrl(database.name) } : {}), ...env })),
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: true,
   });

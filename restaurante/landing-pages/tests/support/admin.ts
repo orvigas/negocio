@@ -2,23 +2,20 @@ import { JSDOM } from 'jsdom';
 import { afterEach } from 'vitest';
 import type { Test } from 'supertest';
 
-import type { BotControlStore } from '@restaurante/core/bot-control';
 import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
 import { createProductRepository, type ProductRepository, type ProductStore } from '@restaurante/core/catalog';
 import { createUserRepository } from '@restaurante/db/user-repository';
 import { SCRYPT_DEFAULTS, hashPassword, type UserRepository } from '@restaurante/core/identity';
 import { createImageChecker } from '@restaurante/web';
+import { createBotControl, type BotControlStore, type BotKeys, type BotLimits } from '@restaurante/core/bot-control';
 
 import { DEFAULT_PUBLIC_DIR, createApp } from '../../src/app.ts';
-import type { BotKeys, Env } from '../../src/config/env.ts';
+import type { Env } from '../../src/config/env.ts';
 import type { MenuRepository } from '../../src/repositories/menu-repository.ts';
 import type { createMemoryMenuRepository } from '../../src/repositories/memory-menu-repository.ts';
 import { bootstrapAdmin } from '../../src/services/admin-bootstrap.ts';
-import { createBotControl } from '../../src/services/bot-control.ts';
-import type { BotLimits } from '../../src/services/whatsapp-bot/protection/limits.ts';
 import type { LandingProducts } from '../../src/services/landing-products.ts';
-import type { FetchLike } from '../../src/services/whatsapp-bot/providers/select.ts';
 import { makeDatabase, type MakeDatabaseOptions } from './database.ts';
 import { listenLocal, type Browser } from './http.ts';
 import { landingProductsFrom } from './landing-products.ts';
@@ -44,8 +41,6 @@ export interface SetupOptions<R extends MenuRepository> {
   botKeys?: BotKeys | null;
   botLimits?: BotLimits;
   wrapBotStore?: (store: BotControlStore) => BotControlStore;
-  /** `fetch` del proveedor cuando el bot se crea desde la configuración (un doble). */
-  providerFetch?: FetchLike;
   /**
    * Productos de las landings (REQ-F-038). Por defecto, el adaptador en memoria sobre `products`;
    * las pruebas de la API pasan la caché real contra el doble HTTP sobre el mismo store.
@@ -108,7 +103,6 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
   botKeys,
   botLimits,
   wrapBotStore = (store) => store,
-  providerFetch,
   landingProducts = ({ products }) => landingProductsFrom(products),
 }: SetupOptions<R> = {}) {
   // Sin repositorio propio se usa el de memoria, que es el tipo por defecto de R.
@@ -133,9 +127,11 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
     keys: botKeys === undefined ? config.botKeys : botKeys,
     limits: botLimits ?? config.botLimits,
     timeZone: config.timezone,
-    staff: config.whatsappBot ? Object.values(config.whatsappBot.staff) : [],
+    staff: config.botPanel ? Object.values(config.botPanel.staff) : [],
     logger,
     now: clock.now,
+    // REQ-F-042: el /admin actual es el panel del bot (el bot vive en la api).
+    mode: 'panel',
   });
   await botControl.init();
   const app = createApp({
@@ -148,7 +144,6 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
     logger,
     now: clock.now,
     botControl,
-    ...(providerFetch ? { providerFetch } : {}),
   });
   const server = await listenLocal(app);
   return {

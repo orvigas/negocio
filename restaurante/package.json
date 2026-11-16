@@ -36,7 +36,7 @@
     "db:migrate:dev": "npm run db:migrate:dev -w @restaurante/db --",
     "admin:hash-password": "npm run admin:hash-password -w landing-pages --",
     "admin:recover": "npm run admin:recover -w landing-pages --",
-    "bot:chat": "npm run bot:chat -w landing-pages --",
+    "bot:chat": "npm run bot:chat -w api --",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "audit:deps": "npm run audit:deps -w landing-pages --"

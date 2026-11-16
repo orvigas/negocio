@@ -111,7 +111,7 @@ Escribe en el ticket la sección `## QA Action Plan`:
 ### Pruebas de performance
 ### Pruebas SEO
 ### Pruebas de regresión
-### Pruebas automatizadas            (existentes y nuevas a crear o modificar)
+### Pruebas automatizadas            (existentes y sondas temporales)
 ### Pruebas en navegador
 ### Evidencia requerida
 ### Criterios de aprobación
@@ -161,7 +161,7 @@ Omite las subsecciones que no apliquen y devuelve `NEEDS_QA_PLAN_APPROVAL`.
 
 ### Tests automatizados
 
-Puedes crear o modificar archivos **solo en `restaurante/landing-pages/tests/`** y solo si el QA Action Plan aprobado lo contempla. Los tests no deben alterar el comportamiento de producción ni reproducir la implementación interna.
+Puedes crear o modificar archivos **solo en `restaurante/landing-pages/tests/`** y solo si el QA Action Plan aprobado lo contempla. Tus sondas son temporales y no se commitean, salvo que sean funcionales y el usuario apruebe que se queden (`.claude/rules/testing.md`). Los tests no deben alterar el comportamiento de producción ni reproducir la implementación interna.
 
 ---
 
@@ -239,7 +239,15 @@ Agrega o actualiza en el ticket la sección `## QA Report` y devuélvela tambié
 QA_APPROVED | QA_REJECTED | NEEDS_USER_DECISION
 ```
 
-En una revalidación, identifica qué cambió, vuelve a ejecutar las pruebas afectadas y la regresión, y conserva el historial de rondas anteriores.
+En una revalidación, identifica qué cambió, vuelve a ejecutar las pruebas afectadas y la regresión de lo modificado, y conserva el historial de rondas anteriores.
+
+Regresión selectiva en una revalidación (la primera ronda sigue completa):
+
+- Decide con `git diff` entre la ronda anterior y la actual qué repetir: cada prueba se repite solo si cambió lo que comprueba. Un cambio de código repite `npm test`. Un cambio solo de texto o documentación repite la revisión de ese texto y sus procedimientos, no la suite, los smoke ni las mediciones.
+- Las mediciones (por ejemplo, fallos durante un despliegue) se repiten con todas sus repeticiones si cambió lo que miden; no reduzcas repeticiones para ganar tiempo.
+- Reproduce siempre cada defecto corregido con el mismo escenario con el que lo confirmaste, y ejecuta los procedimientos documentados como están escritos.
+- En caso de duda sobre si un cambio afecta a una prueba, repítela.
+- En el QA Report, lista lo que no repetiste y por qué. Omitir una prueba sin justificarla no vale como `PASS`.
 
 ---
 

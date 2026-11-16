@@ -1,0 +1,20 @@
+
+          <li class="bot-row flex flex-col gap-3 rounded-lg border border-rim bg-surface p-4 md:flex-row md:items-center md:justify-between">
+            <div class="bot-row__info min-w-0">
+              <p class="bot-row__number font-bold break-words">{{ masked }}</p>
+              <dl class="bot-row__meta mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 text-sm text-masa">
+                <dt class="font-semibold">Origen:</dt>
+                <dd>{{ origin }}</dd>
+                <dt class="font-semibold">Motivo:</dt>
+                <dd class="min-w-0 break-words">{{ reason }}</dd>
+                <dt class="font-semibold">Autor:</dt>
+                <dd class="min-w-0 break-words">{{ author }}</dd>
+                <dt class="font-semibold">Desde:</dt>
+                <dd>{{ since }}</dd>
+                <dt class="font-semibold">Hasta:</dt>
+                <dd>{{ until }}</dd>
+              </dl>
+            </div>
+            <div class="bot-row__actions">{{{ action }}}
+            </div>
+          </li>

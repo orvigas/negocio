@@ -2,10 +2,14 @@ import { isIP } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { parseBotKeys, parseBotLimits, type BotKeys, type BotLimits } from '@restaurante/core/bot-control';
+import { BUSINESS_IDS, PHONE_PATTERN, type BusinessId } from '@restaurante/core/shared';
 import { parseDatabaseUrl, type DatabaseConfig } from '@restaurante/db/database-config';
 
+import { parseChatBot, type ChatBotConfig } from './bot/config.ts';
+
 /**
- * Configuración de la API (REQ-F-038 y REQ-F-039): solo sus variables, validadas al arrancar (fallo
+ * Configuración de la API (REQ-F-038, REQ-F-039 y REQ-F-042, con el bot de WhatsApp): solo sus variables, validadas al arrancar (fallo
  * rápido). Los mensajes nunca repiten los valores (la URL de la base y el token son secretos).
  */
 
@@ -18,6 +22,8 @@ export const API_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const API_DEFAULTS = Object.freeze({
   HOST: '127.0.0.1',
   PORT: 3001,
+  // Puerto del webhook del bot (REQ-F-042, P-1): una app que solo atiende /webhooks/whatsapp.
+  WEBHOOK_PORT: 3004,
   BUSINESS_TIMEZONE: 'America/Mexico_City',
   // Imágenes publicadas de las landings (REQ-F-039, RF-11): en el repositorio y en la imagen Docker
   // de la api están en la misma ruta relativa.
@@ -44,6 +50,20 @@ export interface ApiConfig {
    * producción sin ellas: no se avisa (queda la red de seguridad de 60 s).
    */
   readonly landingNotify: { readonly url: string; readonly token: string } | null;
+  /**
+   * WEBHOOK_PORT (REQ-F-042, P-1): puerto de la app del webhook del bot, en la misma HOST. Es el único
+   * que publica Traefik (solo /webhooks/whatsapp); el de PORT sigue siendo de la red interna.
+   */
+  readonly webhookPort: number;
+  /**
+   * Bot de WhatsApp (REQ-F-009 RF-2; REQ-F-012 RF-2; en api desde REQ-F-042). null sin ninguna
+   * variable de datos del bot: el webhook responde 503. Contiene secretos: nunca se registra.
+   */
+  readonly whatsappBot: ChatBotConfig;
+  /** Umbrales de la protección del bot (REQ-F-025, RF-5). */
+  readonly botLimits: BotLimits;
+  /** Claves de la lista negra (REQ-F-025, D-T1); null sin bot. */
+  readonly botKeys: BotKeys | null;
 }
 
 export class ApiConfigError extends Error {
@@ -86,6 +106,23 @@ function isServiceUrl(value: string): boolean {
 
 const isNotifyToken = (value: string): boolean => value.length >= MIN_NOTIFY_TOKEN_LENGTH && /^[\x21-\x7e]+$/.test(value);
 
+/**
+ * Números de WHATSAPP_MOLOTES y WHATSAPP_BIRRIA (los del CTA de las landings): el bot solo los usa
+ * para D-6 y como emisor con Twilio (D-8). Mismo texto que la validación de landing-pages. Sus
+ * variantes _URL y _MESSAGE son solo de las landings.
+ */
+function parseBotPhones(env: Env, issues: string[]): Partial<Record<BusinessId, string>> {
+  const phones: Partial<Record<BusinessId, string>> = {};
+  for (const businessId of BUSINESS_IDS) {
+    const name = `WHATSAPP_${businessId.toUpperCase()}`;
+    const phone = readVar(env, name);
+    if (phone === undefined) continue;
+    if (PHONE_PATTERN.test(phone)) phones[businessId] = phone;
+    else issues.push(`${name} debe tener solo dígitos en formato internacional (8 a 15), sin "+" ni espacios`);
+  }
+  return phones;
+}
+
 /** @throws {ApiConfigError} */
 export function loadApiConfig(env: Env = process.env): ApiConfig {
   const issues: string[] = [];
@@ -121,7 +158,33 @@ export function loadApiConfig(env: Env = process.env): ApiConfig {
     issues.push('En producción, LANDING_INTERNAL_URL e INTERNAL_NOTIFY_TOKEN son obligatorias (aviso interno a landing-pages)');
   }
 
-  if (issues.length > 0 || database === undefined || nodeEnv === undefined || !isNodeEnv(nodeEnv)) throw new ApiConfigError(issues);
+  const rawWebhookPort = readVar(env, 'WEBHOOK_PORT');
+  const webhookPort = rawWebhookPort === undefined ? API_DEFAULTS.WEBHOOK_PORT : /^\d{1,5}$/.test(rawWebhookPort) ? Number(rawWebhookPort) : Number.NaN;
+  if (!Number.isInteger(webhookPort) || webhookPort < 1 || webhookPort > 65535) issues.push('WEBHOOK_PORT debe ser un entero entre 1 y 65535');
+  else if (webhookPort === port) issues.push('WEBHOOK_PORT debe ser distinto de PORT');
+
+  // Bot de WhatsApp (REQ-F-042, RF-6): mismas reglas y textos que tenía landing-pages.
+  const phones = parseBotPhones(env, issues);
+  const whatsappBot = parseChatBot(env, nodeEnv, phones.molotes, issues);
+  const botLimits = parseBotLimits(env, issues);
+  // La clave solo se exige con el resto del bot ya válido: así cada error del bot se ve una vez.
+  const botKeys = parseBotKeys(env, whatsappBot !== null && whatsappBot !== undefined, issues);
+  // D-6 (REQ-F-009): con el bot, los CTA de las dos landings abren el chat del mismo número (el del bot).
+  if (whatsappBot && phones.molotes !== undefined && phones.birria !== undefined && phones.molotes !== phones.birria) {
+    issues.push('Con el bot de WhatsApp, WHATSAPP_MOLOTES y WHATSAPP_BIRRIA deben ser el mismo número (el del bot)');
+  }
+
+  if (
+    issues.length > 0 ||
+    database === undefined ||
+    nodeEnv === undefined ||
+    !isNodeEnv(nodeEnv) ||
+    whatsappBot === undefined ||
+    botLimits === undefined ||
+    botKeys === undefined
+  ) {
+    throw new ApiConfigError(issues);
+  }
   return Object.freeze({
     nodeEnv,
     host,
@@ -131,5 +194,9 @@ export function loadApiConfig(env: Env = process.env): ApiConfig {
     timezone,
     productImagesDir,
     landingNotify: notifyUrl !== undefined && notifyToken !== undefined ? Object.freeze({ url: notifyUrl, token: notifyToken }) : null,
+    webhookPort,
+    whatsappBot,
+    botLimits,
+    botKeys,
   });
 }

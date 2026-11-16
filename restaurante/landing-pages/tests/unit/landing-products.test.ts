@@ -24,6 +24,7 @@ function fakeClient() {
         pending.push({ business, resolve: resolve as (result: PublicApiResult<PublicBusinessId>) => void });
       });
     },
+    getPage: () => Promise.reject(new Error('no se usa')),
   };
   const take = (business: PublicBusinessId, newest = false) => {
     const index = newest ? pending.findLastIndex((call) => call.business === business) : pending.findIndex((call) => call.business === business);

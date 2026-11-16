@@ -1,0 +1,7 @@
+
+        <form class="bot-add mt-3 space-y-4" method="post" action="{{ action }}" data-submit-guard>
+          <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+          <div class="grid gap-4 md:grid-cols-2">{{{ fields }}}
+          </div>
+          <button class="button button--primary inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-(--accent) px-5 py-2.5 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-(--accent-strong) active:scale-[0.98] aria-busy:opacity-70" type="submit" data-busy-text="Bloqueando…">Bloquear número</button>
+        </form>

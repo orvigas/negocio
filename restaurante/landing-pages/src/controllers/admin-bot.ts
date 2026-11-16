@@ -1,10 +1,8 @@
-import { maskedFromLast4 } from '@restaurante/core/bot-control';
 import { isAdmin } from '@restaurante/core/identity';
+import { DEFAULT_MANUAL_DURATION, isManualDuration, maskedFromLast4, parsePhoneInput, validateReason, type BotControl } from '@restaurante/core/bot-control';
 
-import { DEFAULT_MANUAL_DURATION, isManualDuration, validateReason, type BotControl } from '../services/bot-control.ts';
-import { parsePhoneInput } from '../services/whatsapp-bot/phone.ts';
 import { renderAdminUnavailable } from '../views/admin/index.ts';
-import { BOT_PATH, BOT_SUCCESS_MESSAGES, renderBotPage, type BotFormErrors, type BotPageOptions } from '../views/admin/bot.ts';
+import { BOT_PATH, BOT_SUCCESS_MESSAGES, REACHED_MOVED_MESSAGE, renderBotPage, type BotFormErrors, type BotPageOptions } from '../views/admin/bot.ts';
 import { createAdminAccess, type AdminRouterContext, type Authenticated, type Permission } from './admin-access.ts';
 import type { AdminDeps } from './admin.ts';
 
@@ -29,7 +27,6 @@ export interface AdminBotController {
 
 const BODY_LIMIT = 4 * 1024;
 const ID_PATTERN = /^[1-9]\d{0,9}$/;
-const TOKEN_PATTERN = /^[0-9a-f]{32}$/;
 const SWITCH_FIELDS = Object.freeze(['accion', 'motivo']);
 const BLOCK_FIELDS = Object.freeze(['telefono', 'duracion', 'motivo']);
 const REACHED_FIELDS = Object.freeze(['duracion', 'motivo']);
@@ -53,6 +50,8 @@ const PHONE_ERRORS = Object.freeze({
   already_blocked: 'Ese número ya está en la lista: quítalo antes para cambiar la duración.',
 });
 
+const MOVED_PROBLEM = 'No se guardó nada: este cambio se hace en el admin nuevo.';
+
 export function createAdminBotController(deps: AdminDeps): AdminBotController {
   const { config, renderer, now, sessions, users, logger, botControl, botProvider } = deps;
   const access = createAdminAccess({ config, sessions, users, renderer, now, logger });
@@ -68,13 +67,13 @@ export function createAdminBotController(deps: AdminDeps): AdminBotController {
     control: BotControl,
     auth: Authenticated,
     status: number,
-    extra: Partial<Pick<BotPageOptions, 'success' | 'problem' | 'form' | 'switchError'>> = {},
+    extra: Partial<Pick<BotPageOptions, 'success' | 'problem' | 'form' | 'switchError' | 'movedTo'>> = {},
   ): Promise<void> {
     const snapshot = await control.snapshot();
     sendHtml(ctx, status, renderBotPage(renderer, { ...access.pageContext(auth), snapshot, timezone: config.timezone, provider: botProvider, ...extra }));
   }
 
-  return Object.freeze<AdminBotController>({
+  const controller: AdminBotController = {
     page(ctx) {
       return access.page(ctx, { returnTo: BOT_PATH, permission: adminOnly }, async (auth) => {
         if (!botControl) return unavailable(ctx);
@@ -135,22 +134,43 @@ export function createAdminBotController(deps: AdminDeps): AdminBotController {
       return seeOther(ctx, successPath('unblocked', last4));
     },
 
-    /** Bloqueo desde "alcanzaron un tope hoy" (RF-6; D-T11). */
+    /**
+     * Bloqueo desde "alcanzaron un tope hoy" (RF-6; D-T11). Desde REQ-F-042 (RF-8, D-2, CA-7) la lista
+     * vive en el proceso del bot (la api) y se ve en el admin nuevo: tras la sesión, el permiso y el
+     * CSRF, responde 410 con el aviso y no bloquea nada.
+     */
     async blockReached(ctx) {
       const auth = await access.post(ctx, { returnTo: BOT_PATH, limit: BODY_LIMIT, permission: adminOnly, allowedFields: REACHED_FIELDS });
       if (!auth) return undefined;
       if (!botControl) return unavailable(ctx);
-      const token = ctx.params.token;
-      if (typeof token !== 'string' || !TOKEN_PATTERN.test(token)) return ctx.throw(404);
-      const duration = auth.fields.get('duracion') ?? DEFAULT_MANUAL_DURATION;
-      if (!isManualDuration(duration)) return ctx.throw(400, 'Duración desconocida.', { code: 'INVALID_FORM' });
-      const reason = validateReason(auth.fields.get('motivo'));
-      if ('error' in reason) return renderPage(ctx, botControl, auth, 422, { problem: reason.error });
-      const last4 = botControl.reachedLast4(token);
-      const outcome = await botControl.blockReached(token, duration, reason.value, actorOf(auth));
-      if (outcome === 'blocked') return seeOther(ctx, successPath('blocked', last4));
-      if (outcome === 'already_blocked') return renderPage(ctx, botControl, auth, 409, { problem: PROBLEMS.alreadyBlocked });
-      return ctx.throw(404);
+      return renderPage(ctx, botControl, auth, 410, { problem: REACHED_MOVED_MESSAGE });
     },
+  };
+
+  // Modo de solo lectura (REQ-F-043, RF-10 y D-2): con el admin nuevo activo (ADMIN_NEW_URL), el bot se
+  // controla allí. La página se consulta sin formularios; cada POST: sesión -> permiso -> cuerpo -> CSRF
+  // -> 410 con esa misma página, antes de validar nada o de escribir. Una pestaña abierta con un
+  // formulario antiguo se entera así de que su cambio no se guardó.
+  const movedTo = config.adminNewUrl;
+  if (movedTo === undefined) return Object.freeze(controller);
+  const moved = (action: string, allowedFields: readonly string[]): Handler =>
+    async (ctx) => {
+      const auth = await access.post(ctx, { returnTo: BOT_PATH, limit: BODY_LIMIT, permission: adminOnly, allowedFields });
+      if (!auth) return undefined;
+      if (!botControl) return unavailable(ctx);
+      logger.info('admin_bot_moved', { action, userId: auth.user.id });
+      return renderPage(ctx, botControl, auth, 410, { movedTo, problem: MOVED_PROBLEM });
+    };
+  return Object.freeze<AdminBotController>({
+    page(ctx) {
+      return access.page(ctx, { returnTo: BOT_PATH, permission: adminOnly }, async (auth) => {
+        if (!botControl) return unavailable(ctx);
+        return renderPage(ctx, botControl, auth, 200, { movedTo });
+      });
+    },
+    toggle: moved('toggle', SWITCH_FIELDS),
+    block: moved('block', BLOCK_FIELDS),
+    unblock: moved('unblock', NO_FIELDS),
+    blockReached: moved('block_reached', REACHED_FIELDS),
   });
 }

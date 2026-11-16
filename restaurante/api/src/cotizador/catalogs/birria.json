@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "negocio": "birria",
+  "insumos": [
+    { "id": "carne-res", "nombre": "Carne de res cruda", "unidad": "kg", "costo": 170, "mermaPct": 40 },
+    { "id": "masa", "nombre": "Masa", "unidad": "kg", "costo": 15, "provisional": true },
+    { "id": "queso", "nombre": "Queso", "unidad": "kg", "costo": 150 },
+    { "id": "agua", "nombre": "Agua fresca (vitrolero)", "unidad": "l", "costo": 150, "presentacion": 18 },
+    { "id": "consome", "nombre": "Consomé (costo incremental por porción de 500 ml)", "unidad": "porcion", "costo": 0.5, "provisional": true }
+  ],
+  "itemsVenta": [
+    {
+      "id": "taco",
+      "nombre": "Taco de birria",
+      "producto": null,
+      "precioCarta": 30,
+      "pieza": true,
+      "receta": [
+        { "insumo": "carne-res", "cantidad": 40 },
+        { "insumo": "masa", "cantidad": 40 }
+      ]
+    },
+    {
+      "id": "quesabirria",
+      "nombre": "Quesabirria",
+      "producto": null,
+      "precioCarta": null,
+      "pieza": true,
+      "receta": [
+        { "insumo": "carne-res", "cantidad": 40 },
+        { "insumo": "masa", "cantidad": 40 },
+        { "insumo": "queso", "cantidad": 40 }
+      ]
+    },
+    {
+      "id": "consome-500",
+      "nombre": "Consomé 500 ml",
+      "producto": null,
+      "precioCarta": 45,
+      "receta": [{ "insumo": "consome", "cantidad": 1 }]
+    },
+    {
+      "id": "agua-500",
+      "nombre": "Agua 500 ml",
+      "producto": null,
+      "precioCarta": 25,
+      "receta": [{ "insumo": "agua", "cantidad": 0.5 }]
+    }
+  ],
+  "costosPorPersona": [
+    { "id": "complementos", "concepto": "Complementos y desechables", "costo": 6 },
+    { "id": "otros", "concepto": "Otros costos variables", "costo": 0 }
+  ],
+  "combustible": { "costoHora": 5, "horasTanda": 4.5, "insumoBase": "carne-res", "crudoPorTandaKg": 7 },
+  "costosFijosEvento": [
+    { "id": "mano-obra", "concepto": "Mano de obra y logística", "costo": 1600 },
+    { "id": "otros", "concepto": "Otros costos fijos", "costo": 0 }
+  ],
+  "politica": { "minPersonas": 30, "refPersonas": 100, "margenObjetivoPct": 30 },
+  "matriz": { "desde": 30, "hasta": 100, "paso": 10, "extra": [150, 200, 300] },
+  "paquetes": [
+    {
+      "id": "tradicional",
+      "nombre": "Tradicional",
+      "activo": true,
+      "tarifa": { "a": 145, "b": 120, "f": 100 },
+      "items": [
+        { "item": "taco", "porPersona": 3 },
+        { "item": "consome-500", "porPersona": 1 },
+        { "item": "agua-500", "porPersona": 1 }
+      ]
+    },
+    {
+      "id": "mixto-1",
+      "nombre": "Mixto 1",
+      "activo": true,
+      "tarifa": { "a": 155, "b": 130, "f": 110 },
+      "items": [
+        { "item": "taco", "porPersona": 2 },
+        { "item": "quesabirria", "porPersona": 1 },
+        { "item": "consome-500", "porPersona": 1 },
+        { "item": "agua-500", "porPersona": 1 }
+      ]
+    },
+    {
+      "id": "mixto-2",
+      "nombre": "Mixto 2",
+      "activo": true,
+      "tarifa": { "a": 165, "b": 140, "f": 120 },
+      "items": [
+        { "item": "taco", "porPersona": 1 },
+        { "item": "quesabirria", "porPersona": 2 },
+        { "item": "consome-500", "porPersona": 1 },
+        { "item": "agua-500", "porPersona": 1 }
+      ]
+    },
+    {
+      "id": "especial",
+      "nombre": "Especial",
+      "activo": true,
+      "tarifa": { "a": 175, "b": 150, "f": 130 },
+      "items": [
+        { "item": "quesabirria", "porPersona": 3 },
+        { "item": "consome-500", "porPersona": 1 },
+        { "item": "agua-500", "porPersona": 1 }
+      ]
+    }
+  ]
+}

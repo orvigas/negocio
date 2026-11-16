@@ -9,7 +9,8 @@
     "./catalog": "./catalog/index.ts",
     "./schedule": "./schedule/index.ts",
     "./identity": "./identity/index.ts",
-    "./bot-control": "./bot-control/index.ts"
+    "./bot-control": "./bot-control/index.ts",
+    "./cotizador": "./cotizador/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

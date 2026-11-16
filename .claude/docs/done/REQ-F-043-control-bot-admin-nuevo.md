@@ -2,9 +2,15 @@
 
 ## Estado
 
-READY_FOR_MERGE
+Desplegado en producción el 2026-11-16 con el PR #141 (`epic/arquitectura` → `main`, merge `49bcf4a`, ejecución 43784650953). El primer `deploy` falló con el código 4 (`deploy/` cambió); se reinstaló `deploy/` y `restore.sh` en el VPS (suma `a3c2b6d7…` igual a la de `main`) y se relanzó: `deploy` en `success`, con `api`, `inventory-manager` y `app` en `healthy`.
 
-PR 1 de 3 (contratos y `api`): [PR #130](https://github.com/orvigas/negocio/pull/130), mergeado en `epic/arquitectura` (`1c801cf`). PR 2 de 3 (pantalla): [PR #131](https://github.com/orvigas/negocio/pull/131), mergeado en `epic/arquitectura` (`0391e86`). PR 3 de 3 (solo lectura y documentación): [PR #132](https://github.com/orvigas/negocio/pull/132), mergeado en `epic/arquitectura` (`7aa01f4`). Su último CI, sobre `05bf89c`, quedó en verde (ver "Último CI del PR 3"). El ticket sigue en `in-progress/` hasta las comprobaciones de producción.
+Comprobaciones de producción hechas el 2026-11-16 (por la sesión principal, por encargo del usuario, que no tenía acceso a su equipo):
+- `admin.birriaelmuneco.com/acceso` responde 200; `/bot` sin sesión redirige al acceso (303 con `next=/bot`); `https://birriaelmuneco.com/admin/bot` sin sesión redirige al acceso del admin actual.
+- DT-3 (fila histórica del personal): `bot_block` tiene 0 filas, 0 bloqueos activos y 0 coincidencias con los 4 últimos dígitos de `WHATSAPP_BOT_STAFF_*` (comprobado en el VPS sin copiar los números). Los números del personal configurados dan 1 terminación distinta.
+
+**No comprobado:** las pantallas `/bot` (admin nuevo) y `/admin/bot` (solo lectura) con sesión de administrador, ni el aviso al personal; quedan para el usuario. El ticket se cierra por orden del usuario.
+
+DONE
 
 ## Aprobación
 

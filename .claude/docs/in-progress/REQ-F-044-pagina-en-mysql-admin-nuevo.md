@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 2, QA corta tras las correcciones). PR 2 abierto hacia `epic/arquitectura`, CI en curso. PR 1 mergeado ([#134](https://github.com/orvigas/negocio/pull/134), `9dd95b1`) sin CI completo y validado después en #135: ver "Incidencia del PR 1".
+QA_APPROVED (PR 2, QA corta tras las correcciones). PR 2 mergeado en `epic/arquitectura`: [#139](https://github.com/orvigas/negocio/pull/139), `5fe54ce`, CI verde (ejecución 42136143089). Simplificaciones posteriores en [#140](https://github.com/orvigas/negocio/pull/140) (`dd459ec`). La épica llegó a `main` con [#141](https://github.com/orvigas/negocio/pull/141) (merge `49bcf4a`, desplegado el 2026-11-16): la pantalla "Página" existe en producción cerrada (`PAGE_CUTOVER=false`). PR 1 mergeado ([#134](https://github.com/orvigas/negocio/pull/134), `9dd95b1`) sin CI completo y validado después en #135: ver "Incidencia del PR 1". Siguiente: PR 3 (el corte), antes comprobar el tamaño de `changes.jsonl` y que `app-data` tenga `current.json` de ambos negocios.
 
 ## Aprobación
 

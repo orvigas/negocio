@@ -2,7 +2,19 @@
 
 ## Estado
 
-Los tres PR están mergeados en `epic/arquitectura`: #121, #124 y #126 (merge `16acc18`). El ticket sigue en `in-progress/` hasta las comprobaciones de producción (CA-1 a CA-3, CA-9, memoria en el VPS y certificado real), que dependen del despliegue de la épica. No está en `DONE`.
+Desplegado en producción el 2026-11-16 con el PR #141 (`epic/arquitectura` → `main`, merge `49bcf4a`, ejecución 43784650953). El primer `deploy` falló con el código 4 (`deploy/` cambió); se reinstaló `deploy/` y `restore.sh` en el VPS (suma `a3c2b6d7…` igual a la de `main`) y se relanzó: `deploy` en `success`, con `api`, `inventory-manager` y `app` en `healthy`.
+
+Comprobaciones de producción hechas el 2026-11-16 (por la sesión principal, por encargo del usuario, que no tenía acceso a su equipo):
+- `api` arrancó con `whatsappBot: enabled` y `bot_provider_selected: meta`, con el webhook en el puerto 3004.
+- Verificación con el token correcto: `123`. Token incorrecto: 403 con `bot_webhook_verify_failed` en el log de `api`.
+- Lo atiende `api`: sin cabecera CSP. Firma ausente: 401 con `bot_webhook_signature_invalid` en `api`.
+- `/api/v1/admin/sesion` y `/api/v1/public/birria/productos`: 404 con CSP (los responde `app`); una ruta inventada no aparece en el log de `api`.
+- Ruta exacta: `/webhooks/whatsapp/` y `/webhooks/` responden 404 (los atiende `app`).
+- `/`, `/molotes`, `/birria` y `/admin/login` responden 200. Memoria: `app` 1,9 %, `api` 1,9 %, `inventory-manager` 0,9 %, `mysql` 13,5 %; `free -m` con unos 2,6 GB disponibles.
+
+**No comprobado:** "un mensaje real" al número del bot (responde y `api` lo refleja) y el certificado real; quedan para el usuario. El ticket se cierra por orden del usuario.
+
+DONE
 
 ## Aprobación
 

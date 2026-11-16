@@ -2,7 +2,18 @@
 
 ## Estado
 
-READY_FOR_MERGE (PR 3, el corte). QA_APPROVED en la ronda 1 (ver "QA Report del PR 3"); DEF-PR3-001 corregido. Commit y PR hacia `epic/arquitectura` desde `feature/REQ-F-044-pagina-en-mysql-3-corte` ([#147](https://github.com/orvigas/negocio/pull/147), commit `0562846`): CI del commit `0562846` en `pass` (`calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)`, `verificacion`; `publish`, `deploy` y `vigente` omitidos, como en todo PR). Pendiente: `ops/backup/ci/smoke.sh` (CA-17) solo corre en el PR de la épica hacia `main`; se comprueba allí. Antes de desplegar: las comprobaciones de `despliegue.md` §8 en el VPS. El ticket sigue en `in-progress/` hasta que el usuario confirme el merge a `main`. Antes: PR 1 ([#134](https://github.com/orvigas/negocio/pull/134)) y PR 2 ([#139](https://github.com/orvigas/negocio/pull/139), simplificado en [#140](https://github.com/orvigas/negocio/pull/140)) mergeados en `epic/arquitectura`; la épica llegó a `main` con [#141](https://github.com/orvigas/negocio/pull/141) y se desplegó el 2026-11-16 con la pantalla "Página" cerrada.
+DONE
+
+PR 3 (el corte) mergeado en `epic/arquitectura` ([#147](https://github.com/orvigas/negocio/pull/147), `f144a4b`) y la épica en `main` con [#148](https://github.com/orvigas/negocio/pull/148) (merge `0736fa0`, ejecución 43801922215, `deploy` en `success`, 2026-11-16). CA-17 (`smoke.sh`): el job `docker` de #148, que lo corre en PR hacia `main`, terminó en `pass`.
+
+Comprobaciones de producción tras el despliegue (2026-11-16, por la sesión principal, solo lectura):
+- `api`, `app` e `inventory-manager` en `healthy`; `/`, `/molotes`, `/birria` y `/admin/login` responden 200, y el acceso del admin nuevo también.
+- `app` registró dos `page_import_done` con `source` `current` (Molotes: historial 1; Birria: historial 2) y 0 líneas omitidas; sin `page_import_failed`, `page_json_diverged`, `landing_page_fallback` ni `menu_data_damaged`.
+- `page_import` tiene dos filas (`molotes` 1@2026-10-14T16:39:21-06:00 y `birria` 2@2026-10-16T08:47:31-06:00) y `page_version` dos versiones por negocio.
+- `current.json` de ambos negocios y `changes.jsonl` siguen con el mismo tamaño que antes (6746, 6960 y 1227 bytes).
+- `/admin/molotes` sin sesión redirige al acceso.
+
+**No comprobado:** con sesión de administrador, que `/admin/<negocio>` salga sin formulario con el enlace al admin nuevo, que "Página" se pueda editar y un cambio de prueba se vea en la landing y se deshaga con "Restaurar versión anterior"; quedan para el usuario. El ticket se cierra porque el usuario confirmó el merge. Sigue el ticket 6 (retirar `/admin`), solo cuando la importación se haya ejecutado en producción: ya se ejecutó.
 
 ## Aprobación
 

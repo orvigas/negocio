@@ -10,6 +10,7 @@ import {
   type BotProvider,
 } from '@restaurante/core/bot-control';
 import { createMemoryPageStore, createPageRepository, createProductRepository, type MemoryPageStore, type MemoryProductStore, type ProductRepository } from '@restaurante/core/catalog';
+import type { QuoteCatalogSource } from '@restaurante/core/cotizador';
 import {
   LastAdminError,
   SCRYPT_DEFAULTS,
@@ -27,6 +28,7 @@ import { createImageChecker, createLogger } from '@restaurante/web';
 import { createAdminRoutes } from '../../src/admin/index.ts';
 import { createApiApp } from '../../src/app.ts';
 import { API_DEFAULTS } from '../../src/config.ts';
+import { createFileQuoteCatalogSource } from '../../src/cotizador/file-catalog-source.ts';
 import type { LandingNotifier } from '../../src/notifier.ts';
 import { makeStore } from './fixtures.ts';
 import { listenLocal } from './http.ts';
@@ -220,6 +222,7 @@ export interface BotOptions {
 export async function startAdmin({
   users: testUsers = [ADMIN, MOLOTES_EDITOR],
   realNotifier,
+  quotes,
   bot: { provider = 'meta', keys = TEST_BOT_KEYS, limits = DEFAULT_BOT_LIMITS, store: botStore = createMemoryBotControlStore() } = {},
 }: {
   users?: TestUser[];
@@ -227,6 +230,8 @@ export async function startAdmin({
   bot?: BotOptions;
   /** Aviso interno real, para las pruebas de punta a punta; sin él, el doble `notifier`. */
   realNotifier?: LandingNotifier;
+  /** Catálogo del cotizador (REQ-F-046); por defecto, el JSON real de `api`. */
+  quotes?: QuoteCatalogSource;
 } = {}): Promise<AdminHarness> {
   const clock = { now: new Date('2026-10-26T18:00:00Z') };
   const now = () => clock.now;
@@ -253,6 +258,12 @@ export async function startAdmin({
   await botControl.init();
   const pageStore = createMemoryPageStore();
   const pages = createPageRepository({ store: pageStore, timeZone: 'America/Mexico_City', now, logger });
+  let quoteSource = quotes;
+  if (!quoteSource) {
+    const fileQuotes = createFileQuoteCatalogSource({ logger });
+    await fileQuotes.init();
+    quoteSource = fileQuotes;
+  }
   const admin = createAdminRoutes({
     users,
     products,
@@ -260,6 +271,7 @@ export async function startAdmin({
     notifier: realNotifier ?? notifier,
     botControl,
     botProvider: provider,
+    quotes: quoteSource,
     timeZone: 'America/Mexico_City',
     hashParams: TEST_HASH_PARAMS,
     now,

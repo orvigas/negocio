@@ -40,6 +40,9 @@ export const adminPaths = Object.freeze({
   // Datos de página (REQ-F-044).
   page: (business: PublicBusinessId) => `${ADMIN_API_PREFIX}/${business}/pagina`,
   pageRestore: (business: PublicBusinessId) => `${ADMIN_API_PREFIX}/${business}/pagina/restaurar`,
+  // Cotizador de taquizas (solo administradores; REQ-F-046).
+  quote: (business: PublicBusinessId) => `${ADMIN_API_PREFIX}/${business}/cotizador`,
+  quoteCalculations: (business: PublicBusinessId) => `${ADMIN_API_PREFIX}/${business}/cotizador/calculos`,
   // Control del bot (solo administradores; REQ-F-043).
   bot: `${ADMIN_API_PREFIX}/bot`,
   botSwitch: `${ADMIN_API_PREFIX}/bot/interruptor`,

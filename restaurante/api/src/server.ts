@@ -17,6 +17,7 @@ import { startCatalogReload } from './bot/catalog-reload.ts';
 import { startBotControlTimers } from './bot/control-timers.ts';
 import { createBotFromConfig, createBotWebhookApp } from './bot/webhook-app.ts';
 import { ApiConfigError, loadApiConfig } from './config.ts';
+import { createFileQuoteCatalogSource } from './cotizador/file-catalog-source.ts';
 import { createLandingNotifier } from './notifier.ts';
 
 /**
@@ -95,6 +96,10 @@ const stopCatalogReload = startCatalogReload({ products });
 
 // Datos de página (REQ-F-044): de MySQL, sin caché. Sin filas (aún no importadas), "no disponible".
 const pages = createPageRepository({ store: createPrismaPageStore({ prisma }), timeZone: config.timezone, logger });
+// Cotizador (REQ-F-046): el JSON se valida una vez aquí. Si no es válido, se registra
+// `quote_catalog_invalid` y solo el cotizador queda "no disponible" (503): nunca impide arrancar (P-2).
+const quotes = createFileQuoteCatalogSource({ logger });
+await quotes.init();
 const admin = createAdminRoutes({
   users: createUserRepository({ prisma }),
   products,
@@ -102,6 +107,7 @@ const admin = createAdminRoutes({
   notifier,
   botControl,
   botProvider: bot?.chatBot.provider ?? null,
+  quotes,
   timeZone: config.timezone,
   logger,
 });

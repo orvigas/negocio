@@ -1,5 +1,6 @@
 import {
   PAGE_IMPORT_SEED_REFUSED,
+  allMarked,
   choosePageSource,
   parseChangeLog,
   planPageImport,
@@ -8,7 +9,7 @@ import {
   type PageImportProblem,
   type PageStore,
 } from '@restaurante/core/catalog';
-import { BUSINESS_IDS, silentLogger, type BusinessId, type Logger } from '@restaurante/core/shared';
+import { BUSINESS_IDS, confirmedByOther, isWriteConflict, silentLogger, type BusinessId, type Logger } from '@restaurante/core/shared';
 
 import type { MenuRepository } from '../repositories/menu-repository.ts';
 
@@ -83,24 +84,32 @@ export async function importPages({ repository, store, existing, logger = silent
   }
 
   const importedAt = now();
-  await store.transaction(
-    async (tx) => {
-      for (const plan of plans) {
-        await tx.putCurrent(plan.business, plan.current);
-        if (plan.previous) await tx.putPrevious(plan.business, plan.previous);
-        await tx.addImportedChanges(entries[plan.business]);
-        await tx.markImported({
-          business: plan.business,
-          importedAt,
-          source: plan.source,
-          sourceVersion: plan.sourceVersion,
-          historyCount: entries[plan.business].length,
-          skippedLines: skipped.length,
-        });
-      }
-    },
-    { timeoutMs: PAGE_IMPORT_TIMEOUT_MS },
-  );
+  try {
+    await store.transaction(
+      async (tx) => {
+        for (const plan of plans) {
+          await tx.putCurrent(plan.business, plan.current);
+          if (plan.previous) await tx.putPrevious(plan.business, plan.previous);
+          await tx.addImportedChanges(entries[plan.business]);
+          await tx.markImported({
+            business: plan.business,
+            importedAt,
+            source: plan.source,
+            sourceVersion: plan.sourceVersion,
+            historyCount: entries[plan.business].length,
+            skippedLines: skipped.length,
+          });
+        }
+      },
+      { timeoutMs: PAGE_IMPORT_TIMEOUT_MS },
+    );
+  } catch (err) {
+    // La `api` siembra la página de una instalación nueva a la vez (REQ-F-045, solo en desarrollo): si
+    // ya están todas las marcas, la escribió ella con la misma semilla; si no, el error es real.
+    if (!isWriteConflict(err) || !(await confirmedByOther(() => allMarked(store, plans)))) throw err;
+    for (const plan of plans) logger.warn('page_import_skipped', { business: plan.business, reason: 'concurrent' });
+    return [];
+  }
   for (const plan of plans) {
     logger.info('page_import_done', {
       business: plan.business,

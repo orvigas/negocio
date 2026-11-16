@@ -1,10 +1,9 @@
 import type { Context, Middleware, Next, ParameterizedContext } from 'koa';
 
 import { PageUnavailableError } from '@restaurante/core/catalog';
-import { DatabaseUnavailableError, type Logger } from '@restaurante/core/shared';
+import { DatabaseUnavailableError, safeEqualStrings, type Logger } from '@restaurante/core/shared';
 import {
   resolveSession as resolveUserSession,
-  safeEqualStrings,
   type SessionInfo,
   type SessionStore,
   type UserRecord,

@@ -1,5 +1,4 @@
-import { safeEqualStrings } from '@restaurante/core/identity';
-import type { Logger } from '@restaurante/core/shared';
+import { safeEqualStrings, type Logger } from '@restaurante/core/shared';
 
 import type { MetaBotConfig } from '../../config.ts';
 import type { ChatBot, DeliveryOutcome, SendResult, StaffNotice, VerifyOutcome, WebhookQuery } from '../../chat-bot.ts';

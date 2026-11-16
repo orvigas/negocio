@@ -1,7 +1,6 @@
 import Koa from 'koa';
 
-import { safeEqualStrings } from '@restaurante/core/identity';
-import { errorProp, isBusinessId, silentLogger, type Logger } from '@restaurante/core/shared';
+import { errorProp, isBusinessId, safeEqualStrings, silentLogger, type Logger } from '@restaurante/core/shared';
 import { readJsonBody } from '@restaurante/web';
 
 import type { LandingPage } from './services/landing-page.ts';

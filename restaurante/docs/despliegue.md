@@ -16,9 +16,8 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
     `traefik-public`. Se construye desde el workspace `restaurante/landing-pages/` del monorepo
     (REQ-F-036), que incluye los paquetes `restaurante/packages/core` y `packages/db` (REQ-F-037),
     con el contexto de build en `restaurante/`. Dentro de la imagen, la app está en
-    `/app/landing-pages`, que es su directorio de trabajo: los comandos relativos de esta guía
-    (`node scripts/admin-recover.ts`) valen para las imágenes de antes y de después del monorepo,
-    así que la vuelta atrás no cambia.
+    `/app/landing-pages`, que es su directorio de trabajo. Desde REQ-F-045, los comandos de consola
+    (`node scripts/admin-recover.ts`) están en la imagen `api` (directorio de trabajo `/app/api`).
   - `api` (REQ-F-038, REQ-F-039 y REQ-F-042): la imagen `api`, la API propia y el bot de WhatsApp.
     - `GET /api/v1/public/{molotes|birria}/productos`: de aquí las landings de `app` leen los
       productos (`API_INTERNAL_URL=http://api:3001`).
@@ -37,7 +36,8 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
     - Llega a MySQL y a `app` por sus nombres de contenedor (`restaurante-mysql-1` y
       `restaurante-app-1`), no por los de servicio: en `traefik-public`, un alias `app` o `mysql` de
       otro proyecto respondería por ellos. Lo fija el compose; el `.env` no cambia.
-    - Usa el mismo usuario solo DML que la app; nunca migra ni importa semillas. Si se cae, las
+    - Usa el mismo usuario solo DML que la app; nunca migra. Solo en una instalación nueva (base
+      vacía) siembra los productos y la página de la semilla (REQ-F-045). Si se cae, las
       landings siguen respondiendo con su última copia buena (o la semilla, si `app` arrancó sin ella).
   - `inventory-manager` (REQ-F-039): la imagen `inventory-manager`, el admin nuevo (Koa con SSR) en
     `https://admin.birriaelmuneco.com`.
@@ -442,7 +442,9 @@ En el primer arranque:
 - MySQL crea la base y los usuarios: `restaurante_app` (solo DML), `restaurante_migrator` (DDL)
   y `restaurante_backup` (solo lectura).
 - `migrate` crea las tablas.
-- La app copia las semillas, importa los productos y crea el primer administrador.
+- La `api`, que arranca antes que la app, siembra los productos y la página de la semilla
+  (REQ-F-045). La app copia las semillas en su volumen, encuentra las marcas sin reimportar y crea
+  el primer administrador con `ADMIN_USER`/`ADMIN_PASSWORD_HASH` (el compose aún se las pasa a ella).
 
 Si la app no queda sana en el primer despliegue, no hay versión anterior: el workflow queda en
 rojo y la app se queda como esté ([Diagnóstico](#10-diagnóstico)).
@@ -480,9 +482,11 @@ tail state/releases.log                           # historial: commit, digests y
 ls -lt backups/                                    # volcados
 ```
 
-- **Recuperar el acceso a `/admin`:**
-  `$C exec app node scripts/admin-recover.ts --usuario <nombre>`
-  ([Recuperar el acceso](../README.md#recuperar-el-acceso)).
+- **Recuperar el acceso al admin nuevo** (en la `api` desde REQ-F-045):
+  `$C exec api node scripts/admin-recover.ts --usuario <nombre>`
+  ([Recuperar el acceso](../README.md#recuperar-el-acceso)). Si la `api` en marcha es una imagen
+  anterior a REQ-F-045 (tras una vuelta atrás), el comando sigue en la `app`:
+  `$C exec app node scripts/admin-recover.ts --usuario <nombre>`.
 - **Reiniciar la app:** `$C restart app`. Para reiniciar el bot, `$C restart api`: conserva el router
   del webhook.
 - **Recrear la app** (`$C up -d app`): usa los digests de `state/release.env`. Tras una vuelta

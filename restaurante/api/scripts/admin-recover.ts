@@ -1,8 +1,9 @@
 /**
- * Recuperación del acceso de administración por consola (REQ-F-007, D-5, R-5 y DT-14).
+ * Recuperación del acceso de administración por consola (REQ-F-007, D-5, R-5 y DT-14). En la `api`
+ * desde REQ-F-045: el acceso es el del admin nuevo (inventory-manager).
  *
  *   npm run admin:recover -- --usuario <nombre>
- *   docker exec -it <contenedor> node scripts/admin-recover.ts --usuario <nombre>
+ *   docker compose exec api node scripts/admin-recover.ts --usuario <nombre>
  *
  * Trabaja directamente sobre la base de DATABASE_URL (REQ-F-014, RF-11). No migra: antes verifica
  * que la base esté lista (conexión, colación y migraciones al día; hasta 10 s de espera).
@@ -21,7 +22,7 @@ import { DatabaseInitError, probeOf, queryOf, verifyDatabase } from '@restaurant
 import { createUserRepository } from '@restaurante/db/user-repository';
 import { hashPassword, normalizeUsername, passwordError, usernameError } from '@restaurante/core/identity';
 
-import { ConfigError, loadDatabaseConfig } from '../src/config/env.ts';
+import { ApiConfigError, loadDatabaseConfig } from '../src/config.ts';
 import { readHidden } from './support/read-hidden.ts';
 
 function fail(message: string): never {
@@ -47,7 +48,7 @@ let databaseConfig: DatabaseConfig;
 try {
   databaseConfig = loadDatabaseConfig();
 } catch (err) {
-  if (err instanceof ConfigError) fail(err.message);
+  if (err instanceof ApiConfigError) fail(err.message);
   throw err;
 }
 
@@ -74,8 +75,8 @@ try {
   const { user, created } = await users.recover({ username, passwordHash: await hashPassword(password) });
   stdout.write(
     created
-      ? `Se creó el administrador "${user.username}". Ya puede entrar en /admin con la contraseña nueva.\n`
-      : `Se recuperó el acceso de "${user.username}": está activo, es administrador y tiene la contraseña nueva. Sus sesiones abiertas se cerraron.\n`,
+      ? `Se creó el administrador "${user.username}". Ya puede entrar en el admin nuevo con la contraseña nueva.\n`
+      : `Se recuperó el acceso de "${user.username}": está activo, es administrador y tiene la contraseña nueva. Sus sesiones abiertas se cerraron. Ya puede entrar en el admin nuevo.\n`,
   );
 } catch {
   // Sin detalles técnicos (los errores de Prisma incluyen rutas e invocaciones).

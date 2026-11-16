@@ -121,7 +121,7 @@ describe('último administrador con concurrencia por HTTP (CA-5)', () => {
       const session = await loginAs(context.browser(), ADMIN_USER, 'clave-de-prueba-SECRETA-123');
       const [res, recovered] = await Promise.all([
         deactivateUser(session, owner.id),
-        runNode(['scripts/admin-recover.ts', '--usuario', 'eva'], {
+        runNode(['../api/scripts/admin-recover.ts', '--usuario', 'eva'], {
           env: { NODE_ENV: 'test', DATABASE_URL: appDatabaseUrl(context.database.name) },
           input: 'clave-recuperada-por-consola\n',
         }),

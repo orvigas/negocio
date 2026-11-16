@@ -7,7 +7,7 @@
  *   npm run bot:chat -- --proveedor twilio           (simula Twilio; por defecto, meta)
  *
  * Arranca la app real del webhook de la api (REQ-F-042) en 127.0.0.1 con los productos de las
- * semillas de las pruebas (tests/fixtures/seeds, en memoria; no toca la base de datos) y el bot
+ * semillas de core/catalog (en memoria; no toca la base de datos) y el bot
  * del proveedor elegido conectado a su doble
  * (tests/support/cloud-api-double.ts o tests/support/twilio-api-double.ts). Cada línea que
  * escribes llega al webhook como un mensaje de texto **firmado**, igual que los del proveedor

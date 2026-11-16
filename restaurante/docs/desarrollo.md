@@ -104,11 +104,12 @@ SHADOW_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/res
 
 - Deja vacías las variables `WHATSAPP_BOT_*`: con todas vacías el bot queda deshabilitado y las
   landings funcionan igual (el webhook de `api` responde 503).
-- **Primer administrador de `/admin`** (opcional): genera el hash con
+- **Primer administrador** (opcional): genera el hash con
   `npm run admin:hash-password` (pide la contraseña sin mostrarla, mínimo 12 caracteres) y
-  rellena `ADMIN_USER` y `ADMIN_PASSWORD_HASH`. Escribe el hash **entre comillas simples**
-  (`ADMIN_PASSWORD_HASH='scrypt$...'`) para que Docker Compose no interprete los `$`. Solo se usa
-  si la base de datos no tiene usuarios.
+  rellena `ADMIN_USER` y `ADMIN_PASSWORD_HASH` en `api/.env` (desde REQ-F-045 lo crea la `api`; el
+  `/admin` actual también las lee de `landing-pages/.env` hasta su retirada). Escribe el hash
+  **entre comillas simples** (`ADMIN_PASSWORD_HASH='scrypt$...'`) para que Docker Compose no
+  interprete los `$`. Solo se usa si la base de datos no tiene usuarios.
 - Si la app no arranca, termina con código 1 y lista los problemas de configuración (sin mostrar
   valores). Corrige `.env` y vuelve a arrancar.
 
@@ -143,7 +144,9 @@ de página viven en MySQL. Estructura y reglas en
 
 - En el primer arranque se crea sola: copia la semilla de cada negocio, y los productos y los datos
   de página se importan a la base una sola vez (`page_import_done`, o `page_import_from_seed` si
-  vienen de la semilla).
+  vienen de la semilla). Con la base vacía, la `api` también prepara la instalación con la semilla
+  (`page_seeded` y `products_imported`; REQ-F-045): si gana la carrera, la landing registra
+  `page_import_skipped` o `products_import_skipped` con `reason: "concurrent"` y sigue.
 - Si ya tenías productos en tu base local y la carpeta está vacía, la importación de la página se
   niega (`PAGE_IMPORT_SEED_REFUSED`) y la app no arranca: copia los JSON de otra carpeta, o empieza
   con una base vacía ("Empezar de cero", arriba).
@@ -168,7 +171,7 @@ npm run dev         # api (3001), landings (3000) y admin nuevo (3003), con reca
 REQ-F-038), `landing-pages` (`npm run dev:landing`) y el admin nuevo (`npm run dev:inventory`, en
 `http://127.0.0.1:3003`; REQ-F-039). Puedes levantarlos por separado
 en dos terminales. Las landings leen los productos de la API: si no está en marcha, muestran la
-semilla de `content/seeds.ts` y registran `landing_products_fallback`; al levantarla, pasan a sus
+semilla (`packages/core/catalog/seeds/`) y registran `landing_products_fallback`; al levantarla, pasan a sus
 datos sin reiniciar (`landing_products_recovered`). Un cambio de producto en `/admin` se ve al
 recargar la landing.
 
@@ -193,7 +196,8 @@ recargar la landing.
 - Los logs son JSON por línea en la terminal. Al arrancar verás `server_started` (y
   `database_waiting` si MySQL todavía estaba arrancando).
 - ¿Perdiste la contraseña del administrador local? `npm run admin:recover -- --usuario <nombre>`
-  (ver [Recuperar el acceso](../README.md#recuperar-el-acceso)).
+  (comando de la `api` desde REQ-F-045: usa el `DATABASE_URL` de `api/.env`; ver
+  [Recuperar el acceso](../README.md#recuperar-el-acceso)).
 
 ## 6. Comprobar la calidad antes de terminar
 

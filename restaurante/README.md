@@ -53,8 +53,9 @@ estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md)
 | `package.json` (workspaces, `allowScripts`, los scripts y las herramientas comunes: TypeScript y ESLint), `package-lock.json` (único), `tsconfig.base.json` (opciones estrictas que extienden todos los workspaces), `tsconfig.json` y `eslint.config.ts` (lint de todo el monorepo), `.nvmrc`, `compose.yaml` y `docker/` (MySQL local), `.dockerignore`, `deploy/`, `ops/`, `security/`, `docs/` y este README | `src/`, `public/`, `tests/`, `scripts/`, `tsconfig.json`, `vitest.config.ts`, `.env.example` (y el `.env` local), `data/` (`DATA_DIR` por defecto) y el `Dockerfile` |
 
 - **Comandos:** todos los `npm run ...` de este README se ejecutan desde `restaurante/`. Cada
-  script de la raíz delega en su workspace (`npm run <script> -w landing-pages --`, o
-  `-w @restaurante/db` para `db:generate`, `db:migrate` y `db:migrate:dev`), así que los
+  script de la raíz delega en su workspace (`npm run <script> -w landing-pages --`, `-w api` para
+  `admin:recover` y `admin:hash-password`, o `-w @restaurante/db` para `db:generate`, `db:migrate` y
+  `db:migrate:dev`), así que los
   argumentos se pasan igual que antes (`npm run admin:recover -- --usuario <nombre>`).
   `typecheck` y `lint` cubren todos los workspaces desde la raíz. `npm ci` (o `npm install`) se
   ejecuta siempre en la raíz: instala las dependencias en `restaurante/node_modules` y enlaza los
@@ -130,13 +131,17 @@ npm run dev            # api (127.0.0.1:3001) y landing-pages (http://127.0.0.1:
 `npm run dev` levanta los dos procesos, la API (`npm run dev:api`) y las landings
 (`npm run dev:landing`); también se pueden levantar por separado. Las landings leen los productos
 y los datos de página de `API_INTERNAL_URL` (en `landing-pages/.env`, `http://127.0.0.1:3001`). Si
-la API no está en marcha, las landings sirven la semilla de `content/seeds.ts` y lo registran
+la API no está en marcha, las landings sirven la semilla (`packages/core/catalog/seeds/`) y lo registran
 (`landing_products_fallback` y `landing_page_fallback`); en cuanto la API responde, muestran sus
 datos sin reiniciar.
 
-En la primera ejecución se crea la carpeta de datos (`DATA_DIR`, por defecto `landing-pages/data/`) con
-una copia de la semilla de cada negocio, y los productos y los datos de página se importan una sola
-vez a la base de datos MySQL (REQ-F-008 y REQ-F-044). La app no migra: verifica al arrancar que la base esté lista. Ver
+En la primera ejecución, con la base vacía y migrada, la `api` prepara la instalación una sola vez
+(REQ-F-045): los productos y los datos de página de la semilla de cada negocio
+(`packages/core/catalog/seeds/`) y el primer administrador si `api/.env` trae `ADMIN_USER` y
+`ADMIN_PASSWORD_HASH`. Mientras conviva con ella, `landing-pages` también crea la carpeta de datos
+(`DATA_DIR`, por defecto `landing-pages/data/`) con una copia de la semilla y hace su importación
+única (REQ-F-008 y REQ-F-044); si las dos arrancan a la vez, la que pierde la carrera encuentra las
+marcas y sigue. Ninguna migra: verifican al arrancar que la base esté lista. Ver
 [Base de datos](#base-de-datos).
 
 `npm install` solo ejecuta los scripts de instalación aprobados en `allowScripts` del
@@ -155,8 +160,8 @@ apruebe con `npm install-scripts approve <paquete>`.
 | `npm run start:api`  | Inicia la API sin recarga (carga `api/.env` si existe; `NODE_ENV` debe venir del `.env` o del entorno) |
 | `npm run build:css`  | Compila el CSS de ambas landings y de la administración (`build:css:molotes`, `build:css:birria`, `build:css:admin`) |
 | `npm run watch:css`  | Compilación de CSS en modo observación                      |
-| `npm run admin:hash-password` | Pide la contraseña de administración (sin mostrarla) e imprime el valor de `ADMIN_PASSWORD_HASH` |
-| `npm run admin:recover -- --usuario <nombre>` | Recupera el acceso de administración por consola (ver [Recuperar el acceso](#recuperar-el-acceso)) |
+| `npm run admin:hash-password` | Pide la contraseña de administración (sin mostrarla) e imprime el valor de `ADMIN_PASSWORD_HASH`; delega en el workspace `api` |
+| `npm run admin:recover -- --usuario <nombre>` | Recupera el acceso de administración por consola con el `DATABASE_URL` de `api/.env`; delega en el workspace `api` (ver [Recuperar el acceso](#recuperar-el-acceso)) |
 | `npm run bot:chat [-- --ahora AAAA-MM-DDTHH:MM]` | Conversación con el bot de WhatsApp en la terminal contra el simulador de la Cloud API, sin Meta; delega en el workspace `api` (ver [Probar el bot en local](#probar-el-bot-en-local)) |
 | `npm run db:generate` | Genera el cliente de Prisma en `packages/db/src/generated/prisma` (necesario antes de `typecheck`, `lint`, `test` y `dev`) |
 | `npm run db:up` / `npm run db:down` | Levanta / detiene el MySQL 8.4 local de `compose.yaml` (solo en `127.0.0.1:3307`; datos en el volumen `mysql-dev-data`) |
@@ -236,7 +241,8 @@ con `-f landing-pages/Dockerfile`. Dentro de la imagen se conserva la forma del 
 `/app/package.json` y `/app/package-lock.json`, las dependencias en `/app/node_modules`, los
 paquetes en `/app/packages` (REQ-F-037; npm los enlaza en `/app/node_modules/@restaurante`) y la
 app en `/app/landing-pages`, que es el directorio de trabajo (los comandos relativos, como
-`node src/server.ts` o `node scripts/admin-recover.ts`, no cambian). Node ejecuta los `.ts` de los
+`node src/server.ts`, no cambian; en la imagen `api`, el directorio de trabajo es `/app/api` y ahí
+está `node scripts/admin-recover.ts`). Node ejecuta los `.ts` de los
 paquetes por su ruta real (`/app/packages/...`, fuera de `node_modules`), así que el type stripping
 funciona igual que con los de la app.
 
@@ -254,7 +260,7 @@ explícito en tres sitios a la vez: `.nvmrc`, `engines.node` de los dos `package
 | `test`       | `build` + diseño fuente; comando por defecto `npm test` desde `/app` (las suites de `api/` y `landing-pages/`) |
 | `migrate`    | Dependencias de producción + CLI de Prisma, `prisma/` y `prisma.config.ts` (de `packages/db`, copiados al directorio de trabajo `/app/landing-pages` como siempre); usuario `node`; ejecuta `prisma migrate deploy` con `MIGRATION_DATABASE_URL` y termina |
 | `production` | Dependencias de producción (sin `typescript` ni `@types/*`), `src/` (`.ts`) y `public/` con el CSS compilado, `packages/core`, `packages/contracts` y, de `packages/db`, `src/` (con el cliente generado) y las migraciones; usuario `node`; arranca con `node src/server.ts` |
-| `api`        | API propia (REQ-F-038): dependencias de producción, `api/src`, `packages/core`, `packages/contracts` y, de `packages/db`, `src/` y las migraciones; directorio de trabajo `/app/api`, `PORT=3001`, usuario `node`, `HEALTHCHECK` contra su propio endpoint; arranca con `node src/server.ts` |
+| `api`        | API propia (REQ-F-038): dependencias de producción, `api/src`, los comandos de consola (`scripts/admin-recover.ts` y `scripts/hash-password.ts`; REQ-F-045), `packages/core` (con las semillas), `packages/contracts` y, de `packages/db`, `src/` y las migraciones; directorio de trabajo `/app/api`, `PORT=3001`, usuario `node`, `HEALTHCHECK` contra su propio endpoint; arranca con `node src/server.ts` |
 
 El `.dockerignore` (en `restaurante/`, la raíz del contexto) deja fuera `node_modules/`, `.env*`
 (salvo `.env.example`), `data/`, el CSS generado localmente, logs, cobertura, `.git`, `deploy/`,
@@ -338,8 +344,8 @@ atrás) está en `deploy/` y se describe en [docs/despliegue.md](docs/despliegue
     favicon.
   - Se construye con
     `docker build -f landing-pages/Dockerfile --target inventory-manager -t restaurante:inventory-manager .`.
-- Recuperar el acceso dentro del contenedor:
-  `docker exec -it restaurante node scripts/admin-recover.ts --usuario <nombre>`.
+- Recuperar el acceso dentro del contenedor de la `api` (REQ-F-045):
+  `docker exec -it <contenedor-api> node scripts/admin-recover.ts --usuario <nombre>`.
 - `/admin` exige HTTPS en producción (ver [Seguridad](#seguridad-1)): en el VPS lo da Traefik y
   `deploy/compose.prod.yaml` fija `TRUST_PROXY=true`.
 
@@ -398,9 +404,16 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
   `PAGE_UNAVAILABLE` si aún no hay datos importados o la fila no es válida.
 - Variables (`api/.env.example`): `NODE_ENV` (obligatoria), `HOST` (127.0.0.1 por defecto),
   `PORT` (3001 por defecto), `DATABASE_URL` (el usuario solo DML de la app) y
-  `DATABASE_ALLOW_NEWER_SCHEMA` (solo la vuelta atrás de `deploy.sh`). Al arrancar verifica la
-  base igual que la app (`database_init_failed` y código 1 si no está lista); nunca migra, nunca
-  importa semillas ni escribe: la importación sigue siendo de `landing-pages`.
+  `DATABASE_ALLOW_NEWER_SCHEMA` (solo la vuelta atrás de `deploy.sh`), y `ADMIN_USER` y
+  `ADMIN_PASSWORD_HASH` (primer administrador, las dos o ninguna). Al arrancar verifica la base igual
+  que la app (`database_init_failed` y código 1 si no está lista) y nunca migra.
+- Instalación nueva (REQ-F-045): con la base vacía y migrada (`product_import` sin filas), siembra una
+  sola vez la página (`page_seeded`) y los productos (`products_imported`, fuente `seed`) de la
+  semilla de `packages/core/catalog/seeds/`, y crea el primer administrador
+  (`admin_bootstrap_created`). En una instalación existente no siembra nada ni crea usuarios. Si un
+  paso falla, termina con 1 y un mensaje sin detalles (`page_seed_failed`, `products_init_failed` o
+  `admin_bootstrap_failed`). Si otro arranque prepara la misma base a la vez, el que pierde registra
+  `page_seed_skipped` o `products_import_skipped` con `reason: "concurrent"` y sigue.
 - En producción va en su propio contenedor (`api`), solo en las redes internas `db` y `admin`: sin
   puertos publicados ni router de Traefik. `landing-pages` la alcanza en
   `API_INTERNAL_URL=http://api:3001`, igual que `inventory-manager` por la red `admin`.
@@ -1525,8 +1538,8 @@ Los datos editables de cada landing están en dos sitios (REQ-F-008):
 
 | Qué | Dónde | Semilla versionada |
 | --- | ----- | ------------------ |
-| **Productos**: platillos y bebidas de Molotes, platillos de Birria (con sus variantes o chips) | Base de datos MySQL (tablas `product`, `product_variant`, `product_chip`) | Las listas de `src/content/<negocio>/seed.json` (solo para la importación inicial) |
-| **Página**: showcase del hero, texto destacado del menú ("8 Sabores de Barrio") y promoción | Base de datos MySQL (tablas `page_version`, `page_change` y `page_import`; REQ-F-044) | `src/content/<negocio>/seed.json` (importación inicial y respaldo de las landings sin API) |
+| **Productos**: platillos y bebidas de Molotes, platillos de Birria (con sus variantes o chips) | Base de datos MySQL (tablas `product`, `product_variant`, `product_chip`) | Las listas de `packages/core/catalog/seeds/<negocio>.json` (solo para la importación inicial) |
+| **Página**: showcase del hero, texto destacado del menú ("8 Sabores de Barrio") y promoción | Base de datos MySQL (tablas `page_version`, `page_change` y `page_import`; REQ-F-044) | `packages/core/catalog/seeds/<negocio>.json` (importación inicial y respaldo de las landings sin API) |
 
 - **Modelo común de producto** (`core/catalog/product-schema.ts`): negocio, categoría
   (`platillo` o `bebida`; Birria solo tiene platillos), slug, nombre, descripción, etiqueta
@@ -1552,7 +1565,7 @@ Los datos editables de cada landing están en dos sitios (REQ-F-008):
   productos, conserva su encabezado y muestra un aviso con el CTA de WhatsApp.
 - En Birria, `slug` forma los id del DOM (`card-`, `title-`, `price-`, `desc-`, `variants-`)
   que usa el selector de variantes (`public/js/modules/variant-selector.js`).
-- La landing pinta la semilla de `src/content/` con los datos de página y los productos que recibe
+- La landing pinta la semilla (`packages/core/catalog/seeds/`, reexportada en `src/content/seeds.ts`) con los datos de página y los productos que recibe
   de la `api` (`/api/v1/public/<negocio>/pagina` y `/productos`), con una caché en memoria de 60 s,
   la última copia buena y, sin ninguna, la semilla (`src/services/landing-cache.ts`). Las landings
   nunca consultan la base de datos ni los JSON de `DATA_DIR`; un cambio guardado se ve en la
@@ -1688,12 +1701,15 @@ curl -s -b cookies.txt -X POST https://<sitio>/admin/api/molotes/productos \
 ### Recuperar el acceso
 
 No hay recuperación por correo. Un administrador restablece la contraseña de otro usuario desde
-`/admin/usuarios`. Si se pierde la del último administrador:
+"Usuarios" del admin nuevo. Si se pierde la del último administrador, el comando vive en la `api`
+(REQ-F-045):
 
 ```sh
-npm run admin:recover -- --usuario <nombre>                                  # sin Docker
-docker exec -it restaurante node scripts/admin-recover.ts --usuario <nombre>  # en el contenedor
+npm run admin:recover -- --usuario <nombre>                                         # sin Docker (api/.env)
+docker exec -it <contenedor-api> node scripts/admin-recover.ts --usuario <nombre>  # en el contenedor de la api
 ```
+
+En el VPS: `$C exec api node scripts/admin-recover.ts --usuario <nombre>` (`docs/despliegue.md` §5).
 
 Pide la contraseña nueva dos veces sin mostrarla (al menos 12 caracteres) y trabaja sobre la base
 de `DATABASE_URL`. No migra: antes verifica la base (hasta 10 s de espera) y, si no está lista
@@ -1750,7 +1766,7 @@ DATA_DIR/
   productos quedan "congeladas": ya no se usan ni se editan (los productos vigentes están en la
   base de datos). Se mantienen para poder volver a una versión anterior de la app sin que los
   archivos se traten como dañados. Por la misma razón, las listas de productos de
-  `src/content/<negocio>/seed.json` no deben cambiar.
+  `packages/core/catalog/seeds/<negocio>.json` no deben cambiar.
 
 - **Primera ejecución:** si no existe `current.json` en una instalación nueva, se copia la semilla a
   `current.json` y `previous.json` (log `menu_data_seeded`). En una instalación existente no se
@@ -1855,8 +1871,10 @@ restaurante/                  # Raíz de los npm workspaces (REQ-F-036, REQ-F-03
 │   │                         # prisma-product-store.ts, prisma-bot-control-store.ts y generated/prisma/ (cliente generado; ignorado por git)
 │   └── contracts/            # @restaurante/contracts: contratos de la API con Zod: products.ts (esquemas del endpoint público) y public-client.ts (cliente HTTP)
 ├── api/                      # Workspace de la API propia (REQ-F-038): solo lectura, red interna
-│   ├── src/                  # server.ts (arranque: config, verificación de la base, escucha), app.ts (endpoint y errores), config.ts
+│   ├── src/                  # server.ts (arranque: config, verificación de la base, instalación, escucha), app.ts (endpoint y errores), config.ts,
+│   │                         # install/ (instalación nueva y primer administrador; REQ-F-045)
 │   ├── scripts/dev-server.ts # Entrada de `npm run dev:api` (NODE_ENV=development)
+│   ├── scripts/hash-password.ts, admin-recover.ts y support/read-hidden.ts # `npm run admin:hash-password` y `npm run admin:recover` (REQ-F-045)
 │   ├── tests/                # Pruebas en proceso con el store en memoria (sin MySQL)
 │   └── .env.example          # NODE_ENV, HOST, PORT (3001) y DATABASE_URL
 ├── landing-pages/            # Workspace de la app Koa: landings, /admin y /admin/api
@@ -1872,7 +1890,7 @@ restaurante/                  # Raíz de los npm workspaces (REQ-F-036, REQ-F-03
 │   │   ├── repositories/         # Menús (contrato y reglas, archivos y memoria) y productos (reglas sobre el store de core/catalog)
 │   │   ├── services/             # whatsapp, admin-form, session-store, login-throttle, admin-bootstrap,
 │   │   │                         # product-form, bot-control, bot-usage, landing-products (productos de las landings desde la API; REQ-F-038),
-│   │   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), semillas seed.json e icons.ts
+│   │   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), icons.ts y seeds.ts (reexporta las semillas de core/catalog)
 │   │   ├── utils/                # datetime.ts (zona del negocio), form-body.ts, json-body.ts
 │   │   ├── views/                # render.ts + plantillas HTML
 │   │   │   ├── layouts/base.html # <head> común (SEO, fuentes, CSS/JS por negocio) y skip link
@@ -1897,10 +1915,7 @@ restaurante/                  # Raíz de los npm workspaces (REQ-F-036, REQ-F-03
 │   │       ├── molotes/          # icons/: favicons e iconos de pantalla de inicio (generados)
 │   │       └── birria/           # icons/: ídem
 │   ├── scripts/
-│   │   ├── hash-password.ts      # `npm run admin:hash-password`
-│   │   ├── admin-recover.ts      # `npm run admin:recover`
 │   │   ├── audit-deps.ts         # `npm run audit:deps`: auditoría de dependencias por imagen (CI, job auditoria)
-│   │   ├── support/read-hidden.ts # Lectura de contraseñas sin eco (compartida)
 │   │   ├── support/audit-policy.ts # Política de la auditoría (umbral, excepciones, fail closed)
 │   │   └── generate-icons.py     # Genera public/img/<negocio>/icons/ (Python 3 + Pillow; solo desarrollo)
 │   ├── data/                     # DATA_DIR por defecto fuera de producción (ignorado por git)

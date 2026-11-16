@@ -114,7 +114,8 @@ restaurante/
 │   │   ├── sales/           (pedidos, ventas y cobros)            ← nuevo
 │   │   ├── customers/       (CRM: clientes e historial)           ← nuevo
 │   │   ├── identity/        (usuarios, roles y permisos por negocio)
-│   │   └── bot-control/     (bloqueos, pausa y uso del bot de WhatsApp; desde el paso 2)
+│   │   ├── bot-control/     (bloqueos, pausa y uso del bot de WhatsApp; desde el paso 2)
+│   │   └── cotizador/       (cotizador de taquizas: catálogo, ajustes, tarifa y cálculo; REQ-F-046)
 │   ├── contracts/           ← esquemas y DTO de la API + cliente HTTP tipado
 │   ├── db/                  ← implementaciones Prisma de los repositorios, schema y migraciones
 │   └── web/                 ← utilidades HTTP/SSR sin dominio de las apps Koa (desde REQ-F-039)
@@ -279,6 +280,42 @@ solo lectura (410 en sus POST), así que `api` es la única que escribe. Sin esa
 `/admin/bot` sigue escribiendo: los dos procesos comparten el control por la base
 (`core/bot-control`), `api` lo refresca cada `BOT_CONTROL_REFRESH_SECONDS` (10 s) y solo `api` corre
 el mantenimiento. En ese caso, una baja hecha desde `/admin` no libera el cupo del número en `api`.
+
+### Cotizador de taquizas (REQ-F-046)
+
+Funcionalidad ajena al plan de migración (va a `main`, no a `epic/arquitectura`), construida con
+las mismas capas:
+
+- `packages/core/cotizador/` (TS puro, sin E/S): valida el JSON del catálogo y los ajustes (ambos
+  como `unknown`), define una sola vez los campos editables (claves, rangos y lectura y escritura
+  sobre el catálogo), aplica los ajustes sobre una copia, calcula y arma la matriz. La tarifa está
+  aislada en `tariff.ts`. El catálogo llega por el puerto `QuoteCatalogSource` (asíncrono), así
+  que el cálculo no sabe de dónde viene.
+- `packages/contracts/quote.ts`: el DTO de los campos con sus valores por defecto, el cuerpo del
+  cálculo (personas y solo las diferencias respecto del JSON, como texto) y su resultado, y los
+  métodos `getQuoteDefaults` y `calculateQuote` del cliente del admin.
+- `api`: el JSON (`api/src/cotizador/catalogs/birria.json`), su lectura y validación al arrancar
+  (`file-catalog-source.ts`) y las rutas `GET /api/v1/admin/<negocio>/cotizador` y
+  `POST …/cotizador/calculos`, solo para administradores. Un JSON inválido no impide arrancar
+  (decisión P-2 del usuario): el cotizador responde 503 `QUOTE_UNAVAILABLE` y el CI es la barrera.
+- `inventory-manager` (pantalla, siguiente PR): pide los campos, traduce la query a ajustes, llama
+  a la API y pinta; no calcula nada, porque no puede importar `core`.
+- Fase 2: otra implementación del puerto (en `db`) tomará de la tabla de productos el nombre y el
+  precio a la carta de cada ítem por el `slug` de `producto`, sin cambiar el contrato.
+
+**Fórmula de precio.** Con a = tarifa en `minPersonas`, b = tarifa en `refPersonas` y F = piso,
+s = (a − b) / (refPersonas − minPersonas):
+
+- si minPersonas ≤ N ≤ refPersonas: tarifa(N) = a − (N − minPersonas) × s (la recta del Excel);
+- si N > refPersonas: tarifa(N) = F + (b − F) × e^(−s × (N − refPersonas) / (b − F)), continua en
+  valor y en pendiente en la referencia, que converge a F sin cruzarlo;
+- precio comercial = tarifa(N) redondeada (0.5 sube); precio sugerido = el mayor entre el
+  comercial y el precio por margen, ((costo variable + fijos / N) / (1 − margen), hacia arriba).
+
+Restricciones: F < b ≤ a y minPersonas < refPersonas. Para modificarla: los valores, en el JSON
+(con un PR); la curva, sustituyendo `tariff.ts` y sus valores esperados en
+`api/tests/unit/quote-calculator.test.ts`. El detalle (parámetros, ejemplo y formato del JSON)
+está en el [README](../README.md#cotizador-de-taquizas).
 
 ## 7. Patrones
 

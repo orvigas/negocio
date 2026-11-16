@@ -6,11 +6,12 @@ import type { AccountRoutes } from './account-routes.ts';
 import type { BotRoutes } from './bot-routes.ts';
 import type { PageRoutes } from './page-routes.ts';
 import type { ProductRoutes } from './product-routes.ts';
+import type { QuoteRoutes } from './quote-routes.ts';
 import type { SessionRoutes } from './session-routes.ts';
 import type { UserRoutes } from './user-routes.ts';
 
 /**
- * Rutas de `/api/v1/admin` (REQ-F-039; usuarios y cuenta propia, REQ-F-040; control del bot, REQ-F-043; datos de página, REQ-F-044). Una ruta conocida con otro método responde 405 con `Allow`
+ * Rutas de `/api/v1/admin` (REQ-F-039; usuarios y cuenta propia, REQ-F-040; control del bot, REQ-F-043; datos de página, REQ-F-044; cotizador, REQ-F-046). Una ruta conocida con otro método responde 405 con `Allow`
  * (`allowedMethods`; el cuerpo lo pone el manejador central); una ruta desconocida, 404.
  */
 export function createAdminRouter({
@@ -20,6 +21,7 @@ export function createAdminRouter({
   users,
   account,
   bot,
+  quotes,
 }: {
   session: SessionRoutes;
   products: ProductRoutes;
@@ -27,6 +29,7 @@ export function createAdminRouter({
   users: UserRoutes;
   account: AccountRoutes;
   bot: BotRoutes;
+  quotes: QuoteRoutes;
 }): Router {
   const router = new Router({ prefix: ADMIN_API_PREFIX });
 
@@ -51,6 +54,9 @@ export function createAdminRouter({
   router.post('/bot/bloqueos', bot.block);
   router.post('/bot/bloqueos/:id/quitar', bot.unblock);
   router.post('/bot/topes/:token/bloquear', bot.blockReached);
+
+  router.get('/:business/cotizador', quotes.defaults);
+  router.post('/:business/cotizador/calculos', quotes.calculate);
 
   router.get('/:business/pagina', pages.get);
   router.put('/:business/pagina', pages.save);

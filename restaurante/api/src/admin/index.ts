@@ -1,6 +1,7 @@
 import type { Freshness } from '@restaurante/contracts';
 import type { BotControl, BotProvider } from '@restaurante/core/bot-control';
 import type { PageRepository, ProductRepository, ProductView } from '@restaurante/core/catalog';
+import type { QuoteCatalogSource } from '@restaurante/core/cotizador';
 import {
   createLoginThrottle,
   createSessionStore,
@@ -17,6 +18,7 @@ import { createBotRoutes, type BotRoutes } from './bot-routes.ts';
 import { createIdempotencyStore } from './idempotency.ts';
 import { createPageRoutes, type PageRoutes } from './page-routes.ts';
 import { createProductRoutes, type ProductRoutes } from './product-routes.ts';
+import { createQuoteRoutes, type QuoteRoutes } from './quote-routes.ts';
 import { createSessionRoutes, type SessionRoutes } from './session-routes.ts';
 import { createUserRoutes, type UserRoutes } from './user-routes.ts';
 
@@ -26,6 +28,7 @@ import { createUserRoutes, type UserRoutes } from './user-routes.ts';
  * admin"), autenticador de core, repositorio de productos de core y aviso interno. Desde REQ-F-040,
  * también los usuarios (solo administradores) y la cuenta propia, con el repositorio de usuarios.
  * Desde REQ-F-043, el control del bot (solo administradores), con la misma instancia que usa el bot.
+ * Desde REQ-F-046, el cotizador de taquizas (solo administradores), con el catálogo de `quotes`.
  */
 export function createAdminRoutes({
   users,
@@ -34,6 +37,7 @@ export function createAdminRoutes({
   notifier,
   botControl,
   botProvider,
+  quotes,
   timeZone,
   hashParams,
   now = () => new Date(),
@@ -47,12 +51,14 @@ export function createAdminRoutes({
   botControl: BotControl;
   /** Proveedor del bot en marcha; null: desactivado. */
   botProvider: BotProvider | null;
+  /** Catálogo del cotizador (REQ-F-046). */
+  quotes: QuoteCatalogSource;
   timeZone: string;
   /** Costo de scrypt del hash ficticio y de las contraseñas nuevas (las pruebas lo bajan). */
   hashParams?: PasswordHashParams;
   now?: () => Date;
   logger?: Logger;
-}): { session: SessionRoutes; products: ProductRoutes; pages: PageRoutes; users: UserRoutes; account: AccountRoutes; bot: BotRoutes } {
+}): { session: SessionRoutes; products: ProductRoutes; pages: PageRoutes; users: UserRoutes; account: AccountRoutes; bot: BotRoutes; quotes: QuoteRoutes } {
   const sessions = createSessionStore({ now });
   const access = createAdminAccess({ sessions, users, logger });
   return {
@@ -77,5 +83,6 @@ export function createAdminRoutes({
     users: createUserRoutes({ access, sessions, users, timeZone, ...(hashParams ? { hashParams } : {}), logger }),
     account: createAccountRoutes({ access, sessions, users, ...(hashParams ? { hashParams } : {}), logger }),
     bot: createBotRoutes({ access, botControl, botProvider, timeZone, logger }),
+    quotes: createQuoteRoutes({ access, quotes, logger }),
   };
 }

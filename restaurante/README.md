@@ -44,7 +44,7 @@ estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md)
 | `api/` | API propia (REQ-F-038, REQ-F-039, REQ-F-040 y REQ-F-044): `GET /api/v1/public/{molotes,birria}/productos` y `/pagina` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos y, con `ADMIN_NEW_URL`, la única vía web para gestionar usuarios y controlar el bot. Solo en la red interna; ver [API propia](#api-propia-api). También ejecuta el [bot de WhatsApp](#bot-de-whatsapp) (REQ-F-042), con su webhook en un puerto propio, lo único de `api` que se alcanza desde internet |
 | `inventory-manager/` | Admin nuevo (REQ-F-039, REQ-F-040 y REQ-F-043): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos, los usuarios, "Mi cuenta", el control del bot y la página con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
 | `packages/web/` (`@restaurante/web`) | Utilidades HTTP y SSR sin dominio que comparten las apps Koa (REQ-F-039): plantillas, lectura de formularios y JSON, mismo origen y logger JSON |
-| `packages/core/` (`@restaurante/core`) | Dominio en TypeScript puro, sin Koa ni Prisma: módulos `catalog`, `schedule`, `identity`, `bot-control` y `shared`. Cada módulo se importa solo por su `index.ts` (`@restaurante/core/catalog`) |
+| `packages/core/` (`@restaurante/core`) | Dominio en TypeScript puro, sin Koa ni Prisma: módulos `catalog`, `schedule`, `identity`, `bot-control`, `cotizador` (REQ-F-046) y `shared`. Cada módulo se importa solo por su `index.ts` (`@restaurante/core/catalog`) |
 | `packages/db/` (`@restaurante/db`) | Persistencia: `prisma/` (schema y migraciones), `prisma.config.ts`, el cliente de Prisma generado (`src/generated/prisma`), la conexión, la verificación al arrancar y las implementaciones Prisma de los repositorios de `core` |
 | `packages/contracts/` (`@restaurante/contracts`) | Contratos de la API con Zod (`zod` 4.6.7, solo aquí): los esquemas de `/api/v1/public` y `/api/v1/admin`, los clientes HTTP tipados de las landings y del admin nuevo, y el formulario de producto guiado por el descriptor |
 
@@ -371,6 +371,14 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
   - control del bot (REQ-F-043), solo para administradores: `GET /bot`, `PUT /bot/interruptor`, `POST /bot/bloqueos`,
     `POST /bot/bloqueos/<id>/quitar` y `POST /bot/topes/<token>/bloquear`. La auditoría queda en
     `bot_audit`. Las respuestas nunca llevan el número completo, su seudónimo ni el id de la clave;
+  - cotizador de taquizas (REQ-F-046), solo para administradores y solo Birria:
+    `GET /<negocio>/cotizador` devuelve los campos editables con los valores del JSON y
+    `POST /<negocio>/cotizador/calculos` (`{ personas, ajustes }`, con solo los campos que difieren
+    del JSON, como texto) devuelve el cálculo por paquete y la matriz. No escribe nada, así que no
+    exige CSRF. Errores: 403 `FORBIDDEN_ROLE` a un editor, 404 `QUOTE_NOT_FOUND` (Molotes), 422
+    `VALIDATION_FAILED` con `fields` por clave (`n` para las personas) y 503 `QUOTE_UNAVAILABLE` si
+    el JSON no es válido. Los logs solo llevan cuántos campos fallaron (`quote_validation_failed`),
+    nunca los ajustes. Ver [Cotizador de taquizas](#cotizador-de-taquizas);
   - los cuerpos tienen una lista cerrada de campos (otro campo: 422);
   - las escrituras exigen el token CSRF de la sesión en `X-CSRF-Token`; el límite de intentos cuenta
     el último valor de `X-Forwarded-For`, que escribe el admin.
@@ -1383,6 +1391,107 @@ simuladores con entregas de ejemplo en `tests/fixtures/whatsapp/` (Meta) y
 (`tests/integration/chat-bot-contract.test.ts`) recorre los mismos casos con los dos
 proveedores. Ninguna prueba llama a Meta ni a Twilio (`tests/setup/no-meta.ts` lo impide).
 
+## Cotizador de taquizas
+
+Herramienta de cálculo para cotizar taquizas de Birria (REQ-F-046), basada en el Excel
+`Cotizador_Taquiza_Birria.xlsx` (que no está en el repositorio). La API la sirve solo a
+administradores (ver [API propia](#api-propia-api)); el cálculo no guarda nada.
+
+- **Valores por defecto:** `api/src/cotizador/catalogs/birria.json`. Para cambiar un valor por
+  defecto, un ítem o un paquete se edita ese JSON con un PR: el CI lo valida
+  (`api/tests/unit/quote-calculator.test.ts` carga el JSON real) y el despliegue lo publica. No
+  hace falta tocar código.
+- **Si el JSON no es válido**, la `api` arranca igual: registra `quote_catalog_invalid` con la
+  ruta y el mensaje de cada problema (p. ej. «Tarifa del paquete "Tradicional": el piso F (120)
+  debe ser menor que la tarifa en la referencia b (120).») y solo el cotizador responde 503
+  `QUOTE_UNAVAILABLE`. La barrera es la prueba del CI.
+- **Código:** `packages/core/cotizador/` (validación del JSON y de los ajustes, campos editables,
+  tarifa, cálculo y matriz; TS puro), `packages/contracts/quote.ts` (contrato y cliente) y
+  `api/src/admin/quote-routes.ts` con `api/src/cotizador/file-catalog-source.ts`. El cálculo
+  recibe el catálogo por el puerto `QuoteCatalogSource`, sin saber de dónde viene (fase 2: la
+  tabla de productos, por el `slug` de `producto` de cada ítem).
+
+### Formato del JSON
+
+| Bloque | Contenido |
+| --- | --- |
+| `version`, `negocio` | `1` y el negocio (`birria`) |
+| `insumos` | `id`, `nombre`, `unidad` (`kg`, `l` o `porcion`), `costo` (por unidad o, con `presentacion`, por presentación: agua, 150 $ por vitrolero de 18 l), `mermaPct` opcional (la receta va en neto; cruda = neta / (1 − merma)) y `provisional` opcional |
+| `itemsVenta` | `id`, `nombre`, `producto` (slug o `null`), `precioCarta` (o `null`), `pieza` (cuenta como pieza) y `receta` (`insumo` y `cantidad`, en g si el insumo va en kg; si no, en su unidad) |
+| `costosPorPersona`, `costosFijosEvento` | `id`, `concepto` y `costo` ($/persona y $/evento) |
+| `combustible` | `costoHora`, `horasTanda`, `insumoBase` (en kg) y `crudoPorTandaKg` |
+| `politica` | `minPersonas`, `refPersonas` y `margenObjetivoPct` |
+| `matriz` | `desde`, `hasta`, `paso` y `extra` (filas adicionales) |
+| `paquetes` | `id`, `nombre`, `activo` (opcional, `true`), `tarifa` (`a`, `b`, `f`) e `items` (`item` y `porPersona`; un ítem que no aparece vale 0) |
+
+Se rechazan los campos desconocidos, los ids repetidos y las referencias rotas, y cada valor
+cumple el rango de su campo editable:
+
+| Campo | Rango |
+| --- | --- |
+| Costos de insumos, a la carta y por persona; costo por hora de combustible | 0 a 100 000 $, 2 decimales |
+| Costos fijos por evento | 0 a 1 000 000 $, 2 decimales |
+| Merma y margen objetivo | 0 ≤ x < 100 % |
+| Tamaño de la presentación; kg crudos por tanda | > 0 y ≤ 1 000 |
+| Horas por tanda | 0 a 48 |
+| Receta | 0 a 5 000 g (insumos en kg) o 0 a 100 (l y porciones) |
+| Cantidad por persona de cada ítem en un paquete | 0 a 50, 2 decimales; al menos un ítem > 0 |
+| a, b y F | > 0 y ≤ 100 000; F < b ≤ a |
+| `minPersonas` y `refPersonas` | enteros, 1 ≤ mínimo < referencia ≤ 5 000 |
+| Matriz | `desde` ≥ mínimo, `hasta` ≥ `desde`, `paso` ≥ 1, hasta 10 filas extra de 1 a 5 000 y 50 filas en total |
+
+Los números tienen como máximo 4 decimales (2 en los importes). Las personas de un cálculo son
+un entero de 1 a 5 000.
+
+### Cómo funciona la fórmula de precio y cómo modificarla
+
+Cada paquete tiene una tarifa por persona que baja conforme el evento crece: entre `minPersonas`
+y `refPersonas` baja en línea recta, como en el Excel, y a partir de ahí sigue bajando cada vez
+menos, hasta estabilizarse en un piso F que nunca cruza. El precio final nunca baja del precio
+que garantiza el margen objetivo.
+
+Con a = tarifa en `minPersonas`, b = tarifa en `refPersonas` y F = piso:
+
+- s = (a − b) / (refPersonas − minPersonas), en pesos por persona.
+- Si minPersonas ≤ N ≤ refPersonas: tarifa(N) = a − (N − minPersonas) × s.
+- Si N > refPersonas: tarifa(N) = F + (b − F) × e^(−s × (N − refPersonas) / (b − F)).
+- Precio comercial = tarifa(N) redondeada al peso entero (0.5 sube, como `ROUND` de Excel).
+- Precio por margen = (costo variable + costos fijos / N) / (1 − margen objetivo), hacia arriba.
+- Precio sugerido = el mayor de los dos; por debajo de `minPersonas` no hay precio.
+
+La curva es continua en valor y en pendiente en `refPersonas`, converge a F y nunca baja de F.
+Con los valores por defecto reproduce el Excel en los 71 enteros de 30 a 100.
+
+| Parámetro | Significado | Si lo cambias |
+| --- | --- | --- |
+| `minPersonas` (30) | Desde dónde se cotiza y dónde vale a | Por debajo no hay precio |
+| `refPersonas` (100) | Fin del tramo recto; desde aquí el descuento se va apagando | Si lo subes, la recta es más suave y más larga (con 120, N = 100 da 126) |
+| `a` (145 en el Tradicional) | Tarifa en el mínimo | Mueve el arranque del tramo recto |
+| `b` (120) | Tarifa en la referencia | Mueve el final del tramo recto y el arranque de la curva |
+| `F` (100) | Piso de estabilización | Subir F frena antes el descuento (F = 110 da 110 en 200 personas); bajarlo lo extiende (F = 90 da 99) |
+| Margen objetivo y costos | Precio mínimo por margen | Si suben, puede mandar el margen (con margen del 50 %, N = 60 da 148) |
+
+Ejemplo (Tradicional, valores por defecto):
+
+| N | Tarifa | Precio comercial | Precio por margen | Precio sugerido |
+| --- | --- | --- | --- | --- |
+| 30 | 145.00 | 145 | 144 | 145 |
+| 60 | 134.29 | 134 | 106 | 134 |
+| 100 | 120.00 | 120 | 91 | 120 |
+| 120 | 113.99 | 114 | 87 | 114 |
+| 150 | 108.19 | 108 | 83 | 108 |
+| 200 | 103.35 | 103 | 79 | 103 |
+| 300 | 100.56 | 101 | 75 | 101 |
+| 500 | 100.02 | 100 | 72 | 100 |
+
+Con a = b la tarifa es plana: vale b también por encima de `refPersonas`. Cambiar la composición
+de un paquete no cambia su tarifa: hay que ajustar también a, b y F.
+
+**Dónde se cambia:** para dejarlo como valor por defecto, en el JSON (con un PR). **Cambiar la
+curva:** la función de tarifa vive aislada en `packages/core/cotizador/tariff.ts`, con su prueba
+contra los valores del Excel y la tabla de arriba; para usar otra curva basta con sustituir esa
+función y sus valores esperados. El resto del cálculo, la API y la pantalla no cambian.
+
 ## Menús
 
 Los datos editables de cada landing están en dos sitios (REQ-F-008):
@@ -1709,7 +1818,8 @@ restaurante/                  # Raíz de los npm workspaces (REQ-F-036, REQ-F-03
 │   │   ├── catalog/          # product-schema, menu-schema, visible-menu, price, slug, menu-diff, product-store (contrato del store y errores), memory-product-store y published (toPublished; REQ-F-038)
 │   │   ├── schedule/         # business-schedule (negocio activo y avisos del día)
 │   │   ├── identity/         # authorization, user-schema, admin-auth (scrypt) y user-repository (contrato del repositorio de usuarios)
-│   │   └── bot-control/      # bot-control-store (contrato: bloqueos, pausa y uso) y memory-bot-control-store
+│   │   ├── bot-control/      # bot-control-store (contrato: bloqueos, pausa y uso) y memory-bot-control-store
+│   │   └── cotizador/        # Cotizador de taquizas (REQ-F-046): catalog-schema (JSON), fields, adjustments, tariff, calculator, rounding y catalog-source (puerto)
 │   ├── db/                   # @restaurante/db: persistencia con Prisma sobre MySQL
 │   │   ├── prisma/           # schema.prisma y migrations/ (SQL de MySQL versionado; las aplica el proceso migrate, nunca la app)
 │   │   ├── prisma.config.ts  # Configuración del CLI de Prisma (solo desarrollo, CI y las etapas build/test/migrate)

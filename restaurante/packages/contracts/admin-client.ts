@@ -49,6 +49,13 @@ import {
   type PageWriteResponse,
 } from './page.ts';
 import type { PublicBusinessId } from './products.ts';
+import {
+  quoteCalculationResponseSchema,
+  quoteDefaultsResponseSchema,
+  type QuoteCalculationRequest,
+  type QuoteCalculationResponse,
+  type QuoteDefaultsResponse,
+} from './quote.ts';
 
 /**
  * Cliente HTTP tipado de `/api/v1/admin` (REQ-F-039, D-1 y D-2; usuarios y cuenta, REQ-F-040) para el
@@ -131,6 +138,9 @@ export interface AdminApiClient {
   blockNumber(auth: AdminCredentials, input: BotBlockRequest): Promise<AdminApiResult<BotBlockResponse>>;
   unblockNumber(auth: AdminCredentials, id: number): Promise<AdminApiResult<BotBlockResponse>>;
   blockReached(auth: AdminCredentials, token: string, input: BotReachedBlockRequest): Promise<AdminApiResult<BotBlockResponse>>;
+  // Cotizador de taquizas (solo administradores; REQ-F-046). El cálculo no escribe nada.
+  getQuoteDefaults(auth: AdminCredentials, business: PublicBusinessId): Promise<AdminApiResult<QuoteDefaultsResponse>>;
+  calculateQuote(auth: AdminCredentials, business: PublicBusinessId, input: QuoteCalculationRequest): Promise<AdminApiResult<QuoteCalculationResponse>>;
 }
 
 interface Schema<T> {
@@ -227,5 +237,7 @@ export function createAdminApiClient({ baseUrl, timeoutMs, fetch: fetchFn = (inp
     blockNumber: (auth, input) => request('POST', adminPaths.botBlocks, { auth, body: input, schema: botBlockResponseSchema, expect: 201 }),
     unblockNumber: (auth, id) => request('POST', adminPaths.botUnblock(id), { auth, body: {}, schema: botBlockResponseSchema }),
     blockReached: (auth, token, input) => request('POST', adminPaths.botBlockReached(token), { auth, body: input, schema: botBlockResponseSchema, expect: 201 }),
+    getQuoteDefaults: (auth, business) => request('GET', adminPaths.quote(business), { auth, schema: quoteDefaultsResponseSchema }),
+    calculateQuote: (auth, business, input) => request('POST', adminPaths.quoteCalculations(business), { auth, body: input, schema: quoteCalculationResponseSchema }),
   });
 }

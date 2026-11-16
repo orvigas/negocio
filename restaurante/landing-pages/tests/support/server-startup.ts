@@ -1,4 +1,5 @@
 import { chmod } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import { expect } from 'vitest';
 
@@ -39,6 +40,14 @@ export async function boot(env: Record<string, string>) {
   return server;
 }
 
+/** Proceso real de la api (REQ-F-045: prepara la instalación), sin aviso interno y con el primer administrador. */
+export const API_ENTRY = join('..', 'api', 'src', 'server.ts');
+export async function bootApi(env: Record<string, string>) {
+  const server = await startServer({ ...ADMIN_ENV, INTERNAL_NOTIFY_TOKEN: undefined, ...env }, 30_000, { args: [API_ENTRY] });
+  cleanups.push(async () => void (await server.stop()));
+  return server;
+}
+
 export function logLines(stdout: string) {
   return stdout
     .split('\n')
@@ -46,8 +55,8 @@ export function logLines(stdout: string) {
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
-export async function expectControlledFailure(databaseUrlValue: string, expected: Record<string, unknown>) {
-  const server = await boot({ DATABASE_URL: databaseUrlValue });
+export async function expectControlledFailure(databaseUrlValue: string, expected: Record<string, unknown>, start: typeof boot = boot) {
+  const server = await start({ DATABASE_URL: databaseUrlValue });
   expect(server.started).toBe(false);
   expect(await server.exited).toBe(1);
   const { stdout, stderr } = server.output();

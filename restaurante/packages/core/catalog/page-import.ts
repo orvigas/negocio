@@ -1,7 +1,7 @@
-import { BUSINESS_IDS, isBusinessId, type BusinessId } from '../shared/index.ts';
+import { BUSINESS_IDS, confirmedByOther, isBusinessId, isWriteConflict, silentLogger, type BusinessId, type Logger } from '../shared/index.ts';
 import type { FieldChange } from './menu-diff.ts';
 import { AUTHOR_MAX_LENGTH, pickPageData, textLength, type MenuDocument } from './menu-schema.ts';
-import { PAGE_ACTIONS, versionOf, type PageAction, type PageChangeEntry, type StoredPage } from './page-store.ts';
+import { PAGE_ACTIONS, versionOf, type PageAction, type PageChangeEntry, type PageStore, type StoredPage } from './page-store.ts';
 
 /**
  * Importación única de los datos de página desde los JSON (REQ-F-044, PR 3; RF-2, RF-3, RF-8 y D-10).
@@ -17,6 +17,9 @@ import { PAGE_ACTIONS, versionOf, type PageAction, type PageChangeEntry, type St
  *
  * Un documento que no cabe en las columnas (fecha de más de 64 caracteres, revisión fuera de INT,
  * texto mal formado) se trata como inválido: un JSON nunca aborta la importación (D-2).
+ *
+ * `seedPages` (REQ-F-045): la `api` prepara la página de una instalación nueva con la semilla, con las
+ * mismas reglas que la primera ejecución sin JSON (vigente y anterior = semilla, marca `seed`).
  */
 
 export const PAGE_IMPORT_SEED_REFUSED = 'PAGE_IMPORT_SEED_REFUSED';
@@ -105,6 +108,62 @@ export function planPageImport<Id extends BusinessId>(business: Id, candidates: 
   // Primera ejecución: la semilla es la versión vigente y la anterior, como hacían los JSON (CA-5).
   if (source === 'seed' && problem === 'missing') previous = current;
   return { ok: true, plan: { business, source, sourceVersion: versionOf(document), current, previous, problem: source === 'current' ? null : problem } };
+}
+
+/** Todos los negocios de `plans` tienen ya su marca de importación. */
+export async function allMarked(store: Pick<PageStore, 'readImports'>, plans: readonly Pick<PageImportPlan, 'business'>[]): Promise<boolean> {
+  const marked = new Set((await store.readImports()).map((mark) => mark.business));
+  return plans.every((plan) => marked.has(plan.business));
+}
+
+/** Candidatos de una instalación nueva sin JSON: solo la semilla (primera ejecución, CA-5). */
+export function seedCandidates<Id extends BusinessId>(seed: MenuDocument<Id>): PageImportCandidates<Id> {
+  return { current: null, previous: null, problem: 'missing', seeded: true, seed };
+}
+
+export interface SeedPagesOptions {
+  store: Pick<PageStore, 'readImports' | 'transaction'>;
+  /** Semilla de cada negocio, ya validada. */
+  seeds: { [Id in BusinessId]: MenuDocument<Id> };
+  logger?: Logger;
+  now?: () => Date;
+}
+
+/**
+ * Página de una instalación nueva (REQ-F-045, RF-4): crea con la semilla la versión vigente, la anterior
+ * y la marca de cada negocio sin marca, en una sola transacción. Quien la llama decide que la
+ * instalación es nueva (D-10: en una existente nunca se publica la semilla). Idempotente: un negocio con
+ * marca no se toca. Si otro proceso sembró a la vez (la transacción choca con las claves o con un
+ * interbloqueo y se revierte), se vuelven a leer las marcas: con todas presentes se registra
+ * `page_seed_skipped` y se continúa; si falta alguna, el error es real. Devuelve los negocios sembrados.
+ */
+export async function seedPages({ store, seeds, logger = silentLogger, now = () => new Date() }: SeedPagesOptions): Promise<BusinessId[]> {
+  const marked = new Set((await store.readImports()).map((mark) => mark.business));
+  const plans: PageImportPlan[] = [];
+  for (const business of BUSINESS_IDS) {
+    if (marked.has(business)) continue;
+    // Sin `existing`, la semilla nunca se niega.
+    const decision = planPageImport(business, seedCandidates(seeds[business]), { existing: false });
+    if (decision.ok) plans.push(decision.plan);
+  }
+  if (plans.length === 0) return [];
+
+  const importedAt = now();
+  try {
+    await store.transaction(async (tx) => {
+      for (const plan of plans) {
+        await tx.putCurrent(plan.business, plan.current);
+        if (plan.previous) await tx.putPrevious(plan.business, plan.previous);
+        await tx.markImported({ business: plan.business, importedAt, source: plan.source, sourceVersion: plan.sourceVersion, historyCount: 0, skippedLines: 0 });
+      }
+    });
+  } catch (err) {
+    if (!isWriteConflict(err) || !(await confirmedByOther(() => allMarked(store, plans)))) throw err;
+    for (const plan of plans) logger.warn('page_seed_skipped', { business: plan.business, reason: 'concurrent' });
+    return [];
+  }
+  for (const plan of plans) logger.info('page_seeded', { business: plan.business, source: plan.source });
+  return plans.map((plan) => plan.business);
 }
 
 // --- Historial (`changes.jsonl`) -------------------------------------------------

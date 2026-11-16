@@ -29,7 +29,9 @@ son relativas a `restaurante/landing-pages/`.
   interna. Publica los productos y los datos de página de cada negocio
   (`/api/v1/public/<negocio>/productos` y `/pagina`) y su administración (`/api/v1/admin/...`). Ejecuta además el **bot de WhatsApp** (`api/src/bot/`), que arma el pedido
   y avisa al personal: los pedidos **no se guardan**. Su webhook se sirve en un puerto propio, lo
-  único de `api` que se alcanza desde internet.
+  único de `api` que se alcanza desde internet. Desde REQ-F-045 prepara una instalación nueva al
+  arrancar (productos y página de la semilla y el primer administrador) y contiene los comandos de
+  consola `admin:recover` y `admin:hash-password`.
 - **`inventory-manager`** (REQ-F-039, REQ-F-040, REQ-F-043 y REQ-F-044): el admin nuevo por SSR de
   productos, usuarios, cuenta propia, control del bot y página, que solo habla con la `api` mediante
   el cliente de `contracts`.
@@ -225,8 +227,9 @@ siguen en `landing-pages`; los tres últimos pasan a la API en REQ-F-044, abajo)
 - un vuelo por negocio (las visitas simultáneas comparten la petición) y, durante una caída, un
   reintento de fondo cada 5 s como mucho;
 - si la API falla (caída, más de 1,5 s, 5xx o un cuerpo que no cumple el contrato), la última copia
-  buena sin límite de tiempo y, si no la hubo (arranque sin API), la semilla de
-  `content/seeds.ts`; ninguna landing responde 5xx por la API;
+  buena sin límite de tiempo y, si no la hubo (arranque sin API), la semilla
+  (`core/catalog/seeds/` desde REQ-F-045, reexportada en `content/seeds.ts`); ninguna landing
+  responde 5xx por la API;
 - las landings no tienen credenciales de la base **en su código**, pero el contenedor
   `landing-pages` las conserva hasta el paso 4 porque `/admin` sigue en él.
 
@@ -393,6 +396,34 @@ Decisión del usuario: "Sí, 6 tickets en ese orden". Cada ticket es su propio P
 | 6 | Retirada del `/admin` actual | Mover la importación de semillas y el menú, quitar las credenciales de la base de `landing-pages`, quitar el router `restaurante-admin` y activar la regla de lint para `/admin` |
 
 Los IDs de los tickets 5 y 6 se asignan al crearlos.
+
+### Paso 4, ticket 6, PR 1 aplicado (REQ-F-045)
+
+Retirada del `/admin` actual en tres PR hacia `epic/arquitectura`. El PR 1 lleva a la `api` lo que la
+administración necesita fuera de `landing-pages`, sin cambiar todavía nada de `landing-pages` hacia
+fuera ni de `deploy/` u `ops/`:
+
+- **Semillas en `core/catalog`:** `core/catalog/seeds/{molotes,birria}.json` (las mismas, movidas sin
+  cambios desde `landing-pages/src/content/<negocio>/seed.json`), con `SEED_FILES` y
+  `loadSeedDocument` (`core/catalog/seeds.ts`, lectura con `node:fs`). `landing-pages` las reexporta
+  en `content/seeds.ts`; las pruebas de la `api` ya no tienen su copia.
+- **Instalación nueva en la `api`** (`api/src/install/`): tras verificar la base, si `product_import`
+  no tiene filas, siembra la página (`seedPages` de `core/catalog/page-import.ts`: vigente y
+  anterior = semilla, marca `seed`) y después los productos de la semilla, y crea el primer
+  administrador con `ADMIN_USER`/`ADMIN_PASSWORD_HASH` (ahora variables de la `api`). En una
+  instalación existente no siembra nada. Cada paso que falla termina con 1 y un mensaje sin
+  detalles.
+- **Dos arranques a la vez** (la `api` y la importación de `landing-pages`, solo en desarrollo):
+  `isWriteConflict` y `confirmedByOther` (`core/shared/concurrent-write.ts`). Ante un choque de
+  claves o un interbloqueo, el que pierde vuelve a leer las marcas; si aparecen, registra
+  `products_import_skipped`, `page_seed_skipped` o `page_import_skipped` con `reason: "concurrent"` y
+  sigue.
+- **Comandos de consola en la `api`:** `api/scripts/admin-recover.ts`, `hash-password.ts` y
+  `support/read-hidden.ts`, en la imagen `api` (`docker compose exec api node scripts/admin-recover.ts`).
+  Los alias de la raíz (`npm run admin:recover`, `npm run admin:hash-password`) delegan en `-w api`.
+- **`safeEqualStrings`** pasa de `core/identity` a `core/shared/safe-equal.ts`: la usan el aviso
+  interno de las landings, el CSRF de la API y el webhook del bot, que no dependen de la identidad.
+  Así el PR 2 puede prohibir `core/identity` en `landing-pages` sin excepciones.
 
 ### Paso 4, ticket 5 aplicado (REQ-F-044)
 

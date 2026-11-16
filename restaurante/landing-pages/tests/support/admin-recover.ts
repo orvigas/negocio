@@ -9,7 +9,7 @@ import { runNode } from './process.ts';
 
 export const NEW_PASSWORD = 'clave-recuperada-por-consola';
 export const recover = (env: Record<string, string>, args: string[], input = `${NEW_PASSWORD}\n`) =>
-  runNode(['scripts/admin-recover.ts', ...args], { env: { NODE_ENV: 'test', ...env }, input });
+  runNode(['../api/scripts/admin-recover.ts', ...args], { env: { NODE_ENV: 'test', ...env }, input });
 export const withDatabase = (name: string) => ({ DATABASE_URL: appDatabaseUrl(name) });
 
 export const cleanups: (() => Promise<void>)[] = [];

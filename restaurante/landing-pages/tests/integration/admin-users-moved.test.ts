@@ -113,7 +113,7 @@ describe('el resto del /admin funciona igual', () => {
 
   it('la recuperación por consola sigue funcionando con ADMIN_NEW_URL', async () => {
     const { database, prisma } = await movedAdmin();
-    const result = await runNode(['scripts/admin-recover.ts', '--usuario', ADMIN_USER], {
+    const result = await runNode(['../api/scripts/admin-recover.ts', '--usuario', ADMIN_USER], {
       env: { NODE_ENV: 'test', ...ENV, DATABASE_URL: appDatabaseUrl(database.name) },
       input: `${NEW_PASSWORD}\n`,
     });

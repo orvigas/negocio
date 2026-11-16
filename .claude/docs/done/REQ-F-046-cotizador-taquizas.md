@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 2: pantalla de `inventory-manager`). Los dos defectos MINOR (DEF-003 y DEF-004, ver "QA Report — PR 2") se corrigieron antes del commit por decisión del usuario ("Si"). Implementación aprobada ("Si la apruebo") y QA Action Plan del PR 2 aprobado ("Apruebo todo"). Rama `feature/REQ-F-046-cotizador-taquizas` creada desde `main` (`6627f7a`), sin commits. El PR 1 (#151, dominio, contrato y API) ya está en `main` y desplegado, e integrado en `epic/arquitectura` (#152).
+DONE. PR 1 (#151, https://github.com/orvigas/negocio/pull/151: dominio, contrato y API) y PR 2 (#153, https://github.com/orvigas/negocio/pull/153: pantalla de `inventory-manager`, con DEF-003 y DEF-004 corregidos) mergeados en `main` (el PR 2, en `2283660`, el 2026-11-16) y desplegados: el CI de `main` de ese merge, con `deploy`, terminó en success (ejecución 43912626105). Pendiente del usuario: comprobar en producción, con una sesión de administrador, la pantalla `/birria/cotizador`.
 
 ## Aprobación
 
@@ -1373,4 +1373,8 @@ El usuario pide corregir los dos defectos antes del commit ("Si"). senior-fullst
 - DEF-003: revierte `birria.json` al de `main` (el ajuste era innecesario: `core` ya completa los ítems con 0) y corrige la fila `paquetes` del README y el Implementation Result (64 campos).
 - DEF-004: `sanitizeNext` acota la vuelta a 3 000 caracteres ya codificada como campo del formulario de acceso (4 KiB), y el cotizador manda al acceso sin la query cuando no cabe; el límite de 8 KiB de la query (CA-20) no cambia. Prueba en `quote.test.ts` y casos en `config-session.test.ts`.
 
-Vuelve a validar, hace el commit y abre el Pull Request hacia `main`.
+Vuelve a validar, hace el commit `ec6f78a` y abre el Pull Request https://github.com/orvigas/negocio/pull/153 hacia `main` (en borrador hasta terminar la ejecución de ese commit; después, listo). CI del PR listo en verde: `calidad`, `docker`, `auditoria`, `pruebas` (1/2 y 2/2) y `verificacion` en pass (ejecución 43910108423). Estado: `READY_FOR_MERGE` (PR 2).
+
+### Cierre (2026-11-16)
+
+El usuario confirma el merge del PR 2 ("Mergeado"): #153 está en `main` (`2283660`) y el despliegue de `main` terminó en success (ejecución 43912626105). El PR 1 (#151) ya estaba mergeado y desplegado. senior-fullstack mueve el ticket a `done/` con estado `DONE`, con el registro del PR 2 (commit `f9b498c` de la rama del ticket, que no llegó a `main` porque el PR se mergeó antes). Queda como comprobación del usuario la pantalla en producción con una sesión de administrador (no verificada por el agente).

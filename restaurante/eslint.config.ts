@@ -80,21 +80,24 @@ const OTHER_APPS_FROM_LANDING_PATTERNS = [
 ];
 const LANDING_APP_PATTERNS = [...RELATIVE_JS_IMPORT_PATTERNS, ...PACKAGE_INTERNAL_PATTERNS, ...OTHER_APPS_FROM_LANDING_PATTERNS];
 
-// Código de las landings (REQ-F-038, RF-8; decisión P-1 A): obtiene los productos solo de la API
-// (cliente de contracts). Nunca la base de datos, la identidad, el control del bot ni el repositorio
-// de productos; sí los módulos puros de core (shared, schedule y las funciones de catalog), hasta que
+// Código de las landings (REQ-F-038, RF-8; decisión P-1 A; REQ-F-044, RF-5): obtiene los productos y
+// la página solo de la API (cliente de contracts). Nunca la base de datos, la identidad, el control del
+// bot, el repositorio de productos, el de página ni el de menús (los JSON de DATA_DIR); sí los módulos puros de core (shared, schedule y las funciones de catalog), hasta que
 // el aviso y los horarios sean endpoints (desviación registrada en restaurante/docs/arquitectura.md §4).
 const LANDING_CODE_FILES = [
   'landing-pages/src/controllers/landing.ts',
   'landing-pages/src/views/landings/**/*.ts',
   'landing-pages/src/services/landing-products.ts',
+  'landing-pages/src/services/landing-page.ts',
+  'landing-pages/src/services/landing-cache.ts',
 ];
-const LANDING_CODE_HINT = `El código de las landings solo obtiene los productos del cliente de la API (@restaurante/contracts; REQ-F-038). ${DEPENDENCY_HINT}`;
+const LANDING_CODE_HINT = `El código de las landings solo obtiene los productos y la página del cliente de la API (@restaurante/contracts; REQ-F-038 y REQ-F-044). ${DEPENDENCY_HINT}`;
 const LANDING_CODE_PATTERNS = [
   ...LANDING_APP_PATTERNS,
   { regex: '^@restaurante/db(?:/|$)', message: `Las landings no leen la base de datos. ${LANDING_CODE_HINT}` },
   { regex: '^(?:(?:prisma|mariadb)(?:/|$)|@prisma/)', message: `Las landings no leen la base de datos. ${LANDING_CODE_HINT}` },
   { regex: '^@restaurante/core/(?:identity|bot-control)(?:/|$)', message: `Las landings no usan la identidad ni el control del bot. ${LANDING_CODE_HINT}` },
+  { regex: String.raw`(?:^|/)repositories/[^/]*menu-repository(?:\.ts)?$`, message: `Las landings no leen los JSON de DATA_DIR: la página llega por la API (REQ-F-044). ${LANDING_CODE_HINT}` },
 ];
 const LANDING_CODE_PATHS = [
   {
@@ -107,6 +110,12 @@ const LANDING_CODE_PATHS = [
     name: '@restaurante/core/catalog',
     importNames: ['createProductRepository', 'ProductRepository', 'ProductRepositoryOptions', 'productsFromMenuData'],
     message: `Las landings no leen el repositorio de productos. ${LANDING_CODE_HINT}`,
+  },
+  {
+    // Datos de página (REQ-F-044): repositorio y store en MySQL o en memoria, fuera de las landings.
+    name: '@restaurante/core/catalog',
+    importNames: ['createPageRepository', 'PageRepository', 'PageRepositoryOptions', 'PageStore', 'PageStoreTx', 'createMemoryPageStore', 'MemoryPageStore'],
+    message: `Las landings no leen el repositorio de página: la página llega por la API. ${LANDING_CODE_HINT}`,
   },
 ];
 

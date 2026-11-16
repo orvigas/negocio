@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../../src/app.ts';
-import { makeConfig, makeRecordingLogger, makeRepository } from '../helpers.ts';
+import { makeConfig, makeRecordingLogger } from '../helpers.ts';
 import { listenLocal } from '../support/http.ts';
 import { makeProductRepository } from '../support/products.ts';
-import { landingProductsFrom } from '../support/landing-products.ts';
+import { fixedLandingPage, landingProductsFrom } from '../support/landing-products.ts';
 
 /**
  * Log de cada petición con la IP del cliente y el esquema (REQ-F-016, D-4 y CA-5). Detrás de
@@ -14,7 +14,7 @@ import { landingProductsFrom } from '../support/landing-products.ts';
 async function serve(env: Record<string, string> = {}) {
   const logger = makeRecordingLogger();
   const products = (await makeProductRepository()).repository;
-  const server = await listenLocal(createApp({ config: makeConfig(env), repository: await makeRepository(), products, landingProducts: landingProductsFrom(products), logger }));
+  const server = await listenLocal(createApp({ config: makeConfig(env), products, landingProducts: landingProductsFrom(products), landingPage: fixedLandingPage(), logger }));
   const requestLines = () => logger.lines.filter((line) => line.msg === 'request');
   return { server, requestLines };
 }

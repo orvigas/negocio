@@ -5,7 +5,7 @@ import Koa from 'koa';
 import helmet from 'koa-helmet';
 import serve from 'koa-static';
 
-import type { ProductRepository } from '@restaurante/core/catalog';
+import type { PageRepository, ProductRepository } from '@restaurante/core/catalog';
 import {
   SCRYPT_DEFAULTS,
   createLoginThrottle,
@@ -23,8 +23,8 @@ import type { Config } from './config/env.ts';
 import { createAdminGate } from './middleware/admin-guard.ts';
 import { createErrorHandler } from './middleware/error-handler.ts';
 import { createRequestLogger } from './middleware/request-logger.ts';
-import { assertMenuRepository } from './repositories/menu-repository.ts';
 import { createRouter } from './routes/index.ts';
+import type { LandingPage } from './services/landing-page.ts';
 import type { LandingProducts } from './services/landing-products.ts';
 import { renderAdminUnavailable } from './views/admin/index.ts';
 
@@ -34,8 +34,6 @@ export const DEFAULT_PUBLIC_DIR = join(SRC_DIR, '..', 'public');
 
 export interface AppOptions {
   config: Config;
-  /** Repositorio de menús ya inicializado (src/repositories/; REQ-F-001, RF-9). Se valida al crear la app. */
-  repository: unknown;
   /** Productos (REQ-F-008), ya inicializados: importación hecha y caché cargada. Para /admin. */
   products: ProductRepository;
   /**
@@ -43,6 +41,13 @@ export interface AppOptions {
    * escrituras de `products` (RF-6): cada cambio de /admin se ve en la siguiente visita.
    */
   landingProducts: LandingProducts;
+  /** Datos de página de las landings, de la API propia (REQ-F-044, RF-5). */
+  landingPage: LandingPage;
+  /**
+   * Datos de página en MySQL para /admin (REQ-F-044, RF-10): solo lectura con ADMIN_NEW_URL; sin ella,
+   * /admin escribe aquí (D-6). Obligatorio con `users`.
+   */
+  pages?: PageRepository | undefined;
   /**
    * Usuarios de /admin (REQ-F-007). Sin ellos, la administración no se monta y /admin responde
    * 503 (p. ej. en las pruebas de las landings).
@@ -64,9 +69,10 @@ export interface AppOptions {
 /** Construye la app Koa sin abrir puertos (testeable con Supertest). */
 export function createApp({
   config,
-  repository,
   products,
   landingProducts,
+  landingPage,
+  pages,
   users,
   hashParams = SCRYPT_DEFAULTS,
   logger = silentLogger,
@@ -76,11 +82,14 @@ export function createApp({
   publicDir = DEFAULT_PUBLIC_DIR,
 }: AppOptions): Koa {
   if (!config) throw new TypeError('createApp requiere la configuración');
-  const menuRepository = assertMenuRepository(repository);
   if (typeof products?.getPublished !== 'function') throw new TypeError('createApp requiere el repositorio de productos');
   if (typeof landingProducts?.get !== 'function' || typeof landingProducts.invalidate !== 'function') {
     throw new TypeError('createApp requiere los productos de las landings (landingProducts)');
   }
+  if (typeof landingPage?.get !== 'function' || typeof landingPage.invalidate !== 'function') {
+    throw new TypeError('createApp requiere los datos de página de las landings (landingPage)');
+  }
+  if (users && typeof pages?.get !== 'function') throw new TypeError('createApp requiere los datos de página (pages) para /admin');
   // RF-6 (REQ-F-038): cada escritura confirmada de productos invalida la caché de las landings.
   products.onChange((business) => landingProducts.invalidate(business));
 
@@ -110,11 +119,14 @@ export function createApp({
         botControl,
         botProvider: config.botPanel?.provider,
         landingProducts,
+        landingPage,
+        // Comprobado arriba: con usuarios, `pages` existe.
+        pages: pages as PageRepository,
       }
     : undefined;
   const renderUnavailable = () =>
     renderAdminUnavailable(renderer, { faviconBusinessId: getActiveBusinessId({ now: now(), timeZone: config.timezone }) }).toString();
-  const router = createRouter({ config, renderer, now, repository: menuRepository, products, landingProducts, publicDir, admin, logger });
+  const router = createRouter({ config, renderer, now, products, landingProducts, landingPage, publicDir, admin, logger });
 
   app.use(createRequestLogger({ logger }));
   app.use(createErrorHandler({ logger, exposeStack: config.nodeEnv === 'development' }));

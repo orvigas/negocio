@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { apiErrorSchema, pageResponseSchemas } from '@restaurante/contracts';
-import { createMemoryPageStore, type MemoryPageStore } from '@restaurante/core/catalog';
+import { createMemoryPageStore, createPageRepository, type MemoryPageStore } from '@restaurante/core/catalog';
 
 import { createApiApp } from '../../src/app.ts';
-import { createApiPages } from '../../src/page-cutover.ts';
 import { recordingLogger } from '../support/admin.ts';
 import { makeStore } from '../support/fixtures.ts';
 import { listenLocal } from '../support/http.ts';
@@ -16,7 +15,7 @@ async function start(prepare: (store: MemoryPageStore) => void = seedPages) {
   const pageStore = createMemoryPageStore();
   prepare(pageStore);
   const logger = recordingLogger();
-  const pages = createApiPages({ store: pageStore, timeZone: 'America/Mexico_City', logger, cutover: true });
+  const pages = createPageRepository({ store: pageStore, timeZone: 'America/Mexico_City', logger });
   const { url } = await listenLocal(createApiApp({ store: await makeStore(), pages, logger }));
   return { url, pageStore, logger };
 }

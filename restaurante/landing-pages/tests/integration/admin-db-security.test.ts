@@ -165,6 +165,6 @@ describe('sin secretos en logs ni respuestas (CA-17)', () => {
       for (const token of csrfTokens) expect(outside).not.toContain(token);
     }
     // El registro de cambios del menú tampoco lleva secretos.
-    expect(JSON.stringify(context.repository.storage.changes)).not.toMatch(/scrypt|clave-/);
+    expect(JSON.stringify(context.pageStore.state.changes)).not.toMatch(/scrypt|clave-/);
   });
 });

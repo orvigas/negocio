@@ -2,6 +2,8 @@ import { expect } from 'vitest';
 
 import type { BusinessId } from '@restaurante/core/shared';
 
+import type { PageDataByBusiness, PageRepository } from '@restaurante/core/catalog';
+
 import type { MenuRepository } from '../../src/repositories/menu-repository.ts';
 import { login, type MemoryRepository, type SetupOptions, setupAdmin } from './admin.ts';
 
@@ -20,4 +22,8 @@ export async function loggedIn<R extends MenuRepository = MemoryRepository>(opti
   return { ...context, browser };
 }
 
-export const versionOf = async (repository: MenuRepository, businessId: BusinessId) => (await repository.getForEdit(businessId)).version;
+/** Versión vigente de la página en MySQL (REQ-F-044): la que espera el formulario de /admin. */
+export const versionOf = async (pages: Pick<PageRepository, 'get'>, businessId: BusinessId) => (await pages.get(businessId)).version;
+
+/** Datos de página de un estado, con la forma de Molotes (los campos que leen las pruebas). */
+export const pageOf = (state: { data: unknown }) => state.data as PageDataByBusiness['molotes'];

@@ -1,4 +1,4 @@
-import { PageError, type PageChangeEntry, type PageStore, type PageStoreTx, type StoredPage, type StoredPages } from '@restaurante/core/catalog';
+import { PageError, type PageChangeEntry, type PageImportMark, type PageStore, type PageStoreTx, type StoredPage, type StoredPages } from '@restaurante/core/catalog';
 import type { BusinessId } from '@restaurante/core/shared';
 
 import type { Database } from './client.ts';
@@ -12,6 +12,13 @@ import type { Prisma } from './generated/prisma/client.ts';
  */
 
 type Client = Database | Prisma.TransactionClient;
+
+/** Filas por INSERT al importar `changes.jsonl` (REQ-F-044, PR 3). */
+export const IMPORT_BATCH_SIZE = 500;
+/** Límite de la transacción por defecto (el de Prisma). */
+const DEFAULT_TIMEOUT_MS = 5_000;
+
+const isImportSource = (value: string): value is PageImportMark['source'] => value === 'current' || value === 'previous' || value === 'seed';
 
 const toStored = (row: { revision: number; updatedAt: string | null; updatedBy: string | null; updatedById: number | null; data: string }): StoredPage => ({
   revision: row.revision,
@@ -49,6 +56,24 @@ const txOn = (tx: Prisma.TransactionClient): PageStoreTx => ({
   async addChange({ at, business, author, authorId, action, changes }: PageChangeEntry) {
     await tx.pageChange.create({ data: { at, business, author, authorId, action, changes: JSON.stringify(changes) } });
   },
+
+  async putCurrent(business, current) {
+    await tx.pageVersion.create({ data: { business, slot: 'current', ...toStored(current) } });
+  },
+
+  async addImportedChanges(entries) {
+    for (let start = 0; start < entries.length; start += IMPORT_BATCH_SIZE) {
+      const batch = entries.slice(start, start + IMPORT_BATCH_SIZE);
+      await tx.pageChange.createMany({
+        data: batch.map(({ at, business, author, authorId, action, changes }) => ({ at, business, author, authorId, action, changes: JSON.stringify(changes), imported: true })),
+      });
+    }
+  },
+
+  async markImported({ business, importedAt, source, sourceVersion, historyCount, skippedLines }) {
+    // Clave primaria por negocio: una segunda marca falla y deshace la transacción.
+    await tx.pageImport.create({ data: { business, importedAt, source, sourceVersion, historyCount, skippedLines } });
+  },
 });
 
 export function createPrismaPageStore({ prisma }: { prisma: Database }): PageStore {
@@ -65,6 +90,20 @@ export function createPrismaPageStore({ prisma }: { prisma: Database }): PageSto
 
   return Object.freeze<PageStore>({
     read: (business) => run(() => read(prisma, business)),
-    transaction: (task) => run(() => prisma.$transaction((tx) => task(txOn(tx)))),
+    transaction: (task, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) => run(() => prisma.$transaction((tx) => task(txOn(tx)), { timeout: timeoutMs })),
+    readImports: () =>
+      run(async () => {
+        const rows = await prisma.pageImport.findMany();
+        return rows.map(({ business, importedAt, source, sourceVersion, historyCount, skippedLines }) => ({
+          business,
+          importedAt,
+          // La columna solo la escribe markImported con uno de los tres orígenes.
+          source: isImportSource(source) ? source : 'current',
+          sourceVersion,
+          historyCount,
+          skippedLines,
+        }));
+      }),
+    hasProductImports: () => run(async () => (await prisma.productImport.count()) > 0),
   });
 }

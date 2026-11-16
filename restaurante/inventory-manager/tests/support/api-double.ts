@@ -129,7 +129,7 @@ export interface ApiDouble {
   freshness: 'confirmed' | 'pending';
   /** Control del bot (REQ-F-043). */
   bot: BotDouble;
-  /** Datos de página (REQ-F-044): cerrados por defecto, como con `PAGE_CUTOVER = false`. */
+  /** Datos de página (REQ-F-044): "no disponibles" por defecto, como la API sin datos importados. */
   page: PageDouble;
   /** Cambia un producto "desde otra sesión" (para el 409). */
   touch(id: number, by: string): void;

@@ -61,9 +61,9 @@ const PROBLEMS = Object.freeze({
 });
 
 export function createAdminProductsController(deps: AdminDeps): AdminProductsController {
-  const { config, renderer, now, repository, products, landingProducts, sessions, users, logger } = deps;
+  const { config, renderer, now, pages, products, landingProducts, sessions, users, logger } = deps;
   const access = createAdminAccess({ config, sessions, users, renderer, now, logger });
-  const businessView = createBusinessView({ config, renderer, repository, products, access });
+  const businessView = createBusinessView({ config, renderer, pages, products, access });
   const { sendHtml, seeOther } = access;
 
   function businessFrom(ctx: AdminRouterContext): BusinessId {

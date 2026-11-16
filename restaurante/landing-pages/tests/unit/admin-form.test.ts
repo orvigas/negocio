@@ -19,10 +19,9 @@ function pageFields(businessId: BusinessId): FormFields {
     businessId,
     timezone: 'America/Mexico_City',
     csrfToken: 'token',
-    document: seedDocuments()[businessId],
+    page: pickPageData(businessId, seedDocuments()[businessId].data),
     version: '0@seed',
     lastChange: null,
-    damaged: null,
     viewer: { displayName: 'Ana', role: 'admin', businesses: [] },
     faviconBusinessId: businessId,
   }).toString();

@@ -1,5 +1,6 @@
 import type { Context, Middleware, Next, ParameterizedContext } from 'koa';
 
+import { PageUnavailableError } from '@restaurante/core/catalog';
 import { DatabaseUnavailableError, type Logger } from '@restaurante/core/shared';
 import {
   resolveSession as resolveUserSession,
@@ -90,9 +91,15 @@ export function createAdminGate({
       if (!(await available())) return respondUnavailable(ctx);
       await next();
     } catch (err) {
-      if (!(err instanceof DatabaseUnavailableError)) throw err;
-      // Solo nombre y códigos: el mensaje de Prisma lleva rutas e invocaciones (DT-9).
-      logger.error('database_unavailable', { path: ctx.path, ...err.details });
+      if (err instanceof PageUnavailableError) {
+        // Datos de página sin importar o dañados en MySQL (REQ-F-044): ya registrado sin contenido.
+        logger.error('page_unavailable', { path: ctx.path });
+      } else if (err instanceof DatabaseUnavailableError) {
+        // Solo nombre y códigos: el mensaje de Prisma lleva rutas e invocaciones (DT-9).
+        logger.error('database_unavailable', { path: ctx.path, ...err.details });
+      } else {
+        throw err;
+      }
       ctx.status = 503;
       if (isAdminApiPath(ctx.path)) {
         ctx.type = 'json';

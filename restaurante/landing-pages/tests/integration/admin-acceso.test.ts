@@ -18,12 +18,12 @@ describe('acceso protegido (RF-5)', () => {
   });
 
   it('CA-20: sin sesión, un guardado se rechaza y no escribe nada', async () => {
-    const { request: client, repository } = await setupAdmin();
-    const before = await versionOf(repository, 'molotes');
+    const { request: client, pages } = await setupAdmin();
+    const before = await versionOf(pages, 'molotes');
     const res = await client().post('/admin/molotes').type('form').send({ 'menu.highlight': 'Hackeado', action: 'save' });
     expect(res.status).toBe(303);
     expect(res.headers.location).toBe('/admin/login?next=%2Fadmin%2Fmolotes&expirada=1');
-    expect(await versionOf(repository, 'molotes')).toBe(before);
+    expect(await versionOf(pages, 'molotes')).toBe(before);
   });
 
   it('GET /admin sin sesión pide acceso; con sesión muestra el inicio (REQ-F-007)', async () => {
@@ -90,15 +90,15 @@ describe('acceso protegido (RF-5)', () => {
   });
 
   it('CA-22: tras 2 horas sin actividad, guardar pide acceso de nuevo y no escribe nada', async () => {
-    const { browser, clock, repository } = await loggedIn();
+    const { browser, clock, pages } = await loggedIn();
     const { fields } = await openForm(browser, 'molotes');
-    const before = await versionOf(repository, 'molotes');
+    const before = await versionOf(pages, 'molotes');
 
     clock.advance(SESSION_IDLE_MS);
     const res = await submitForm(browser, 'molotes', fields, { 'menu.highlight': 'Tarde' });
     expect(res.status).toBe(303);
     expect(res.headers.location).toBe('/admin/login?next=%2Fadmin%2Fmolotes&expirada=1');
-    expect(await versionOf(repository, 'molotes')).toBe(before);
+    expect(await versionOf(pages, 'molotes')).toBe(before);
 
     const loginPage = await browser.get(res.headers.location!);
     expect(textOf(loginPage.text)).toContain('Tu sesión caducó.');

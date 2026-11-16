@@ -31,8 +31,8 @@ describe('createLandingController', () => {
         config: makeConfig(),
         renderer,
         now: () => new Date(),
-        // @ts-expect-error: repositorio incompleto, a propósito (no se llega a usar).
-        repository: { getPublished: async () => ({}) },
+        landingPage: { get: async () => ({}) as never },
+        landingProducts: { get: async () => ({}) as never },
         // @ts-expect-error: negocio desconocido, a propósito.
         businessId: 'tacos',
       }),

@@ -6,9 +6,9 @@ import { describe, expect, it } from 'vitest';
 
 import { PROJECT_DIR } from '../../src/config/env.ts';
 import { createApp } from '../../src/app.ts';
-import { makeConfig, makeRepository } from '../helpers.ts';
+import { makeConfig } from '../helpers.ts';
 import { listenLocal } from '../support/http.ts';
-import { makeApiLandingProducts } from '../support/landing-products.ts';
+import { fixedLandingPage, makeApiLandingProducts } from '../support/landing-products.ts';
 import { startProductsApiDouble } from '../support/products-api-double.ts';
 import { makeProductRepository } from '../support/products.ts';
 
@@ -20,7 +20,8 @@ import { makeProductRepository } from '../support/products.ts';
  * La referencia (tests/snapshots/landing-html/) se generó con el commit 769ad8b de
  * epic/arquitectura; manifest.json guarda la ruta, el día, el archivo y su SHA-256. Esta prueba nunca
  * la reescribe: ahora los productos llegan por HTTP (cliente real de contracts contra el doble de la
- * API sobre el mismo store) y solo se compara.
+ * API sobre el mismo store) y solo se compara. Desde REQ-F-044 los datos de página son los de la
+ * semilla servidos como los daría la API (CA-6): el documento sale de la semilla más la página.
  */
 
 const REFERENCE_DIR = join(PROJECT_DIR, 'tests', 'snapshots', 'landing-html');
@@ -41,12 +42,11 @@ describe('CA-1: HTML idéntico al previo a REQ-F-038', () => {
   });
 
   it('las 21 respuestas coinciden byte a byte', async () => {
-    const repository = await makeRepository();
     const { repository: products, store } = await makeProductRepository();
     const api = await startProductsApiDouble({ store });
     const landingProducts = makeApiLandingProducts({ url: api.url });
     await landingProducts.warmUp();
-    const app = createApp({ config: makeConfig({ NODE_ENV: 'development' }), repository, products, landingProducts, now: () => new Date('2026-10-23T18:00:00Z') });
+    const app = createApp({ config: makeConfig({ NODE_ENV: 'development' }), products, landingProducts, landingPage: fixedLandingPage(), now: () => new Date('2026-10-23T18:00:00Z') });
     const client = (await listenLocal(app)).request();
 
     for (const entry of manifest.entries) {

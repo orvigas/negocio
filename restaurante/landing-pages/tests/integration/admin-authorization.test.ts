@@ -13,10 +13,10 @@ async function molotesEditor() {
   const context = await setupAdmin();
   await createUser(context.users, { username: 'mole', displayName: 'Editor de Molotes', businesses: ['molotes'] });
   const browser = await loginAs(context.browser(), 'mole');
+  // Datos de página en MySQL (REQ-F-044): versiones y registro del negocio.
   const snapshot = (businessId: BusinessId) => ({
-    current: context.repository.storage.files.get(`${businessId}/current`),
-    previous: context.repository.storage.files.get(`${businessId}/previous`),
-    changes: context.repository.storage.changes.length,
+    pages: structuredClone(context.pageStore.state.pages.get(businessId)),
+    changes: context.pageStore.state.changes.length,
   });
   return { ...context, browser, snapshot };
 }
@@ -34,14 +34,11 @@ describe('editor asignado solo a Molotes (CA-6)', () => {
     expectForbidden(await browser.get('/admin/birria/restaurar-anterior'));
   });
 
-  it('guardar, sobrescribir tras conflicto, restaurar y restaurar la semilla en Birria: 403 y el JSON no cambia', async () => {
-    const { browser, snapshot, repository } = await molotesEditor();
+  it('guardar, sobrescribir tras conflicto, restaurar y restaurar la semilla en Birria: 403 y la página no cambia', async () => {
+    const { browser, snapshot } = await molotesEditor();
     // El editor usa el formulario y el token de su propio negocio.
     const page = await browser.get('/admin/molotes');
     const csrf = csrfFrom(page.text);
-    // Datos de Birria dañados: también se rechaza la restauración de la semilla, que sí estaría permitida.
-    repository.storage.files.set('birria/current', '[]');
-    await repository.getForEdit('birria');
     const before = snapshot('birria');
 
     const birriaFields = { ...formFields(page.text), _csrf: csrf };
@@ -71,11 +68,11 @@ describe('editor asignado solo a Molotes (CA-6)', () => {
   });
 
   it('en su negocio edita con normalidad y el cambio queda a su nombre', async () => {
-    const { browser, repository } = await molotesEditor();
+    const { browser, pageStore } = await molotesEditor();
     const page = await browser.get('/admin/molotes');
     expect(page.status).toBe(200);
     expect((await submitForm(browser, 'molotes', formFields(page.text), { 'menu.highlight': 'Del editor' })).status).toBe(303);
-    expect(repository.storage.changes.at(-1)).toMatchObject({ author: 'Editor de Molotes', business: 'molotes' });
+    expect(pageStore.state.changes.at(-1)).toMatchObject({ author: 'Editor de Molotes', business: 'molotes' });
   });
 
   it('si pierde el negocio mientras edita, su siguiente envío pide acceso y no escribe (CA-11)', async () => {

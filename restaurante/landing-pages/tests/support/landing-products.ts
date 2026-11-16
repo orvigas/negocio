@@ -1,7 +1,9 @@
 import { createPublicApiClient } from '@restaurante/contracts';
 import type { Logger } from '@restaurante/core/shared';
 
-import type { ProductRepository } from '@restaurante/core/catalog';
+import type { PageRepository, ProductRepository } from '@restaurante/core/catalog';
+import type { BusinessId } from '@restaurante/core/shared';
+import { loadSeedPages, type LandingPage, type SeedPages } from '../../src/services/landing-page.ts';
 import { createLandingProducts, loadSeedProducts, type LandingProducts, type LandingProductsOptions } from '../../src/services/landing-products.ts';
 
 /**
@@ -39,5 +41,42 @@ export function makeApiLandingProducts({
     seeds: loadSeedProducts(),
     ...(logger ? { logger } : {}),
     ...options,
+  });
+}
+
+/**
+ * Datos de página de las landings en las pruebas (REQ-F-044): adaptador en memoria sobre el repositorio
+ * de página (lo que la API leería de MySQL), sin HTTP. Sin datos (no importados), la semilla.
+ */
+export function landingPageFrom(pages: Pick<PageRepository, 'get'>): LandingPage {
+  const seeds = loadSeedPages();
+  return Object.freeze<LandingPage>({
+    async warmUp() {},
+    async get<Id extends BusinessId>(business: Id) {
+      // El repositorio solo guarda datos validados del negocio: tienen la forma de su contrato.
+      return pages.get(business).then(
+        (state) => state.data as SeedPages[Id],
+        () => seeds[business],
+      );
+    },
+    invalidate() {},
+    async confirmFresh() {
+      return true;
+    },
+  });
+}
+
+/** Datos de página fijos (la semilla, o los que se pasen) para las pruebas que no editan la página. */
+export function fixedLandingPage(pages: Partial<SeedPages> = {}): LandingPage {
+  const data = { ...loadSeedPages(), ...pages };
+  return Object.freeze<LandingPage>({
+    async warmUp() {},
+    async get(business) {
+      return structuredClone(data[business]);
+    },
+    invalidate() {},
+    async confirmFresh() {
+      return true;
+    },
   });
 }

@@ -5,8 +5,8 @@ import { ANA, dom, formFields, startInventory, type Browser, type Harness } from
 
 /** Atajos de las pruebas de la pantalla "Página" (REQ-F-044). */
 
-export const CLOSED_TITLE = 'La edición de esta pantalla aún no está activa.';
-export const CLOSED_TEXT = 'Por ahora, los cambios de la página se hacen en el /admin actual. Los datos no se han perdido.';
+export const CLOSED_TITLE = 'La página no está disponible en este momento.';
+export const CLOSED_TEXT = 'No se cambió nada. Inténtalo en unos minutos; si sigue igual, avisa al administrador.';
 export const UNCONFIRMED = 'No pudimos confirmar el cambio. Revisa la página antes de repetirlo.';
 export const MOLOTES = '/molotes/pagina';
 export const MOLOTES_RESTORE = `${MOLOTES}/restaurar`;
@@ -14,10 +14,10 @@ export const TITLE = 'hero.showcase.title';
 
 type Options = Parameters<typeof startInventory>[0];
 
-/** Sesión con la puerta cerrada, como en producción con `PAGE_CUTOVER = false`. */
+/** Sesión con la página "no disponible" (datos sin importar o fila dañada). */
 export const closedSession = (user = ANA, options: Options = {}): Promise<{ h: Harness; browser: Browser }> => signedIn(user, options);
 
-/** Sesión con la puerta abierta: el corte solo existe aquí, contra el doble. */
+/** Sesión con la página disponible en el doble. */
 export async function openSession(user = ANA, options: Options = {}): Promise<{ h: Harness; browser: Browser }> {
   const session = await signedIn(user, options);
   session.h.api.page.open = true;
@@ -48,7 +48,7 @@ export function expectClosed(html: string): void {
   expect(text).toContain(CLOSED_TEXT);
   expect(noticeRole(html)).toBe('status');
   expect(main?.querySelectorAll('form, input, textarea, button')).toHaveLength(0);
-  // Sin enlace: este dominio no sirve el /admin actual.
+  // Sin enlace: la edición no está en otro sitio.
   expect(main?.querySelector('a')).toBeNull();
   expect(text).not.toContain('Servicio no disponible');
   expect(text).not.toContain('Cambios guardados');

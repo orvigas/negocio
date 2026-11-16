@@ -24,6 +24,8 @@ import {
   type MenuDocument,
   type PageAction as ChangeAction,
   type PageData,
+  type PageImportCandidates,
+  type PageImportProblem,
   type ValidationError,
 } from '@restaurante/core/catalog';
 
@@ -34,7 +36,9 @@ import { loadSeedDocument } from '../content/seeds.ts';
  *
  * Contrato (todas las operaciones son asíncronas, para poder cambiar a una base de datos):
  *
- *   init()                                   Prepara el almacenamiento: primera ejecución o datos dañados.
+ *   init({ seedMissing })                    Prepara el almacenamiento: primera ejecución o datos dañados.
+ *                                            Con `seedMissing: false` (instalación existente; REQ-F-044,
+ *                                            D-10) no escribe la semilla si faltan los archivos.
  *   getPublished(businessId)                 Documento válido que muestra la landing (en memoria, sin E/S).
  *   getForEdit(businessId)                   { document, version, damaged } para la administración;
  *                                            vuelve a revisar el almacenamiento (RF-8.5).
@@ -49,6 +53,9 @@ import { loadSeedDocument } from '../content/seeds.ts';
  *   getStartupSource(businessId)             { source, data }: documento que se publicó al arrancar y de
  *                                            dónde salió ('current' | 'previous' | 'seed'). Es la fuente
  *                                            de la importación única de productos (REQ-F-008, RF-3).
+ *   getImportSource(businessId)              Candidatos de la importación de página (REQ-F-044): vigente y
+ *                                            anterior válidos, motivo y semilla. No escribe nada.
+ *   readChangeLog()                          Texto de `changes.jsonl`, o null si no existe (REQ-F-044).
  *
  * Documento: { schemaVersion, business, revision, updatedAt, updatedBy, data }.
  *
@@ -62,6 +69,7 @@ import { loadSeedDocument } from '../content/seeds.ts';
  *   remove(businessId, name): Promise<void>
  *   isolate(businessId, stamp): Promise<string|null> renombra 'current' a damaged-<stamp>.json
  *   appendChange(line): Promise<void>                registro de cambios (una línea JSON)
+ *   readChanges(): Promise<string|null>              registro completo, o null si no existe
  */
 
 /** Nombres de los textos que guarda un storage por negocio. */
@@ -74,6 +82,12 @@ export interface MenuStorage {
   remove(businessId: BusinessId, name: StorageName): Promise<void>;
   isolate(businessId: BusinessId, stamp: string): Promise<string | null>;
   appendChange(line: string): Promise<void>;
+  readChanges(): Promise<string | null>;
+}
+
+export interface MenuInitOptions {
+  /** Escribir la semilla si faltan los archivos (por defecto). false en una instalación existente (D-10). */
+  seedMissing?: boolean;
 }
 
 export interface DamagedInfo {
@@ -103,7 +117,7 @@ export interface SaveRequest {
 
 /** Contrato del repositorio: cada operación devuelve documentos del negocio pedido. */
 export interface MenuRepository {
-  init(): Promise<void>;
+  init(options?: MenuInitOptions): Promise<void>;
   getPublished<Id extends BusinessId>(businessId: Id): Promise<MenuDocument<Id>>;
   getForEdit<Id extends BusinessId>(businessId: Id): Promise<EditState<Id>>;
   save<Id extends BusinessId>(businessId: Id, request: SaveRequest): Promise<MenuDocument<Id>>;
@@ -111,6 +125,8 @@ export interface MenuRepository {
   restoreSeed<Id extends BusinessId>(businessId: Id, options: { author: unknown }): Promise<MenuDocument<Id>>;
   getLastChange(businessId: BusinessId): Promise<{ at: string; by: string } | null>;
   getStartupSource<Id extends BusinessId>(businessId: Id): Promise<StartupSource<Id>>;
+  getImportSource<Id extends BusinessId>(businessId: Id): Promise<PageImportCandidates<Id>>;
+  readChangeLog(): Promise<string | null>;
 }
 
 /** Documento publicado al arrancar y su origen (REQ-F-008, RF-3.1 y RF-3.4). */
@@ -121,7 +137,7 @@ export interface StartupSource<Id extends BusinessId = BusinessId> {
 
 /** Misma forma sin correlacionar el negocio con el tipo de sus datos (implementación). */
 interface UntypedMenuRepository {
-  init(): Promise<void>;
+  init(options?: MenuInitOptions): Promise<void>;
   getPublished(businessId: BusinessId): Promise<MenuDocument>;
   getForEdit(businessId: BusinessId): Promise<EditState>;
   save(businessId: BusinessId, request: SaveRequest): Promise<MenuDocument>;
@@ -129,6 +145,8 @@ interface UntypedMenuRepository {
   restoreSeed(businessId: BusinessId, options: { author: unknown }): Promise<MenuDocument>;
   getLastChange(businessId: BusinessId): Promise<{ at: string; by: string } | null>;
   getStartupSource(businessId: BusinessId): Promise<StartupSource>;
+  getImportSource(businessId: BusinessId): Promise<PageImportCandidates>;
+  readChangeLog(): Promise<string | null>;
 }
 
 export interface ConflictInfo {
@@ -146,6 +164,8 @@ export const REPOSITORY_METHODS = Object.freeze([
   'restoreSeed',
   'getLastChange',
   'getStartupSource',
+  'getImportSource',
+  'readChangeLog',
 ]);
 
 export { CHANGE_ACTIONS, type ChangeAction, versionOf };
@@ -270,6 +290,9 @@ export function createMenuRepository({
   const state = {} as Record<BusinessId, BusinessState>;
   // Documento publicado al terminar init() y su origen (fuente de la importación de productos).
   const startup = new Map<BusinessId, { source: StartupOrigin; data: MenuData }>();
+  // Qué encontró init() para la importación de página (REQ-F-044): por qué no hay vigente y si sembró.
+  const importInfo = new Map<BusinessId, { problem: PageImportProblem | null; seeded: boolean }>();
+  let seedMissing = true;
   const locks = new Map<BusinessId, Promise<unknown>>();
   let initialized = false;
 
@@ -370,6 +393,7 @@ export function createMenuRepository({
       };
       logger.warn('menu_data_damaged_pending', { business: businessId, servingFrom: previous ? 'previous' : 'seed' });
       startup.set(businessId, { source: previous ? 'previous' : 'seed', data: state[businessId].published.data });
+      importInfo.set(businessId, { problem: 'damaged', seeded: false });
       return;
     }
 
@@ -377,6 +401,17 @@ export function createMenuRepository({
     if (current.status === 'ok') {
       state[businessId] = { published: current.document, damaged: null };
       startup.set(businessId, { source: 'current', data: current.document.data });
+      importInfo.set(businessId, { problem: null, seeded: false });
+      return;
+    }
+    if (current.status === 'missing' && !seedMissing) {
+      // Instalación existente sin current.json (REQ-F-044, D-10): no se escribe nada. Se publica la
+      // versión anterior si es válida y, si no, la semilla solo en memoria; la importación decide.
+      const previous = await readValidPrevious(businessId);
+      state[businessId] = { published: previous ?? seedOf(businessId), damaged: null };
+      startup.set(businessId, { source: previous ? 'previous' : 'seed', data: state[businessId].published.data });
+      importInfo.set(businessId, { problem: 'missing', seeded: false });
+      logger.warn('menu_data_missing', { business: businessId, servingFrom: previous ? 'previous' : 'seed' });
       return;
     }
     if (current.status === 'missing') {
@@ -386,11 +421,13 @@ export function createMenuRepository({
       await storage.write(businessId, 'current', serialize(seed));
       state[businessId] = { published: seed, damaged: null };
       startup.set(businessId, { source: 'seed', data: seed.data });
+      importInfo.set(businessId, { problem: 'missing', seeded: true });
       logger.info('menu_data_seeded', { business: businessId });
       return;
     }
     // markDamaged (atStartup) asigna el estado del negocio antes de leerlo.
     await markDamaged(businessId, { reason: current.reason, issues: current.issues, atStartup: true });
+    importInfo.set(businessId, { problem: 'damaged', seeded: false });
     startup.set(businessId, { source: state[businessId].damaged?.servingFrom === 'previous' ? 'previous' : 'seed', data: state[businessId].published.data });
   }
 
@@ -457,7 +494,8 @@ export function createMenuRepository({
   // Cada negocio solo guarda y devuelve documentos propios: validateMenuDocument exige
   // `business === businessId` y buildDocument lo fija; por eso el contrato puede correlacionarlos.
   return Object.freeze<UntypedMenuRepository>({
-    async init() {
+    async init(options = {}) {
+      seedMissing = options.seedMissing ?? true;
       await storage.init();
       for (const businessId of BUSINESS_IDS) await loadBusiness(businessId);
       initialized = true;
@@ -553,6 +591,23 @@ export function createMenuRepository({
       // init() registra el origen de todos los negocios.
       const { source, data } = startup.get(businessId) as { source: StartupOrigin; data: MenuData };
       return { source, data: structuredClone(data) };
+    },
+
+    async getImportSource(businessId) {
+      ensureReady(businessId);
+      // init() registra lo que encontró en todos los negocios.
+      const { problem, seeded } = importInfo.get(businessId) as { problem: PageImportProblem | null; seeded: boolean };
+      return {
+        current: problem === null || seeded ? structuredClone(state[businessId].published) : null,
+        previous: await readValidPrevious(businessId),
+        problem: seeded ? null : problem,
+        seeded,
+        seed: seedOf(businessId),
+      };
+    },
+
+    readChangeLog() {
+      return storage.readChanges();
     },
   }) as MenuRepository;
 }

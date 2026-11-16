@@ -1,0 +1,25 @@
+<p class="font-label text-xs font-bold tracking-widest text-(--accent-soft) uppercase">{{ businessName }}</p>
+      <h1 class="font-headline text-3xl font-black tracking-tight uppercase">Cotizador de taquizas</h1>
+      <p class="mt-2 text-sm text-masa">Escribe las personas y pulsa «Calcular». Puedes cambiar cualquier parámetro: solo se aplica a este cálculo y la URL se puede recargar o compartir.</p>
+      {{{ notices }}}
+      <form id="quote-form" class="quote-form mt-6 space-y-6" method="get" action="{{ action }}" novalidate>
+        <input type="hidden" name="{{ submitField }}" value="1" />
+        <div class="quote-form__head flex flex-wrap items-start gap-3 rounded-2xl border border-rim bg-surface p-4 md:p-6">
+          {{{ personas }}}
+          <div class="quote-form__actions flex flex-wrap items-center gap-3 sm:mt-5">
+            <button class="button button--primary inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-(--accent) px-5 py-2.5 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-(--accent-strong) active:scale-[0.98]" type="submit">Calcular</button>
+            {{{ reset }}}
+          </div>
+        </div>
+        {{{ notes }}}
+        {{{ results }}}
+        <section class="quote-params space-y-4" aria-labelledby="quote-params-title">
+          <h2 id="quote-params-title" class="font-headline text-xl font-bold">Parámetros</h2>
+          <p class="text-sm text-masa">Usa punto o coma para los decimales, sin separador de miles. Las secciones con cambios o con errores se abren solas.</p>
+          {{{ sections }}}
+          <div class="quote-form__actions flex flex-wrap items-center gap-3">
+            <button class="button button--primary inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-(--accent) px-5 py-2.5 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-(--accent-strong) active:scale-[0.98]" type="submit">Calcular</button>
+            {{{ reset }}}
+          </div>
+        </section>
+      </form>

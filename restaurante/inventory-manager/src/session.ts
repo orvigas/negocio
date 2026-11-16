@@ -50,9 +50,22 @@ const RETURN_PATTERNS: readonly RegExp[] = [
   /^\/cuenta$/,
   // Control del bot (REQ-F-043).
   /^\/bot$/,
+  // Cotizador de taquizas (REQ-F-046): ruta fija con la query de un cálculo (la de URLSearchParams).
+  // Solo caracteres de una query codificada: sin redirección abierta.
+  /^\/birria\/cotizador(?:\?[A-Za-z0-9._~*%&=+,-]*)?$/,
 ];
 
+/**
+ * Tope de la vuelta ya codificada como campo del formulario de acceso (DEF-004 de REQ-F-046): el
+ * cuerpo del acceso está limitado a 4 KiB, y así queda sitio para un usuario y una contraseña de su
+ * longitud máxima. Una vuelta más larga se descarta (se vuelve al inicio).
+ */
+export const NEXT_ENCODED_LIMIT = 3000;
+
+/** Longitud del valor tal como lo codifica el navegador en un formulario (`application/x-www-form-urlencoded`). */
+const encodedLength = (value: string): number => new URLSearchParams([['', value]]).toString().length - 1;
+
 export function sanitizeNext(value: unknown): string {
-  if (typeof value !== 'string') return '/';
-  return RETURN_PATTERNS.some((pattern) => pattern.test(value)) ? value : '/';
+  if (typeof value !== 'string' || value.length > NEXT_ENCODED_LIMIT) return '/';
+  return RETURN_PATTERNS.some((pattern) => pattern.test(value)) && encodedLength(value) <= NEXT_ENCODED_LIMIT ? value : '/';
 }

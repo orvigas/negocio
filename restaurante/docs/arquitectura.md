@@ -298,8 +298,13 @@ las mismas capas:
   (`file-catalog-source.ts`) y las rutas `GET /api/v1/admin/<negocio>/cotizador` y
   `POST …/cotizador/calculos`, solo para administradores. Un JSON inválido no impide arrancar
   (decisión P-2 del usuario): el cotizador responde 503 `QUOTE_UNAVAILABLE` y el CI es la barrera.
-- `inventory-manager` (pantalla, siguiente PR): pide los campos, traduce la query a ajustes, llama
-  a la API y pinta; no calcula nada, porque no puede importar `core`.
+- `inventory-manager`: la pantalla `GET /birria/cotizador` (`controllers/quote.ts` y
+  `views/quote.ts`), solo para administradores y con su enlace en el menú de Birria. Pide los
+  campos, traduce la query a ajustes, llama a la API y pinta; no calcula ni valida nada, porque no
+  puede importar `core`. El formulario es GET y funciona sin JavaScript: al pulsar «Calcular»
+  responde 303 a la URL con solo N y los campos que difieren del JSON (recargable y compartible),
+  y rechaza sin calcular una query de más de 8 KiB o con claves repetidas o desconocidas. Nunca
+  registra la query ni los valores.
 - Fase 2: otra implementación del puerto (en `db`) tomará de la tabla de productos el nombre y el
   precio a la carta de cada ítem por el `slug` de `producto`, sin cambiar el contrato.
 

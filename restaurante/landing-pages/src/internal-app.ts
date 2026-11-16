@@ -4,12 +4,15 @@ import { safeEqualStrings } from '@restaurante/core/identity';
 import { errorProp, isBusinessId, silentLogger, type Logger } from '@restaurante/core/shared';
 import { readJsonBody } from '@restaurante/web';
 
+import type { LandingPage } from './services/landing-page.ts';
 import type { LandingProducts } from './services/landing-products.ts';
 
 /**
  * Puerto interno de landing-pages (REQ-F-039, RF-12 a RF-14): solo el aviso de la API tras cada
- * escritura confirmada de productos. Desde REQ-F-042 el bot vive en la api (con su propia caché, ya
- * recargada por la escritura): el aviso solo invalida la caché de la landing.
+ * escritura confirmada de productos o de la página del negocio. Desde REQ-F-042 el bot vive en la api
+ * (con su propia caché, ya recargada por la escritura): el aviso solo invalida las cachés de la landing.
+ * Desde REQ-F-044 significa "cambió este negocio": invalida productos y página, y `landing` solo es
+ * true si los dos quedaron al día. Una api anterior lo sigue usando igual (solo productos).
  *
  *   POST /internal/v1/productos-cambiados  { "business": "molotes" | "birria" }
  *   Authorization: Bearer <INTERNAL_NOTIFY_TOKEN>
@@ -28,6 +31,7 @@ const BEARER = /^Bearer (\S+)$/;
 export interface InternalAppOptions {
   token: string;
   landingProducts: Pick<LandingProducts, 'invalidate' | 'confirmFresh'>;
+  landingPage: Pick<LandingPage, 'invalidate' | 'confirmFresh'>;
   logger?: Logger;
 }
 
@@ -36,7 +40,7 @@ function sendError(ctx: Koa.Context, status: number, code: string, message: stri
   ctx.body = { error: { code, message } };
 }
 
-export function createInternalApp({ token, landingProducts, logger = silentLogger }: InternalAppOptions): Koa {
+export function createInternalApp({ token, landingProducts, landingPage, logger = silentLogger }: InternalAppOptions): Koa {
   if (typeof token !== 'string' || token === '') throw new TypeError('createInternalApp requiere la credencial');
   const app = new Koa();
   app.silent = true;
@@ -72,7 +76,9 @@ export function createInternalApp({ token, landingProducts, logger = silentLogge
 
     // La landing espera los datos nuevos en su siguiente visita.
     landingProducts.invalidate(business);
-    const landing = await landingProducts.confirmFresh(business);
+    landingPage.invalidate(business);
+    const fresh = await Promise.all([landingProducts.confirmFresh(business), landingPage.confirmFresh(business)]);
+    const landing = fresh.every(Boolean);
     logger.info('products_change_notified', { business, landing });
     ctx.body = { landing };
     return undefined;

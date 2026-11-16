@@ -20,7 +20,7 @@ import type { UsersController } from './controllers/users.ts';
  * POST /:negocio/productos/:id/subir | …/bajar -> orden (con JS, fragmento de la lista)
  *
  * Datos de página (REQ-F-044):
- * GET  /:negocio/pagina | POST /:negocio/pagina -> edición, o el aviso "aún no está activa"
+ * GET  /:negocio/pagina | POST /:negocio/pagina -> edición, o el aviso "no disponible"
  * GET|POST /:negocio/pagina/restaurar          -> confirmar y restaurar la versión anterior
  *
  * Usuarios y "Mi cuenta" (REQ-F-040):

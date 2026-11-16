@@ -1,14 +1,16 @@
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
-import { createUser, csrfFrom, login, loginAs, openForm, setupAdmin, submitForm, textOf } from '../support/admin.ts';
+import { createUser, csrfFrom, login, loginAs, setupAdmin, textOf } from '../support/admin.ts';
+import { pageOf } from '../support/admin-page.ts';
 
 /**
  * Modo de solo lectura de los productos en el /admin actual (REQ-F-039, RF-15 y CA-13): con
  * ADMIN_NEW_URL, la edición de productos se hace en el admin nuevo. Las páginas muestran los
  * productos sin controles de edición, con un aviso y el enlace; ninguna escritura cambia nada (HTML:
- * 410 con el aviso; /admin/api: 410 PRODUCTS_MOVED). Bot y menú funcionan igual; usuarios y cuenta
- * pasan también a solo lectura desde REQ-F-040 (admin-users-moved.test.ts).
+ * 410 con el aviso; /admin/api: 410 PRODUCTS_MOVED). El bot funciona igual; usuarios y cuenta pasan
+ * también a solo lectura desde REQ-F-040 (admin-users-moved.test.ts), y hero, destacado y promociones
+ * desde REQ-F-044 (RF-10 y CA-13: valores de MySQL sin formulario y 410 sin escribir).
  * Sin la variable, el comportamiento es el de siempre (lo cubren admin-products.test.ts y
  * admin-products-api.test.ts).
  */
@@ -41,8 +43,8 @@ describe('páginas de productos sin controles de edición', () => {
     for (const label of ['Agregar platillo', 'Agregar bebida', 'Editar', 'Eliminar', 'Subir', 'Bajar']) expect(text).not.toContain(label);
     expect(section!.querySelectorAll('form').length).toBe(0);
     expect(text).toContain('Ver productos eliminados');
-    // El formulario de hero y promociones sigue en la misma página.
-    expect(document.querySelector('#admin-form')).not.toBeNull();
+    // REQ-F-044 (RF-10): hero y promociones también en solo lectura, sin formulario.
+    expect(document.querySelector('#admin-form')).toBeNull();
   });
 
   it('los eliminados se consultan sin el botón Recuperar', async () => {
@@ -134,10 +136,30 @@ describe('ninguna escritura de productos cambia nada (CA-13)', () => {
 });
 
 describe('el resto del /admin funciona igual', () => {
-  it('menú (hero y promociones) y bot; usuarios en consulta y "Mi cuenta" en el admin nuevo (REQ-F-040)', async () => {
-    const { browser } = await movedAdmin();
-    const { fields } = await openForm(browser, 'molotes');
-    expect((await submitForm(browser, 'molotes', fields, { 'menu.highlight': 'Destacado de prueba' })).status).toBe(303);
+  it('menú (hero y promociones) en solo lectura (REQ-F-044, CA-13) y bot; usuarios en consulta y "Mi cuenta" en el admin nuevo (REQ-F-040)', async () => {
+    const { browser, pages, pageStore } = await movedAdmin();
+    const vigente = await pages.get('molotes');
+    const page = await browser.get('/admin/molotes');
+    expect(page.status).toBe(200);
+    const { document } = new JSDOM(page.text).window;
+    const main = document.querySelector('main')!;
+    expect(textOf(main.outerHTML)).toContain('El hero, el texto destacado y las promociones ahora se editan en el admin nuevo.');
+    expect(main.querySelector(`a[href="${NEW_ADMIN}/molotes/pagina"]`)).not.toBeNull();
+    expect(main.querySelector<HTMLInputElement>('[name="menu.highlight"]')?.value).toBe(pageOf(vigente).menu.highlight);
+    expect([...main.querySelectorAll('form')].filter((form) => !form.action.endsWith('/admin/logout'))).toHaveLength(0);
+    const before = structuredClone(pageStore.state);
+    const csrf = csrfFrom(page.text);
+    for (const [path, body] of [
+      ['/admin/molotes', { _csrf: csrf, action: 'save', expectedVersion: vigente.version, 'menu.highlight': 'Destacado de prueba' }],
+      ['/admin/molotes/restaurar-anterior', { _csrf: csrf, expectedVersion: vigente.version }],
+      ['/admin/molotes/restaurar-semilla', { _csrf: csrf }],
+    ] as const) {
+      const res = await browser.post(path).type('form').send(body);
+      expect(res.status, path).toBe(410);
+      expect(textOf(res.text)).toContain('No se guardó nada');
+    }
+    expect((await browser.post('/admin/molotes').type('form').send({ _csrf: 'otro', action: 'save' })).status).toBe(403);
+    expect(pageStore.state).toEqual(before);
     expect((await browser.get('/admin/usuarios')).status).toBe(200);
     expect((await browser.get('/admin/cuenta')).status).toBe(410);
     expect([200, 503]).toContain((await browser.get('/admin/bot')).status);

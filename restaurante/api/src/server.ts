@@ -1,7 +1,7 @@
 import { once } from 'node:events';
 
 import { createBotControl } from '@restaurante/core/bot-control';
-import { createProductRepository } from '@restaurante/core/catalog';
+import { createPageRepository, createProductRepository } from '@restaurante/core/catalog';
 import { errorProp } from '@restaurante/core/shared';
 import { createPrismaClient } from '@restaurante/db/client';
 import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
@@ -18,7 +18,6 @@ import { startBotControlTimers } from './bot/control-timers.ts';
 import { createBotFromConfig, createBotWebhookApp } from './bot/webhook-app.ts';
 import { ApiConfigError, loadApiConfig } from './config.ts';
 import { createLandingNotifier } from './notifier.ts';
-import { createApiPages } from './page-cutover.ts';
 
 /**
  * Arranque de la API (REQ-F-038 y REQ-F-039). Verifica la conexión y el estado de las migraciones
@@ -94,8 +93,8 @@ const stopControlTimers = startBotControlTimers({ botControl, refreshMs: config.
 const bot = createBotFromConfig({ config: config.whatsappBot, limits: config.botLimits, timeZone: config.timezone, products, botControl, logger });
 const stopCatalogReload = startCatalogReload({ products });
 
-// Datos de página (REQ-F-044): de MySQL, sin caché; hasta el corte, siempre "no disponible".
-const pages = createApiPages({ store: createPrismaPageStore({ prisma }), timeZone: config.timezone, logger });
+// Datos de página (REQ-F-044): de MySQL, sin caché. Sin filas (aún no importadas), "no disponible".
+const pages = createPageRepository({ store: createPrismaPageStore({ prisma }), timeZone: config.timezone, logger });
 const admin = createAdminRoutes({
   users: createUserRepository({ prisma }),
   products,

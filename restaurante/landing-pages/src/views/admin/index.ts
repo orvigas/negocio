@@ -4,19 +4,18 @@ import {
   centsToInput,
   childOf,
   getPageSchema,
-  pickPageData,
   resolveUnion,
   type JsonObject,
   type LeafNode,
-  type MenuDocument,
   type ObjectNode,
+  type PageConflictInfo,
+  type PageData,
   type SchemaNode,
 } from '@restaurante/core/catalog';
 import type { Renderer, SafeHtml } from '@restaurante/web';
 
 import { getIconLinks } from '../../content/icons.ts';
 import { getBusinessContent } from '../../content/index.ts';
-import type { ConflictInfo, DamagedInfo } from '../../repositories/menu-repository.ts';
 
 /** Atributo HTML: `true` lo pinta sin valor; `false` o `undefined` lo omiten. */
 type AttrEntry = [name: string, value: string | boolean | undefined];
@@ -82,14 +81,10 @@ const NOTICE_TONES: Readonly<Record<'error' | 'warning' | 'success', string>> = 
   success: 'admin-notice--success border-green-700 bg-green-50 text-green-900',
 });
 
-const SERVING_FROM_TEXT: Readonly<Record<string, string>> = Object.freeze({
-  previous: 'la versión anterior',
-  seed: 'la semilla original',
-  memory: 'la última versión válida',
-});
-
 export const SUCCESS_MESSAGES = Object.freeze({
   save: 'Cambios guardados. La landing ya muestra los datos nuevos.',
+  // REQ-F-044: la API no confirmó la página nueva; la landing la mostrará en 60 s como mucho.
+  save_pending: 'Cambios guardados. La landing los mostrará en cuanto la API vuelva a responder (como mucho en un minuto); mientras tanto sigue mostrando los datos anteriores.',
   product_created: 'Producto creado. Está al final y no disponible: edítalo y marca "Disponible" para mostrarlo en la landing.',
   product_saved: 'Producto guardado. La landing ya muestra los datos nuevos.',
   // REQ-F-038 (DEF-003): la API de productos no respondió al guardar; la landing sigue con su última copia.
@@ -408,40 +403,32 @@ export function renderAdminLogin(
   });
 }
 
-function renderDamaged(
-  renderer: Renderer,
-  { businessId, damaged, csrfToken }: { businessId: BusinessId; damaged: DamagedInfo; csrfToken: string },
-): SafeHtml {
-  const option = (action: string, label: string) =>
-    renderer.render('admin/partials/restore-form', {
-      action,
-      csrfToken,
-      label,
-      buttonClass: CLASSES.primaryButton,
-    });
-  return renderer.render('admin/partials/damaged', {
-    toneClass: NOTICE_TONES.error,
-    servingFrom: SERVING_FROM_TEXT[damaged.servingFrom],
-    options: renderer.join([
-      ...(damaged.previousValid ? [option(restorePreviousPath(businessId), 'Restaurar versión anterior')] : []),
-      option(restoreSeedPath(businessId), 'Restaurar semilla original'),
-    ]),
-  });
-}
-
 export interface AdminBusinessOptions extends AdminPageContext {
   businessId: BusinessId;
   timezone: string;
-  document: MenuDocument;
+  /** Datos de página vigentes en MySQL (REQ-F-044). */
+  page: PageData;
   version: string;
   lastChange: LastChange | null;
-  damaged: DamagedInfo | null;
+  /** Con ADMIN_NEW_URL (REQ-F-044, RF-10): la página se consulta sin formulario, con aviso y enlace. */
+  movedTo?: string | undefined;
   form?: AdminFormState | undefined;
-  conflict?: ConflictInfo | undefined;
+  conflict?: PageConflictInfo | undefined;
   success?: string | undefined;
   problem?: string | undefined;
   /** Lista de productos (REQ-F-008; src/views/admin/products.ts). */
   products?: SafeHtml | undefined;
+}
+
+/** Aviso del modo de solo lectura de la página (REQ-F-044, RF-10): texto y un enlace con nombre. */
+function renderPageMovedNotice(renderer: Renderer, businessId: BusinessId, movedTo: string): SafeHtml {
+  return renderNotice(renderer, {
+    tone: 'warning',
+    role: 'status',
+    title: 'El hero, el texto destacado y las promociones ahora se editan en el admin nuevo.',
+    paragraphs: ['Aquí solo puedes consultarlos: los cambios se hacen en la sección "Página" del admin nuevo.'],
+    extra: renderer.render('admin/partials/page-moved-link', { href: `${movedTo}/${businessId}/pagina` }),
+  });
 }
 
 /** Página de configuración de un negocio. */
@@ -450,10 +437,10 @@ export function renderAdminBusiness(renderer: Renderer, options: AdminBusinessOp
     businessId,
     timezone,
     csrfToken,
-    document,
+    page,
     version,
     lastChange,
-    damaged,
+    movedTo,
     form,
     conflict,
     success,
@@ -462,9 +449,10 @@ export function renderAdminBusiness(renderer: Renderer, options: AdminBusinessOp
     faviconBusinessId,
     products,
   } = options;
-  const { sections, summary } = renderSchemaFields(renderer, businessId, pickPageData(businessId, document.data), form);
+  const { sections, summary } = renderSchemaFields(renderer, businessId, page, form);
 
   const notices: SafeHtml[] = [];
+  if (movedTo) notices.push(renderPageMovedNotice(renderer, businessId, movedTo));
   if (success) notices.push(renderNotice(renderer, { tone: 'success', role: 'status', title: success }));
   if (problem) notices.push(renderNotice(renderer, { tone: 'error', role: 'alert', title: problem }));
   if (summary.length > 0) {
@@ -479,13 +467,10 @@ export function renderAdminBusiness(renderer: Renderer, options: AdminBusinessOp
       }),
     );
   }
-  if (damaged) {
-    notices.push(renderDamaged(renderer, { businessId, damaged, csrfToken }));
-  }
 
   let conflictNotice = renderer.join([]);
   let submit = renderer.render('admin/partials/submit', { authorName: viewer.displayName, primaryButtonClass: CLASSES.primaryButton });
-  if (conflict && !damaged) {
+  if (conflict) {
     const who = conflict.updatedBy ?? 'alguien';
     const when = conflict.updatedAt ? ` el ${formatDisplayDate(conflict.updatedAt, timezone)}` : '';
     conflictNotice = renderer.render('admin/partials/conflict', {
@@ -497,9 +482,25 @@ export function renderAdminBusiness(renderer: Renderer, options: AdminBusinessOp
     });
     submit = renderer.join([]);
   }
-  if (damaged) submit = renderer.join([]);
 
   const title = `Menú de ${businessName(businessId)}`;
+  if (movedTo) {
+    // Solo lectura: los valores vigentes, sin formulario ni acciones (RF-10).
+    return adminPage(renderer, {
+      title,
+      viewer,
+      csrfToken,
+      faviconBusinessId,
+      current: businessId,
+      body: renderer.render('admin/business-readonly', {
+        title,
+        lastChange: lastChangeText(lastChange, timezone),
+        notices: renderer.join(notices),
+        products: products ?? renderer.join([]),
+        sections,
+      }),
+    });
+  }
   return adminPage(renderer, {
     title,
     viewer,
@@ -515,15 +516,12 @@ export function renderAdminBusiness(renderer: Renderer, options: AdminBusinessOp
       csrfToken,
       expectedVersion: conflict ? conflict.version : version,
       conflict: conflictNotice,
-      dataAttrs: attrs(renderer, [['disabled', Boolean(damaged)]]),
       sections,
       submit,
-      restore: damaged
-        ? renderer.join([])
-        : renderer.render('admin/partials/restore-link', {
-            href: restorePreviousPath(businessId),
-            secondaryButtonClass: CLASSES.secondaryButton,
-          }),
+      restore: renderer.render('admin/partials/restore-link', {
+        href: restorePreviousPath(businessId),
+        secondaryButtonClass: CLASSES.secondaryButton,
+      }),
     }),
   });
 }
@@ -537,6 +535,7 @@ export function renderAdminConfirmRestore(
     businessId,
     timezone,
     csrfToken,
+    version,
     lastChange,
     problem,
     viewer,
@@ -544,6 +543,8 @@ export function renderAdminConfirmRestore(
   }: AdminPageContext & {
     businessId: BusinessId;
     timezone: string;
+    /** Versión vigente que se confirma: si cambió antes de enviar, no se restaura nada (REQ-F-044). */
+    version: string;
     lastChange: LastChange | null;
     problem?: string | undefined;
   },
@@ -562,6 +563,7 @@ export function renderAdminConfirmRestore(
       notices: renderer.join(notices),
       action: restorePreviousPath(businessId),
       csrfToken,
+      expectedVersion: version,
       cancelHref: adminPath(businessId),
       primaryButtonClass: CLASSES.primaryButton,
       secondaryButtonClass: CLASSES.secondaryButton,

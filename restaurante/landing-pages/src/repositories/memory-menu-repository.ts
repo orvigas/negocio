@@ -48,6 +48,9 @@ export function createMemoryStorage(): MemoryStorage {
     async appendChange(line) {
       changes.push(JSON.parse(line));
     },
+    async readChanges() {
+      return changes.length === 0 ? null : changes.map((entry) => `${JSON.stringify(entry)}\n`).join('');
+    },
   });
 }
 

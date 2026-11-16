@@ -16,10 +16,12 @@ describe('contrato del repositorio de menús (RF-9)', () => {
     for (const method of REPOSITORY_METHODS) expect(typeof repository[method as keyof typeof repository]).toBe('function');
   });
 
-  it('createApp rechaza un repositorio que no cumple el contrato', () => {
-    expect(() => createApp({ config: makeConfig(), repository: { getPublished() {} }, products: { getPublished() {} } as never, landingProducts: { get() {} } as never })).toThrow(/no implementa: init/);
-    // @ts-expect-error: sin repositorio, a propósito.
-    expect(() => createApp({ config: makeConfig() })).toThrow(/no implementa/);
+  it('createApp ya no usa el repositorio de menús: exige los datos de página de las landings (REQ-F-044)', () => {
+    const products = { getPublished() {} } as never;
+    const landingProducts = { get() {}, invalidate() {} } as never;
+    expect(() => createApp({ config: makeConfig(), products, landingProducts, landingPage: { get() {} } as never })).toThrow(/landingPage/);
+    // @ts-expect-error: sin datos de página, a propósito.
+    expect(() => createApp({ config: makeConfig(), products, landingProducts })).toThrow(/landingPage/);
   });
 
   it('CA-38: el repositorio en memoria trabaja sin archivos de datos', async () => {

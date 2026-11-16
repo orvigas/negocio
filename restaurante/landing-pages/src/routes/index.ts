@@ -10,12 +10,13 @@ import { manifestPath } from '../content/icons.ts';
 import type { AdminDeps } from '../controllers/admin.ts';
 import { createIconsController } from '../controllers/icons.ts';
 import { createLandingController } from '../controllers/landing.ts';
-import type { MenuRepository } from '../repositories/menu-repository.ts';
+import { loadSeedMenus } from '../services/landing-page.ts';
+import type { LandingPage } from '../services/landing-page.ts';
 import type { LandingProducts } from '../services/landing-products.ts';
 import { createAdminRouter } from './admin.ts';
 
 /** Dependencias propias de la administración (las comunes llegan en el resto de `deps`). */
-export type AdminRouteDeps = Omit<AdminDeps, 'config' | 'renderer' | 'now' | 'repository' | 'products'>;
+export type AdminRouteDeps = Omit<AdminDeps, 'config' | 'renderer' | 'now' | 'products'>;
 
 /**
  * GET /           -> landing de Birria El Muñeco, siempre, con el aviso del día (REQ-F-028):
@@ -35,24 +36,27 @@ export function createRouter({
   admin,
   publicDir,
   landingProducts,
+  landingPage,
   ...deps
 }: {
   config: Config;
   renderer: Renderer;
   now: () => Date;
-  repository: MenuRepository;
   products: ProductRepository;
   /** Productos de las landings, de la API (REQ-F-038). /admin usa `products`. */
   landingProducts: LandingProducts;
+  /** Datos de página de las landings, de la API (REQ-F-044). /admin usa `pages`. */
+  landingPage: LandingPage;
   publicDir: string;
   admin?: AdminRouteDeps | undefined;
   logger: Logger;
 }): Router {
   const router = new Router();
   const icons = createIconsController({ publicDir });
-  router.get('/', createLandingController({ ...deps, landingProducts }));
+  const seeds = loadSeedMenus();
+  router.get('/', createLandingController({ ...deps, landingProducts, landingPage, seeds }));
   for (const businessId of BUSINESS_IDS) {
-    router.get(BUSINESS_PATHS[businessId], createLandingController({ ...deps, landingProducts, businessId }));
+    router.get(BUSINESS_PATHS[businessId], createLandingController({ ...deps, landingProducts, landingPage, seeds, businessId }));
     router.get(manifestPath(businessId), icons.manifest(businessId));
   }
   router.get('/favicon.ico', icons.favicon);

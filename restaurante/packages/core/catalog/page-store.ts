@@ -46,18 +46,44 @@ export interface PageChangeEntry {
   changes: FieldChange[];
 }
 
+/** Marca de la importación única de un negocio (`page_import`; RF-2). */
+export interface PageImportMark {
+  business: BusinessId;
+  importedAt: Date;
+  source: 'current' | 'previous' | 'seed';
+  /** `revision@updatedAt` del documento importado como vigente (CA-16). */
+  sourceVersion: string;
+  historyCount: number;
+  skippedLines: number;
+}
+
 export interface PageStoreTx {
   read(business: BusinessId): Promise<StoredPages>;
   /** Reemplaza la versión vigente si sigue siendo `expected`; si no, false y no escribe nada. */
   replaceCurrent(business: BusinessId, next: StoredPage, expected: Pick<StoredPage, 'revision' | 'updatedAt'>): Promise<boolean>;
   putPrevious(business: BusinessId, previous: StoredPage): Promise<void>;
   addChange(entry: PageChangeEntry): Promise<void>;
+  /** Solo la importación: crea la versión vigente de un negocio sin datos. */
+  putCurrent(business: BusinessId, current: StoredPage): Promise<void>;
+  /** Solo la importación: entradas de `changes.jsonl` (`imported`), por lotes. */
+  addImportedChanges(entries: PageChangeEntry[]): Promise<void>;
+  /** Solo la importación: deja la marca; falla si el negocio ya la tenía. */
+  markImported(mark: PageImportMark): Promise<void>;
+}
+
+export interface PageTransactionOptions {
+  /** Límite de la transacción (la importación necesita más que una escritura). */
+  timeoutMs?: number;
 }
 
 export interface PageStore {
   read(business: BusinessId): Promise<StoredPages>;
   /** Ejecuta `task` de forma atómica: si lanza, no queda nada escrito. */
-  transaction<T>(task: (tx: PageStoreTx) => Promise<T>): Promise<T>;
+  transaction<T>(task: (tx: PageStoreTx) => Promise<T>, options?: PageTransactionOptions): Promise<T>;
+  /** Marcas de importación existentes. */
+  readImports(): Promise<PageImportMark[]>;
+  /** `product_import` tiene filas: la instalación ya existía al empezar el arranque (D-10). */
+  hasProductImports(): Promise<boolean>;
 }
 
 // --- Errores de dominio ----------------------------------------------------------

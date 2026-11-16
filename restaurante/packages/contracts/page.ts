@@ -6,11 +6,11 @@ import type { PublicBusinessId } from './products.ts';
 /**
  * Contrato de los datos de página (REQ-F-044): lo que pintan las landings en
  * `/api/v1/public/<negocio>/pagina` y la edición en `/api/v1/admin/<negocio>/pagina`. Aquí solo va la
- * forma: las reglas (largos, precios) son las de core y las aplica la API. Sin datos en MySQL, o antes
- * del corte, ambos endpoints responden 503 con el código `PAGE_UNAVAILABLE`.
+ * forma: las reglas (largos, precios) son las de core y las aplica la API. Sin datos en MySQL (aún no
+ * importados) o con una fila dañada, ambos endpoints responden 503 con el código `PAGE_UNAVAILABLE`.
  */
 
-/** Código del 503 "aún no disponible": no es una avería, y una escritura no se aplicó. */
+/** Código del 503 "no disponible": una escritura no se aplicó. */
 export const PAGE_UNAVAILABLE_CODE = 'PAGE_UNAVAILABLE';
 export const PAGE_CONFLICT_CODE = 'PAGE_CONFLICT';
 export const PAGE_NO_PREVIOUS_CODE = 'PAGE_NO_PREVIOUS';

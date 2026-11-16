@@ -2,6 +2,7 @@
 // Lo único que se importa desde fuera del módulo (REQ-F-037, restaurante/docs/arquitectura.md §4).
 export * from './menu-diff.ts';
 export * from './page-form.ts';
+export * from './page-import.ts';
 export * from './page-repository.ts';
 export * from './page-store.ts';
 export * from './memory-page-store.ts';

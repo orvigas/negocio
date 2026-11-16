@@ -1,7 +1,7 @@
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
-import { ADMIN_PASSWORD, ADMIN_USER, USER_PASSWORD, createUser, csrfFrom, login, loginAs, openForm, setupAdmin, submitForm, textOf } from '../support/admin.ts';
+import { ADMIN_PASSWORD, ADMIN_USER, USER_PASSWORD, createUser, csrfFrom, login, loginAs, setupAdmin, textOf } from '../support/admin.ts';
 import { appDatabaseUrl } from '../support/database.ts';
 import { runNode } from '../support/process.ts';
 
@@ -103,10 +103,11 @@ describe('ninguna escritura de usuarios ni de la cuenta cambia nada (CA-14)', ()
 });
 
 describe('el resto del /admin funciona igual', () => {
-  it('menú (hero y promociones) y bot', async () => {
+  it('menú (hero y promociones, en solo lectura desde REQ-F-044) y bot', async () => {
     const { browser } = await movedAdmin();
-    const { fields } = await openForm(browser, 'molotes');
-    expect((await submitForm(browser, 'molotes', fields, { 'menu.highlight': 'Destacado de prueba' })).status).toBe(303);
+    const page = await browser.get('/admin/molotes');
+    expect(page.status).toBe(200);
+    expect(page.text).not.toContain('id="admin-form"');
     expect([200, 503]).toContain((await browser.get('/admin/bot')).status);
   });
 

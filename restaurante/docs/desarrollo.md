@@ -135,13 +135,21 @@ npm run db:down      # lo detiene (los datos quedan en el volumen mysql-dev-data
   `collation-server=utf8mb4_es_0900_as_cs` y modo estricto, y los mismos usuarios que crea
   `docker/mysql/initdb/01-usuarios.sh`.
 
-`DATA_DIR` vacío usa la carpeta `landing-pages/data/` (ignorada por git). Ahí se guardan los JSON
-de página de cada negocio y `changes.jsonl`. Estructura y reglas en
+`DATA_DIR` vacío usa la carpeta `landing-pages/data/` (ignorada por git). Ahí están los JSON de
+página de cada negocio y `changes.jsonl`, que desde REQ-F-044 **solo se leen** al arrancar: los datos
+de página viven en MySQL. Estructura y reglas en
 [Archivos de datos](../README.md#archivos-de-datos-data_dir) y
 [Base de datos](../README.md#base-de-datos).
 
-- En el primer arranque se crea sola: copia la semilla de cada negocio, y los productos se
-  importan a la base una sola vez.
+- En el primer arranque se crea sola: copia la semilla de cada negocio, y los productos y los datos
+  de página se importan a la base una sola vez (`page_import_done`, o `page_import_from_seed` si
+  vienen de la semilla).
+- Si ya tenías productos en tu base local y la carpeta está vacía, la importación de la página se
+  niega (`PAGE_IMPORT_SEED_REFUSED`) y la app no arranca: copia los JSON de otra carpeta, o empieza
+  con una base vacía ("Empezar de cero", arriba).
+- Editar los JSON a mano ya no cambia nada: la página se edita en el admin nuevo
+  (`http://127.0.0.1:3003/<negocio>/pagina`) o, sin `ADMIN_NEW_URL`, en `/admin/<negocio>`. Con la
+  API parada, las landings muestran la semilla de la página.
 - Para experimentar sin tocar tus datos, apunta `DATA_DIR` a otra ruta absoluta (fuera de `src/`
   y de `public/`).
 - **Nunca** apuntes `DATABASE_URL` ni `MIGRATION_DATABASE_URL` a una base de producción mientras
@@ -170,7 +178,7 @@ recargar la landing.
 | `http://127.0.0.1:3000/?dia=lunes` | Fuerza el día del aviso (`lunes` … `domingo`, sin acentos); solo con `NODE_ENV=development`. El aviso sale una vez por sesión: ábrelo en una ventana privada nueva o borra `sessionStorage` para volver a verlo |
 | `http://127.0.0.1:3000/molotes` y `/birria` | Cada landing, siempre |
 | `http://127.0.0.1:3000/admin` | Administración (necesita el primer administrador del paso 3) |
-| `http://127.0.0.1:3003/` | Admin nuevo (REQ-F-039): productos de cada negocio, con las mismas cuentas de `/admin`. Necesita la API en marcha; sin ella, cada pantalla avisa con un 503 |
+| `http://127.0.0.1:3003/` | Admin nuevo (REQ-F-039): productos, página, usuarios y bot de cada negocio, con las mismas cuentas de `/admin`. Necesita la API en marcha; sin ella, cada pantalla avisa con un 503 |
 
 - `npm run dev` reinicia al editar cualquier `.ts` importado. Un reinicio cierra las sesiones de
   `/admin`. Reiniciar la `api` cierra las sesiones del admin nuevo y borra las conversaciones del

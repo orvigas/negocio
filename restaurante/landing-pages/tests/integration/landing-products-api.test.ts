@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { BusinessId } from '@restaurante/core/shared';
 
 import { createApp } from '../../src/app.ts';
-import { makeConfig, makeRecordingLogger, makeRepository } from '../helpers.ts';
+import { makeConfig, makeRecordingLogger } from '../helpers.ts';
 import { formFields, login, setupAdmin, type Browser } from '../support/admin.ts';
 import { listenLocal } from '../support/http.ts';
-import { makeApiLandingProducts } from '../support/landing-products.ts';
+import { fixedLandingPage, makeApiLandingProducts } from '../support/landing-products.ts';
 import { startProductsApiDouble, type ProductsApiDouble } from '../support/products-api-double.ts';
 import { ANA, makeProductRepository, VALID_INPUTS } from '../support/products.ts';
 
@@ -229,7 +229,7 @@ async function landingsWithApi({ retryMs = 20, startDown = false }: { retryMs?: 
   if (startDown) api.setMode('down');
   const landingProducts = makeApiLandingProducts({ url: api.url, logger, timeoutMs: 200, retryMs });
   await landingProducts.warmUp();
-  const app = createApp({ config: makeConfig(), repository: await makeRepository(), products, landingProducts, logger });
+  const app = createApp({ config: makeConfig(), products, landingProducts, landingPage: fixedLandingPage(), logger });
   const client = (await listenLocal(app)).request();
   const get = async (path: string) => {
     const res = await client.get(path);

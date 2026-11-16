@@ -7,7 +7,7 @@
         <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
         <input type="hidden" name="expectedVersion" value="{{ expectedVersion }}" />
         {{{ conflict }}}
-        <fieldset class="admin-form__data space-y-6"{{{ dataAttrs }}}>
+        <fieldset class="admin-form__data space-y-6">
           <legend class="sr-only">Datos de la página</legend>{{{ sections }}}
         </fieldset>
         {{{ submit }}}

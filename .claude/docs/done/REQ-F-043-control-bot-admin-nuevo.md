@@ -10,7 +10,9 @@ Comprobaciones de producción hechas el 2026-11-16 (por la sesión principal, po
 
 **Comprobado después por el usuario (2026-11-16):** `https://admin.birriaelmuneco.com/bot`, con sesión de administrador, muestra el estado: bot habilitado (Meta), interruptor activo y último cambio de orvigas el 15/10/2026 05:02 con su motivo, más el formulario del motivo de la pausa. `https://birriaelmuneco.com/bot` responde 404 porque esa ruta no existe; la de solo lectura es `/admin/bot`.
 
-**No comprobado:** `/admin/bot` (solo lectura) con sesión de administrador, y el aviso al personal; quedan para el usuario. El ticket se cierra por orden del usuario.
+`https://birriaelmuneco.com/admin/bot`, con sesión de administrador, muestra la información sin formularios (el usuario lo confirmó el 2026-11-16).
+
+**No comprobado:** el aviso al personal; queda para el usuario. El ticket se cierra por orden del usuario.
 
 DONE
 

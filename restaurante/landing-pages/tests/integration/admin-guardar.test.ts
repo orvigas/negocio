@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { seedData } from '../helpers.ts';
+import { seedData, seedPage } from '../helpers.ts';
 import { createUser, formFields, loginAs, openForm, setupAdmin, submitForm, textOf } from '../support/admin.ts';
 import { loggedIn, versionOf } from '../support/admin-page.ts';
 
@@ -12,7 +12,7 @@ describe('guardar (RF-6)', () => {
   // REQ-F-008: el formulario de página guarda hero, destacado y promociones. El precio de un
   // producto (CA-1 de REQ-F-001) se edita en su propio formulario: tests/integration/admin-products.test.ts.
   it('CA-27: guarda con POST-redirect-GET y la landing muestra el precio nuevo del hero sin reiniciar', async () => {
-    const { browser, request: client, repository, products } = await loggedIn();
+    const { browser, request: client, pageStore, products } = await loggedIn();
     const landingBefore = await client().get('/molotes');
     expect(landingBefore.text).not.toContain('$150 MXN');
 
@@ -30,7 +30,7 @@ describe('guardar (RF-6)', () => {
     expect(textOf(page.text)).toContain('Cambios guardados.');
     expect(page.text).toContain('role="status"');
 
-    const changes = repository.storage.changes;
+    const changes = pageStore.state.changes;
     expect(changes).toEqual([
       expect.objectContaining({
         
@@ -40,7 +40,7 @@ describe('guardar (RF-6)', () => {
         changes: [{ field: 'hero.showcase.priceCents', before: 14500, after: 15000 }],
       }),
     ]);
-    expect(JSON.parse(repository.storage.files.get('molotes/previous')!).data).toEqual(seedData('molotes'));
+    expect(JSON.parse(pageStore.state.pages.get('molotes')!.previous!.data)).toEqual(seedPage('molotes'));
   });
 
   it('CA-2: el precio del hero de Birria en 199.50 se muestra como "$199.50 MXN"', async () => {
@@ -83,8 +83,8 @@ describe('guardar (RF-6)', () => {
     expect(page.text).not.toContain('name="author"');
     expect(textOf(page.text)).toContain('El cambio se registrará a nombre de Ana.');
     expect((await submitForm(browser, 'molotes', fields, { 'hero.showcase.title': 'Hero de Ana' })).status).toBe(303);
-    expect(context.repository.storage.changes.at(-1)).toMatchObject({ author: 'Ana', authorId: ana.id, action: 'save', business: 'molotes' });
-    expect(JSON.parse(context.repository.storage.files.get('molotes/current')!).updatedBy).toBe('Ana');
+    expect(context.pageStore.state.changes.at(-1)).toMatchObject({ author: 'Ana', authorId: ana.id, action: 'save', business: 'molotes' });
+    expect(context.pageStore.state.pages.get('molotes')!.current!.updatedBy).toBe('Ana');
 
     // Un campo "author" enviado a mano no cambia el autor: el formulario se rechaza.
     const forged = await submitForm(browser, 'molotes', formFields((await browser.get('/admin/molotes')).text), { author: 'Otra persona' });
@@ -92,15 +92,15 @@ describe('guardar (RF-6)', () => {
   });
 
   it('CA-10 / CA-19: un error de validación conserva lo escrito, marca el campo y no depende del color', async () => {
-    const { browser, repository } = await loggedIn();
+    const { browser, pages } = await loggedIn();
     const { fields } = await openForm(browser, 'molotes');
-    const before = await versionOf(repository, 'molotes');
+    const before = await versionOf(pages, 'molotes');
     const res = await submitForm(browser, 'molotes', fields, {
       'hero.showcase.priceCents': '0',
       'hero.showcase.title': 'Título nuevo escrito',
     });
     expect(res.status).toBe(422);
-    expect(await versionOf(repository, 'molotes')).toBe(before);
+    expect(await versionOf(pages, 'molotes')).toBe(before);
 
     const resent = formFields(res.text);
     expect(resent['hero.showcase.priceCents']).toBe('0');
@@ -118,13 +118,13 @@ describe('guardar (RF-6)', () => {
     // REQ-F-008: los campos de producto ya no son del formulario de página.
     ['un campo de un producto existente', { 'menu.items.0.name': 'Otro nombre' }],
   ])('CA-18: rechaza %s sin escribir', async (_label, changes) => {
-    const { browser, repository } = await loggedIn();
+    const { browser, pages } = await loggedIn();
     const { fields } = await openForm(browser, 'birria');
-    const before = await versionOf(repository, 'birria');
+    const before = await versionOf(pages, 'birria');
     const res = await submitForm(browser, 'birria', fields, { ...changes });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('STRUCTURE_MODIFIED');
-    expect(await versionOf(repository, 'birria')).toBe(before);
+    expect(await versionOf(pages, 'birria')).toBe(before);
   });
 
   it('rechaza una acción desconocida, cuerpos demasiado grandes y otros tipos de contenido', async () => {

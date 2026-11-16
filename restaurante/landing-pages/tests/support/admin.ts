@@ -4,7 +4,14 @@ import type { Test } from 'supertest';
 
 import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
-import { createProductRepository, type ProductRepository, type ProductStore } from '@restaurante/core/catalog';
+import {
+  createMemoryPageStore,
+  createPageRepository,
+  createProductRepository,
+  type PageRepository,
+  type ProductRepository,
+  type ProductStore,
+} from '@restaurante/core/catalog';
 import { createUserRepository } from '@restaurante/db/user-repository';
 import { SCRYPT_DEFAULTS, hashPassword, type UserRepository } from '@restaurante/core/identity';
 import { createImageChecker } from '@restaurante/web';
@@ -15,10 +22,12 @@ import type { Env } from '../../src/config/env.ts';
 import type { MenuRepository } from '../../src/repositories/menu-repository.ts';
 import type { createMemoryMenuRepository } from '../../src/repositories/memory-menu-repository.ts';
 import { bootstrapAdmin } from '../../src/services/admin-bootstrap.ts';
+import type { LandingPage } from '../../src/services/landing-page.ts';
 import type { LandingProducts } from '../../src/services/landing-products.ts';
+import { importPages } from '../../src/services/page-import.ts';
 import { makeDatabase, type MakeDatabaseOptions } from './database.ts';
 import { listenLocal, type Browser } from './http.ts';
-import { landingProductsFrom } from './landing-products.ts';
+import { landingPageFrom, landingProductsFrom } from './landing-products.ts';
 import { sourcesFrom } from './products.ts';
 
 export type MemoryRepository = ReturnType<typeof createMemoryMenuRepository>;
@@ -46,6 +55,8 @@ export interface SetupOptions<R extends MenuRepository> {
    * las pruebas de la API pasan la caché real contra el doble HTTP sobre el mismo store.
    */
   landingProducts?: (deps: { products: ProductRepository; store: ProductStore }) => LandingProducts | Promise<LandingProducts>;
+  /** Página de las landings (REQ-F-044). Por defecto, el adaptador en memoria sobre `pages`. */
+  landingPage?: (deps: { pages: PageRepository }) => LandingPage;
 }
 
 /** Clave de prueba para la lista negra sin bot (REQ-F-025). */
@@ -91,6 +102,8 @@ export function makeClock(start = FRIDAY_NOON_MX): Clock {
 /**
  * App de pruebas con administración habilitada, repositorio de menús en memoria (CA-38) y una
  * base de datos MySQL de pruebas con el primer administrador creado desde ADMIN_ENV (REQ-F-007).
+ * Datos de página (REQ-F-044): store en memoria con la importación ya hecha desde el repositorio de
+ * menús, como en el arranque.
  */
 export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
   env = {},
@@ -104,6 +117,7 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
   botLimits,
   wrapBotStore = (store) => store,
   landingProducts = ({ products }) => landingProductsFrom(products),
+  landingPage = ({ pages }) => landingPageFrom(pages),
 }: SetupOptions<R> = {}) {
   // Sin repositorio propio se usa el de memoria, que es el tipo por defecto de R.
   const repo = (repository ?? (await makeRepository({ now: clock.now }))) as R;
@@ -122,6 +136,9 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
     logger,
   });
   await products.init(await sourcesFrom(repo));
+  const pageStore = createMemoryPageStore();
+  await importPages({ repository: repo, store: pageStore, existing: false, now: clock.now });
+  const pages = createPageRepository({ store: pageStore, timeZone: config.timezone, now: clock.now, logger });
   const botControl = createBotControl({
     store: wrapBotStore(createPrismaBotControlStore({ prisma: database.prisma })),
     keys: botKeys === undefined ? config.botKeys : botKeys,
@@ -136,9 +153,10 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
   await botControl.init();
   const app = createApp({
     config: botLimits ? { ...config, botLimits } : config,
-    repository: repo,
     products,
     landingProducts: await landingProducts({ products, store: productStore }),
+    landingPage: landingPage({ pages }),
+    pages,
     users,
     hashParams: TEST_HASH_PARAMS,
     logger,
@@ -151,6 +169,8 @@ export async function setupAdmin<R extends MenuRepository = MemoryRepository>({
     clock,
     logger,
     repository: repo,
+    pages,
+    pageStore,
     products,
     users: realUsers,
     prisma: database.prisma,
@@ -195,6 +215,14 @@ export function csrfFrom(html: string): string {
   if (!match) throw new Error('No hay token CSRF en la página');
   // El grupo 1 es obligatorio en el patrón: existe si hubo coincidencia.
   return match[1] as string;
+}
+
+/** Campos del formulario de confirmación de "Restaurar versión anterior" (token y versión confirmada). */
+export function restoreFields(html: string): FormFields {
+  const match = html.match(/name="expectedVersion" value="([^"]*)"/);
+  if (!match) throw new Error('No hay versión en la confirmación');
+  // El grupo 1 es obligatorio en el patrón: existe si hubo coincidencia.
+  return { _csrf: csrfFrom(html), expectedVersion: match[1] as string };
 }
 
 /** Abre la página de un negocio y devuelve sus campos listos para enviar. */

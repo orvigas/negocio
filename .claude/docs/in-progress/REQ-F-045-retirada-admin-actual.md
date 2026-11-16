@@ -2,7 +2,9 @@
 
 ## Estado
 
-QA_APPROVED (PR 1 de 3)
+READY_FOR_MERGE (PR 1 de 3)
+
+- PR 1: #156 (https://github.com/orvigas/negocio/pull/156), hacia `epic/arquitectura`. CI con el PR listo: `calidad`, `docker`, `auditoria` y `pruebas` en `pass` (se comprueba al marcarlo listo; el resultado queda en el informe del PR).
 
 ## Aprobación
 
@@ -1048,3 +1050,7 @@ El usuario aprueba el QA Action Plan ("apruebo todo con b"). `senior-qa` lo ejec
 ### DEF-002 corregido (2026-11-16)
 
 `senior-fullstack` corrige DEF-002 (semilla ilegible dentro de `InstallationError`) con un caso en una prueba existente y anota DEF-001 como pendiente del PR 2. Validaciones en verde. Estado: `QA_APPROVED` (PR 1 de 3), listo para commit y PR.
+
+### PR 1 abierto (2026-11-16)
+
+Commit `bf40141` (`feat: la api prepara las instalaciones nuevas y contiene la recuperación del acceso`) y PR #156 hacia `epic/arquitectura`, abierto como borrador y marcado listo tras el último push. Estado: `READY_FOR_MERGE` (PR 1 de 3), sujeto al CI en verde del PR listo. El ticket sigue en `in-progress/` hasta el PR 3.

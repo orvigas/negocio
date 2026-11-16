@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 3, el corte, ronda 1; ver "QA Report del PR 3"). DEF-PR3-001 corregido. Commit y PR hacia `epic/arquitectura` desde `feature/REQ-F-044-pagina-en-mysql-3-corte` (ver "Pull Request del PR 3" en el historial): pasa a `READY_FOR_MERGE` cuando su CI (`calidad`, `docker`, `auditoria`, `pruebas`) quede en `pass`. Pendiente: `ops/backup/ci/smoke.sh` (CA-17) solo corre en el PR de la épica hacia `main`; se comprueba allí. Antes de desplegar: las comprobaciones de `despliegue.md` §8 en el VPS. El ticket sigue en `in-progress/` hasta que el usuario confirme el merge a `main`. Antes: PR 1 ([#134](https://github.com/orvigas/negocio/pull/134)) y PR 2 ([#139](https://github.com/orvigas/negocio/pull/139), simplificado en [#140](https://github.com/orvigas/negocio/pull/140)) mergeados en `epic/arquitectura`; la épica llegó a `main` con [#141](https://github.com/orvigas/negocio/pull/141) y se desplegó el 2026-11-16 con la pantalla "Página" cerrada.
+READY_FOR_MERGE (PR 3, el corte). QA_APPROVED en la ronda 1 (ver "QA Report del PR 3"); DEF-PR3-001 corregido. Commit y PR hacia `epic/arquitectura` desde `feature/REQ-F-044-pagina-en-mysql-3-corte` ([#147](https://github.com/orvigas/negocio/pull/147), commit `0562846`): CI del commit `0562846` en `pass` (`calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)`, `verificacion`; `publish`, `deploy` y `vigente` omitidos, como en todo PR). Pendiente: `ops/backup/ci/smoke.sh` (CA-17) solo corre en el PR de la épica hacia `main`; se comprueba allí. Antes de desplegar: las comprobaciones de `despliegue.md` §8 en el VPS. El ticket sigue en `in-progress/` hasta que el usuario confirme el merge a `main`. Antes: PR 1 ([#134](https://github.com/orvigas/negocio/pull/134)) y PR 2 ([#139](https://github.com/orvigas/negocio/pull/139), simplificado en [#140](https://github.com/orvigas/negocio/pull/140)) mergeados en `epic/arquitectura`; la épica llegó a `main` con [#141](https://github.com/orvigas/negocio/pull/141) y se desplegó el 2026-11-16 con la pantalla "Página" cerrada.
 
 ## Aprobación
 
@@ -1274,7 +1274,7 @@ Plan aprobado por el usuario: "Apruebo el plan"; `smoke.sh` por el CI: "Sí, ace
 
 ### Pull Request del PR 3 (2026-11-16)
 
-Se corrige DEF-PR3-001 en `landing-pages/.env.example` (al arrancar, un `current.json` dañado se conserva como `damaged-<fecha>.json`; los JSON ya no se reimportan). `typecheck` 0, `lint` 0 y `npm test` 0 (`api` 46/1.118, `landing-pages` 95/1.314, `inventory-manager` 15/257). Única prueba permanente nueva: `landing-pages/tests/unit/page-import.test.ts`. Un commit y PR hacia `epic/arquitectura`, que también integra en la épica el commit de documentación de #146. CA-17 (`smoke.sh`) queda para el CI del PR de la épica a `main`.
+Se corrige DEF-PR3-001 en `landing-pages/.env.example` (al arrancar, un `current.json` dañado se conserva como `damaged-<fecha>.json`; los JSON ya no se reimportan). `typecheck` 0, `lint` 0 y `npm test` 0 (`api` 46/1.118, `landing-pages` 95/1.314, `inventory-manager` 15/257). Única prueba permanente nueva: `landing-pages/tests/unit/page-import.test.ts`. Commit `0562846` y PR [#147](https://github.com/orvigas/negocio/pull/147) hacia `epic/arquitectura`, que también integra en la épica el commit de documentación de #146. CA-17 (`smoke.sh`) queda para el CI del PR de la épica a `main`. CI de #147 en `pass` ([ejecución](https://github.com/orvigas/negocio/actions/runs/43795911542)). Estado: `READY_FOR_MERGE`.
 
 ## Incidencia del PR 1
 

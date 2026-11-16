@@ -15,6 +15,7 @@ import { createAccountController } from './controllers/account.ts';
 import { createAdminController } from './controllers/admin.ts';
 import { createBotController } from './controllers/bot.ts';
 import { createPageController } from './controllers/page.ts';
+import { createQuoteController } from './controllers/quote.ts';
 import { createUsersController } from './controllers/users.ts';
 import { createErrorHandler } from './middleware/error-handler.ts';
 import { createRequestLogger } from './middleware/request-logger.ts';
@@ -67,7 +68,7 @@ export function createInventoryApp({
 
   const views = createViews(createRenderer({ viewsDir }));
   const deps = { config, api, views, logger };
-  const router = createRouter({ admin: createAdminController(deps), users: createUsersController(deps), account: createAccountController(deps), bot: createBotController(deps), page: createPageController(deps) });
+  const router = createRouter({ admin: createAdminController(deps), users: createUsersController(deps), account: createAccountController(deps), bot: createBotController(deps), page: createPageController(deps), quote: createQuoteController(deps) });
 
   app.use(createRequestLogger(logger));
   app.use(createSecurityHeaders({ isProduction: config.isProduction, logger }));

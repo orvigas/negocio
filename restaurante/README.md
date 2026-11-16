@@ -42,7 +42,7 @@ estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md)
 | --- | --- |
 | `landing-pages/` | La app Koa descrita en este README (las landings, `/admin` y `/admin/api`). Las landings leen los productos de `api/` (REQ-F-038) |
 | `api/` | API propia (REQ-F-038, REQ-F-039, REQ-F-040 y REQ-F-044): `GET /api/v1/public/{molotes,birria}/productos` y `/pagina` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos y, con `ADMIN_NEW_URL`, la única vía web para gestionar usuarios y controlar el bot. Solo en la red interna; ver [API propia](#api-propia-api). También ejecuta el [bot de WhatsApp](#bot-de-whatsapp) (REQ-F-042), con su webhook en un puerto propio, lo único de `api` que se alcanza desde internet |
-| `inventory-manager/` | Admin nuevo (REQ-F-039, REQ-F-040 y REQ-F-043): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos, los usuarios, "Mi cuenta", el control del bot y la página con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
+| `inventory-manager/` | Admin nuevo (REQ-F-039, REQ-F-040 y REQ-F-043): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos, los usuarios, "Mi cuenta", el control del bot y la página, y ofrece el cotizador de taquizas (REQ-F-046), con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
 | `packages/web/` (`@restaurante/web`) | Utilidades HTTP y SSR sin dominio que comparten las apps Koa (REQ-F-039): plantillas, lectura de formularios y JSON, mismo origen y logger JSON |
 | `packages/core/` (`@restaurante/core`) | Dominio en TypeScript puro, sin Koa ni Prisma: módulos `catalog`, `schedule`, `identity`, `bot-control`, `cotizador` (REQ-F-046) y `shared`. Cada módulo se importa solo por su `index.ts` (`@restaurante/core/catalog`) |
 | `packages/db/` (`@restaurante/db`) | Persistencia: `prisma/` (schema y migraciones), `prisma.config.ts`, el cliente de Prisma generado (`src/generated/prisma`), la conexión, la verificación al arrancar y las implementaciones Prisma de los repositorios de `core` |
@@ -439,7 +439,9 @@ El admin nuevo de REQ-F-039, REQ-F-040 y REQ-F-043 (paso 4 de [Arquitectura](doc
   contadores frente a sus topes, "alcanzaron un tope hoy", lista negra y alta de bloqueos. Desde
   REQ-F-044, también «Página» (`/<negocio>/pagina`): hero, texto destacado y promoción, con
   "Último cambio", conflicto y "Restaurar versión anterior" con confirmación. Si la API responde
-  `PAGE_UNAVAILABLE`, muestra un aviso neutro sin formulario. Todo funciona sin JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el
+  `PAGE_UNAVAILABLE`, muestra un aviso neutro sin formulario. Desde REQ-F-046, también «Cotizador»
+  (`/birria/cotizador`, solo administradores y solo Birria): ver
+  [Cotizador de taquizas](#cotizador-de-taquizas). Todo funciona sin JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el
   doble envío y reordena sin recargar.
 - **Cambio de la propia contraseña:** la API devuelve una sesión nueva y el admin reescribe su cookie;
   las demás sesiones del usuario (también las del `/admin` actual) se cierran. Si un administrador
@@ -1405,9 +1407,34 @@ administradores (ver [API propia](#api-propia-api)); el cálculo no guarda nada.
   ruta y el mensaje de cada problema (p. ej. «Tarifa del paquete "Tradicional": el piso F (120)
   debe ser menor que la tarifa en la referencia b (120).») y solo el cotizador responde 503
   `QUOTE_UNAVAILABLE`. La barrera es la prueba del CI.
+- **Pantalla** (`inventory-manager`, `GET /birria/cotizador`; enlace «Cotizador» en el menú de
+  Birria, solo para administradores; un editor recibe 403 y `/molotes/cotizador` responde 404):
+  - Arriba, «Personas» y «Calcular»; debajo, los avisos fijos, los resultados por paquete activo
+    (precio por persona, venta, costo, utilidad, margen real, costos, piezas, precio por margen y
+    comercial con cuál mandó, y la diferencia frente a la carta) y la matriz de volumen.
+  - Los parámetros van en cinco secciones plegables (`details`): paquetes y tarifas; insumos y
+    recetas; costos por persona, combustible y fijos; política y carta; matriz. Se abren solas las
+    que tienen algún campo modificado o con error. Cada campo modificado lleva la marca
+    «modificado» y la masa y el consomé, «provisional», con texto.
+  - Formulario GET sin JavaScript: «Calcular» envía todo el formulario con `calcular=1` y la
+    pantalla responde 303 a `/birria/cotizador?n=<N>&<solo los campos que difieren del JSON>`, con
+    la coma decimal pasada a punto. Esa URL se puede recargar y compartir entre administradores
+    (S-5: valores del JSON vigentes más esas diferencias). «Restablecer valores del JSON» vuelve a
+    `/birria/cotizador?n=<N>`. Sin `n`, el formulario con los valores del JSON y sin resultados.
+  - Con un campo inválido no se calcula nada (422): resumen de errores con enlaces a cada campo,
+    el mensaje junto al campo (`aria-describedby`, `aria-invalid`) y lo escrito conservado. Por
+    debajo del mínimo, «El mínimo es 30 personas» y ningún precio.
+  - Una query de más de 8 KiB o con claves repetidas o desconocidas (p. ej. un enlace antiguo con
+    un ítem que el JSON ya no tiene) muestra un aviso, sin calcular, con «Restablecer valores del
+    JSON». Con el JSON inválido, «Cotizador no disponible» (503) sin detalles.
+  - Nada se guarda. Los logs de `inventory-manager` registran la ruta sin la query y solo el motivo
+    de un rechazo (`quote_rejected`); nunca claves ni valores. Tras caducar la sesión, el acceso
+    devuelve al cotizador con la misma query (sin ella si, codificada en el formulario de acceso,
+    pasa de 3 000 caracteres: ese formulario admite 4 KiB).
 - **Código:** `packages/core/cotizador/` (validación del JSON y de los ajustes, campos editables,
-  tarifa, cálculo y matriz; TS puro), `packages/contracts/quote.ts` (contrato y cliente) y
-  `api/src/admin/quote-routes.ts` con `api/src/cotizador/file-catalog-source.ts`. El cálculo
+  tarifa, cálculo y matriz; TS puro), `packages/contracts/quote.ts` (contrato y cliente),
+  `api/src/admin/quote-routes.ts` con `api/src/cotizador/file-catalog-source.ts` e
+  `inventory-manager/src/controllers/quote.ts` con `src/views/quote.ts`. El cálculo
   recibe el catálogo por el puerto `QuoteCatalogSource`, sin saber de dónde viene (fase 2: la
   tabla de productos, por el `slug` de `producto` de cada ítem).
 
@@ -1422,7 +1449,7 @@ administradores (ver [API propia](#api-propia-api)); el cálculo no guarda nada.
 | `combustible` | `costoHora`, `horasTanda`, `insumoBase` (en kg) y `crudoPorTandaKg` |
 | `politica` | `minPersonas`, `refPersonas` y `margenObjetivoPct` |
 | `matriz` | `desde`, `hasta`, `paso` y `extra` (filas adicionales) |
-| `paquetes` | `id`, `nombre`, `activo` (opcional, `true`), `tarifa` (`a`, `b`, `f`) e `items` (`item` y `porPersona`; un ítem que no aparece vale 0) |
+| `paquetes` | `id`, `nombre`, `activo` (opcional, `true`), `tarifa` (`a`, `b`, `f`) e `items` (`item` y `porPersona`). Un ítem del catálogo que no aparece en un paquete vale 0 (no incluido) y se puede añadir desde la pantalla |
 
 Se rechazan los campos desconocidos, los ids repetidos y las referencias rotas, y cada valor
 cumple el rango de su campo editable:

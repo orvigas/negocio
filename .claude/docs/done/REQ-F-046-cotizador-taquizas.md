@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE (PR 1: dominio, contrato y API) — Pull Request https://github.com/orvigas/negocio/pull/151 hacia `main`, con el CI (`calidad`, `docker`, `auditoria` y `pruebas`) comprobado en `pass` tras marcarlo como listo. El PR 2 (pantalla) sigue pendiente.
+DONE. PR 1 (#151, https://github.com/orvigas/negocio/pull/151: dominio, contrato y API) y PR 2 (#153, https://github.com/orvigas/negocio/pull/153: pantalla de `inventory-manager`, con DEF-003 y DEF-004 corregidos) mergeados en `main` (el PR 2, en `2283660`, el 2026-11-16) y desplegados: el CI de `main` de ese merge, con `deploy`, terminó en success (ejecución 43912626105). Pendiente del usuario: comprobar en producción, con una sesión de administrador, la pantalla `/birria/cotizador`.
 
 ## Aprobación
 
@@ -677,6 +677,81 @@ Decisión del usuario: "Si corrigelos".
 - Validaciones: `npm run typecheck` 0; `npm run lint` 0; `npm test` (con `npm run db:up`): api 48 / 1 148, landing-pages 95 / 1 314, inventory-manager 15 / 257, en verde.
 - Limpieza: sin bases `restaurante_test*`, sin procesos de Vitest ni servidores, un solo worktree; MySQL detenido de nuevo con `npm run db:down`; copia de seguridad de la mutación borrada del scratchpad.
 
+### PR 2 — pantalla
+
+#### Rama
+
+`feature/REQ-F-046-cotizador-taquizas`, creada de nuevo desde `main` actualizado (`6627f7a`, con el PR 1 mergeado; la rama del PR 1 ya no existía). Destino del PR: `main` (P-1). Sin commits.
+
+#### Cambios realizados
+
+- `inventory-manager/src/controllers/quote.ts` (nuevo): `createQuoteController` con `createControllerKit`. Orden de `GET /birria/cotizador`:
+  1. tamaño de la query (`Buffer.byteLength > 8 KiB`), sin leerla;
+  2. sesión (303 al acceso con `next` = ruta + query si cabe como vuelta; si no, solo la ruta) y rol administrador (403 «Solo los administradores pueden usar el cotizador.»);
+  3. `getQuoteDefaults`: 401 → acceso; 403 → sin permiso; 404 `QUOTE_NOT_FOUND` → 404; 503 `QUOTE_UNAVAILABLE` → «Cotizador no disponible.» (503, sin detalles); resto → 503 común;
+  4. query demasiado larga, con claves repetidas o desconocidas → aviso con «Restablecer valores del JSON» (200, sin cálculo);
+  5. con `calcular=1` (el formulario completo) → 303 a `/birria/cotizador?n=<N>&<diferencias>`: recorta, pasa la coma decimal a punto y quita lo igual al JSON (comparación numérica; la lista de filas extra, sin repetidos y en orden; un valor inválido se conserva para mostrar su error);
+  6. sin `n`, el formulario con los valores del JSON; con `n`, `calculateQuote` → 200 con resultados o 422 con los errores por campo y lo escrito.
+  - Solo registra `quote_rejected { reason }`, `quote_unavailable_shown` y los fallos de la API sin detalles; nunca la query, claves ni valores.
+  - Desviación menor del plan: el aviso de query demasiado larga se muestra tras comprobar la sesión (el plan lo ponía antes), para no enseñar la pantalla sin sesión; la query tampoco se lee antes.
+- `inventory-manager/src/views/quote.ts` y plantillas `pages/quote.html` y `partials/quote-*.html` (nuevas):
+  - `h1` «Cotizador de taquizas»; arriba «Personas» (`inputmode="numeric"`), «Calcular» y «Restablecer valores del JSON» (`/birria/cotizador?n=<N>`, S-7);
+  - avisos fijos de RF-5 (exclusiones, tarifa y "no se guarda") en un `aside`;
+  - resultados por paquete activo (precio por persona, venta, costo del evento, utilidad, margen real, costo variable, fijo y total por persona, piezas, precio por margen y comercial, «Mandó el margen objetivo…» o «Mandó la tarifa comercial.», y «Ahorro de $41 frente a la carta» o «$19 más caro que la carta»); por debajo del mínimo, «El mínimo es 30 personas.» y «Sin precio»;
+  - matriz como `table` con `caption` y `th scope`, en una región desplazable con foco de teclado;
+  - las 5 secciones `details`/`summary`, abiertas solo con algún campo modificado o con error, con el recuento («2 modificados», «con errores») en el `summary`; grupos en `fieldset` con `legend`; campos de texto con `inputmode="decimal"` (o `numeric`), ayuda con el valor por defecto y el rango, `aria-describedby`, `aria-invalid` y las marcas «modificado» y «provisional» como texto en la etiqueta;
+  - «Activo / Inactivo» con dos radios en un `fieldset`;
+  - resumen de errores con `role="alert"` y enlaces a cada campo en el orden de la pantalla («No se calculó nada: revisa los campos marcados.»).
+  - Sin JavaScript nuevo ni cambios de CSP. Estilo del admin nuevo (sistema P-4, basado en `_stich_source_/birrier_a_el_mu_eco/DESIGN.md`: superficies, bordes, radios de 8 y 16 px, campos con borde 1.5 px y foco adobo, radios con borde adobo y relleno chile), con Tailwind y BEM.
+- `inventory-manager/src/views/index.ts`: `HeaderSection` con `'quote'`; `businessNav` añade «Cotizador» solo en Birria y solo para administradores.
+- `inventory-manager/src/routes.ts` y `src/app.ts`: `GET /birria/cotizador` (ruta fija: `/molotes/cotizador` da el 404 común).
+- `inventory-manager/src/session.ts`: `sanitizeNext` admite `/birria/cotizador` con una query de `[A-Za-z0-9._~*%&=+,-]`, siempre que la vuelta, codificada como campo del formulario de acceso, no pase de 3 000 caracteres (`NEXT_ENCODED_LIMIT`; corrección de DEF-004).
+- **S-2 (añadir ítems a un paquete):** no requiere cambios. `parseQuoteCatalog` (`core`, desde el PR 1) ya completa cada paquete con todos los ítems del catálogo, con 0 los que no aparecen en el JSON, así que `p.tradicional.q.quesabirria` y `p.especial.q.taco` existen y se pueden editar (64 campos). El ajuste de `api/src/cotizador/catalogs/birria.json` que se había hecho (ítems en 0) era innecesario y se revirtió (corrección de DEF-003): el archivo es idéntico al de `main`.
+- Pruebas permanentes (las del plan): `inventory-manager/tests/integration/quote.test.ts` (9 casos, con el de la vuelta tras el acceso con una query larga de DEF-004) con `tests/support/api-double-quote.ts` (enganchado en `api-double.ts`); casos de `sanitizeNext` en `tests/unit/config-session.test.ts`. `formFields` (`tests/support/browser.ts`) omite ahora los radios no marcados, como un navegador (no había radios antes).
+- Documentación: README (tabla del monorepo, «Pantallas» del admin nuevo, la pantalla en «Cotizador de taquizas» y el formato del JSON), `docs/arquitectura.md` (§6, la parte de `inventory-manager`) y `.claude/CLAUDE.md` §8 (P-3: `api` e `inventory-manager` incluyen el cotizador).
+
+#### Criterios de aceptación (alcance del PR 2)
+
+| Criterio | Estado |
+| --- | --- |
+| CA-6 | Cumplido: N = 29 muestra «El mínimo es 30 personas.» y «Sin precio» en cada paquete (prueba y sonda contra la API real) |
+| CA-9 | Cumplido: consomé 0 → costo variable $46.61 y «$19 más caro que la carta (carta: $115).», con el aviso de la tarifa siempre visible; Mixto 1 inactivo → fuera de resultados y matriz |
+| CA-10 | Cumplido: margen 50 → $148, venta $8,880.00, «Mandó el margen objetivo», margen real 50.2 % |
+| CA-11 | Cumplido: fijos 3 000, N = 30 → $211 y «Mandó el margen objetivo» |
+| CA-15 | Cumplido (sonda contra la API real): F ≥ b, a < b, mínimo ≥ referencia, merma o margen 100, negativo, texto, vacío, `Infinity`, N vacío o decimal, kg por tanda 0, ítems en 0 y ningún paquete activo → 422 con resumen enlazado, mensaje junto al campo, `aria-invalid`, valores conservados y sección abierta; nunca 500 |
+| CA-16 | Cumplido: «Calcular» → 303 a la URL con solo N y las diferencias; recargarla da el mismo resultado; la API recibe solo esas diferencias |
+| CA-17 | Cumplido: «Restablecer valores del JSON» → `/birria/cotizador?n=<N>`, valores del JSON y ninguna marca «modificado» |
+| CA-19 (`inventory-manager`) | Cumplido: los logs de las dos apps no contienen la query, claves ni valores (centinela) en cálculos aceptados, rechazados por la API y rechazados por la pantalla |
+| CA-20 | Cumplido: query > 8 KiB → «La configuración es demasiado larga; restablece los valores.»; repetida → «El enlace tiene campos repetidos…»; desconocida → «El enlace tiene campos que ya no existen…»; sin cálculo ni 500 |
+| CA-21 (pantalla) | Cumplido: con 503 `QUOTE_UNAVAILABLE`, «Cotizador no disponible.» (503) sin detalles |
+| CA-22 (pantalla) | Cumplido: editor → 403 sin llamar a la API del cotizador y sin enlace; administrador → enlace en el menú de Birria (no en Molotes) y 200; `/molotes/cotizador` → 404 |
+| CA-23 | Cumplido: marca «provisional» en costo de masa y de consomé y en las recetas de masa y consomé; nota de exclusiones visible |
+| CA-24 | Teclado y sin JavaScript: formulario GET, `details` nativos, radios y enlaces nativos, región de la matriz con `tabindex="0"`. Secciones plegadas salvo las que tienen cambios o errores (prueba). La revisión visual a 360 px queda para QA |
+
+#### Validaciones ejecutadas
+
+- `npm run build:css`: 0.
+- `npm run typecheck`: 0.
+- `npm run lint`: 0, sin errores ni avisos.
+- `npm test` (con `npm run db:up`): api 48 archivos / 1 148 pruebas, landing-pages 95 / 1 314, inventory-manager 16 / 275; todo en verde. `quote.test.ts` tarda unos 0.5 s.
+- Tras corregir DEF-003 y DEF-004: `npm run build:css` 0; `npm run typecheck` 0; `npm run lint` 0; `npm test`: api 48 / 1 148, landing-pages 95 / 1 314, inventory-manager 16 / 278 (una prueba de integración y dos casos de `sanitizeNext` más), en verde. `shasum` de `birria.json` = el de `main` (`ac593bf9…`).
+- Sonda temporal (descartada, no queda en el repo): `inventory-manager` real contra la `api` real (`startAdmin`, JSON real) recorriendo CA-1, CA-6, CA-9 a CA-11, CA-13, CA-15 (13 casos), la composición nueva (quesabirria en el Tradicional: 4 piezas) y la normalización de las filas extra; todos con el resultado esperado y logs de las dos apps sin claves ni valores.
+- `git diff` revisado: solo archivos del ticket (más `.claude/CLAUDE.md` §8, autorizado por P-3).
+
+#### Archivos afectados
+
+Nuevos: `restaurante/inventory-manager/src/controllers/quote.ts`, `restaurante/inventory-manager/src/views/quote.ts`, `restaurante/inventory-manager/src/views/pages/quote.html`, `restaurante/inventory-manager/src/views/partials/quote-{active,detail,field,group,mark,matrix,matrix-cell,matrix-empty,matrix-head,matrix-row,note,notes,package,reset,results,section,section-state}.html`, `restaurante/inventory-manager/tests/integration/quote.test.ts`, `restaurante/inventory-manager/tests/support/api-double-quote.ts`.
+
+Modificados: `restaurante/inventory-manager/src/{app,routes,session}.ts`, `restaurante/inventory-manager/src/views/index.ts`, `restaurante/inventory-manager/tests/support/{api-double,browser}.ts`, `restaurante/inventory-manager/tests/unit/config-session.test.ts`, `restaurante/README.md`, `restaurante/docs/arquitectura.md`, `.claude/CLAUDE.md`, este ticket.
+
+#### Riesgos o pendientes
+
+- Una vuelta tras el acceso de más de 3 000 caracteres codificados (muy por encima de un formulario realista, unos 1 250) vuelve al cotizador sin la query. Con un usuario y una contraseña de su longitud máxima en caracteres multibyte, el cuerpo del acceso podría pasar de 4 KiB igualmente; eso no depende de la vuelta y ya ocurría antes.
+- Los importes se muestran con el formato de México (`$8,040.00`, `$19`); el ticket escribe «19 $». Mismo dato.
+- Revisión visual a 360 px, contraste y recorrido con teclado: QA (no hay diseño del admin en `_stich_source_/`; se usa el sistema visual del admin nuevo).
+- El registro de accesos del Traefik del VPS, si está activado, guardaría la URL con las diferencias (riesgo ya anotado en el plan técnico).
+- Limpieza: ver la respuesta del agente.
+
 ## QA Action Plan
 
 Alcance: **PR 1** (dominio `core/cotizador`, contrato `contracts/quote.ts`, JSON y endpoints de `api`, documentación). La pantalla de `inventory-manager` es el PR 2 y tendrá su propio plan. NotebookLM no está disponible en esta sesión (sus herramientas MCP no se exponen): no se consultó.
@@ -798,6 +873,163 @@ Salida de `typecheck`, `lint` y `npm test` (archivos y pruebas por workspace); s
 ### Limpieza
 
 Al terminar (también si algo falla): borrar la sonda de `api/tests/integration/`, la copia del árbol de S-5 y los scripts y JSON temporales del scratchpad; eliminar la imagen de Docker de I-3; comprobar con `SHOW DATABASES LIKE 'restaurante_test%'` que no quedan bases, que no quedan procesos de Vitest, Node ni servidores ni puertos ocupados, y `git worktree list` y `git status` iguales que al empezar; si MySQL estaba detenido al empezar, volver a detenerlo (`npm run db:down`).
+
+## QA Action Plan — PR 2
+
+Alcance: **PR 2** (pantalla `GET /birria/cotizador` de `inventory-manager`, enlace del menú, `sanitizeNext`, ajuste de `birria.json` con ítems en 0, documentación y `.claude/CLAUDE.md` §8). El plan del PR 1 (arriba) y su QA Report se conservan. NotebookLM no está disponible en esta sesión (sus herramientas MCP no se exponen): no se consultó. `_stich_source_/` no tiene diseño del admin: la referencia visual es `_stich_source_/birrier_a_el_mu_eco/DESIGN.md` (sistema P-4 del admin nuevo).
+
+### Objetivo
+
+Comprobar con evidencia que la pantalla cumple los criterios del PR 2 contra la `api` real (no solo contra el doble), en el orden de comprobaciones acordado, sin 500 con ninguna entrada; que es accesible, usable a 360 px y sin JavaScript; que no registra ni filtra los ajustes; que `sanitizeNext` no abre redirecciones; que el ajuste de `birria.json` no cambia ningún cálculo; y que el resto del admin no regresa.
+
+### Requisito bajo prueba
+
+REQ-F-046 versión 1, con la Revisión técnica, P-1 a P-3 y el TAP. En el PR 2: RF-1 a RF-9 (parte pantalla), RF-10 (pantalla 503), RF-11 (pantalla y menú), S-2 (ítems añadibles), S-5, S-7, y CA-6, CA-9 a CA-11, CA-15 a CA-17, CA-19 (`inventory-manager`), CA-20 a CA-24. CA-1 a CA-5, CA-7, CA-8, CA-12 a CA-14 ya pasaron en la API (PR 1); aquí solo se comprueba que la pantalla los pinta igual (regresión R-6).
+
+### Criterios de aceptación (alcance PR 2 → pruebas)
+
+| Criterio | Qué se comprueba | Pruebas |
+| --- | --- | --- |
+| CA-6 | N = 29: «El mínimo es 30 personas.» y ningún precio en ningún paquete ni en la matriz; N = 30 sí da precio | F-3 |
+| CA-9 | Consomé 0 en el Tradicional, N = 60: costo variable 46.61, carta 115, «$19 más caro que la carta», aviso RF-5 de la tarifa visible; Mixto 1 inactivo: ausente de resultados y de la matriz | F-3 |
+| CA-10 | Margen 50 %, N = 60: 148, venta 8 880, «mandó el margen», margen real 50.2 % | F-3 |
+| CA-11 | Fijos 3 000, N = 30: 211 y «mandó el margen» | F-3 |
+| CA-15 | Cada caso del criterio en pantalla: 422, resumen `role="alert"` con enlaces a cada campo, mensaje junto al campo (`aria-describedby`, `aria-invalid`), valores conservados, sección abierta, sin resultados, sin 500 | N-2, A-4 |
+| CA-16 | «Calcular» → 303 con N + solo diferencias; recargar y abrir en otra sesión de administrador → mismos resultados | F-4 |
+| CA-17 | «Restablecer valores del JSON» → valores del JSON, N conservado, ninguna marca «modificado» | F-5 |
+| CA-19 (`inventory-manager`) | Logs de las dos apps sin query, claves ni valores (centinelas) en todos los caminos | S-4 |
+| CA-20 | Query > 8 KiB, claves repetidas o desconocidas → aviso claro, sin cálculo, sin 500 | N-1 |
+| CA-21 (pantalla) | JSON inválido → «Cotizador no disponible.» (503) sin detalles; el resto del admin sigue | S-5 |
+| CA-22 (pantalla) | Sin sesión → acceso y vuelta; editor → 403 sin enlace; administrador → enlace y 200; `/molotes/cotizador` → 404 | S-1, S-2 |
+| CA-23 | «provisional» en masa y consomé (costo y receta) y nota de exclusiones visibles en pantalla | F-1, U-1 |
+| CA-24 | Teclado, sin JavaScript, 360 px con secciones plegadas salvo cambios o errores y resultados legibles | A-1 a A-3, B-1 a B-3, J-1 |
+
+### Riesgos identificados
+
+- **Orden de comprobaciones:** la implementación muestra el aviso de 8 KiB después de la sesión, el rol y `getQuoteDefaults` (desviación documentada). Riesgo: con la API caída y una query larga se ve el 503 común en lugar del aviso, o se parsea la query antes de tiempo.
+- **Vuelta tras el acceso con una query grande:** `next` de hasta 8 192 caracteres se vuelve a codificar en `/acceso?next=…` (`%` → `%25`); la URL puede triplicarse y superar el límite de cabeceras de Node (16 KiB → 431) o el del cuerpo del formulario de acceso.
+- **`sanitizeNext`:** la clase de caracteres admite `%`; un `%2F%2F`, `%0D%0A` o `%5C` no debe permitir salir de la ruta fija.
+- **Escape de valores devueltos** en el 422 (lo escrito se repinta): inyección HTML en `value`, en `m.extra` y en N.
+- **Coma decimal** y normalización en la URL (`1,5` → `1.5`; `1,600` en gramos = 1.6).
+- **Radios «Activo / Inactivo»** y el cambio de `formFields` del soporte de pruebas (ahora omite radios no marcados): posible efecto en otras pruebas.
+- **`businessNav` cambió de firma** (rol): riesgo en el menú de las demás pantallas.
+- **Ajuste de `birria.json`:** un ítem en 0 no debe cambiar costos, piezas, carta ni la matriz; sí debe permitir añadirlo desde la pantalla.
+- **Pantalla larga en móvil** (66 campos): desbordamiento horizontal de la matriz, de los `fieldset` o de los importes.
+- **Contraste** de ayudas, marcas y foco sobre las superficies oscuras de la guía (el foco de la guía es un borde de 1.5 px «sin halo»).
+- **Clases de Tailwind** solo usadas en las plantillas nuevas que no lleguen al CSS compilado.
+
+### Pruebas funcionales (pantalla contra la `api` real)
+
+Entorno: `startAdmin` (api real, JSON real, usuarios y almacenes en memoria) + `startInventory({ apiUrl })` en la sonda temporal (A-1).
+
+- **F-1. Sin query:** 200, `h1` único «Cotizador de taquizas», «Personas», «Calcular», «Restablecer valores del JSON», las 5 secciones en el orden de RF-1 y todas cerradas, 66 campos con su valor por defecto (incluidos `p.tradicional.q.quesabirria` = 0 y `p.especial.q.taco` = 0), ninguna marca «modificado», marcas «provisional» (CA-23), las tres notas de RF-5, sin resultados ni matriz.
+- **F-2. Valores por defecto con N = 60, 100, 200 y 5 000:** precio, venta, costo, utilidad, margen, costo variable, fijo, piezas, precio por margen y comercial, quién mandó y diferencia frente a la carta, iguales a lo que devuelve la API para el mismo cuerpo (comparación del texto pintado con la respuesta JSON); matriz con las 11 filas por defecto (145…101 en el Tradicional), `caption` y `th scope`.
+- **F-3. Textos de CA-6, CA-9, CA-10 y CA-11** en pantalla, con los valores exactos del criterio; formato de importes `es-MX` coherente en resultados y matriz.
+- **F-4. URL de diferencias (CA-16, S-5, RF-7):** enviar el formulario completo (`formFields`) con 0, 1 y 5 cambios → 303 a `/birria/cotizador?n=…&<solo diferencias>` en el orden de la pantalla; valores iguales al JSON escritos de otra forma (`170,0`, `170.00`, ` 170 `, `150, 200 ,300` en `m.extra`, `0` y `0.00` en los ítems nuevos) no aparecen; la coma decimal llega como punto; un valor inválido se conserva tal cual. Abrir la URL resultante con otro administrador (segundo usuario `admin` en `startAdmin`) → mismos resultados y mismas marcas. La API recibe solo esas diferencias (cuerpo observado en la sonda).
+- **F-5. Restablecer (CA-17, S-7):** con cambios y N = 60 → enlace a `/birria/cotizador?n=60`, todos los valores del JSON, ninguna marca, secciones cerradas; con N inválido (`abc`, vacío) → enlace sin `n`.
+- **F-6. Marcas y secciones:** cada sección se abre solo con un campo modificado o con error en ella, y su `summary` dice el recuento («N modificados», «con errores»); «modificado» y «provisional» son texto dentro de la etiqueta, no solo color.
+- **F-7. Añadir y quitar ítems (S-2, ajuste del JSON):** quesabirria = 1 en el Tradicional → 4 piezas, costo variable 65.26 (47.11 + receta de quesabirria con combustible, calculado aparte), sin diferencia frente a la carta (la quesabirria no tiene precio); taco = 1 en el Especial → 4 piezas y costo variable coherente; volver a 0 → sin marca; taco = 0 y quesabirria = 3 en el Tradicional → válido; todos en 0 → error de CA-15.
+- **F-8. Sin persistencia en pantalla (CA-18):** tras cálculos con ajustes, otro administrador abre `/birria/cotizador` sin query → valores del JSON; `shasum` de `birria.json` igual antes y después; contador `calls.writes` de `startAdmin` sin cambios.
+
+### Pruebas negativas y casos límite
+
+- **N-1. Query (CA-20) y orden del controlador:** query de exactamente 8 192 bytes (se procesa) y de 8 193 (aviso «La configuración es demasiado larga…», sin llamar a `calculateQuote`, sin parsear); clave repetida (`n`, un campo, `calcular`) → aviso de repetidos; clave desconocida, id que ya no existe (`p.borrado.a`), `calcular=2`, `calcular` sin valor, mayúsculas → aviso de desconocidos; `calcular=1` junto a una clave desconocida → aviso, no 303; repetida y desconocida juntas → el aviso de la primera encontrada. Orden observado frente al acordado: sin sesión + > 8 KiB → 303 al acceso con `next=/birria/cotizador` (sin query); editor + > 8 KiB → 403; administrador + > 8 KiB con la API caída → se registra qué se ve (aviso o 503 común) y se clasifica frente a la desviación documentada. En todos: enlace «Restablecer» que conserva N si es válido.
+- **N-2. Validación en pantalla (CA-15)**, cada caso por separado y uno combinado: F = b, F > b, a < b, a = b (plano, aceptado); mínimo = y > referencia; merma 100 y margen 100; negativo, texto, vacío obligatorio, `Infinity`, `NaN`, `1e3`, tres decimales en un importe, `1.2.3`; kg por tanda 0; todos los ítems de un paquete en 0; ningún paquete activo; matriz desde < mínimo, hasta < desde, más de 50 filas, `m.extra` con 11 valores; error general `''` (clave fuera del patrón no alcanzable desde la pantalla: se fuerza un valor de 65 caracteres) → mensaje en el resumen sin enlace roto.
+- **N-3. Personas:** vacío, ` 60 `, `060`, `0`, `-1`, `1.5`, `60,0`, `abc`, `29`, `30`, `100`, `101`, `5000`, `5001`, `9999999` → resultado o mensaje junto a «Personas», nunca 500; `Restablecer` correcto en cada uno.
+- **N-4. Escape (XSS):** valores `"><script>…`, `<img src=x onerror=…>`, `'` y `&` en un campo, en `m.extra` y en N → repintados escapados en `value`, sin elementos nuevos en el DOM (jsdom) y sin ejecución en Chrome; la cabecera CSP sigue igual.
+- **N-5. Coma decimal:** `200,5` y `200.5` dan lo mismo; `1,600` en un importe → error de decimales; en gramos → 1.6 con la marca «modificado» y la ayuda «sin separador de miles» visible.
+- **N-6. Fallos de la API:** API caída o lenta (`apiTimeoutMs` corto) → aviso «no disponible» común (503) sin detalles; 401 de la API a mitad de sesión → cookie borrada y acceso con `next`; administrador degradado a editor (`change`) → 403 en la siguiente petición; desactivado → acceso.
+- **N-7. Métodos y rutas:** `POST`, `PUT` y `HEAD` sobre `/birria/cotizador`, `/birria/cotizador/`, `/Birria/cotizador`, `/molotes/cotizador` → respuesta coherente con las demás pantallas (404/405), nunca 500.
+
+### Pruebas de seguridad y permisos
+
+- **S-1. Sin sesión (CA-22):** `GET /birria/cotizador?n=60&p.tradicional.f=110` → 303 a `/acceso?next=…` con la query exacta; tras entrar, vuelve a esa URL y calcula. Con una query del tamaño máximo realista (formulario completo con todos los campos cambiados) y con la peor admitida por `sanitizeNext` (8 192 caracteres con muchos `%2C`): se registra si la cadena acceso → vuelta funciona o termina en 431/413 (riesgo de la segunda viñeta).
+- **S-2. Rol y negocio (CA-22, RF-11):** editor de Molotes y editor de Birria → 403 «Solo los administradores pueden usar el cotizador.», sin llamada al cálculo en la API (logs de la API) y sin enlace «Cotizador» en ningún menú; administrador → enlace solo en el menú de Birria, con `aria-current` en la pantalla; `/molotes/cotizador` → 404 común.
+- **S-3. `sanitizeNext`:** además de los casos de `config-session.test.ts`: `//evil.example`, `/birria/cotizador?n=1&x=%2F%2Fevil`, `%0D%0A`, `%5C`, `\`, `@`, `:`, `?` vacío, `#`, espacios, unicode, mayúsculas en la ruta, prefijos (`/birria/cotizadorX`, `/birria/cotizador/../usuarios`), longitud 8 192 y 8 193, valores no texto. La URL resultante del acceso es siempre relativa al propio host (`Location` empieza por `/` y no por `//`).
+- **S-4. Logs (CA-19, RF-9):** `recordingLogger` de `inventory-manager` y logger de `startAdmin` con 10+ centinelas únicos (valores, claves y una clave desconocida) en: cálculo aceptado, 422, aviso de repetidos, de desconocidos, de 8 KiB, 303 de «Calcular», 303 al acceso, 403 de editor, 503 del JSON inválido y API caída. Ninguna línea contiene centinelas, `?`, nombres de clave de ajustes ni la `Location`; solo `ctx.path`, `quote_rejected { reason }`, `quote_unavailable_shown` y los fallos de API sin detalles.
+- **S-5. JSON inválido (CA-21):** `startAdmin({ quotes })` con `createFileQuoteCatalogSource` sobre copias rotas en el scratchpad (F ≥ b; referencia rota) → la pantalla responde 503 «Cotizador no disponible.» sin rutas, paquete, campo ni texto del JSON; el menú y las demás pantallas (productos, usuarios, bot, cuenta) siguen en 200. El JSON real no se toca.
+- **S-6. CSP y cabeceras:** la respuesta del cotizador lleva las mismas cabeceras de seguridad que las demás pantallas (`script-src 'self'`, sin `unsafe-inline`); el HTML no tiene `<script>` en línea, atributos `on*` ni `style=`; consola de Chrome sin violaciones de CSP.
+
+### Pruebas responsive (360×800, 768×1024, 1280×800)
+
+- **B-1.** En cada ancho, sin query, con resultados (N = 60) y con errores (422): `document.documentElement.scrollWidth ≤ innerWidth` (sin desbordamiento horizontal); la matriz se desplaza dentro de su región; textos, importes y etiquetas sin cortes; botones de al menos 44 px de alto.
+- **B-2. 360 px (CA-24):** secciones plegadas salvo las que tienen cambios o errores; resultados antes de los parámetros y legibles sin zoom; «Calcular» alcanzable sin scroll en el estado inicial.
+- **B-3.** Capturas de los tres anchos en los tres estados (en el scratchpad, se borran al terminar; quedan descritas en el QA Report).
+
+### Pruebas de accesibilidad
+
+- **A-1. Teclado (Chrome):** Tab desde el inicio recorre menú → Personas → Calcular → Restablecer → resultados (región de la matriz con `tabindex="0"`) → cada `summary` (Enter y Espacio abren y cierran) → campos → radios (flechas) → Calcular; sin trampas; foco visible en todos (se mide el cambio de borde u `outline` con `getComputedStyle` y su contraste ≥ 3:1).
+- **A-2. Estructura (jsdom sobre el HTML de cada estado):** un solo `h1` y jerarquía sin saltos; `header`/`nav`/`main`; cada `input` con `label[for]` único; ids únicos; todo `aria-describedby`/`aria-labelledby` apunta a ids existentes; `aria-invalid="true"` solo en campos con error; radios en `fieldset` con `legend`; tablas con `caption` y `th scope`; marcas «modificado»/«provisional» como texto accesible.
+- **A-3. Resumen de errores:** `role="alert"`, recibe el foco o se anuncia al cargar como en las demás pantallas (`errorSummary`), cada enlace lleva a un campo existente y el campo queda enfocado o visible al seguirlo.
+- **A-4. Contraste (WCAG AA):** colores computados en Chrome de texto normal, ayudas, marcas, errores, enlaces, botón primario, radios y cabeceras de la matriz frente a su fondo real (≥ 4.5:1 normal, ≥ 3:1 grande y componentes), y comparados con los tokens de `DESIGN.md` (`#1c1412`, `#261a17`, `#432c27`, `#fbf5ea`, `#d6c3b3`, `#b91c1c`, `#c2410c`, `#eab308`).
+- **A-5.** El estado no depende solo del color (errores, «modificado», «Mandó el margen», «Ahorro»/«más caro»).
+
+### Pruebas UX/UI (frente a `DESIGN.md` y al admin nuevo)
+
+- **U-1.** Superficies, bordes, radios (8 y 16 px), campos con borde 1.5 px y foco adobo, botón primario chile rojo con texto crema, radios con borde adobo y relleno chile, tipografías Epilogue y Space Grotesk; coherencia con productos y página del admin nuevo. Solo se reportan desviaciones frente a la guía o al resto del admin, no preferencias.
+- **U-2.** Textos de la pantalla frente al ticket (RF-5, CA-6, CA-9, CA-10, CA-20, CA-21); la diferencia de formato «$19» frente a «19 $» se registra como observación (mismo dato, formato `es-MX` ya anotado por el desarrollador).
+
+### Pruebas sin JavaScript
+
+- **J-1.** Chrome sin JavaScript (headless con `--blink-settings=scriptEnabled=false`, A-3): cargar, abrir secciones, enviar «Calcular», recibir el 303, ver resultados, el 422 y «Restablecer»; mismo resultado que con JavaScript. La pantalla no lleva `data-*` de comportamiento ni depende de `main.js`.
+
+### Validez del HTML
+
+- **H-1.** HTML renderizado de los estados (vacío, resultados, 422, avisos, 503, 403): comprobaciones estructurales con jsdom (A-2, anidamiento de interactivos, `form`/`fieldset`/`details` bien cerrados) y, si se autoriza (A-4), `html-validate` sin errores.
+
+### Pruebas de performance
+
+- **P-1.** Tamaño del HTML del cotizador sin query y con resultados; número de peticiones (CSS, JS, fuentes) igual al resto del admin; tiempo de 20 renderizados por defecto y 20 en el peor caso permitido (N = 5 000, matriz de 50 filas) contra la api real; dos llamadas a la API por pintado (tres con el 303). Solo es defecto si el costo crece sin límite o se acerca al tiempo de espera del cliente.
+- **P-2.** `npm run build:css` contiene las utilidades que solo usan las plantillas `quote*` (p. ej. las de la matriz y de las marcas), comprobadas en `public/css/main.css` y visualmente.
+
+### Pruebas de regresión
+
+- **R-1.** Desde `restaurante/`: `npm run build:css`, `npm run typecheck`, `npm run lint` (0 sin avisos) y `npm test` completo (api, landing-pages, inventory-manager), con `npm run db:up` (MySQL está detenido ahora; se vuelve a detener al terminar). Lint y typecheck se ejecutan sin las sondas en el árbol.
+- **R-2. Ajuste de `birria.json`:** suite de `api` (incluidas las 25 + 5 pruebas del PR 1) en verde; diferencial temporal con `core`: el JSON de `main` frente al del árbol, con N de 1 a 600 y puntos hasta 5 000, por defecto y con los ajustes de CA-7 a CA-14 → todas las cifras de `calculateQuote` y `buildMatrix` idénticas; el DTO pasa de 64 a 66 campos y solo añade `p.tradicional.q.quesabirria` y `p.especial.q.taco` con «0», en su sección y grupo; `parseQuoteCatalog` acepta el JSON nuevo. No se repite el contraste con el Excel (X-1 a X-3 del PR 1): si el diferencial da 0 diferencias, las cifras del Excel siguen cubiertas.
+- **R-3. Resto del admin:** pantallas de productos (Molotes y Birria), página, usuarios, cuenta y bot en 200 con el menú correcto para administrador y editor (sonda con el doble y recorrido en Chrome); `aria-current` intacto; el cambio de `formFields` (radios) no altera ninguna otra prueba (suite).
+- **R-4.** Regla de dependencias: `inventory-manager` solo importa `contracts` y `web` (`npm run lint`).
+- **R-5. Documentación:** README (tabla del monorepo, «Pantallas», «Cotizador de taquizas», formato del JSON con ítems en 0), `docs/arquitectura.md` §6 y `.claude/CLAUDE.md` §8 frente a la implementación (ruta, permisos, 303, límites, mensajes, logs, campos 66).
+- **R-6.** Las cifras que pinta la pantalla para CA-1 a CA-5, CA-7, CA-8, CA-12 a CA-14 coinciden con la API (F-2, F-3 con los mismos ajustes del PR 1).
+
+### No aplica
+
+- Integración de WhatsApp y SEO público (pantalla de administración): solo se comprueba `title` coherente y que no se indexa igual que el resto del admin.
+- `docker build`: el PR 2 no cambia el Dockerfile ni la ubicación del JSON (comprobado en el PR 1, I-3).
+
+### Pruebas automatizadas (existentes y sondas temporales)
+
+- Existentes: `inventory-manager/tests/integration/quote.test.ts` (8 casos), `tests/unit/config-session.test.ts` (`sanitizeNext`), las del PR 1 en `api` y toda la suite.
+- Sondas temporales (se borran; no se commitean):
+  - `restaurante/inventory-manager/tests/integration/qa-req-f-046-pr2-sonda.test.ts`: `startAdmin` de `api/tests/support/admin.ts` + `startInventory({ apiUrl })`; F-1 a F-8, N-1 a N-7, S-1 a S-6, A-2, H-1 (jsdom), P-1, R-3.
+  - `restaurante/inventory-manager/tests/integration/qa-req-f-046-pr2-servidor.test.ts`: levanta la misma pila en `127.0.0.1` para el navegador, escribe las URL en el scratchpad y espera un archivo de parada (tope 45 min).
+  - `restaurante/api/tests/unit/qa-req-f-046-pr2-json.test.ts`: diferencial de R-2.
+- No se añade ninguna prueba permanente. Si una sonda encuentra un defecto que ninguna prueba cubre, se propone el caso para `quote.test.ts` o `config-session.test.ts` al corregirlo.
+
+### Autorizaciones temporales que pido
+
+- **A-1.** Crear las tres sondas de arriba fuera de `restaurante/landing-pages/tests/` (la definición del agente solo cubre esa carpeta), y borrarlas al terminar.
+- **A-2.** Mantener en segundo plano la pila de prueba (`api` real con usuarios y almacenes en memoria + `inventory-manager`) en puertos libres de `127.0.0.1` durante el recorrido del navegador, sin `.env`, sin base de desarrollo y sin proveedor real del bot.
+- **A-3.** Usar Chrome (extensión, pestaña nueva que se cierra al terminar) para teclado, responsive, contraste y consola, y Chrome headless por línea de comandos con JavaScript desactivado (J-1) y capturas en el scratchpad.
+- **A-4 (opcional).** Ejecutar `npx --yes html-validate` desde el scratchpad para H-1 (descarga temporal de npm; no toca `package.json` ni `package-lock.json`). Si no se autoriza, H-1 se queda en las comprobaciones con jsdom.
+- **A-5.** `npm run db:up` para la suite y `npm run db:down` al terminar (MySQL está detenido ahora).
+
+### Evidencia requerida
+
+Salidas de `build:css`, `typecheck`, `lint` y `npm test` (archivos y pruebas por workspace); salida de la sonda caso a caso; resultado del diferencial de R-2 (esperado: 0 diferencias); líneas de log capturadas en S-4 y S-5; `Location` observadas en S-1 y S-3; medidas de desbordamiento, foco y contraste en Chrome; descripción de las capturas por ancho y estado; resultado de J-1; tiempos y tamaños de P-1; `shasum` del JSON antes y después.
+
+### Criterios de aprobación
+
+- Todos los criterios de la tabla en PASS con evidencia.
+- Ninguna respuesta 500 con ninguna entrada de N-1 a N-7.
+- Ninguna redirección fuera del host ni a otra ruta por `next`; logs sin ajustes, claves ni query.
+- El ajuste de `birria.json` no cambia ninguna cifra (R-2) y permite añadir ítems (F-7).
+- Sin desbordamiento horizontal a 360 px; teclado completo con foco visible; contraste AA; funciona sin JavaScript.
+- `build:css`, `typecheck`, `lint` y `npm test` en verde.
+- Sin defectos `BLOCKER` ni `CRITICAL`; los `MAJOR`, solo con decisión del usuario.
+
+### Limpieza
+
+Al terminar (también si algo falla): crear el archivo de parada y comprobar que la pila de A-2 terminó; borrar las tres sondas, las copias rotas del JSON, capturas, scripts y salidas del scratchpad, y la caché de `npx` de A-4 si se usó; cerrar la pestaña de Chrome y comprobar que no queda Chrome headless; comprobar sin procesos de Vitest ni Node escuchando ni puertos ocupados; `SHOW DATABASES LIKE 'restaurante_test%'` vacío; `npm run db:down`; `git worktree list` (un solo árbol), `git status` igual que al empezar salvo este ticket y `shasum` de `birria.json` sin cambios.
 
 ## QA Report
 
@@ -927,6 +1159,172 @@ Ninguno en el PR 1.
 
 QA_APPROVED. Todos los criterios del alcance del PR 1 pasan con evidencia. Hay dos defectos TRIVIAL que no bloquean (DEF-001 y DEF-002); se pueden corregir en el PR 2 o antes del commit, a decisión del usuario. No se añade ninguna prueba permanente.
 
+## QA Report — PR 2
+
+### Ronda
+
+1 (PR 2: pantalla de `inventory-manager`), 2026-11-16, sobre `feature/REQ-F-046-cotizador-taquizas` (`6627f7a` más los cambios sin commit). El usuario aprobó el plan y las autorizaciones A-1 a A-5 ("Apruebo todo"). NotebookLM no estaba disponible: no se consultó.
+
+Entorno de las sondas:
+- `api` real con `startAdmin` (JSON real; usuarios y almacenes en memoria): administradores `ana` y `bea`, editor de Molotes `eli` y editor de Birria `beto`;
+- `inventory-manager` real con `startInventory({ apiUrl })`, en `127.0.0.1`.
+
+### Pruebas ejecutadas
+
+| Prueba | Acción | Resultado |
+| --- | --- | --- |
+| R-1 | `npm run db:up`, `npm run build:css`, `npm run typecheck`, `npm run lint` y `npm test`, antes de crear las sondas | build 0; typecheck 0; lint 0, sin avisos; api 48 archivos / 1 148 pruebas, landing-pages 95 / 1 314, inventory-manager 16 / 275; todo en verde |
+| R-2 | Sonda `api/tests/unit/qa-req-f-046-pr2-json.test.ts`: el JSON de `main` (`ac593bf9…`) frente al del árbol (`8953d6d7…`), con `core` | 7 308 cálculos (N de 1 a 600 y 9 puntos hasta 5 000, por defecto y con 11 juegos de ajustes) y las 12 matrices: **0 diferencias**. Ver DEF-003 para el número de campos |
+| Sonda pantalla | `inventory-manager/tests/integration/qa-req-f-046-pr2-sonda.test.ts`: 16 casos y 2 extra (F-1 a F-8, N-1 a N-7, S-1 a S-6, A-2, P-1, R-3) | 18/18 ejecutados. Resultados abajo |
+| Navegador | Chrome con la extensión (ventana mínima de 606 px) | Acceso real con vuelta al cotizador, teclado, radios con flechas, envío con Enter (303 real) y XSS sin ejecución |
+| B, J, A-1, A-3, A-4 | Chrome headless por CDP (script del scratchpad) | 3 anchos × 3 estados con capturas, recorrido con Tab (60 pasos), foco del resumen y de sus enlaces, contraste computado y prueba sin JavaScript |
+| H-1 | `npx --yes html-validate@9`, preset `recommended`, desde el scratchpad y con caché propia. Desactivadas solo las reglas de estilo (`void-style`, `doctype-style`, `no-trailing-whitespace`) y `valid-id` en modo `relaxed` (los ids con punto son válidos en HTML5) | 5 estados (vacío, resultados, 422, 503 y tarifa plana): 2 avisos `prefer-native-element` (el `div role="region"` de la matriz); ningún error de estructura |
+
+### Criterios de aceptación (alcance PR 2)
+
+| Criterio | Resultado | Evidencia |
+| --- | --- | --- |
+| CA-6 | PASS | N = 29: «El mínimo es 30 personas.» y «Sin precio» en los 4 paquetes, sin matriz. N = 30: 145/155/165/175 |
+| CA-9 | PASS | Consomé 0 en el Tradicional: costo variable $46.61 y «$19 más caro que la carta (carta: $115).», con la nota de la tarifa visible. Mixto 1 inactivo: ausente de los resultados y de la matriz (cabeceras: Tradicional, Mixto 2, Especial) |
+| CA-10 | PASS | Margen 50: $148, venta $8,880.00, margen real 50.2 %, «Mandó el margen objetivo…» |
+| CA-11 | PASS | Fijos 3 000, N = 30: $211 y «Mandó el margen objetivo» |
+| CA-15 | PASS | 30 casos de N-2, cada uno por separado y uno combinado: 422; resumen `role="alert"` con enlaces a ids existentes; mensaje junto al campo, con `aria-invalid` y `aria-describedby`; valores conservados; sección abierta con «con errores»; sin resultados; ningún 500. Al cargar, el resumen recibe el foco; al seguir un enlace, el foco pasa al campo, que se ve y está en una sección abierta |
+| CA-16 | PASS | Con 0, 1 y 5 cambios, el formulario completo responde 303 a una URL con N y solo las diferencias, en el orden de la pantalla y con `9,5` → `9.5`. Los valores iguales al JSON escritos de otra forma no viajan. Abrir la URL con otro administrador (`bea`) da los mismos precios y textos. En Chrome real: radio «Inactivo» con la flecha, Enter y 303 a `?n=60&p.tradicional.on=0&po.margen=50` |
+| CA-17 | PASS | «Restablecer» → `/birria/cotizador?n=60`: valores del JSON, ninguna marca y secciones cerradas. Con N inválido, el enlace va sin `n` |
+| CA-19 (`inventory-manager`) | PASS | 10 centinelas en 10 caminos (aceptado, 422, repetida, desconocida, 8 KiB, 303, acceso, 403, JSON inválido y API caída): 47 líneas de log, **0 fugas** (ni valores, ni claves, ni `?`, ni `calcular`). Mensajes: `request` con la ruta, `quote_rejected { reason }`, `quote_unavailable_shown`, `api_unavailable`, `admin_forbidden` y `quote_validation_failed`. Las 146 líneas de la sesión de Chrome tampoco llevan query ni valores |
+| CA-20 | PASS | 8 192 bytes: se procesa (422 de la API por un valor de más de 64 caracteres, sin 500). 8 193: aviso «La configuración es demasiado larga…» sin llamar al cálculo. Claves repetidas (`n`, un campo, `calcular`) → aviso de repetidos. Desconocida, `calcular=2`, `calcular` sin valor, mayúsculas o `calcular=1` + desconocida → aviso de desconocidos, sin 303. Con varias causas, gana la primera encontrada |
+| CA-21 (pantalla) | PASS | Con F = b y con una referencia rota: 503 «Cotizador no disponible.» sin `paquetes`, `tarifa`, `gordita`, `QUOTE_`, `$.` ni nombres de paquete. Productos, usuarios, bot, cuenta e inicio siguen en 200 |
+| CA-22 (pantalla) | PASS | Editor de Molotes y editor de Birria → 403 «Solo los administradores pueden usar el cotizador.», sin ninguna llamada al cotizador en la API y sin enlace en ningún menú. Administrador → «Cotizador» solo en el menú de Birria, con `aria-current` en la pantalla. `/molotes/cotizador` → 404. Sin sesión → 303 al acceso y vuelta con la misma query (también en Chrome real) |
+| CA-23 | PASS | «provisional» en `i.masa.costo`, `i.consome.costo`, `r.taco.masa`, `r.quesabirria.masa` y `r.consome-500.consome`; las 3 notas de RF-5 están visibles |
+| CA-24 | PASS | A 360, 768 y 1280 px: sin desbordamiento horizontal; la matriz se desplaza dentro de su región (360: 344 frente a 326 px). Resultados antes de los parámetros. «Calcular» visible sin scroll (a 360 px, en y = 204 de 800). Secciones cerradas salvo las que tienen cambios o errores. Teclado completo: menú, Personas, Calcular, Restablecer, matriz, `summary` y campos, todos con `:focus-visible`. Sin JavaScript (CDP `setScriptExecutionDisabled`): el envío GET calcula ($148, «Mandó el margen objetivo», marcas) igual que con JavaScript |
+
+Regresión de cifras (R-6): en 16 escenarios (CA-1 a CA-14 y bordes), los precios, el costo variable y las 11 filas de la matriz que pinta la pantalla son idénticos a la respuesta JSON de la API.
+
+### Defectos encontrados
+
+### DEF-003
+- Severidad: MINOR
+- Criterio de aceptación afectado: ninguno funcional. Afecta a la documentación del JSON (R-5) y a la justificación del ajuste de `birria.json`.
+- Descripción: el ajuste de `birria.json` (quesabirria = 0 en el Tradicional y taco = 0 en el Especial) no cambia nada.
+  - `parseQuoteCatalog` (`packages/core/cotizador/catalog-schema.ts`, `readPackage`, desde el PR 1) ya completa cada paquete con todos los ítems del catálogo, con 0 los que no aparecen («Todos los ítems del catálogo, en su orden: 0 = no incluido (S-2)»).
+  - Con el JSON de `main` ya existían `p.tradicional.q.quesabirria` y `p.especial.q.taco`, y la pantalla permitía añadirlos.
+  - Por eso son falsas estas afirmaciones:
+    - la del README (tabla del formato del JSON, fila `paquetes`): «Un ítem que no aparece vale 0 y no se puede editar»;
+    - la del Implementation Result del PR 2: «el campo de un ítem no incluido no existía» y «66 campos en lugar de 64».
+  - El número de campos es 64 con los dos JSON.
+- Pasos para reproducir: cargar con `parseQuoteCatalog` + `quoteFields` el JSON de `main` y el del árbol, o abrir la pantalla con `startAdmin({ quotes })` sobre el JSON de `main` y pedir `?n=60&p.tradicional.q.quesabirria=1`.
+- Resultado esperado: una documentación que describa el comportamiento real (un ítem que no aparece vale 0 y sí se puede añadir desde la pantalla).
+- Resultado actual:
+  - con el JSON de `main`: 64 campos, `p.tradicional.q.quesabirria` = 0 y `p.especial.q.taco` = 0 editables; con quesabirria = 1, 200 y costo variable $65.26 (idéntico al JSON nuevo);
+  - con el JSON nuevo: 64 campos, no 66.
+- Evidencia: sonda R-2 (`campos 64 64 []`, sin claves nuevas, 7 308 cálculos sin diferencias) y caso EXTRA2 de la sonda de pantalla.
+- Impacto: ninguno en los cálculos ni en la pantalla. El README da una regla falsa a quien mantenga el JSON, y la decisión de dejar el ajuste en este PR se tomó con una premisa incorrecta.
+- Recomendación: corregir la fila `paquetes` del README y el Implementation Result. Mantener o revertir el ajuste del JSON (es inocuo) queda a decisión del usuario.
+
+### DEF-004
+- Severidad: MINOR
+- Criterio de aceptación afectado: caso límite «sesión caducada: acceso y vuelta al cotizador con la misma query» (S-1).
+- Descripción: `sanitizeNext` admite una query de hasta 8 192 caracteres, pero el formulario de acceso de `inventory-manager` limita su cuerpo a 4 KiB (`LOGIN_BODY_LIMIT`). Con un `next` de unos 3.6 KiB o más, codificado otra vez en el cuerpo, el envío del acceso responde 413 «El formulario es demasiado grande.»: no se entra y se pierde la vuelta.
+- Pasos para reproducir: sin sesión, abrir `/birria/cotizador?<query válida de 4 000 caracteres>` → 303 a `/acceso?next=…` → enviar usuario y contraseña.
+- Resultado esperado: entrar y volver al cotizador con la misma query, o, si la query es demasiado larga para conservarla, entrar y volver al cotizador sin ella.
+- Resultado actual: con 2 000, 3 000, 3 300 y 3 500 caracteres, 303 y vuelta correcta; con 4 000 y 6 000, 413 en el acceso.
+- Evidencia: caso EXTRA de la sonda (`loginStatus` 303/303/303/303/413/413) y S-1 «8192 con %2C» (413).
+- Impacto: bajo. Una URL realista es mucho más corta: el formulario completo con todos los campos cambiados mide unos 1 250 caracteres y vuelve bien. Solo afecta a enlaces anómalos o manipulados. Basta volver a `/acceso` para entrar.
+- Recomendación: que los dos límites sean coherentes, de modo que una query aceptada como vuelta no impida entrar.
+
+### Resultado de los 4 riesgos señalados en el plan
+
+1. **Orden de comprobaciones (aviso de 8 KiB después de la sesión y de `getQuoteDefaults`).** Comportamiento observado:
+   - sin sesión + query larga → 303 al acceso con `next=/birria/cotizador` (sin la query);
+   - editor + query larga → 403;
+   - administrador + query larga → aviso, sin parsear y sin llamar al cálculo;
+   - administrador + query larga con la API caída → 503 común «Servicio no disponible» en lugar del aviso.
+
+   Coincide con la desviación documentada por el desarrollador y no da ningún 500. No es un defecto.
+2. **Vuelta tras el acceso con una query grande.** La URL de 13 686 caracteres no da 431, pero el cuerpo del acceso da 413 por encima de unos 3.6 KiB: es el DEF-004.
+3. **Escape de los valores repintados.** PASS:
+   - `"><script>…<img onerror=…>'&` en un campo, en `m.extra` y en N se repinta escapado en `value`, sin elementos nuevos en el DOM;
+   - en Chrome real no se abre ningún diálogo y la consola está vacía;
+   - la CSP es la misma que en productos (`script-src 'self'; script-src-attr 'none'`), sin `<script>` en línea, `on*` ni `style=`.
+4. **Contraste del foco.** PASS en AA:
+   - los enlaces, botones, `summary` y la región de la matriz tienen un contorno maíz de 2 px (9.45:1 sobre brasa);
+   - los campos de texto cambian el borde de `#ab8985` a adobo `#c2410c`, que contrasta 3.26:1 con la superficie;
+   - los radios muestran el anillo blanco y azul de `@tailwindcss/forms`.
+
+   El foco de los campos es un cambio de color de 1 px, poco marcado (1.64:1 frente al borde en reposo). Es el mismo patrón que `field-input` y `field-checkbox` en el resto del admin y el que pide `DESIGN.md` («1.5px border in `#c2410c` with zero outer fuzzy halo»). Lo dejo como observación, no como defecto del PR.
+
+### Observaciones (no son defectos)
+
+- `/birria/cotizador/` y `/Birria/cotizador` responden 200: el router no es estricto ni distingue mayúsculas, como el resto de rutas. `sanitizeNext` no las admite como vuelta.
+- `n=060` se conserva tal cual en la URL de diferencias y en «Restablecer» (calcula 60).
+- `1,600` en gramos se acepta como 1.6, con la marca «modificado» (lo fijó la Revisión técnica, punto 2). En importes se rechaza.
+- En `a < b` el error se marca en `b`. Con un campo inválido, las reglas entre campos no aparecen hasta corregirlo (documentado en el PR 1).
+- Un valor de más de 64 caracteres (solo por URL: los campos tienen `maxlength="64"`) da el error general «Los ajustes no son válidos…», sin campo marcado.
+- Los campos miden 42 px de alto (menos de la guía de 44 px y más del mínimo de 24 px de WCAG 2.5.8), igual que en el resto del admin.
+- `html-validate` sugiere `<section>` en lugar de `div role="region"` para la matriz. Es una preferencia: el `div` desplazable con `aria-labelledby` y `tabindex="0"` es accesible.
+- Los importes salen con formato `es-MX` («$19 más caro»), no «19 $». Es el mismo dato.
+- «La API recibe solo las diferencias» lo cubre la prueba permanente `quote.test.ts` con el doble. Contra la API real, las cifras coinciden con un cálculo que solo envía esas diferencias.
+
+### Regresión
+
+- La suite completa está en verde (275 pruebas en `inventory-manager`, incluidas `quote.test.ts` y `config-session.test.ts`, y el cambio de `formFields` para los radios). Typecheck y lint en 0.
+- Las demás pantallas siguen en 200, con el menú correcto para administrador y editor y `aria-current` intacto: inicio, productos de los dos negocios, página, usuarios, cuenta, bot y alta de producto. El editor de Molotes recibe 403 en las de Birria, como antes.
+- El ajuste de `birria.json` no cambia ninguna cifra (R-2), y las pruebas del PR 1 en `api` siguen pasando.
+- Regla de dependencias: `npm run lint` en 0. `inventory-manager` solo importa `contracts` y `web`.
+
+### Responsive
+
+360×800, 768×1024 y 1280×800 en los estados vacío, resultados y errores: sin desbordamiento horizontal. A 1280 px, tarjetas de paquete en 2 columnas. La matriz se desplaza dentro de su región. Textos e importes sin cortes. En móvil, los resultados aparecen antes que los parámetros.
+
+### Accesibilidad
+
+- Estructura (jsdom) en los estados vacío, resultados, 422 y 503: un `h1`; encabezados 1 → 2 → 3 sin saltos; `header`, `nav` y `main`; ids únicos; todos los campos con `label[for]`; radios dentro de `label` y de `fieldset` con `legend`; ninguna referencia `aria-*` rota; `aria-invalid` solo en los campos con error; tabla con `caption` y `th scope`; sin interactivos anidados.
+- Teclado, foco y contraste de los textos (mínimo 5.96:1 en los 20 pares color/fondo medidos): ver los riesgos 4 y CA-24.
+- Ningún estado depende solo del color: «modificado», «provisional», «con errores», «Mandó el margen…» y «Ahorro»/«más caro» son texto.
+
+### UX/UI
+
+Coherente con `DESIGN.md` y con el admin nuevo: superficies `#261a17` y `#33221e`, bordes `#432c27`, radios de 8 y 16 px, botón primario chile rojo con texto crema (5.96:1), Epilogue y Space Grotesk, radios con borde adobo, marcas maíz y adobo, y la misma cabecera y menú. Revisado en las capturas de los tres anchos.
+
+### Performance
+
+- HTML: 69 KB sin query, 91 KB con resultados y 125 KB en el peor caso (50 filas de matriz).
+- Peticiones iguales al resto del admin (CSS, `main.js` y fuentes).
+- Contra la API real, 20 pintados: mediana 4.5 ms (máx. 8.4) por defecto y 10.4 ms (máx. 14.7) en el peor caso.
+
+### SEO
+
+No aplica (pantalla de administración). El `title` es «Cotizador de taquizas | Administración» y lleva `robots` `noindex, nofollow`, como el resto del admin.
+
+### Documentación
+
+Verificados `restaurante/README.md` y `docs/arquitectura.md` §6 frente a lo observado: ruta, permisos, 303, 8 KiB, avisos, 503, logs y vuelta tras el acceso. También `.claude/CLAUDE.md` §8, que describe correctamente el cotizador en `api` e `inventory-manager`. Hay dos excepciones:
+- la fila `paquetes` del formato del JSON (DEF-003);
+- la vuelta tras el acceso, que solo se cumple por debajo de unos 3.6 KiB (DEF-004).
+
+### No repetido
+
+- El contraste con el Excel (X-1 a X-3 del PR 1): el diferencial R-2 da 0 diferencias entre el JSON de `main` y el nuevo, así que las cifras del Excel siguen cubiertas.
+- `docker build`: el PR 2 no cambia el Dockerfile ni la ubicación del JSON.
+- La ventana real de Chrome no baja de 606 px. Los anchos exactos (360/768/1280) se midieron con Chrome headless, aprobado en A-3. Con la extensión se probaron el acceso, el teclado, el envío y el XSS.
+
+### Pendientes de revisión manual
+
+Ninguno.
+
+### Limpieza
+
+- Borradas las tres sondas: `api/tests/unit/qa-req-f-046-pr2-json.test.ts` e `inventory-manager/tests/integration/qa-req-f-046-pr2-{sonda,servidor}.test.ts`.
+- La pila de A-2 se detuvo con el archivo de parada: la tarea en segundo plano terminó con código 0.
+- Borrada la carpeta `qa` del scratchpad: capturas, HTML, JSON rotos, script CDP y su perfil de Chrome, `html-validate` y su caché de npm propia, y logs. Quedan solo `cot.xlsx`, `cotizador-analisis.md` y `venv`, que ya existían. `~/.npm/_npx` no se tocó: se usó una caché en el scratchpad.
+- Cerrada la pestaña de Chrome (el grupo quedó vacío). Ningún Chrome headless, Vitest ni Node escuchando (`pgrep` y `lsof` vacíos).
+- Sin bases `restaurante_test*` (`SHOW DATABASES`: solo `restaurante`, `restaurante_shadow` y las del sistema). MySQL detenido de nuevo (`npm run db:down`), como estaba al empezar.
+- `git worktree list`: un solo árbol. `git status --short` idéntico al de antes de la ronda. `shasum` de `birria.json` sin cambios (`8953d6d7…`).
+
+### Resultado final
+
+QA_APPROVED. Todos los criterios del alcance del PR 2 pasan con evidencia. No hay defectos BLOCKER, CRITICAL ni MAJOR. DEF-003 y DEF-004 son MINOR y no bloquean; se pueden corregir antes del commit, a decisión del usuario. No se añade ninguna prueba permanente. Si se corrige DEF-004, su caso (acceso con una query larga aceptada por `sanitizeNext`) encaja en `quote.test.ts`.
+
 ## Historial de cambios
 
 ### Versión 1
@@ -952,3 +1350,31 @@ El usuario aprueba el QA Action Plan, la sonda temporal en `api/tests/integratio
 ### Correcciones y Pull Request del PR 1 (2026-11-16)
 
 El usuario pide corregir los dos defectos antes del commit ("Si corrigelos"). senior-fullstack corrige DEF-001 (el contrato rechaza `__proto__` en `ajustes` con 422) y DEF-002 (75 en la tabla de ejemplo), vuelve a validar, hace el commit `2f257bc` y abre el Pull Request https://github.com/orvigas/negocio/pull/151 hacia `main` (en borrador hasta este commit; se marca como listo después de su push y se comprueba el CI). Estado: `READY_FOR_MERGE` (PR 1).
+
+### Implementación del PR 2 (2026-11-16)
+
+Con el plan ya aprobado ("Recomendadas"; P-1 `main`, P-3 `.claude/CLAUDE.md` §8 en este PR), senior-fullstack crea de nuevo `feature/REQ-F-046-cotizador-taquizas` desde `main` (con el PR 1 mergeado) e implementa la pantalla de `inventory-manager` (controlador, vistas, ruta, enlace del menú, `sanitizeNext`), sus pruebas y la documentación. Corrige además el hueco de S-2 en el JSON (ítems en 0 para poder añadirlos). Sin commits. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA Action Plan del PR 2 (2026-11-16)
+
+El usuario aprueba la implementación del PR 2 ("Si la apruebo"), incluido dejar en este PR el ajuste de `birria.json` (quesabirria = 0 en el Tradicional y taco = 0 en el Especial; 64 → 66 campos). senior-qa analiza el ticket, el diff del PR 2, las pruebas y la guía visual, y añade el "QA Action Plan — PR 2" con las autorizaciones temporales que necesita (A-1 a A-5). Sin ejecutar pruebas. Estado: `NEEDS_QA_PLAN_APPROVAL`.
+
+### QA del PR 2, ronda 1 (2026-11-16)
+
+El usuario aprueba el plan y las autorizaciones A-1 a A-5 ("Apruebo todo"). senior-qa ejecuta el plan contra la `api` real y añade el "QA Report — PR 2". Todos los criterios del PR 2 pasan. Hay dos defectos MINOR:
+- DEF-003: el README y el Implementation Result dicen que, sin el ajuste de `birria.json`, no se podía añadir un ítem y que los campos pasan de 64 a 66. Las dos cosas son falsas.
+- DEF-004: la vuelta tras el acceso falla con 413 si la query pasa de unos 3.6 KiB.
+
+Limpieza verificada. Estado: `QA_APPROVED`.
+
+### Correcciones de DEF-003 y DEF-004 y Pull Request del PR 2 (2026-11-16)
+
+El usuario pide corregir los dos defectos antes del commit ("Si"). senior-fullstack:
+- DEF-003: revierte `birria.json` al de `main` (el ajuste era innecesario: `core` ya completa los ítems con 0) y corrige la fila `paquetes` del README y el Implementation Result (64 campos).
+- DEF-004: `sanitizeNext` acota la vuelta a 3 000 caracteres ya codificada como campo del formulario de acceso (4 KiB), y el cotizador manda al acceso sin la query cuando no cabe; el límite de 8 KiB de la query (CA-20) no cambia. Prueba en `quote.test.ts` y casos en `config-session.test.ts`.
+
+Vuelve a validar, hace el commit `ec6f78a` y abre el Pull Request https://github.com/orvigas/negocio/pull/153 hacia `main` (en borrador hasta terminar la ejecución de ese commit; después, listo). CI del PR listo en verde: `calidad`, `docker`, `auditoria`, `pruebas` (1/2 y 2/2) y `verificacion` en pass (ejecución 43910108423). Estado: `READY_FOR_MERGE` (PR 2).
+
+### Cierre (2026-11-16)
+
+El usuario confirma el merge del PR 2 ("Mergeado"): #153 está en `main` (`2283660`) y el despliegue de `main` terminó en success (ejecución 43912626105). El PR 1 (#151) ya estaba mergeado y desplegado. senior-fullstack mueve el ticket a `done/` con estado `DONE`, con el registro del PR 2 (commit `f9b498c` de la rama del ticket, que no llegó a `main` porque el PR se mergeó antes). Queda como comprobación del usuario la pantalla en producción con una sesión de administrador (no verificada por el agente).

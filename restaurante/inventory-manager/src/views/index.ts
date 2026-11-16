@@ -3,6 +3,7 @@ import type { Renderer, SafeHtml } from '@restaurante/web';
 
 import { BOT_PATH, createBotViews } from './bot.ts';
 import { createPageViews, pagePath } from './page.ts';
+import { QUOTE_BUSINESS, QUOTE_PATH, createQuoteViews } from './quote.ts';
 import { ACCOUNT_PATH, USERS_PATH, createUserViews } from './users.ts';
 
 /**
@@ -49,8 +50,11 @@ export interface NoticeOptions {
   urgent?: boolean;
 }
 
-/** Sección de la cabecera (REQ-F-040 y REQ-F-043): usuarios, bot o "Mi cuenta"; "Página" es de un negocio (REQ-F-044). */
-export type HeaderSection = 'users' | 'bot' | 'account' | 'page';
+/**
+ * Sección de la cabecera (REQ-F-040 y REQ-F-043): usuarios, bot o "Mi cuenta"; "Página" (REQ-F-044) y
+ * "Cotizador" (REQ-F-046) son de un negocio.
+ */
+export type HeaderSection = 'users' | 'bot' | 'account' | 'page' | 'quote';
 
 export interface PageOptions {
   title: string;
@@ -95,7 +99,7 @@ export function createViews(renderer: Renderer) {
       userName: context.user.name,
       csrfToken: context.csrfToken,
       accountCurrent: ariaCurrent(section === 'account'),
-      businessNav: current ? businessNav(current, section) : join([]),
+      businessNav: current ? businessNav(current, section, context.user.role === 'admin') : join([]),
       links: join([
         ...context.user.businesses.map((business) =>
           render('partials/nav-link', { href: productsPath(business), label: BUSINESS_NAMES[business], current: ariaCurrent(business === current) }),
@@ -111,12 +115,19 @@ export function createViews(renderer: Renderer) {
     });
   }
 
-  /** Secciones del negocio que se está editando (REQ-F-044). `aria-current="true"`: el enlace del negocio ya es la página actual. */
-  function businessNav(business: PublicBusinessId, section: HeaderSection | undefined): SafeHtml {
+  /**
+   * Secciones del negocio que se está editando (REQ-F-044). `aria-current="true"`: el enlace del negocio ya es la página actual.
+   * "Cotizador" (REQ-F-046, RF-11): solo Birria y solo para administradores.
+   */
+  function businessNav(business: PublicBusinessId, section: HeaderSection | undefined, isAdmin: boolean): SafeHtml {
     const link = (href: string, label: string, active: boolean) => render('partials/subnav-link', { href, label, current: active ? render('partials/aria-current', { value: 'true' }) : join([]) });
     return render('partials/business-nav', {
       businessName: BUSINESS_NAMES[business],
-      links: join([link(productsPath(business), 'Productos', section === undefined), link(pagePath(business), 'Página', section === 'page')]),
+      links: join([
+        link(productsPath(business), 'Productos', section === undefined),
+        link(pagePath(business), 'Página', section === 'page'),
+        ...(isAdmin && business === QUOTE_BUSINESS ? [link(QUOTE_PATH, 'Cotizador', section === 'quote')] : []),
+      ]),
     });
   }
 
@@ -156,6 +167,7 @@ export function createViews(renderer: Renderer) {
     ...createUserViews({ render, join, attrs, page, notice, displayDate }),
     ...createBotViews({ render, join, attrs, page, notice, displayDate }),
     ...createPageViews({ render, join, page, notice, renderField, errorSummary, fieldId, displayDate, businessNames: BUSINESS_NAMES }),
+    ...createQuoteViews({ render, join, attrs, page, notice, businessNames: BUSINESS_NAMES }),
 
     login({ next, problem }: { next: string; problem?: 'invalid' | 'locked' | 'expired' | 'unavailable' | 'closed' | undefined }): SafeHtml {
       const notices: Record<string, NoticeOptions> = {

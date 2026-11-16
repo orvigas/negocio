@@ -104,14 +104,14 @@ export class Browser {
   }
 }
 
-/** Campos de un formulario como los enviaría el navegador (las casillas, solo si están marcadas). */
+/** Campos de un formulario como los enviaría el navegador (casillas y radios, solo si están marcados). */
 export function formFields(html: string, selector: string): Record<string, string> {
   const { document } = new JSDOM(html).window;
   const form = document.querySelector(selector);
   if (!form) throw new Error(`No se encontró ${selector}`);
   const fields: Record<string, string> = {};
   for (const element of form.querySelectorAll<HTMLInputElement>('input[name], select[name], textarea[name]')) {
-    if (element.type === 'checkbox' && !element.checked) continue;
+    if ((element.type === 'checkbox' || element.type === 'radio') && !element.checked) continue;
     fields[element.name] = element.value;
   }
   return fields;

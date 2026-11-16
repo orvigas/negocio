@@ -8,7 +8,9 @@ Comprobaciones de producción hechas el 2026-11-16 (por la sesión principal, po
 - `admin.birriaelmuneco.com/acceso` responde 200; `/bot` sin sesión redirige al acceso (303 con `next=/bot`); `https://birriaelmuneco.com/admin/bot` sin sesión redirige al acceso del admin actual.
 - DT-3 (fila histórica del personal): `bot_block` tiene 0 filas, 0 bloqueos activos y 0 coincidencias con los 4 últimos dígitos de `WHATSAPP_BOT_STAFF_*` (comprobado en el VPS sin copiar los números). Los números del personal configurados dan 1 terminación distinta.
 
-**No comprobado:** las pantallas `/bot` (admin nuevo) y `/admin/bot` (solo lectura) con sesión de administrador, ni el aviso al personal; quedan para el usuario. El ticket se cierra por orden del usuario.
+**Comprobado después por el usuario (2026-11-16):** `https://admin.birriaelmuneco.com/bot`, con sesión de administrador, muestra el estado: bot habilitado (Meta), interruptor activo y último cambio de orvigas el 15/10/2026 05:02 con su motivo, más el formulario del motivo de la pausa. `https://birriaelmuneco.com/bot` responde 404 porque esa ruta no existe; la de solo lectura es `/admin/bot`.
+
+**No comprobado:** `/admin/bot` (solo lectura) con sesión de administrador, y el aviso al personal; quedan para el usuario. El ticket se cierra por orden del usuario.
 
 DONE
 

@@ -480,8 +480,9 @@ jobs:
       # CA-9 (REQ-F-015): la imagen production, sin HOST al ejecutar, escucha en 0.0.0.0 dentro del
       # contenedor (HOST de la imagen), el HEALTHCHECK queda healthy y la landing responde por el
       # puerto publicado. La red db-test es interna (no publica puertos): el contenedor se crea en la
-      # red por defecto y se conecta además a db-test antes de arrancar. Usa la base migrada del paso
-      # anterior con el usuario solo DML de pruebas; números de WhatsApp ficticios.
+      # red por defecto y se conecta además a db-test antes de arrancar (ahí llega a la api, que usa la
+      # base migrada del paso anterior con el usuario solo DML de pruebas; la app no usa la base desde
+      # REQ-F-045); números de WhatsApp ficticios.
       - name: imagen production escucha en 0.0.0.0 y queda healthy
         working-directory: restaurante
         run: |
@@ -506,8 +507,6 @@ jobs:
           fi
           docker logs api-ca11 | grep '"msg":"server_started"' | grep -q '"service":"api"' || { docker logs api-ca11; exit 1; }
           docker create --name app-ca9 -p 127.0.0.1:3000:3000 \
-            -e DATABASE_URL=mysql://restaurante_test_app:test-dev@mysql-dev:3306/restaurante_test_ci \
-            -e DATA_DIR=/var/lib/restaurante \
             -e WHATSAPP_MOLOTES=5210000000001 \
             -e WHATSAPP_BIRRIA=5210000000002 \
             -e API_INTERNAL_URL=http://api-ca11:3001 \

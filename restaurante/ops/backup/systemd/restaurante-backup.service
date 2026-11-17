@@ -1,7 +1,7 @@
 # Respaldo diario cifrado fuera del VPS (REQ-F-019). Lo lanza restaurante-backup.timer.
 # Instalación: docs/despliegue.md, "Respaldos fuera del VPS". A mano: sudo systemctl start restaurante-backup.service
 [Unit]
-Description=Respaldo cifrado de restaurante (MySQL y app-data) a Cloudflare R2
+Description=Respaldo cifrado de restaurante (MySQL) a Cloudflare R2
 Wants=network-online.target
 After=network-online.target docker.service
 Requires=docker.service

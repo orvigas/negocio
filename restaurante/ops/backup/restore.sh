@@ -9,9 +9,14 @@
 #
 # Pide la clave privada de age (AGE-SECRET-KEY-1...) sin eco; nunca toca el disco ni los argumentos.
 # Secuencia, con el candado de deploy.sh: descargar -> descifrar -> verificar sumas -> confirmar ->
-# MySQL en marcha -> parar la app -> DROP DATABASE y carga del volcado -> restaurar app-data ->
+# MySQL en marcha -> parar la app -> DROP DATABASE y carga del volcado -> restaurar app-data (solo un
+# respaldo de formato 1, anterior a la limpieza de REQ-F-045: va al volumen, que ya no monta nadie) ->
 # arrancar la imagen de la app del respaldo -> salud -> state/release.env y releases.log. Mide cada
 # fase. Se pierde todo lo escrito después del respaldo.
+#
+# Un respaldo anterior a REQ-F-045 trae una app que necesita MySQL y DATA_DIR, que este compose ya no
+# le pasa: no queda healthy (código 12, con la base ya restaurada). Redespliega entonces la punta de
+# main (docs/despliegue.md, 11.7).
 #
 # Si al terminar nadie atiende el webhook del bot (app sin bot y api sin router, REQ-F-042), lo avisa
 # en la última línea: la restauración sí se hizo y repetirla no lo arreglaría, así que termina con 0.
@@ -116,7 +121,7 @@ read_identity || fail 2 'clave privada no válida'
 age_decrypt "$WORK/backup.tar.age" "$WORK/bundle.tar" || fail 6 'no se pudo descifrar (¿clave equivocada?)'
 AGE_IDENTITY=''
 mkdir -- "$WORK/parts"
-tar -C "$WORK/parts" -xf "$WORK/bundle.tar" manifest.txt dump.sql.gz app-data.tar || fail 6 'el paquete descifrado está dañado'
+extract_parts "$WORK/bundle.tar" "$WORK/parts" || fail 6 'el paquete descifrado está dañado'
 rm -f -- "$WORK/bundle.tar" "$WORK/backup.tar.age"
 verify_parts "$WORK/parts" || fail 6 'el respaldo no pasó la verificación'
 gzip -t -- "$WORK/parts/dump.sql.gz" || fail 6 'el volcado está dañado'
@@ -134,7 +139,8 @@ phase 'descifrado y verificado'
 
 # --- Confirmación --------------------------------------------------------------------------------
 if [[ -z "$CONFIRM" && -t 0 ]]; then
-  printf 'Se BORRAN la base restaurante y app-data de producción. Escribe "restaurante" para continuar: ' >&2
+  if has_app_data "$WORK/parts"; then WHAT='la base restaurante y app-data'; else WHAT='la base restaurante'; fi
+  printf 'Se BORRA %s de producción. Escribe "restaurante" para continuar: ' "$WHAT" >&2
   IFS= read -r CONFIRM
 fi
 [[ "$CONFIRM" == restaurante ]] || fail 2 'restauración cancelada'
@@ -148,16 +154,25 @@ mysql_root -e 'DROP DATABASE IF EXISTS restaurante' || fail 10 'no se pudo borra
 gzip -dc -- "$WORK/parts/dump.sql.gz" | mysql_root --default-character-set=utf8mb4 || fail 10 'falló la carga del volcado (la app sigue parada; repite la restauración)'
 phase 'base cargada'
 
-# --- app-data ------------------------------------------------------------------------------------
-# Se monta en la misma ruta que en la imagen: un volumen nuevo hereda su dueño (node).
-compose create app >/dev/null 2>&1 || true
-VOLUME="${PROJECT}_app-data"
-docker volume inspect "$VOLUME" >/dev/null 2>&1 || fail 11 "no existe el volumen $VOLUME"
-# shellcheck disable=SC2016 # Se expande dentro del contenedor.
-docker run --rm -i --network none --cap-drop ALL --security-opt no-new-privileges \
-  -v "$VOLUME:$DATA_PATH" --entrypoint sh "$APP_IMAGE" -c 'set -eu; find "$1" -mindepth 1 -delete; tar -C "$1" -xf -' sh "$DATA_PATH" \
-  <"$WORK/parts/app-data.tar" || fail 11 'no se pudo restaurar app-data (la app sigue parada)'
-phase 'app-data restaurado'
+# --- app-data (solo formato 1) -------------------------------------------------------------------
+# Ningún servicio lo monta desde REQ-F-045: se restaura para que una versión anterior (con el compose
+# de su commit) encuentre sus JSON. Se monta en la misma ruta que en la imagen del respaldo (anterior
+# a REQ-F-045, con esa carpeta): un volumen nuevo hereda su dueño (node).
+if has_app_data "$WORK/parts"; then
+  VOLUME="${PROJECT}_app-data"
+  if ! docker volume inspect "$VOLUME" >/dev/null 2>&1; then
+    # Con las etiquetas de compose: el volumen declarado en compose.prod.yaml es este.
+    docker volume create --label "com.docker.compose.project=$PROJECT" --label com.docker.compose.volume=app-data "$VOLUME" >/dev/null ||
+      fail 11 "no se pudo crear el volumen $VOLUME"
+  fi
+  # shellcheck disable=SC2016 # Se expande dentro del contenedor.
+  docker run --rm -i --network none --cap-drop ALL --security-opt no-new-privileges \
+    -v "$VOLUME:$DATA_PATH" --entrypoint sh "$APP_IMAGE" -c 'set -eu; find "$1" -mindepth 1 -delete; tar -C "$1" -xf -' sh "$DATA_PATH" \
+    <"$WORK/parts/app-data.tar" || fail 11 'no se pudo restaurar app-data (la app sigue parada)'
+  phase 'app-data restaurado'
+else
+  log 'el respaldo no trae app-data (formato 2, posterior a REQ-F-045): no hay nada más que restaurar'
+fi
 rm -rf -- "$WORK"
 WORK=''
 
@@ -176,7 +191,7 @@ while ((SECONDS < deadline)); do
 done
 if [[ "$status" != healthy ]]; then
   docker logs --tail 40 "$(compose ps -aq app)" 2>&1 | sed 's/^/  app: /' >&2 || true
-  fail 12 'la app no quedó healthy: revisa el runbook (MIGRATIONS_PENDING, DATABASE_NEWER_THAN_CODE)'
+  fail 12 'la app no quedó healthy: revisa el runbook (un respaldo anterior a REQ-F-045 trae una app que este compose ya no arranca: redespliega la punta de main; docs/despliegue.md, 11.7)'
 fi
 phase 'app healthy'
 

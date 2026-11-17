@@ -11,8 +11,10 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
 - **VPS:** Hostinger con Ubuntu 24.04, Docker y un **Traefik ya instalado** que sirve otros sitios
   en la red externa `traefik-public`. El proyecto vive en `/opt/restaurante`.
 - **Servicios** (`deploy/compose.prod.yaml`, proyecto `restaurante`):
-  - `app`: la imagen `production` (Koa). Sirve las dos landings, `/admin` y la API `/admin/api`.
-    Una sola réplica, sin puertos publicados, en la red interna `db` y en
+  - `app`: la imagen `production` (Koa). Sirve las dos landings; `/admin` solo responde 302 al admin
+    nuevo y 410 a cualquier escritura (REQ-F-045). Desde REQ-F-045 no usa MySQL, `DATA_DIR`, el
+    volumen `app-data` ni las variables del bot: el compose no se los pasa. Una sola réplica, sin
+    puertos publicados, en la red interna `db` (por la que llega a la `api`) y en
     `traefik-public`. Se construye desde el workspace `restaurante/landing-pages/` del monorepo
     (REQ-F-036), que incluye los paquetes `restaurante/packages/core` y `packages/db` (REQ-F-037),
     con el contexto de build en `restaurante/`. Dentro de la imagen, la app está en
@@ -36,18 +38,19 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
     - Llega a MySQL y a `app` por sus nombres de contenedor (`restaurante-mysql-1` y
       `restaurante-app-1`), no por los de servicio: en `traefik-public`, un alias `app` o `mysql` de
       otro proyecto respondería por ellos. Lo fija el compose; el `.env` no cambia.
-    - Usa el mismo usuario solo DML que la app; nunca migra. Solo en una instalación nueva (base
-      vacía) siembra los productos y la página de la semilla (REQ-F-045). Si se cae, las
-      landings siguen respondiendo con su última copia buena (o la semilla, si `app` arrancó sin ella).
+    - Usa el usuario solo DML (`restaurante_app`); nunca migra. Solo en una instalación nueva (base
+      vacía) siembra los productos y la página de la semilla y crea el primer administrador con
+      `ADMIN_USER`/`ADMIN_PASSWORD_HASH`, que desde la limpieza de REQ-F-045 recibe ella (antes, la
+      app). Si se cae, las landings siguen respondiendo con su última copia buena (o la semilla, si
+      `app` arrancó sin ella).
   - `inventory-manager` (REQ-F-039): la imagen `inventory-manager`, el admin nuevo (Koa con SSR) en
     `https://admin.birriaelmuneco.com`.
     - Gestiona los productos, los usuarios y "Mi cuenta" (REQ-F-040) llamando a `api` por la red
       interna `admin`.
     - Está en `traefik-public` y en `admin`: no alcanza MySQL y no tiene credenciales de la base ni
       la del aviso.
-    - Con él desplegado, la edición de productos, la gestión de usuarios, "Mi cuenta" y el control
-      del bot (REQ-F-043) del `/admin` actual quedan en solo lectura (`ADMIN_NEW_URL`) y enlazan al
-      admin nuevo. El menú sigue en `/admin` hasta los tickets siguientes del paso 4.
+    - Es el único admin desde REQ-F-045: `/admin` de las landings responde 302 a su raíz
+      (`ADMIN_NEW_URL`).
     - **Aviso al personal (R-3 de REQ-F-040):** desde ese despliegue, las contraseñas se cambian en
       "Mi cuenta" de `https://admin.birriaelmuneco.com` (mismo usuario y contraseña), y las altas y
       cambios de usuarios, en "Usuarios" del admin nuevo. `npm run admin:recover` sigue igual.
@@ -63,18 +66,19 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
   - En los dos casos se conservan la ruta y la query.
   - Esos 301 son los de una petición GET (la de los navegadores). Con HEAD (`curl -I`), Traefik
     responde 308 a las mismas redirecciones: compruébalas con GET ([verificación](#verificación-del-primer-despliegue-supuestos-del-ticket)).
-  - `/admin` tiene un límite de 10 peticiones por minuto por IP, con ráfaga de 20; después
-    responde 429.
+  - `/admin` no tiene límite propio desde la limpieza de REQ-F-045: va por el router raíz y solo
+    responde 302 o 410.
   - `https://admin.birriaelmuneco.com` sirve `inventory-manager` (REQ-F-039), con su propio
     certificado del certresolver y su propio límite: 60 peticiones por minuto por IP, con ráfaga de
     60. `http://admin.` responde 301 a `https://` conservando la ruta y la query.
   - Traefik no envía HSTS: lo envía la app.
 - **Datos:**
-  - los JSON de página y `changes.jsonl` viven en el volumen `restaurante_app-data`
-    (`DATA_DIR=/var/lib/restaurante`);
-  - los usuarios, la auditoría y los productos, en MySQL.
-- **Estado en memoria:** sesiones de `/admin` y su límite de intentos, en `app`; sesiones del admin
-  nuevo, su límite de intentos, las claves de idempotencia y las conversaciones del bot, en `api`.
+  - los usuarios, la auditoría, los productos y la página (REQ-F-044), en MySQL;
+  - el volumen `restaurante_app-data` (los JSON de página de antes de REQ-F-044) se conserva sin
+    montar desde la limpieza de REQ-F-045: ningún servicio lo usa ni se respalda, pero **no se
+    borra** (lo necesita una vuelta a una versión anterior; [§6](#volver-a-una-versión-anterior-a-req-f-045)).
+- **Estado en memoria:** sesiones del admin nuevo, su límite de intentos, las claves de idempotencia
+  y las conversaciones del bot, en `api`.
   Cada despliegue reinicia los contenedores: cierra las sesiones, corta las conversaciones y deja el
   sitio sin servicio unos 10 a 30 s.
 
@@ -119,15 +123,13 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
       `api` anterior (si la hay; si `state/release.env` no la registra, por ejemplo tras una
       restauración, toma la del contenedor `api` en marcha) y termina con el código 15:
       - si este despliegue **no** aplicó migraciones, la app no se toca;
-      - si **sí** las aplicó, la app en marcha se recrea con su misma imagen y
-        `DATABASE_ALLOW_NEWER_SCHEMA=true` (unos segundos sin servicio), como en la vuelta atrás.
-        Sin la bandera, la app no podría volver a arrancar sobre la base migrada si se reiniciara
-        (`DATABASE_NEWER_THAN_CODE`) antes del siguiente despliegue correcto. Si la app recreada no
-        queda sana, termina con 22.
+      - si **sí** las aplicó, `deploy.sh` intenta recrear la app con su misma imagen y
+        `DATABASE_ALLOW_NEWER_SCHEMA=true`, como en la vuelta atrás. Desde la limpieza de REQ-F-045
+        el compose ya no le pasa esa bandera (la app no usa la base), así que la app queda como
+        estaba. Si no quedara sana, termina con 22.
    7. Cambia `inventory-manager` al digest nuevo y espera `healthy`, más una respuesta 200 de
       `https://admin.<dominio>/salud` a través de Traefik (por `RESTAURANTE_PROBE_ADDRESS`, sin
-      depender del DNS). Va **antes** que la app porque la app nueva activa el modo de solo lectura
-      de los productos de `/admin`. Si no queda sano, vuelve al `inventory-manager` anterior (o lo
+      depender del DNS). Va **antes** que la app porque la app nueva lleva `/admin` al admin nuevo. Si no queda sano, vuelve al `inventory-manager` anterior (o lo
       detiene si no lo había), deja la app como estaba (con la misma protección de las migraciones
       nuevas que el punto 6) y la `api` nueva, y termina con el **código 16**.
    8. Cambia la app al digest nuevo y espera `healthy`, más una respuesta 200 a través de
@@ -236,6 +238,86 @@ rm -rf /tmp/restaurante-deploy
 
 La última suma debe coincidir con la misma orden ejecutada en `restaurante/deploy/` de tu copia
 local.
+
+**Al llegar a `main` la limpieza de REQ-F-045 (PR 3):** cambian `compose.prod.yaml` y los scripts
+de respaldos; `deploy.sh` y `mysql/initdb/` no. En el compose:
+
+- la app deja de recibir `DATABASE_URL`, `DATABASE_ALLOW_NEWER_SCHEMA`, `DATA_DIR`, `ADMIN_*` y las
+  variables del bot, y deja de montar `app-data`;
+- la `api` recibe `ADMIN_USER`/`ADMIN_PASSWORD_HASH`;
+- desaparece el router `restaurante-admin` con su límite de peticiones.
+
+Los scripts de respaldos nuevos se instalan **antes del merge**, con la app del PR 2 todavía en
+marcha: así ningún respaldo de formato 1 lleva la imagen de la app de la limpieza. Esa imagen ya no
+tiene la carpeta de `DATA_DIR`, y un respaldo de formato 1 con ella no se restaura en un volumen
+`app-data` nuevo (VPS nuevo) ni pasa el simulacro. El `backup.sh` nuevo no lee el volumen y funciona
+igual con el compose del PR 2.
+
+En este orden:
+
+1. **`.env`: nada que cambiar.** Las variables son las mismas: el compose solo cambia a quién se las
+   pasa. `ADMIN_USER`/`ADMIN_PASSWORD_HASH` pasan a la `api`, que las valida con las mismas reglas
+   que la app. Con usuarios en la base, solo deja un aviso, sin los valores. No hace falta
+   borrarlas del `.env`.
+2. **Antes del merge, comprobación de solo lectura:** el volumen existe y lo monta la app (todavía):
+
+   ```sh
+   sudo docker volume ls | grep app-data                            # restaurante_app-data
+   sudo docker ps -a --filter volume=restaurante_app-data           # la app
+   ```
+
+3. **Antes del merge, instala los scripts de respaldos del PR** en el VPS, con la sección
+   [11.5](#115-instalar-en-el-vps), pero desde el último commit de la rama del PR (`gh pr checkout
+   <número>` en tu copia local) en lugar de `main`. Solo cambian `lib.sh`, `backup.sh` y
+   `restore.sh` (`env-backup.sh` no cambia) y la unidad `restaurante-backup.service` (solo su
+   descripción). Ni `age`, ni las carpetas, ni `backup.env`, ni `recipients.txt` se tocan:
+
+   ```sh
+   # En tu máquina, en la raíz del repositorio, en la rama del PR:
+   scp -r restaurante/ops/backup <admin>@<vps>:/tmp/restaurante-backup
+   # En el VPS:
+   cd /tmp/restaurante-backup
+   sudo install -o root -g root -m 755 lib.sh backup.sh restore.sh /opt/restaurante/ops/backup/
+   sudo install -o root -g root -m 644 systemd/restaurante-backup.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   rm -rf /tmp/restaurante-backup
+   ```
+
+   Desde aquí, todos los respaldos son de formato 2. Con la app del PR 2 se restauran y pasan el
+   simulacro: esa app no usa la base ni `DATA_DIR`. El `restore.sh` nuevo sigue aceptando los
+   respaldos de formato 1 que ya están en R2. No hagas el merge hasta terminar el paso 4.
+4. **Antes del merge, comprueba que el respaldo nuevo es de formato 2.** Haz un respaldo a mano en
+   el VPS (`sudo systemctl start restaurante-backup.service`; `sudo journalctl -u
+   restaurante-backup.service -n 40 --no-pager` dice `respaldo completo`). Después,
+   en tu Mac, en la misma rama del PR (el `verify-backup.sh` anterior no acepta el formato 2), ejecuta
+   `restaurante/ops/backup/verify-backup.sh --drill`
+   ([11.8](#118-prueba-mensual-y-simulacro-en-tu-mac)). Debe terminar con 0 e imprimir
+   `manifiesto: formato 2` y `sin app-data (formato 2, posterior a REQ-F-045)`. El volumen sigue
+   igual y montado por la app (el segundo comando del paso 2). Si sale `formato 1`, los scripts
+   nuevos no quedaron instalados: repite el paso 3 antes de seguir.
+5. **Haz el merge.** El job `deploy` falla con el código 4 (`deploy/` cambió) sin tocar nada.
+   **Reinstala `deploy/`** con este paso, desde ese commit de `main`, y vuelve a ejecutar el job
+   (**Re-run failed jobs**). Los scripts de respaldos ya están instalados: no se reinstalan.
+6. **Vuelve tu copia local a `main`** (`git switch main && git pull`) para las próximas pruebas
+   mensuales. `verify-backup.sh` es el mismo que el de la rama del PR.
+7. **Comprobaciones** (solo lectura), con `C` del [paso 5](#5-operar-a-mano):
+
+   ```sh
+   sudo docker volume inspect restaurante_app-data >/dev/null && echo existe
+   sudo docker ps -a --filter volume=restaurante_app-data          # vacío: nadie lo monta
+   seq 1 30 | xargs -P 30 -I{} curl -s -o /dev/null -w '%{http_code}\n' https://birriaelmuneco.com/admin/login | sort | uniq -c
+   # 30 302 (ningún 429)
+   curl -s -o /dev/null -w '%{http_code}\n' https://birriaelmuneco.com/molotes     # 200
+   $C logs api | grep -E '"msg":"(server_started|admin_bootstrap_ignored)"'          # y ningún admin_bootstrap_created
+   ```
+
+   Después, un respaldo a mano y su verificación ([11.6](#116-verificar-la-instalación), punto 1;
+   `journalctl` dice `respaldo completo`), y `verify-backup.sh` en tu Mac: `manifiesto: formato 2`,
+   ahora con la imagen de la app de la limpieza.
+
+Vuelta atrás: la automática de `deploy.sh` vuelve a la app de REQ-F-045 (PR 2), que arranca con
+este compose. Volver a una versión anterior a REQ-F-045 exige el compose de su commit
+([§6](#volver-a-una-versión-anterior-a-req-f-045)).
 
 **Al llegar a `main` el bot en `api` (REQ-F-042):** cambian `compose.prod.yaml` (variables del bot
 y router del webhook en `api`) y `deploy.sh`, así que su suma cambia. **Reinstala `deploy/` con este
@@ -408,14 +490,15 @@ sudo -u deploy -H nano /opt/restaurante/.env
 - **Contraseñas de MySQL:** cada una con `openssl rand -hex 32`. Son obligatorias y deben ser
   hexadecimales. Solo se aplican al crear el volumen de MySQL: cambiarlas después exige también
   `ALTER USER` en MySQL.
-- **App y `api`:** las variables que describen [`landing-pages/.env.example`](../landing-pages/.env.example) (WhatsApp,
-  `SITE_URL=https://birriaelmuneco.com`, primer administrador) y [`api/.env.example`](../api/.env.example) (bot de Meta).
-  - Un solo `.env`: el compose pasa las mismas variables del bot a `api`, que las usa todas, y a
-    `app`, que usa el proveedor, el personal, la clave de la lista negra y los topes para la página
-    "Bot" de `/admin` (REQ-F-042). Las demás siguen llegando a `app` hasta el ticket 6, porque la
-    vuelta atrás a una versión con el bot en `app` las necesita.
-  - El compose fija `NODE_ENV`, `HOST`, `PORT`, `WEBHOOK_PORT`, `TRUST_PROXY`, `DATA_DIR` y
-    `DATABASE_URL`: no las pongas.
+- **App y `api`:** las variables que describen [`landing-pages/.env.example`](../landing-pages/.env.example) (WhatsApp y
+  `SITE_URL=https://birriaelmuneco.com`) y [`api/.env.example`](../api/.env.example) (bot de Meta y
+  primer administrador).
+  - Un solo `.env`: el compose pasa a cada servicio solo lo suyo. Las variables del bot y
+    `ADMIN_USER`/`ADMIN_PASSWORD_HASH` solo llegan a `api` (desde la limpieza de REQ-F-045);
+    `WHATSAPP_MOLOTES` y `WHATSAPP_BIRRIA` llegan a las dos (CTA de las landings y regla D-6 del
+    bot, que comprueba la `api`).
+  - El compose fija `NODE_ENV`, `HOST`, `PORT`, `WEBHOOK_PORT`, `TRUST_PROXY` y `DATABASE_URL` (solo
+    de la `api`): no las pongas.
   - `ADMIN_PASSWORD_HASH` va entre comillas simples. Genéralo con `npm run admin:hash-password`
     en tu máquina.
 - **Admin nuevo (REQ-F-039):**
@@ -442,9 +525,9 @@ En el primer arranque:
 - MySQL crea la base y los usuarios: `restaurante_app` (solo DML), `restaurante_migrator` (DDL)
   y `restaurante_backup` (solo lectura).
 - `migrate` crea las tablas.
-- La `api`, que arranca antes que la app, siembra los productos y la página de la semilla
-  (REQ-F-045). La app copia las semillas en su volumen, encuentra las marcas sin reimportar y crea
-  el primer administrador con `ADMIN_USER`/`ADMIN_PASSWORD_HASH` (el compose aún se las pasa a ella).
+- La `api`, que arranca antes que la app, siembra los productos y la página de la semilla y crea el
+  primer administrador con `ADMIN_USER`/`ADMIN_PASSWORD_HASH` (REQ-F-045). Sin esas variables, el
+  acceso se crea con `admin-recover` ([paso 5](#5-operar-a-mano)). La app no toca la base.
 
 Si la app no queda sana en el primer despliegue, no hay versión anterior: el workflow queda en
 rojo y la app se queda como esté ([Diagnóstico](#10-diagnóstico)).
@@ -456,7 +539,7 @@ rojo y la app se queda como esté ([Diagnóstico](#10-diagnóstico)).
 | CA-1: HTTPS y certificado | `curl -sI https://birriaelmuneco.com` → 200, certificado válido en el navegador, landing del día |
 | CA-2: redirecciones | Con GET, como un navegador: `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' 'http://birriaelmuneco.com/molotes?a=1'` (y lo mismo con `http://www.`) → `301` hacia `https://` del mismo host con la ruta y la query (redirección global del entrypoint `web` del Traefik del VPS). Con `'https://www.birriaelmuneco.com/molotes?a=1'` → `301 https://birriaelmuneco.com/molotes?a=1`. Así, `http://www.` llega a la raíz en dos saltos. Con `curl -sI` (HEAD), Traefik responde `308` a las mismas redirecciones: no es un defecto, pero no sirve para esta comprobación |
 | CA-3: puertos cerrados | Desde fuera: `nc -vz <vps> 3000` y `nc -vz <vps> 3306` fallan |
-| CA-4: límite de `/admin` | 30 peticiones **en paralelo**, `seq 1 30 \| xargs -P 30 -I{} curl -s -o /dev/null -w '%{http_code}\n' https://birriaelmuneco.com/admin/login \| sort \| uniq -c`, dan unas 20 con 200 y el resto con 429 (el 2026-10-29: 20 y 10; 10 por minuto y ráfaga de 20, en `deploy/compose.prod.yaml`); `/molotes` sigue en 200. En serie puede no salir ningún 429: con la latencia real la ráfaga se recarga, como en el admin nuevo |
+| CA-13 de REQ-F-045: `/admin` sin límite propio | 30 peticiones **en paralelo**, `seq 1 30 \| xargs -P 30 -I{} curl -s -o /dev/null -w '%{http_code}\n' https://birriaelmuneco.com/admin/login \| sort \| uniq -c`, dan `30 302` (ningún 429); `/molotes` sigue en 200. Hasta esa limpieza había un límite de 10 por minuto y ráfaga de 20 (el 2026-10-29: 20 con 200 y 10 con 429) |
 | CA-5: IP real | En `docker logs restaurante-app-1`, la línea `request` lleva `"protocol":"https"` y tu IP pública, no una `172.x` de Docker. Si sale una `172.x`, Traefik no ve la IP de origen (proxy de Docker en IPv6, CDN delante): revisa la publicación de puertos de Traefik |
 | CA-6 y CA-9 | Un merge despliega solo; dos merges seguidos se despliegan uno tras otro (Actions → `deploy`) |
 | CA-10 | `stat -c '%a %U' /opt/restaurante/.env` → `600 deploy`; `sudo -l -U deploy` sin sudo |
@@ -489,10 +572,8 @@ ls -lt backups/                                    # volcados
   `$C exec app node scripts/admin-recover.ts --usuario <nombre>`.
 - **Reiniciar la app:** `$C restart app`. Para reiniciar el bot, `$C restart api`: conserva el router
   del webhook.
-- **Recrear la app** (`$C up -d app`): usa los digests de `state/release.env`. Tras una vuelta
-  atrás con la base más nueva, la app recreada sin `DATABASE_ALLOW_NEWER_SCHEMA=true` no
-  arranca (`DATABASE_NEWER_THAN_CODE`). Pásala con `sudo env` ([paso 6](#6-volver-a-una-versión-anterior-a-mano))
-  o, mejor, despliega una versión corregida.
+- **Recrear la app** (`$C up -d app`): usa los digests de `state/release.env`. Desde REQ-F-045 la
+  app no usa la base, así que arranca igual tras una vuelta atrás con la base más nueva.
 - **Recrear la `api`:** sigue [Arrancar la `api` a mano](#arrancar-la-api-a-mano), para que el router del
   webhook quede coherente con la imagen.
 
@@ -540,10 +621,11 @@ motivo:
      Si no, el `inventory-manager` nuevo queda con esa `api` de forma estable: el enlace "Bot" sigue
      visible y la pantalla da 503 con un aviso. Sobre una base más nueva que esa imagen no hace falta
      la bandera: `inventory-manager` no usa la base.
-  4. Vuelve la app:
+  4. Vuelve la app (con este compose, solo a una versión de REQ-F-045 o posterior; para una
+     anterior, ver [abajo](#volver-a-una-versión-anterior-a-req-f-045)):
 
      ```sh
-     sudo env DATABASE_ALLOW_NEWER_SCHEMA=true RESTAURANTE_APP_IMAGE=ghcr.io/orvigas/restaurante@sha256:<digest> $CE up -d --no-deps app
+     sudo env RESTAURANTE_APP_IMAGE=ghcr.io/orvigas/restaurante@sha256:<digest> $CE up -d --no-deps app
      ```
 
   5. Si también vuelves la `api`, sigue ahora [Arrancar la `api` a mano](#arrancar-la-api-a-mano).
@@ -553,10 +635,42 @@ Para volver a escribir en `/admin/bot` basta con la app: una versión anterior a
 tener los formularios, y una `api` nueva recoge esos cambios en 10 s
 (`BOT_CONTROL_REFRESH_SECONDS`).
 
+### Volver a una versión anterior a REQ-F-045
+
+Desde la limpieza de REQ-F-045 (PR 3), el compose ya no pasa a la app `DATABASE_URL`, `DATA_DIR`,
+`ADMIN_*` ni las variables del bot, ni le monta `app-data`. Una app anterior a REQ-F-045 (anterior
+al PR 2, el que retiró `/admin`) los necesita: **con el compose actual no arranca**. La vuelta atrás
+automática de `deploy.sh` nunca llega ahí (vuelve a la app anterior, que ya es de REQ-F-045), así que
+solo afecta a una vuelta atrás a mano:
+
+- **Revert en `main`** del PR de la limpieza (y del PR 2 si quieres esa app): el revert devuelve el
+  compose anterior. El job `deploy` falla con el código 4: reinstala el `deploy/` de ese commit
+  ([1.3](#13-instalar-deploy)) y vuelve a ejecutarlo.
+- **Urgente, en el VPS:** instala con [1.3](#13-instalar-deploy) el `deploy/` del último commit de
+  `main` anterior a la limpieza y sigue los pasos de arriba, con la bandera para la app (la base es
+  más nueva que ella):
+
+  ```sh
+  sudo env DATABASE_ALLOW_NEWER_SCHEMA=true RESTAURANTE_APP_IMAGE=ghcr.io/orvigas/restaurante@sha256:<digest> $CE up -d --no-deps app
+  ```
+
+  El siguiente despliegue desde `main` falla con el código 4 hasta que reinstales el `deploy/` de
+  `main`.
+
+En los dos casos el volumen `restaurante_app-data` vuelve a montarse con los JSON que tenía (nadie
+los cambia desde REQ-F-044): la app anterior encuentra las marcas de `page_import` y no reimporta
+nada. Por eso el volumen **no se borra**. En un VPS nuevo, restaurado desde un respaldo de formato 2
+(sin `app-data`), no vuelvas a una versión anterior a REQ-F-045: restaura antes un respaldo de
+formato 1 ([11.7](#117-restaurar-runbook)).
+
 ### Vuelta atrás tras el corte de la página (REQ-F-044)
 
+Histórico: solo aplica a las versiones anteriores a REQ-F-045, que se arrancan con el compose de su
+commit ([arriba](#volver-a-una-versión-anterior-a-req-f-045)). Desde REQ-F-045 la app no importa
+nada.
+
 Desde el PR 3 de REQ-F-044 la página (hero, texto destacado y promociones) vive en MySQL. La `app`
-la importa una sola vez desde `app-data` al arrancar, antes de escuchar, y deja la marca en
+la importaba una sola vez desde `app-data` al arrancar, antes de escuchar, y dejaba la marca en
 `page_import`. Los JSON no se modifican.
 
 - **Si la importación falla o se niega** (`page_import_failed` en `$C logs app`), la `app` termina
@@ -630,8 +744,9 @@ compose instalado: `deploy.sh` lee la etiqueta `org.restaurante.webhook` de la i
 - **Vuelta atrás automática** (código 21): `deploy.sh` vuelve a la app y después a la `api` anteriores,
   y comprueba que esa `api` queda `healthy` y con el webhook; si no, termina con el código 22. Si esa
   `api` no tiene la etiqueta, el router se apaga y `/webhooks/whatsapp` vuelve al router raíz, es
-  decir, a la app anterior, que tiene el bot y sigue recibiendo sus variables. Así el webhook nunca
-  queda en un proceso sin bot.
+  decir, a la app. Hasta REQ-F-045 esa app anterior tenía el bot y recibía sus variables; desde la
+  limpieza de REQ-F-045 la app no las recibe, pero toda `api` desde REQ-F-042 lleva la etiqueta, así
+  que la automática siempre deja el webhook en una `api`.
 - **Revert en `main`:** también exige reinstalar el `deploy/` de ese commit (código 4), que no tiene
   el router.
 
@@ -683,7 +798,9 @@ valores por defecto (ver `README.md`, "Topes de gasto, lista negra e interruptor
    `bot_staff_delivery_failed` y `bot_webhook_signature_invalid`.
 4. **Control del bot (REQ-F-043), como administrador:**
    - `https://admin.birriaelmuneco.com/bot` muestra el estado, los contadores y la lista negra.
-5. **Despliegue del corte de la página (REQ-F-044), una sola vez:**
+5. **Despliegue del corte de la página (REQ-F-044), una sola vez** (aplicado; se conserva como
+   referencia: desde la limpieza de REQ-F-045 la app no monta `app-data` y el primer comando ya no
+   funciona):
    - **Antes de desplegar**, en el VPS: el tamaño de `changes.jsonl` y que existan los
      `current.json` de los dos negocios en `app-data` (sin mirar su contenido):
 
@@ -756,10 +873,14 @@ gzip -dc backups/<archivo>.sql.gz | $C exec -T mysql sh -c 'exec mysql -uroot -p
    `state/release.env` y el webhook daría 502. Con otro `inventory-manager`, arráncalo igual con
    `sudo env RESTAURANTE_INVENTORY_IMAGE=<imagen> $CE up -d --no-deps inventory-manager`.
 
+   Desde REQ-F-045 la app no usa la base: lo que debe corresponder al volcado es la `api`, que
+   verifica las migraciones al arrancar.
+
 2. Los permisos de los usuarios (`GRANT ... ON restaurante.*`) sobreviven al `DROP DATABASE`.
-   La página (REQ-F-044) vuelve con el volcado, incluida su marca `page_import`: un volcado
-   posterior a la importación no reimporta nada, y uno anterior la repite al arrancar con los JSON
-   de `app-data`.
+   La página (REQ-F-044) vuelve con el volcado, incluida su marca `page_import`. Desde REQ-F-045
+   nada la reimporta: con un volcado anterior a la importación (antes del 2026-11-16), la pantalla
+   "Página" queda "no disponible" y las landings muestran la página de la semilla (RN-4 de
+   REQ-F-045; ver [11.7](#117-restaurar-runbook)).
 3. Comprueba `$C ps` (healthy) y el [paso 8](#8-comprobaciones-después-de-cada-despliegue).
 4. Si el siguiente despliegue desde `main` vuelve a fallar en la migración, corrige la migración
    antes de volver a desplegar.
@@ -787,24 +908,22 @@ el log del paso `desplegar`.
 | Código 11 `MySQL no quedó healthy` | MySQL no arrancó (memoria, disco, volumen dañado) o el initdb falló en el primer arranque (contraseñas no hexadecimales) | `$C logs mysql`; la app no se tocó |
 | Código 12 (volcado) | MySQL caído, disco lleno o usuario `restaurante_backup` | `$C logs mysql`, `df -h` |
 | Código 13 (migración) | La migración falló; la app sigue con la versión anterior | Lee el error de Prisma en el log. Si quedó a medias, [restaura](#9-restaurar-la-base-desde-un-volcado) |
-| Código 15 (REQ-F-038) | La `api` nueva no quedó `healthy` o Traefik no le enruta `/webhooks/whatsapp` (REQ-F-042); se volvió a la anterior si la había. La app no se tocó o, si hubo migraciones nuevas, se recreó con su misma imagen y `DATABASE_ALLOW_NEWER_SCHEMA=true` (el log del paso lo dice) | `$C logs api`: suele ser la base (`database_init_failed`), la imagen o, con el bot, su configuración (lista los problemas sin valores). Si la `api` estaba `healthy`, revisa el router `restaurante-webhook` en Traefik y que la `api` esté en `traefik-public`. Las landings siguen con su última copia buena y el webhook, donde estaba. Corrige y vuelve a desplegar: el siguiente despliegue correcto deja la app sin la bandera |
-| Código 16 (REQ-F-039) | `inventory-manager` no quedó `healthy` o Traefik no lo enruta en `admin.<dominio>`; volvió al anterior (o se detuvo si no lo había). La app no se tocó (o, con migraciones nuevas, se recreó con la bandera, como en el código 15); la `api` nueva sigue. En el primer despliegue de REQ-F-042 quedan a la vez la `api` con el bot y la app anterior: el webhook va a la `api`, pero el mantenimiento del control puede correr en las dos hasta el siguiente despliegue y duplicar alguna auditoría de caducidad | `$C logs inventory-manager`: suele ser la configuración (`API_INTERNAL_URL`) o la imagen. Comprueba `RESTAURANTE_ADMIN_DOMAIN` y los routers `restaurante-inventory*` de Traefik. La edición de productos sigue en el `/admin` anterior hasta un despliegue correcto |
+| Código 15 (REQ-F-038) | La `api` nueva no quedó `healthy` o Traefik no le enruta `/webhooks/whatsapp` (REQ-F-042); se volvió a la anterior si la había. La app no se tocó (con migraciones nuevas, el log dice que se recrea con `DATABASE_ALLOW_NEWER_SCHEMA=true`, pero desde REQ-F-045 el compose no se la pasa y la app sigue igual) | `$C logs api`: suele ser la base (`database_init_failed`), la imagen o, con el bot, su configuración (lista los problemas sin valores). Si la `api` estaba `healthy`, revisa el router `restaurante-webhook` en Traefik y que la `api` esté en `traefik-public`. Las landings siguen con su última copia buena y el webhook, donde estaba. Corrige y vuelve a desplegar |
+| Código 16 (REQ-F-039) | `inventory-manager` no quedó `healthy` o Traefik no lo enruta en `admin.<dominio>`; volvió al anterior (o se detuvo si no lo había). La app no se tocó (como en el código 15); la `api` nueva sigue. En el primer despliegue de REQ-F-042 quedan a la vez la `api` con el bot y la app anterior: el webhook va a la `api`, pero el mantenimiento del control puede correr en las dos hasta el siguiente despliegue y duplicar alguna auditoría de caducidad | `$C logs inventory-manager`: suele ser la configuración (`API_INTERNAL_URL`) o la imagen. Comprueba `RESTAURANTE_ADMIN_DOMAIN` y los routers `restaurante-inventory*` de Traefik. Hasta un despliegue correcto queda el `inventory-manager` anterior |
 | `products_notify_failed` / `products_notify_gave_up` en `api` | El aviso interno a `app` (puerto 3002) falla: `app` caída o credencial distinta | `$C ps app`; comprueba que `RESTAURANTE_INTERNAL_NOTIFY_TOKEN` sea la misma para las dos (la reciben del mismo `.env`). Mientras tanto, la landing ve el cambio como mucho en 60 s; el bot, al instante |
 | `POST /webhooks/whatsapp` responde 404 con CSP, o el bot no contesta | La ruta llegó a `app`: `api` caída o reiniciándose, o su router apagado | `$C ps api`; `docker inspect -f '{{index .Config.Labels "traefik.enable"}}' "$($C ps -q api)"` debe decir `true`. Si dice `false` con la imagen actual, recréala con [Arrancar la `api` a mano](#arrancar-la-api-a-mano). Meta reintenta lo que no recibió 200 |
 | El webhook responde 503 `BOT_DISABLED` | La `api` no ve variables del bot | Revisa las `WHATSAPP_BOT_*` del `.env` y recrea la `api` |
 | `/webhooks/whatsapp` responde 502 | Traefik enruta a una `api` que no escucha en el 3004: una `api` anterior a REQ-F-042 con el router encendido, o una `api` recreada a mano. Su healthcheck no mira el 3004 y sale `healthy` | `sudo docker image inspect -f '{{index .Config.Labels "org.restaurante.webhook"}}' "$($C ps -q api \| xargs sudo docker inspect -f '{{.Config.Image}}')"`: si no dice `whatsapp`, recréala con [Arrancar la `api` a mano](#arrancar-la-api-a-mano). Meta reintenta lo que no recibió 200 |
 | `restore.sh` termina con `AVISO: el bot queda SIN SERVICIO` | App restaurada sin bot y `api` sin router | [Arrancar la `api` a mano](#arrancar-la-api-a-mano) con una `api` con webhook, o vuelve a desplegar |
 | `bot_api_error` sin respuesta de Meta en `api` | Sin salida a internet | Comprueba que la `api` esté en `traefik-public` (`$C ps`, `docker inspect`) |
-
 | `admin.<dominio>` responde 429 | Límite de Traefik del admin nuevo (60 por minuto por IP, ráfaga de 60) | Espera un minuto |
 | Las landings registran `landing_products_fallback` | La `api` no responde, tarda más de 1,5 s o devuelve algo fuera del contrato | `$C ps api` y `$C logs api`. Las landings sirven su última copia buena (o la semilla tras reiniciar `app`) y vuelven solas cuando la api responde (`landing_products_recovered`) |
 | Código 20 | Primer despliegue sin versión anterior y la app no arranca | `$C logs app`: suele ser el `.env` (`ConfigError` lista los problemas) |
-| Código 21 | La versión nueva no arrancó; se volvió a la anterior | Corrige y vuelve a desplegar. La app anterior corre con `DATABASE_ALLOW_NEWER_SCHEMA=true` si hubo migración |
+| Código 21 | La versión nueva no arrancó; se volvió a la anterior | Corrige y vuelve a desplegar. La `api` anterior corre con `DATABASE_ALLOW_NEWER_SCHEMA=true` si hubo migración |
 | Código 22 | Tampoco arrancó la versión anterior | [Restaura la base](#9-restaurar-la-base-desde-un-volcado) y arranca la versión del volcado |
 | Código 22 con `la app anterior está restaurada` (REQ-F-042) | La app volvió, pero la `api` anterior no quedó `healthy` o Traefik no le enruta el webhook: el bot puede estar sin servicio | `$C ps api` y `$C logs api`. Arranca una `api` que funcione con [Arrancar la `api` a mano](#arrancar-la-api-a-mano) o vuelve a desplegar. No hace falta restaurar la base |
-| `/admin` responde 503 y `admin_requires_https` | La petición no llegó por HTTPS a través de Traefik | Revisa el entrypoint HTTPS y el certresolver |
-| `/admin` responde 429 | Límite de Traefik (10 por minuto por IP, ráfaga de 20) | Espera un minuto. Cada guardado son 2 peticiones (POST y redirección) |
-| `database_init_failed` | Base inalcanzable, credenciales, migraciones pendientes o base más nueva que el código | Según el código del log ([Base de datos](../README.md#base-de-datos)) |
+| `/admin` responde 404 en lugar del 302 | La app no recibe `ADMIN_NEW_URL` (REQ-F-045) | Revisa `RESTAURANTE_ADMIN_DOMAIN` en el `.env` y que el `deploy/` instalado sea el de `main` |
+| `database_init_failed` en `$C logs api` | Base inalcanzable, credenciales, migraciones pendientes o base más nueva que el código | Según el código del log ([Base de datos](../README.md#base-de-datos)). Desde REQ-F-045 solo la `api` usa la base |
 
 ## 11. Respaldos fuera del VPS
 
@@ -816,15 +935,21 @@ REQ-F-019. Objetivo: perder como mucho 24 h de datos (RPO) y recuperar el servic
 - **Cuándo:** cada día a las 03:00 de `America/Mexico_City` (`restaurante-backup.timer`; el host
   está en UTC). Si el VPS estaba apagado a esa hora, se ejecuta al arrancar.
 - **Qué guarda:**
-  - un `mysqldump` de `restaurante` hecho con el usuario de solo lectura `restaurante_backup`;
-  - el volumen `restaurante_app-data` completo, sin los temporales. Desde REQ-F-044 la página está en
-    el volcado (`page_version`, `page_change` y `page_import`) y los JSON de `app-data` solo sirven
-    para repetir la importación desde un volcado anterior a ella; se siguen guardando hasta el
-    ticket 6;
+  - un `mysqldump` de `restaurante` hecho con el usuario de solo lectura `restaurante_backup` (con
+    la página desde REQ-F-044: `page_version`, `page_change` y `page_import`);
   - un manifiesto con los conteos de `user` y `product`, la última migración, las imágenes y el
     commit de `state/release.env`, y las sumas sha256.
-- **Integridad:** un volcado incompleto o dañado (o un `app-data` sin `molotes/` y `birria/`) no se
-  cifra ni se sube.
+- **Formatos:**
+  - **2** (desde la limpieza de REQ-F-045, cuyos scripts se instalan justo antes de su merge, con
+    la app del PR 2; ver [1.3](#13-instalar-deploy)): manifiesto y volcado. El volumen
+    `restaurante_app-data` no se respalda: la app no lo usa y, desde la limpieza, nadie lo monta (se
+    conserva en el VPS).
+  - **1** (los anteriores, que siguen en R2 hasta que caduquen): además, `app-data.tar`, el volumen
+    `restaurante_app-data` sin los temporales. Todos llevan una imagen de la app anterior a la
+    limpieza, con la carpeta de `DATA_DIR`.
+
+  `restore.sh` y `verify-backup.sh` aceptan los dos.
+- **Integridad:** un volcado incompleto o dañado no se cifra ni se sube.
 - **Cifrado:** con `age`, usando solo las claves públicas de `/etc/restaurante-backup/recipients.txt`.
   La clave privada nunca está en el VPS.
 - **Destino:** Cloudflare R2.
@@ -858,7 +983,7 @@ Códigos de salida de `backup.sh`:
 | 2 | Configuración inválida |
 | 3 | Precondición: disco lleno, sin `release.env`, MySQL parado |
 | 4 | Un despliegue siguió en curso 30 min |
-| 5 | Falló el volcado o la lectura de `app-data` |
+| 5 | Falló el volcado |
 | 6 | Integridad |
 | 7 | Cifrado |
 | 8 | Subida; la copia local queda pendiente |
@@ -962,7 +1087,9 @@ systemctl list-timers restaurante-backup.timer     # próxima ejecución: 09:00 
 rm -rf /tmp/restaurante-backup
 ```
 
-Para actualizar los scripts, repite `scp` y los `install`, y después `daemon-reload`. Nada de esto
+Para actualizar los scripts, repite `scp` y los `install`, y después `daemon-reload`. Excepción:
+los de la limpieza de REQ-F-045 se instalan desde la rama del PR, antes de su merge
+([1.3](#13-instalar-deploy)). Nada de esto
 toca `deploy/`: la suma de `cd /opt/restaurante/deploy && sha256sum compose.prod.yaml deploy.sh
 mysql/initdb/01-usuarios.sh | sha256sum` no cambia.
 
@@ -1012,7 +1139,8 @@ nuevo. **Se pierde todo lo escrito después del respaldo.**
 3. Comprueba las sumas.
 4. Pide que escribas `restaurante` para confirmar.
 5. Para la app y recarga la base como root (`DROP DATABASE` y el volcado).
-6. Vacía y restaura `app-data`.
+6. Solo con un respaldo de formato 1: vacía y restaura el volumen `app-data` (lo crea si no existe).
+   Ningún servicio lo monta; queda para una vuelta a una versión anterior a REQ-F-045.
 7. Arranca **la imagen de la app del respaldo** y espera a que esté `healthy`.
 8. Actualiza `state/release.env` y anota la restauración en `state/releases.log`.
 
@@ -1037,12 +1165,33 @@ Después, haz las comprobaciones del [paso 8](#8-comprobaciones-después-de-cada
 
 **Casos:**
 
+- **Respaldo anterior a REQ-F-045** (formato 1 con una app anterior al PR 2 de REQ-F-045, del
+  2026-11-17 o antes): esa app necesita la base y `DATA_DIR`, que el compose actual ya no le pasa, y
+  `restore.sh` termina con el código 12 con la base y `app-data` ya restaurados. Vuelve a desplegar
+  la punta de `main` ([Redesplegar](#redesplegar-la-punta-de-main)): migra la base si hace falta y
+  arranca la app y la `api` actuales. Si de verdad necesitas esa versión, sigue
+  [Volver a una versión anterior a REQ-F-045](#volver-a-una-versión-anterior-a-req-f-045).
+- **Respaldo de formato 2 con la app del PR 2 de REQ-F-045** (hecho entre la instalación de los
+  scripts nuevos y el merge de la limpieza, [1.3](#13-instalar-deploy)): se restaura como cualquier
+  otro de formato 2. Esa app no usa la base ni `DATA_DIR` y arranca con el compose actual.
+- **Limitación conocida:** un respaldo de formato 1 con la imagen de la app de la limpieza o posterior
+  (sin la carpeta de `DATA_DIR`) no se restaura sobre un volumen `app-data` nuevo: `restore.sh`
+  termina con el código 11, con la base restaurada y la app parada, y el `--drill` falla. Con el
+  orden de [1.3](#13-instalar-deploy) no se genera ninguno. Si aparece, usa otro respaldo, o
+  redespliega la punta de `main` ([Redesplegar](#redesplegar-la-punta-de-main)), que arranca la app
+  sin `app-data`.
+- **Respaldo anterior al 2026-11-16 (antes de la importación de la página, RN-4 de REQ-F-045):** la
+  base vuelve sin filas de página y nada las reimporta. La pantalla "Página" del admin nuevo queda
+  "no disponible" y las landings muestran la página de la semilla (precio del hero de $195 en Birria
+  y $145 en Molotes) hasta que la corrijas a mano en "Página".
 - **Migración a medias (`MIGRATION_INCOMPLETE`) justo tras un despliegue:** usa primero el volcado
   previo de `deploy.sh` ([paso 9](#9-restaurar-la-base-desde-un-volcado)), que es más reciente. Solo
   si no sirve, usa el último respaldo de R2.
-- **El respaldo es más viejo que el código (`MIGRATIONS_PENDING`):** no pasa con `restore.sh`,
-  porque arranca la imagen del respaldo. El siguiente despliegue desde `main` aplica las
-  migraciones pendientes con su volcado previo.
+- **El respaldo es más viejo que el código (`MIGRATIONS_PENDING`):** el siguiente despliegue desde
+  `main` aplica las migraciones pendientes con su volcado previo. Desde REQ-F-045 la app no
+  verifica la base: la que lo hace es la `api`, que `restore.sh` no toca, y solo al arrancar. Si el
+  respaldo es más viejo que la `api` en marcha, vuelve a desplegar la punta de `main` en cuanto
+  termine la restauración.
 - **`DATABASE_NEWER_THAN_CODE`:** la base tiene migraciones que la imagen arrancada no conoce, por
   ejemplo si se arrancó a mano una imagen anterior. Arranca la imagen del respaldo (la que imprime
   `restore.sh`, también en `state/release.env`). `DATABASE_ALLOW_NEWER_SCHEMA=true` solo se usa
@@ -1094,9 +1243,10 @@ restaurante/ops/backup/verify-backup.sh --drill
 4. Compara los conteos de `user` y `product` y la última migración con el manifiesto, es decir,
    con producción en el momento del respaldo. Si `counts_stable=false`, hubo escrituras durante el
    volcado y una diferencia en los conteos solo es un aviso.
-5. Comprueba los JSON de `molotes/` y `birria/`.
-6. Con `--drill`, arranca además la imagen de la app del respaldo con esa base y ese `app-data`, y
-   espera a que responda.
+5. Solo con un respaldo de formato 1: comprueba los JSON de `molotes/` y `birria/` de `app-data`.
+6. Con `--drill`, arranca además la imagen de la app del respaldo y espera a que responda. Con un
+   respaldo de formato 1 le da también esa base y ese `app-data`, que la app de entonces
+   necesitaba; desde REQ-F-045 la app no usa ninguno de los dos.
 
 Al terminar:
 

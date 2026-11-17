@@ -2,12 +2,25 @@
 
 ## Estado
 
-READY_FOR_MERGE (PR 3 de 3)
+DONE (2026-11-17)
 
 - PR 1: #156 (https://github.com/orvigas/negocio/pull/156), mergeado en `epic/arquitectura` (`425e21a`).
 - PR 2: #157 (https://github.com/orvigas/negocio/pull/157), mergeado en `epic/arquitectura` (`dbba0a9`) y desplegado en producción con el PR #158 (épica → `main`, `9fbb7ee`).
-- PR 3: #160 (https://github.com/orvigas/negocio/pull/160) hacia `epic/arquitectura`, rama `feature/REQ-F-045-retirada-admin-actual-3-limpieza` (avanzada por fast-forward hasta `origin/epic/arquitectura` = `10652da`), commit `df20046`. QA_APPROVED en la ronda 2 (DEF-001 corregido con la opción A). CI del PR listo: ver el historial ("PR 3 abierto").
-- El ticket sigue en `in-progress/` hasta que el usuario confirme producción estable tras desplegar la épica en `main` siguiendo `docs/despliegue.md` §1.3 (scripts de respaldos y su verificación **antes** del merge de la épica a `main`; después, código 4, reinstalar `deploy/` y relanzar el job).
+- PR 3: #160 (https://github.com/orvigas/negocio/pull/160), mergeado en `epic/arquitectura` (`a9209ba`) y desplegado en producción con el PR #161 (épica → `main`, `d358e9f`).
+- Producción comprobada por el usuario tras el despliegue (ver el historial, "Cierre").
+
+## Seguimiento
+
+Pendiente de observación (no bloquea el cierre):
+
+- El primer respaldo automático con el compose nuevo es el de las 09:00 UTC del 2026-11-18: debe ser de formato 2 (comprobarlo con `verify-backup.sh`).
+
+Decisiones pendientes que **no** forman parte de este ticket ni de su cierre (no ejecutadas; cada una, en un cambio o ticket aparte):
+
+- (a) Actualizar `.claude/rules/testing.md` (las líneas 25 y 31 citan `setupAdmin`) y `.claude/agents/senior-fullstack.md` (cita `src/content/<negocio>/seed.json` y `admin-guard.ts`), que describen el `/admin` retirado. Requiere autorización explícita del usuario para tocar `.claude/rules/` y `.claude/agents/`.
+- (b) Texto desfasado en `restaurante/deploy/deploy.sh`: el mensaje de log sobre `DATABASE_ALLOW_NEWER_SCHEMA` y la cabecera que habla de `/admin` en solo lectura.
+- (c) Llevar QA-37 y QA-65 (control del bot) y las dos variantes de degradación cruzada entre administradores a una prueba permanente con nombre de dominio, en otro ticket.
+- (d) Quitar el código que quedó solo para pruebas: el modo `'panel'` de `createBotControl` y las ramas `current`/`previous` de `planPageImport`.
 
 ## Aprobación
 
@@ -2135,3 +2148,7 @@ No repite `npm test` ni los dos `smoke.sh`, porque su objeto no cambió. Limpiez
 ### PR 3 abierto (2026-11-17)
 
 Tras `QA_APPROVED` del PR 3 (ronda 2), la rama se avanza por fast-forward hasta `origin/epic/arquitectura` (`10652da`: solo los merges #158 y #159, sin cambios de archivos). Commit `df20046` (`feat: el despliegue y los respaldos dejan la base y app-data de las landings`) y PR #160 hacia `epic/arquitectura`, abierto como borrador y marcado listo en un comando aparte después del último push. La descripción incluye el orden de despliegue de `docs/despliegue.md` §1.3. Estado: `READY_FOR_MERGE` (PR 3 de 3), sujeto al CI en verde del PR listo (`calidad`, `docker`, `auditoria` y `pruebas` 1/2 y 2/2 en `pass`). El ticket sigue en `in-progress/` hasta que el usuario confirme producción estable tras el despliegue.
+
+### Cierre (2026-11-17)
+
+El usuario confirma ("todo comprobado, mergeado") que los tres PR del ticket están mergeados en `epic/arquitectura` (#156, #157 y #160) y publicados en `main` con los PR de la épica #158 y #161. Despliegue comprobado en producción: job `deploy` en `success` tras reinstalar `deploy/` por el código 4; `/admin/login` responde 302 (30 de 30); landings en 200; `api` sana con `admin_bootstrap_ignored`; volumen `app-data` existente y sin montar; respaldo manual de formato 2 verificado con el simulacro (`--drill`) del Mac en `ok`; el usuario probó el admin nuevo con su sesión. Queda en observación el primer respaldo automático (09:00 UTC del 2026-11-18) y las decisiones de la sección "Seguimiento", fuera del cierre. Ticket movido de `in-progress/` a `done/`. Estado: `DONE`.

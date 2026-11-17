@@ -2,10 +2,10 @@
 
 ## Estado
 
-QA_APPROVED (PR 2 de 3)
+READY_FOR_MERGE (PR 2 de 3)
 
 - PR 1: #156 (https://github.com/orvigas/negocio/pull/156), mergeado en `epic/arquitectura` (`425e21a`).
-- PR 2: implementado en `feature/REQ-F-045-retirada-admin-actual-2-retirada` (sin commit). Implementación aprobada ("Si la apruebo"), QA Action Plan aprobado ("Apruebo todo") y QA ronda 1 aprobada; listo para commit y PR a `epic/arquitectura`.
+- PR 2: #157 (https://github.com/orvigas/negocio/pull/157), hacia `epic/arquitectura`, commit `69c0c7e`. Abierto como borrador y marcado listo tras el último push; el resultado del CI con el PR listo (`calidad`, `docker`, `auditoria` y `pruebas`) queda en el informe del PR.
 
 ## Aprobación
 
@@ -1500,3 +1500,7 @@ El usuario aprueba la implementación del PR 2 ("Si la apruebo"). `senior-qa` a�
 ### QA del PR 2, ronda 1 (2026-11-16/17)
 
 El usuario aprueba el QA Action Plan del PR 2 y las autorizaciones 1 a 7 ("Apruebo todo"). `senior-qa` lo ejecuta: typecheck, lint y suite en verde; repeticiones sin fallos; 4/4 mutaciones detectadas; `/admin*` con variantes, redirección abierta y cuerpos de hasta 100 MiB (directo y por Traefik); landings sin base, sin `DATA_DIR` y sin cargar módulos de base; HTML, CSS y recursos idénticos a `425e21a` y a producción; los dos `smoke.sh` reales en verde (margen del 429: 71 s, garantizado por el `sleep 61` del script); vuelta atrás y subida reales con `deploy.sh` desde la versión de producción. Sin defectos; diez observaciones. Limpieza comprobada. Estado: `QA_APPROVED` (PR 2 de 3).
+
+### PR 2 abierto (2026-11-17)
+
+Tras `QA_APPROVED` del PR 2, commit `69c0c7e` (`feat: las landings dejan el /admin actual y funcionan sin base de datos`) y PR #157 hacia `epic/arquitectura`, abierto como borrador y marcado listo después del último push. Estado: `READY_FOR_MERGE` (PR 2 de 3), sujeto al CI en verde del PR listo. El ticket sigue en `in-progress/` hasta el PR 3.

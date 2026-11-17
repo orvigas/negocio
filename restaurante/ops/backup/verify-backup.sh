@@ -11,9 +11,12 @@
 # 1. Descarga, descifra y verifica las sumas del manifiesto.
 # 2. Carga el volcado en un MySQL 8.4 efímero (el mismo digest de producción, sin puertos publicados)
 #    y compara los conteos de user y product y la última migración con el manifiesto.
-# 3. Comprueba que app-data trae los JSON de molotes/ y birria/.
-# 4. --drill: arranca la imagen de la app del respaldo con esa base y ese app-data y espera a que
-#    responda (requiere `docker login ghcr.io` con un token de lectura). Mide el tiempo total.
+# 3. Solo en un respaldo de formato 1 (anterior a la limpieza de REQ-F-045): comprueba que app-data trae
+#    los JSON de molotes/ y birria/. Los de formato 2 no traen app-data (la app ya no lo usa).
+# 4. --drill: arranca la imagen de la app del respaldo y espera a que responda (requiere `docker login
+#    ghcr.io` con un token de lectura). Con un respaldo de formato 1 le da también esa base y ese
+#    app-data, que la app de entonces necesitaba; desde REQ-F-045 la app no usa ninguno de los dos.
+#    Mide el tiempo total.
 #
 # Registra el resultado en ~/.config/restaurante-backup/pruebas.log y, si HC_PING_URL está en la
 # configuración (check mensual), avisa a Healthchecks del éxito o del fallo. Borra al terminar los
@@ -122,7 +125,7 @@ read_identity || fail 'clave privada no válida'
 age_decrypt "$WORK/backup.tar.age" "$WORK/bundle.tar" || fail 'no se pudo descifrar (¿clave equivocada?)'
 AGE_IDENTITY=''
 mkdir -- "$WORK/parts"
-tar -C "$WORK/parts" -xf "$WORK/bundle.tar" manifest.txt dump.sql.gz app-data.tar || fail 'el paquete descifrado está dañado'
+extract_parts "$WORK/bundle.tar" "$WORK/parts" || fail 'el paquete descifrado está dañado'
 rm -f -- "$WORK/bundle.tar" "$WORK/backup.tar.age"
 verify_parts "$WORK/parts" || fail 'el respaldo no pasó la verificación de sumas'
 gzip -t "$WORK/parts/dump.sql.gz" || fail 'el volcado está dañado'
@@ -132,14 +135,18 @@ EXPECTED_PRODUCTS=$(manifest_value "$MANIFEST" products)
 EXPECTED_MIGRATION=$(manifest_value "$MANIFEST" last_migration)
 COUNTS_STABLE=$(manifest_value "$MANIFEST" counts_stable)
 APP_IMAGE=$(manifest_value "$MANIFEST" app_image)
-log "manifiesto: creado $(manifest_value "$MANIFEST" created_at), commit $(manifest_value "$MANIFEST" commit), usuarios $EXPECTED_USERS, productos $EXPECTED_PRODUCTS, migración $EXPECTED_MIGRATION"
+log "manifiesto: formato $(manifest_value "$MANIFEST" format), creado $(manifest_value "$MANIFEST" created_at), commit $(manifest_value "$MANIFEST" commit), usuarios $EXPECTED_USERS, productos $EXPECTED_PRODUCTS, migración $EXPECTED_MIGRATION"
 
-# --- 3. app-data ---------------------------------------------------------------------------------
-tar -tf "$WORK/parts/app-data.tar" >"$WORK/app-data.list" || fail 'app-data está dañado'
-for dir in molotes birria; do
-  grep -Eq "^(\./)?$dir/[^/]+\.json$" "$WORK/app-data.list" || fail "app-data no trae JSON de $dir/"
-done
-log 'app-data: JSON de molotes/ y birria/ presentes'
+# --- 3. app-data (solo formato 1) ----------------------------------------------------------------
+if has_app_data "$WORK/parts"; then
+  tar -tf "$WORK/parts/app-data.tar" >"$WORK/app-data.list" || fail 'app-data está dañado'
+  for dir in molotes birria; do
+    grep -Eq "^(\./)?$dir/[^/]+\.json$" "$WORK/app-data.list" || fail "app-data no trae JSON de $dir/"
+  done
+  log 'app-data: JSON de molotes/ y birria/ presentes'
+else
+  log 'sin app-data (formato 2, posterior a REQ-F-045)'
+fi
 
 # --- 2. MySQL efímero ----------------------------------------------------------------------------
 MYSQL_IMAGE=$(sed -n 's/^[[:space:]]*image:[[:space:]]*\(mysql:8\.4@sha256:[0-9a-f]\{64\}\)[[:space:]]*$/\1/p' "$DEPLOY_DIR/compose.prod.yaml" | head -n 1)
@@ -198,31 +205,36 @@ if [[ "$USERS" != "$EXPECTED_USERS" || "$PRODUCTS" != "$EXPECTED_PRODUCTS" ]]; t
   fi
 fi
 
-# --- 4. Simulacro: la app del respaldo con esta base y este app-data -------------------------------
+# --- 4. Simulacro: la app del respaldo (con esta base y este app-data si es de formato 1) -----------
 if [[ "$DRILL" == true ]]; then
   [[ "$APP_IMAGE" =~ ^[A-Za-z0-9./:@_-]+$ ]] || fail 'el manifiesto no tiene una imagen de la app válida'
   if ! docker image inspect "$APP_IMAGE" >/dev/null 2>&1; then
     log "descargando $APP_IMAGE"
     docker pull --quiet "$APP_IMAGE" >/dev/null || fail 'no se pudo descargar la imagen de la app (docker login ghcr.io)'
   fi
-  docker volume create "$ID-data" >/dev/null
-  # Misma ruta que en la imagen: el volumen nuevo hereda su dueño (node).
-  # shellcheck disable=SC2016 # Se expande dentro del contenedor.
-  docker run --rm -i --network none --cap-drop ALL --security-opt no-new-privileges \
-    -v "$ID-data:$DATA_PATH" --entrypoint sh "$APP_IMAGE" -c 'tar -C "$1" -xf -' sh "$DATA_PATH" \
-    <"$WORK/parts/app-data.tar" || fail 'no se pudo cargar app-data en el volumen'
   # Sin el .env de producción: número de WhatsApp ficticio y sin bot (no envía nada).
   # API_INTERNAL_URL es obligatoria desde REQ-F-038; sin api en esta red, la app sirve la semilla.
   # INTERNAL_NOTIFY_TOKEN es obligatoria en producción desde REQ-F-039: una aleatoria y desechable (en
   # esta red no hay api que avise).
-  DATABASE_URL="mysql://restaurante_app:$RESTAURANTE_DB_APP_PASSWORD@mysql:3306/restaurante"
   INTERNAL_NOTIFY_TOKEN=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
-  export DATABASE_URL INTERNAL_NOTIFY_TOKEN
-  docker run -d --name "$ID-app" --network "$ID" \
-    -e NODE_ENV=production -e HOST=0.0.0.0 -e PORT=3000 -e TRUST_PROXY=true -e DATA_DIR="$DATA_PATH" \
-    -e BUSINESS_TIMEZONE=America/Mexico_City -e DATABASE_URL -e INTERNAL_NOTIFY_TOKEN \
-    -e WHATSAPP_MOLOTES=5210000000000 -e WHATSAPP_BIRRIA=5210000000000 -e API_INTERNAL_URL=http://api:3001 \
-    -v "$ID-data:$DATA_PATH" --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
+  export INTERNAL_NOTIFY_TOKEN
+  set -- -e NODE_ENV=production -e HOST=0.0.0.0 -e PORT=3000 -e TRUST_PROXY=true \
+    -e BUSINESS_TIMEZONE=America/Mexico_City -e INTERNAL_NOTIFY_TOKEN \
+    -e WHATSAPP_MOLOTES=5210000000000 -e WHATSAPP_BIRRIA=5210000000000 -e API_INTERNAL_URL=http://api:3001
+  if has_app_data "$WORK/parts"; then
+    # La app de un respaldo de formato 1 (anterior a REQ-F-045) no arranca sin la base ni DATA_DIR.
+    docker volume create "$ID-data" >/dev/null
+    # Misma ruta que en la imagen: el volumen nuevo hereda su dueño (node).
+    # shellcheck disable=SC2016 # Se expande dentro del contenedor.
+    docker run --rm -i --network none --cap-drop ALL --security-opt no-new-privileges \
+      -v "$ID-data:$DATA_PATH" --entrypoint sh "$APP_IMAGE" -c 'tar -C "$1" -xf -' sh "$DATA_PATH" \
+      <"$WORK/parts/app-data.tar" || fail 'no se pudo cargar app-data en el volumen'
+    DATABASE_URL="mysql://restaurante_app:$RESTAURANTE_DB_APP_PASSWORD@mysql:3306/restaurante"
+    export DATABASE_URL
+    set -- "$@" -e DATABASE_URL -e DATA_DIR="$DATA_PATH" -v "$ID-data:$DATA_PATH"
+  fi
+  docker run -d --name "$ID-app" --network "$ID" "$@" \
+    --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
     "$APP_IMAGE" >/dev/null || fail 'no se pudo arrancar la app'
   deadline=$((SECONDS + HEALTH_TIMEOUT))
   healthy=false
@@ -238,7 +250,7 @@ if [[ "$DRILL" == true ]]; then
     docker logs --tail 30 "$ID-app" 2>&1 | sed 's/^/  app: /' >&2 || true
     fail 'la app del respaldo no respondió'
   fi
-  log "simulacro: la app $APP_IMAGE responde con la base y el app-data restaurados"
+  log "simulacro: la app $APP_IMAGE responde"
 fi
 
 record ok

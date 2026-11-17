@@ -201,6 +201,11 @@ check 'mysql solo está en la red interna' test "$(jq -c '.services.mysql.networ
 check 'la red db es interna' test "$(jq '.networks.db.internal' <<<"$CONFIG")" = true
 check 'la app recibe NODE_ENV, HOST y TRUST_PROXY fijados' test "$(jq -c '.services.app.environment | [.NODE_ENV, .HOST, .TRUST_PROXY]' <<<"$CONFIG")" = '["production","0.0.0.0","true"]'
 check 'la app no recibe la contraseña root de MySQL' test "$(jq '.services.app.environment | has("MYSQL_ROOT_PASSWORD")' <<<"$CONFIG")" = false
+# REQ-F-045 (RF-9): la app no usa MySQL, DATA_DIR, /admin ni el bot.
+check 'la app no recibe la base, DATA_DIR ni el primer administrador' test "$(jq '.services.app.environment | (has("DATABASE_URL") or has("DATABASE_ALLOW_NEWER_SCHEMA") or has("DATA_DIR") or has("ADMIN_USER") or has("ADMIN_PASSWORD_HASH"))' <<<"$CONFIG")" = false
+check 'la app no monta ningún volumen' test "$(jq '.services.app.volumes // [] | length' <<<"$CONFIG")" = 0
+check 'ningún servicio monta app-data' test "$(jq '[.services[] | .volumes // [] | .[] | select(.source == "app-data")] | length' <<<"$CONFIG")" = 0
+check 'la api recibe el primer administrador (ADMIN_USER y ADMIN_PASSWORD_HASH)' test "$(jq '.services.api.environment | has("ADMIN_USER") and has("ADMIN_PASSWORD_HASH")' <<<"$CONFIG")" = true
 # REQ-F-038 (CA-8): la API solo en la red interna, sin puertos ni router de Traefik.
 # REQ-F-039: la api también en la red interna admin (para inventory-manager).
 # REQ-F-042: y en traefik, por la salida a Meta y la entrada del webhook.
@@ -226,13 +231,18 @@ check 'el servicio del webhook usa el puerto 3004' test "$(jq -r '.services.api.
 check 'la api escucha el webhook en el 3004' test "$(jq -r '.services.api.environment.WEBHOOK_PORT' <<<"$CONFIG")" = 3004
 check 'fuera de deploy.sh, el router del webhook queda apagado' test "$(jq -r '.services.api.labels["traefik.enable"]' <<<"$CONFIG")" = false
 check 'con una api con webhook, se enciende' test "$(RESTAURANTE_API_WEBHOOK=true compose config --format json | jq -r '.services.api.labels["traefik.enable"]')" = true
-BOT_VARS='[.environment | to_entries[] | select(.key | test("^(WHATSAPP_BOT_|WHATSAPP_GRAPH_|BOT_|WHATSAPP_MOLOTES$|WHATSAPP_BIRRIA$)"))] | sort_by(.key)'
-check 'la api y la app reciben las mismas variables del bot (RN-5, P-2)' test "$(jq -c ".services.api | $BOT_VARS" <<<"$CONFIG")" = "$(jq -c ".services.app | $BOT_VARS" <<<"$CONFIG")"
+# REQ-F-045: la app ya no recibe las variables del bot; los números del CTA, los mismos que la api.
+check 'la app no recibe ninguna variable del bot' test "$(jq '[.services.app.environment | keys[] | select(test("^(WHATSAPP_BOT_|WHATSAPP_GRAPH_|BOT_)"))] | length' <<<"$CONFIG")" = 0
+check 'la app y la api reciben los mismos números de WhatsApp' test "$(jq -c '.services.app.environment | [.WHATSAPP_MOLOTES, .WHATSAPP_BIRRIA]' <<<"$CONFIG")" = "$(jq -c '.services.api.environment | [.WHATSAPP_MOLOTES, .WHATSAPP_BIRRIA]' <<<"$CONFIG")"
 check 'la api recibe los secretos del bot' test "$(jq '.services.api.environment | has("WHATSAPP_BOT_ACCESS_TOKEN") and has("WHATSAPP_BOT_APP_SECRET") and has("WHATSAPP_BOT_VERIFY_TOKEN") and has("WHATSAPP_BOT_BLOCKLIST_KEY")' <<<"$CONFIG")" = true
 check 'la api no publica puertos' test "$(jq '.services.api.ports // [] | length' <<<"$CONFIG")" = 0
 check 'la api no recibe la contraseña root de MySQL' test "$(jq '.services.api.environment | has("MYSQL_ROOT_PASSWORD")' <<<"$CONFIG")" = false
 check 'la app llega a la api por la red interna' test "$(jq -r '.services.app.environment.API_INTERNAL_URL' <<<"$CONFIG")" = 'http://api:3001'
 check 'los routers de Traefik son solo de la app, de inventory-manager y del webhook' test "$(jq '[.services | to_entries[] | select(.key != "app" and .key != "inventory-manager" and .key != "api") | .value.labels // {} | keys[] | select(startswith("traefik."))] | length' <<<"$CONFIG")" = 0
+# REQ-F-045 (RN-7): sin router ni límite propios para /admin.
+APP_ROUTERS=$(jq -c '[.services.app.labels | keys[] | select(startswith("traefik.http.routers.")) | split(".")[3]] | unique' <<<"$CONFIG")
+check "la app solo tiene los routers raíz, www y http ($APP_ROUTERS)" test "$APP_ROUTERS" = '["restaurante","restaurante-http","restaurante-www"]'
+check 'la app no tiene ningún límite de peticiones' bash -c "! jq -r '.services.app.labels | keys[]' <<<'$CONFIG' | grep -q ratelimit"
 
 say 'imágenes en el registro local'
 derive smoke/app-v2 <<<"FROM $APP_SRC
@@ -325,11 +335,14 @@ for url in 'http birriaelmuneco.com' 'http www.birriaelmuneco.com' 'https www.bi
   check "$scheme://$host -> 301 conservando ruta y query" test "$(redirect_of "$scheme" "$host" '/molotes?a=1&b=2')" = "301 https://$DOMAIN/molotes?a=1&b=2"
 done
 
-say 'límite de peticiones en /admin (CA-4)'
-codes=''
-for _ in $(seq 1 30); do codes+="$(https_status "$DOMAIN" /admin/login) "; done
-check "/admin recibe 429 tras la ráfaga ($(tr ' ' '\n' <<<"$codes" | grep . | sort | uniq -c | awk '{printf "%s x %s; ", $1, $2}'))" grep -q 429 <<<"$codes"
-check 'las primeras 20 peticiones no reciben 429' bash -c "! cut -d' ' -f1-20 <<<'$codes' | grep -q 429"
+# REQ-F-045 (CA-13): /admin ya no tiene límite propio; 30 peticiones en paralelo reciben todas el 302.
+say '/admin sin límite propio (CA-13)'
+export -f https_status
+export TRAEFIK_IP
+# Un solo printf por petición: las 30 líneas no se mezclan en la tubería.
+# shellcheck disable=SC2016 # $0 se expande en el bash de cada petición.
+codes=$(seq 1 30 | xargs -P 30 -I{} bash -c 'printf "%s\n" "$(https_status "$0" /admin/login)"' "$DOMAIN" | sort | uniq -c | awk '{printf "%s x %s; ", $1, $2}')
+check "las 30 peticiones a /admin/login reciben 302 ($codes)" test "$codes" = '30 x 302; '
 check 'las landings no se ven afectadas' test "$(https_status "$DOMAIN" /molotes)" = 200
 
 say 'IP del cliente y esquema en el log (CA-5)'
@@ -534,9 +547,11 @@ check 'todo comando documentado que recrea la api pasa RESTAURANTE_API_WEBHOOK' 
 say 'api rota tras una migración nueva (DEF-001 de REQ-F-038)'
 BEFORE=$(app_id)
 check 'deploy con migración nueva y api rota -> 15' expect_exit 15 run_deploy 9 "$APP2" "$MIG_NEWER" "$API_BAD" "$INV1"
-check 'la app se recreó (las migraciones nuevas la obligan)' test "$(app_id)" != "$BEFORE"
+# Desde REQ-F-045 la app no usa la base: el compose no le pasa DATABASE_ALLOW_NEWER_SCHEMA, así que
+# deploy.sh no tiene nada que cambiarle y la deja como estaba.
+check 'la app no se recreó (ya no depende de la base)' test "$(app_id)" = "$BEFORE"
 check 'con la misma imagen (v2)' test "$(app_image)" = "$REGISTRY/restaurante@$APP2"
-check 'y con DATABASE_ALLOW_NEWER_SCHEMA=true' bash -c "docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' '$(app_id)' | grep -qx DATABASE_ALLOW_NEWER_SCHEMA=true"
+check 'y sin DATABASE_ALLOW_NEWER_SCHEMA' bash -c "! docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' '$(app_id)' | grep -q DATABASE_ALLOW_NEWER_SCHEMA"
 docker restart "$(app_id)" >/dev/null
 check 'tras reiniciarla, la app queda healthy sobre la base migrada' wait_container_healthy "$(app_id)"
 check 'y el sitio responde 200' bash -c "for _ in \$(seq 1 30); do [ \"\$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 --resolve '$DOMAIN:443:$TRAEFIK_IP' 'https://$DOMAIN/')\" = 200 ] && exit 0; sleep 2; done; exit 1"

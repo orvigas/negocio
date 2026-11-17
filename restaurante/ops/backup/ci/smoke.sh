@@ -3,6 +3,8 @@
 # producción (MySQL y app), un S3 local (versitygw, fijado por digest; admite SigV4 e If-None-Match
 # como R2) y un Healthchecks falso, y ejecuta backup.sh, env-backup.sh, restore.sh y
 # verify-backup.sh --drill tal como en el VPS y en el Mac. Nunca toca R2, Healthchecks ni el VPS.
+# Los respaldos nuevos son de formato 2 (sin app-data, REQ-F-045); restore.sh y verify-backup.sh se
+# prueban también con uno de formato 1 (con app-data), como los que siguen en R2.
 #
 #   ops/backup/ci/smoke.sh <imagen production> <imagen migrate>
 #
@@ -68,6 +70,8 @@ cleanup() {
     docker logs --tail 40 bksmoke-s3 2>&1 | sed 's/^/  s3: /' || true
   fi
   compose --profile migrate down -v --remove-orphans >/dev/null 2>&1 || true
+  # app-data no lo monta ningún servicio (REQ-F-045): down -v no lo borra. Lo crea restore.sh aquí.
+  docker volume rm "${COMPOSE_PROJECT_NAME}_app-data" >/dev/null 2>&1 || true
   docker rm -f bksmoke-s3 bksmoke-hc >/dev/null 2>&1 || true
   if [[ "$CREATED_NETWORK" == true ]]; then docker network rm traefik-public >/dev/null 2>&1 || true; fi
   if [[ -z "${SMOKE_WORKDIR:-}" ]]; then rm -rf -- "$WORK"; else rm -rf -- "${WORK:?}"/*; fi
@@ -166,13 +170,9 @@ USERS=$(mysql_root 'SELECT COUNT(*) FROM user')
 PRODUCTS=$(mysql_root 'SELECT COUNT(*) FROM product')
 check "hay datos de prueba (usuarios $USERS, productos $PRODUCTS)" test "$USERS" -ge 1 -a "$PRODUCTS" -ge 1
 printf 'RESTAURANTE_APP_IMAGE=%s\nRESTAURANTE_MIGRATE_IMAGE=%s\nRESTAURANTE_COMMIT=%s\n' "$APP_SRC" "$MIGRATE_SRC" "$(printf '1%.0s' {1..40})" >"$BASE/state/release.env"
-# JSON propios en app-data: uno en cada carpeta, como los que dejaba la app hasta REQ-F-045 (backup.sh
-# y verify-backup.sh los exigen hasta que el PR 3 acepte respaldos sin app-data), y el de Birria para
-# comprobar que se restaura tal cual. La app ya no escribe nada ahí.
-APP_ID=$(compose ps -q app)
-docker exec "$APP_ID" sh -c 'mkdir -p /var/lib/restaurante/molotes /var/lib/restaurante/birria && printf "{\"smoke\":1}\n" > /var/lib/restaurante/birria/smoke.json && printf "{\"smoke\":1}\n" > /var/lib/restaurante/molotes/smoke.json && touch /var/lib/restaurante/molotes/.current.json.1.ab.tmp'
-docker exec "$APP_ID" sh -c 'ls /var/lib/restaurante/molotes/*.json /var/lib/restaurante/birria/*.json' >/dev/null ||
-  ko 'no se pudieron escribir los JSON de app-data'
+APP_VOLUME="${COMPOSE_PROJECT_NAME}_app-data"
+# REQ-F-045 (RN-5): ningún servicio monta app-data.
+check 'ningún contenedor monta app-data' test -z "$(docker ps -aq --filter "volume=$APP_VOLUME")"
 
 # --- Configuración inválida ----------------------------------------------------------------------
 say 'configuración (CA-5)'
@@ -211,9 +211,34 @@ check 'el paquete descifrado pasa la verificación de sumas' verify_parts "$WORK
 check 'el manifiesto trae los conteos de producción' test "$(manifest_value "$WORK/plain/manifest.txt" users)" = "$USERS" -a "$(manifest_value "$WORK/plain/manifest.txt" products)" = "$PRODUCTS"
 check 'el manifiesto trae la imagen de la app' test "$(manifest_value "$WORK/plain/manifest.txt" app_image)" = "$APP_SRC"
 check 'el volcado está completo' sh -c "gzip -dc '$WORK/plain/dump.sql.gz' | tail -n 1 | grep -q '^-- Dump completed'"
-check 'app-data incluye birria/smoke.json' sh -c "tar -tf '$WORK/plain/app-data.tar' | grep -q 'birria/smoke.json'"
-check 'app-data excluye los temporales' sh -c "! tar -tf '$WORK/plain/app-data.tar' | grep -q '\\.tmp$'"
-rm -rf -- "$WORK/plain" "$WORK/latest.tar.age"
+check 'el respaldo es de formato 2' test "$(manifest_value "$WORK/plain/manifest.txt" format)" = 2
+check 'el paquete solo trae el manifiesto y el volcado (sin app-data)' test "$(tar -tf "$WORK/plain/bundle.tar" | sort | tr '\n' ' ')" = 'dump.sql.gz manifest.txt '
+check 'el manifiesto no menciona app-data' bash -c "! grep -q '^app_data' '$WORK/plain/manifest.txt'"
+# Un respaldo de formato 1, como los anteriores a REQ-F-045: el mismo volcado y un app-data con un JSON
+# en cada carpeta. Su imagen de la app es la de antes, con la carpeta de DATA_DIR (dueño node), que
+# restore.sh y verify-backup.sh usan para escribir en el volumen.
+docker build --quiet -t bksmoke/app-anterior - >/dev/null <<<"FROM $APP_SRC
+USER root
+RUN mkdir -p /var/lib/restaurante && chown node:node /var/lib/restaurante && chmod 700 /var/lib/restaurante
+USER node"
+mkdir -p "$WORK/old/data/molotes" "$WORK/old/data/birria" "$WORK/old/parts"
+printf '{"smoke":1}\n' >"$WORK/old/data/molotes/smoke.json"
+printf '{"smoke":1}\n' >"$WORK/old/data/birria/smoke.json"
+tar -C "$WORK/old/data" -cf "$WORK/old/parts/app-data.tar" .
+cp "$WORK/plain/dump.sql.gz" "$WORK/old/parts/dump.sql.gz"
+{
+  sed -e 's/^format=2$/format=1/' -e 's|^app_image=.*|app_image=bksmoke/app-anterior|' "$WORK/plain/manifest.txt"
+  printf 'app_data_entries=%s\n' "$(tar -tf "$WORK/old/parts/app-data.tar" | wc -l | tr -d ' ')"
+  printf 'app_data_sha256=%s\n' "$(sha256_of "$WORK/old/parts/app-data.tar")"
+} >"$WORK/old/parts/manifest.txt"
+tar -C "$WORK/old/parts" -cf "$WORK/old/bundle.tar" manifest.txt dump.sql.gz app-data.tar
+age -R "$ETC/recipients.txt" -o "$WORK/antiguo.tar.age" "$WORK/old/bundle.tar"
+mkdir -p "$WORK/old/check"
+check 'el formato 1 se extrae con app-data' extract_parts "$WORK/old/bundle.tar" "$WORK/old/check"
+check 'y pasa la verificación de sumas' verify_parts "$WORK/old/check"
+printf 'otro\n' >>"$WORK/old/check/app-data.tar"
+check 'un app-data alterado no pasa la verificación' expect_exit 1 verify_parts "$WORK/old/check"
+rm -rf -- "$WORK/plain" "$WORK/latest.tar.age" "$WORK/old"
 
 say 'sin sobrescribir (CA-4, a nivel de cliente)'
 printf 'otro contenido\n' >"$WORK/other"
@@ -298,14 +323,13 @@ age -d -i "$WORK/age.key" -o "$WORK/plain/bundle.tar" "$WORK/for-restore.tar.age
 tar -C "$WORK/plain" -xf "$WORK/plain/bundle.tar" manifest.txt
 EXPECTED_USERS=$(manifest_value "$WORK/plain/manifest.txt" users)
 rm -rf -- "$WORK/plain" "$WORK/for-restore.tar.age"
-# Daños posteriores al respaldo: un usuario más y un JSON cambiado.
+# Daño posterior al respaldo: un usuario más.
 mysql_root "INSERT INTO user (username, username_key, display_name, role, password_hash, updated_at) VALUES ('tarde', 'tarde', 'Tarde', 'editor', 'scrypt\$x', NOW(3))"
-docker exec "$(compose ps -q app)" sh -c 'printf "{\"smoke\":2}\n" > /var/lib/restaurante/birria/smoke.json'
 check 'sin --confirm y sin terminal -> 2' expect_exit 2 run restore-noconfirm sh -c "printf '%s\n' '$IDENTITY' | '$OPS/restore.sh' latest"
 check 'clave privada equivocada -> 6' expect_exit 6 run restore-badkey sh -c "printf '%s\n' '$(age-keygen 2>/dev/null | grep '^AGE-SECRET')' | '$OPS/restore.sh' latest --confirm restaurante"
 check 'restore.sh latest termina con 0' run restore sh -c "printf '%s\n' '$IDENTITY' | '$OPS/restore.sh' latest --confirm restaurante"
 check 'los usuarios vuelven a los del respaldo' test "$(mysql_root 'SELECT COUNT(*) FROM user')" = "$EXPECTED_USERS"
-check 'app-data vuelve al del respaldo' test "$(docker exec "$(compose ps -q app)" cat /var/lib/restaurante/birria/smoke.json)" = '{"smoke":1}'
+check 'sin app-data que restaurar (formato 2), lo dice' grep -q 'no trae app-data' "$WORK/logs/restore.log"
 check 'la app está healthy' test "$(docker inspect -f '{{.State.Health.Status}}' "$(compose ps -q app)")" = healthy
 check 'release.env apunta a la imagen del respaldo' grep -qx "RESTAURANTE_APP_IMAGE=$APP_SRC" "$BASE/state/release.env"
 check 'releases.log registra la restauración' grep -q 'result=restored' "$BASE/state/releases.log"
@@ -319,6 +343,22 @@ check 'restore.sh con una api con router termina con 0' run restore-api sh -c "p
 check 'y sin aviso' bash -c "! grep -q 'AVISO: el bot' '$WORK/logs/restore-api.log'"
 compose rm -sf api >/dev/null 2>&1
 
+say 'restauración de un respaldo de formato 1 (con app-data, anterior a REQ-F-045)'
+app_data_json() { docker run --rm --network none -v "$APP_VOLUME:/data:ro" --entrypoint cat bksmoke/app-anterior /data/birria/smoke.json; }
+docker volume rm "$APP_VOLUME" >/dev/null 2>&1 || true
+mysql_root "INSERT INTO user (username, username_key, display_name, role, password_hash, updated_at) VALUES ('tarde', 'tarde', 'Tarde', 'editor', 'scrypt\$x', NOW(3))"
+check 'restore.sh con un respaldo de formato 1 termina con 0' run restore-old sh -c "printf '%s\n' '$IDENTITY' | '$OPS/restore.sh' '$WORK/antiguo.tar.age' --confirm restaurante"
+check 'los usuarios vuelven a los del respaldo' test "$(mysql_root 'SELECT COUNT(*) FROM user')" = "$EXPECTED_USERS"
+check 'crea el volumen app-data si no existía, con la etiqueta del proyecto' test "$(docker volume inspect -f '{{index .Labels "com.docker.compose.project"}}' "$APP_VOLUME")" = "$COMPOSE_PROJECT_NAME"
+check 'app-data trae el JSON del respaldo' test "$(app_data_json)" = '{"smoke":1}'
+# Un JSON cambiado después: la siguiente restauración lo devuelve al del respaldo.
+docker run --rm --network none -v "$APP_VOLUME:/var/lib/restaurante" --entrypoint sh bksmoke/app-anterior -c 'printf "{\"smoke\":2}\n" > /var/lib/restaurante/birria/smoke.json'
+check 'restore.sh sobre el volumen existente termina con 0' run restore-old-2 sh -c "printf '%s\n' '$IDENTITY' | '$OPS/restore.sh' '$WORK/antiguo.tar.age' --confirm restaurante"
+check 'app-data vuelve al del respaldo' test "$(app_data_json)" = '{"smoke":1}'
+check 'la app (la del respaldo) está healthy' test "$(docker inspect -f '{{.State.Health.Status}}' "$(compose ps -q app)")" = healthy
+check 'release.env apunta a la imagen del respaldo' grep -qx 'RESTAURANTE_APP_IMAGE=bksmoke/app-anterior' "$BASE/state/release.env"
+check 'ningún contenedor monta app-data' test -z "$(docker ps -aq --filter "volume=$APP_VOLUME")"
+
 # --- Prueba mensual y simulacro (RF-11, CA-7, CA-8) ----------------------------------------------
 say 'prueba mensual con --drill (RF-11)'
 # Esta prueba corre con GNU coreutils; verify-backup.sh corre en macOS, cuyo chmod/chown no acepta --.
@@ -327,6 +367,9 @@ install -m 600 "$ETC/backup.env" "$WORK/r2-readonly.conf"
 check 'verify-backup.sh --drill termina con 0' run verify RESTAURANTE_BACKUP_CONFIG="$WORK/r2-readonly.conf" RESTAURANTE_BACKUP_LOG="$WORK/pruebas.log" sh -c "printf '%s\n' '$IDENTITY' | '$OPS_SRC/verify-backup.sh' --drill"
 check 'el resultado queda registrado' grep -q 'resultado=ok' "$WORK/pruebas.log"
 check 'sin contenedores ni redes del simulacro' test -z "$(docker ps -aq --filter name=restaurante-verify-)"
+check 'verify-backup.sh --drill con un respaldo de formato 1 termina con 0' run verify-old RESTAURANTE_BACKUP_CONFIG="$WORK/r2-readonly.conf" RESTAURANTE_BACKUP_LOG="$WORK/pruebas.log" sh -c "printf '%s\n' '$IDENTITY' | '$OPS_SRC/verify-backup.sh' --drill --file '$WORK/antiguo.tar.age'"
+check 'comprueba los JSON de app-data' grep -q 'app-data: JSON de molotes/ y birria/ presentes' "$WORK/logs/verify-old.log"
+check 'sin contenedores ni volúmenes del simulacro' test -z "$(docker ps -aq --filter name=restaurante-verify-)$(docker volume ls -q --filter name=restaurante-verify-)"
 check 'los logs de la prueba no contienen la clave privada' sh -c "! grep -qF -- '$IDENTITY' '$WORK/logs/verify.log'"
 
 say 'resultado'

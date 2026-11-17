@@ -226,9 +226,8 @@ siguen en `landing-pages`; los tres últimos pasan a la API en REQ-F-044, abajo)
   buena sin límite de tiempo y, si no la hubo (arranque sin API), la semilla
   (`core/catalog/seeds/` desde REQ-F-045, reexportada en `content/seeds.ts`); ninguna landing
   responde 5xx por la API;
-- las landings no tienen credenciales de la base en su código ni las usan (REQ-F-045). El compose
-  aún se las pasa al contenedor `landing-pages` hasta la limpieza de `deploy/` (PR 3 de REQ-F-045),
-  para que la vuelta atrás automática a la versión anterior siga funcionando; la app las ignora.
+- las landings no tienen credenciales de la base en su código ni las usan (REQ-F-045), y desde la
+  limpieza de `deploy/` (PR 3 de REQ-F-045) el compose tampoco se las pasa al contenedor.
 
 **Paso 4, ticket 1 aplicado (REQ-F-039):** `inventory-manager` renderiza en el servidor (decisión
 B) y es lo único con lo que habla el navegador. Llama a `/api/v1/admin` por la red interna `admin`
@@ -388,6 +387,27 @@ Decisión del usuario: "Sí, 6 tickets en ese orden". Cada ticket es su propio P
 
 Los IDs de los tickets 5 y 6 se asignan al crearlos.
 
+### Paso 4, ticket 6, PR 3 aplicado (REQ-F-045)
+
+Limpieza de `deploy/` y `ops/`, una vez confirmada la estabilidad de producción con los PR 1 y 2:
+
+- **Compose:** la app ya no recibe `DATABASE_URL`, `DATABASE_ALLOW_NEWER_SCHEMA`, `DATA_DIR`, `ADMIN_*`
+  ni las variables del bot (sí `WHATSAPP_MOLOTES`/`WHATSAPP_BIRRIA`, para el CTA), y no monta
+  `app-data`. La `api` recibe `ADMIN_USER`/`ADMIN_PASSWORD_HASH` (primer administrador de una
+  instalación nueva). Sin el router `restaurante-admin` ni su límite: `/admin` va por el router raíz.
+  La app sigue en la red `db`, por la que llega a la `api` (sacarla queda fuera del ticket).
+- **Volumen `app-data`:** declarado pero sin montar; se conserva en el VPS y no se borra.
+- **Respaldos:** formato 2 (manifiesto y volcado, sin `app-data`). `restore.sh` y `verify-backup.sh`
+  aceptan también el formato 1; con él, `app-data` se restaura en el volumen y el simulacro le da a
+  la app de entonces la base y `DATA_DIR`. Los scripts nuevos se instalan en el VPS antes del merge,
+  con la app del PR 2 en marcha ([despliegue §1.3](despliegue.md#13-instalar-deploy)): ningún
+  respaldo de formato 1 lleva una imagen sin la carpeta de `DATA_DIR`.
+- **Imagen `production`:** sin la carpeta de `DATA_DIR`. Sigue llevando `packages/db` y Prisma
+  (adelgazarla queda fuera del ticket).
+- **Vuelta atrás:** la automática vuelve a la app del PR 2, que arranca con este compose. Una
+  versión anterior a REQ-F-045 necesita el compose de su commit ([despliegue
+  §6](despliegue.md#volver-a-una-versión-anterior-a-req-f-045)).
+
 ### Paso 4, ticket 6, PR 2 aplicado (REQ-F-045)
 
 Con el PR 2, `landing-pages` queda solo con las landings: el paso 4 está completo en el código (la
@@ -402,7 +422,7 @@ limpieza de `deploy/` y `ops/` es el PR 3).
 - **Sin base de datos ni `DATA_DIR`:** `server.ts` valida la configuración, crea el cliente de la API,
   carga las cachés de productos y página, escucha y abre el aviso interno. `config/env.ts` ignora sin
   validar `DATABASE_URL`, `DATABASE_ALLOW_NEWER_SCHEMA`, `DATA_DIR`, `ADMIN_*` y `WHATSAPP_BOT_*`
-  (el compose se las sigue pasando hasta el PR 3). Se retira de `landing-pages` la regla D-6 de
+  (el compose se las pasó hasta el PR 3). Se retira de `landing-pages` la regla D-6 de
   REQ-F-009 (los números de WhatsApp iguales al del bot), que dependía de la configuración del bot;
   la `api` la sigue comprobando con sus propias variables.
 - **Importación desde JSON retirada (RN-4):** se borran `importPages`, el repositorio de menús por

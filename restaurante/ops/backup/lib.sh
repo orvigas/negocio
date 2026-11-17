@@ -252,14 +252,35 @@ manifest_value() { # manifest_value <manifest> <clave>
   sed -n "s/^$2=//p" "$1" | head -n 1
 }
 
-# Comprueba las sumas del manifiesto contra las partes extraídas en <dir>.
+# Formatos del paquete (REQ-F-045, RN-5):
+# - 1: manifest.txt, dump.sql.gz y app-data.tar (los JSON de página de DATA_DIR). Respaldos hasta la
+#   limpieza de REQ-F-045.
+# - 2: manifest.txt y dump.sql.gz. La app ya no tiene app-data.
+# Restaurar y verificar aceptan los dos.
+
+# Extrae las partes del paquete descifrado <bundle> en <dir>: app-data.tar solo si el formato es 1.
+extract_parts() { # extract_parts <bundle> <dir>
+  local bundle=$1 dir=$2
+  tar -C "$dir" -xf "$bundle" manifest.txt dump.sql.gz || return 1
+  if [[ "$(manifest_value "$dir/manifest.txt" format)" == 1 ]]; then
+    tar -C "$dir" -xf "$bundle" app-data.tar || return 1
+  fi
+}
+
+# 0 si las partes extraídas en <dir> traen app-data (formato 1).
+has_app_data() { # has_app_data <dir>
+  [[ -f "$1/app-data.tar" ]]
+}
+
+# Comprueba el formato y las sumas del manifiesto contra las partes extraídas en <dir>.
 verify_parts() { # verify_parts <dir>
-  local dir=$1
-  [[ -f "$dir/manifest.txt" && -f "$dir/dump.sql.gz" && -f "$dir/app-data.tar" ]] || {
-    log 'ERROR: el respaldo no tiene manifest.txt, dump.sql.gz y app-data.tar'
+  local dir=$1 format
+  [[ -f "$dir/manifest.txt" && -f "$dir/dump.sql.gz" ]] || {
+    log 'ERROR: el respaldo no tiene manifest.txt y dump.sql.gz'
     return 1
   }
-  [[ "$(manifest_value "$dir/manifest.txt" format)" == 1 ]] || {
+  format=$(manifest_value "$dir/manifest.txt" format)
+  [[ "$format" == 1 || "$format" == 2 ]] || {
     log 'ERROR: formato de manifiesto desconocido'
     return 1
   }
@@ -267,8 +288,14 @@ verify_parts() { # verify_parts <dir>
     log 'ERROR: la suma del volcado no coincide con el manifiesto'
     return 1
   }
-  [[ "$(sha256_of "$dir/app-data.tar")" == "$(manifest_value "$dir/manifest.txt" app_data_sha256)" ]] || {
-    log 'ERROR: la suma de app-data no coincide con el manifiesto'
-    return 1
-  }
+  if [[ "$format" == 1 ]]; then
+    [[ -f "$dir/app-data.tar" ]] || {
+      log 'ERROR: el respaldo (formato 1) no tiene app-data.tar'
+      return 1
+    }
+    [[ "$(sha256_of "$dir/app-data.tar")" == "$(manifest_value "$dir/manifest.txt" app_data_sha256)" ]] || {
+      log 'ERROR: la suma de app-data no coincide con el manifiesto'
+      return 1
+    }
+  fi
 }

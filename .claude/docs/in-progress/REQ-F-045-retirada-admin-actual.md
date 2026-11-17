@@ -2,10 +2,11 @@
 
 ## Estado
 
-READY_FOR_MERGE (PR 2 de 3)
+QA_APPROVED (PR 3 de 3; QA ronda 2)
 
 - PR 1: #156 (https://github.com/orvigas/negocio/pull/156), mergeado en `epic/arquitectura` (`425e21a`).
-- PR 2: #157 (https://github.com/orvigas/negocio/pull/157), hacia `epic/arquitectura`, commit `69c0c7e`. Abierto como borrador y marcado listo tras el último push; el resultado del CI con el PR listo (`calidad`, `docker`, `auditoria` y `pruebas`) queda en el informe del PR.
+- PR 2: #157 (https://github.com/orvigas/negocio/pull/157), mergeado en `epic/arquitectura` (`dbba0a9`) y desplegado en producción con el PR #158 (épica → `main`, `9fbb7ee`).
+- PR 3: implementado en `feature/REQ-F-045-retirada-admin-actual-3-limpieza` (desde `origin/epic/arquitectura` = `dbba0a9`), sin commit. Implementación aprobada por el usuario ("Adelante con tus recomendaciones"); QA Action Plan (PR 3) aprobado ("Apruebo con tus recomendaciones"); QA ronda 1: QA_REJECTED por DEF-001 (MAJOR), corregido en este PR con la opción A (orden de §1.3: scripts de respaldos antes del merge), pendiente de la aprobación del usuario y de la QA ronda 2.
 
 ## Aprobación
 
@@ -814,6 +815,116 @@ Decisión del usuario (cita textual): "corrigelo y termina".
 
 Sin bases `restaurante_test*` en el MySQL de pruebas (`SHOW DATABASES`: solo `restaurante`, `restaurante_shadow` y las del sistema), sin procesos de Vitest, `src/server.ts` ni `admin-recover`, sin puertos de node escuchando, un solo worktree (`git worktree list`). La copia de la comprobación de mutación se borró y `admin-moved.ts` quedó como estaba (`git diff` sin cambios tras restaurarlo). MySQL detenido con `npm run db:down` (estaba apagado al empezar). En el scratchpad quedan `cot.xlsx`, `cotizador-analisis.md` y `venv/`, que no son de esta tarea.
 
+### PR 3 — Limpieza de `deploy/` y `ops/`
+
+Autorización (transmitida por la sesión principal, 2026-11-17): con los PR 1 y 2 desplegados en producción (#158), el usuario confirma "Todo está bien" (producción estable, RN-6), así que el PR 3 puede empezar. Decisiones vigentes: opción A de P1 a P8 y P-T1 a P-T4; `ADMIN_USER`/`ADMIN_PASSWORD_HASH` en el compose de `api`; sin el límite de `/admin`; `app-data` fuera de los respaldos, conservado y sin borrar; ajuste de `ops/backup/verify-backup.sh:139-140`; sin `admin-recover` real en producción; sin la regla D-6 en las landings.
+
+#### Rama
+
+`feature/REQ-F-045-retirada-admin-actual-3-limpieza`, desde `origin/epic/arquitectura` = `dbba0a9` (= `main` salvo el merge #158, que es el mismo árbol). PR destino: `epic/arquitectura`. Sin commit.
+
+#### Cambios realizados
+
+- **`deploy/compose.prod.yaml` (RF-9, RN-7):**
+  - `app`: sin `DATA_DIR`, `DATABASE_URL`, `DATABASE_ALLOW_NEWER_SCHEMA`, `<<: *bot-env`, `ADMIN_*` ni el volumen `app-data`. Recibe explícitamente `WHATSAPP_MOLOTES` y `WHATSAPP_BIRRIA` (antes le llegaban por el ancla del bot; las necesita el CTA) con sus `_URL` y `_MESSAGE`. Comentarios de `/admin`, sesiones y espera de la base actualizados.
+  - `api`: recibe `ADMIN_USER`/`ADMIN_PASSWORD_HASH` (P-T1). Sigue con el ancla del bot completa (también `WHATSAPP_MOLOTES`/`BIRRIA`, para D-6 y Twilio).
+  - Sin el router `restaurante-admin` ni el middleware `restaurante-admin-ratelimit`: `/admin` va por el router raíz.
+  - `app-data` sigue declarado en `volumes:` con un comentario. Comprobado con Docker: un volumen declarado y sin montar no aparece en `compose config`, compose no lo crea ni lo borra (tampoco con `down -v`) y no da avisos. La declaración solo deja constancia; el volumen de producción existe y no se toca.
+  - `depends_on: mysql` y la red `db` de la app no cambian (la app llega a la `api` por `db`; sacarla de esa red está fuera de alcance).
+- **`deploy/env.production.example`:** cabecera (el compose solo da `DATABASE_URL` a la `api`; las variables que la app ya no recibe no hace falta borrarlas), números de WhatsApp (los reciben las dos; D-6 la comprueba la `api`, P-T4), bot (solo la `api`) y primer administrador (lo crea la `api`).
+- **`landing-pages/Dockerfile`:** se quita el `mkdir /var/lib/restaurante` de la etapa `production` y se actualizan los comentarios de esa etapa (sin `DATA_DIR`; `packages/db` sigue en la imagen, fuera de alcance).
+- **Respaldos (RN-5):**
+  - `lib.sh`: formatos documentados (1 = con `app-data.tar`, 2 = sin él); `extract_parts` (extrae `app-data.tar` solo si el manifiesto dice formato 1), `has_app_data` y `verify_parts`, que acepta los dos formatos y en el 1 sigue exigiendo `app-data.tar` y su suma.
+  - `backup.sh`: no lee ni exige el volumen; manifiesto `format=2` sin `app_data_entries` ni `app_data_sha256`; el paquete lleva solo `manifest.txt` y `dump.sql.gz`.
+  - `restore.sh`: extrae con `extract_parts`; con formato 1 restaura `app-data` en el volumen (lo crea con las etiquetas del proyecto si no existe), con formato 2 lo registra y sigue; la confirmación dice qué se borra; el mensaje del código 12 remite a 11.7 (una app anterior a REQ-F-045 no arranca con este compose).
+  - `verify-backup.sh` (las líneas ~139-140 que pedía el usuario): la comprobación de los JSON de `app-data` solo se hace en el formato 1; el `--drill` solo crea el volumen y pasa `DATABASE_URL`/`DATA_DIR` con un respaldo de formato 1 (la app de entonces los necesitaba).
+  - `systemd/restaurante-backup.service`: solo la descripción (sin "app-data").
+  - `ops/backup/ci/smoke.sh`: ya no escribe JSON en la app (no tiene volumen); comprueba que ningún contenedor monta `app-data`, que el respaldo nuevo es de formato 2 con solo manifiesto y volcado, y construye un respaldo de formato 1 (mismo volcado, `app-data` con un JSON por negocio, imagen "anterior" derivada con la carpeta de `DATA_DIR`) para probar `extract_parts`/`verify_parts` (y que un `app-data` alterado falla), `restore.sh` sobre un volumen inexistente y sobre uno existente con un JSON cambiado, y `verify-backup.sh --drill --file` con él.
+- **`deploy/ci/smoke.sh`:** comprobaciones estáticas nuevas (la app sin base, `DATA_DIR`, `ADMIN_*`, variables del bot ni volúmenes; ningún servicio monta `app-data`; la `api` con `ADMIN_*`; los números de WhatsApp iguales en las dos; la app solo con los routers `restaurante`, `restaurante-www` y `restaurante-http`, sin ningún `ratelimit`). La ráfaga de `/admin` pasa a 30 peticiones **en paralelo** que deben dar exactamente `30 x 302` (CA-13). La comprobación de "api rota tras una migración nueva" pasa de "la app se recreó con `DATABASE_ALLOW_NEWER_SCHEMA=true`" a "la app no se recreó y no tiene la bandera" (el compose ya no se la pasa, así que `compose up` no la cambia); el reinicio posterior sigue comprobando que queda `healthy`. El 302/410 de `/admin` ya estaba (PR 2).
+- **`.github/workflows/ci.yml`:** el contenedor `app-ca9` del job `docker` deja de recibir `DATABASE_URL` y `DATA_DIR` (la app los ignoraba desde el PR 2); comentario actualizado.
+- **Documentación:**
+  - `docs/despliegue.md`: "Qué se despliega" (app sin base ni volumen, `api` con el primer administrador, `/admin` sin límite, datos, estado en memoria, paso 6.ii y 6.vii de `deploy.sh`); §1.3 con el bloque "Al llegar a `main` la limpieza de REQ-F-045" (orden de los pasos en el VPS); §3; §4 (primer arranque y la fila CA-4 → CA-13); §5 (recrear la app); §6 (paso 4 sin la bandera y la sección nueva "Volver a una versión anterior a REQ-F-045": revert en `main` o el `deploy/` del commit anterior, el volumen vuelve a montarse y por eso no se borra; la sección del corte de REQ-F-044 marcada como histórica; la vuelta atrás y el webhook); §8 punto 5 marcado como histórico; §9 (la `api` es la que verifica la base; RN-4); §10 (códigos 15, 16 y 21; fuera `/admin` 503 y 429; nueva fila "`/admin` responde 404"; `database_init_failed` en la `api`; arreglada una línea en blanco que partía la tabla); §11.1 (qué guarda y formatos), códigos de `backup.sh`, §11.7 (paso 6 y los casos "respaldo anterior a REQ-F-045" y RN-4 con $195 y $145, y `MIGRATIONS_PENDING` con la `api`) y §11.8.
+  - `README.md`: enlace a despliegue, imagen `production`, variables de la `api`, "Archivos de datos (`DATA_DIR`)" y la descripción del job `docker` (CA-13, la app recreada y la prueba de respaldos).
+  - `docs/arquitectura.md`: §2 (el compose ya no pasa credenciales a las landings), "Paso 4, ticket 6, PR 3 aplicado" y el tiempo verbal del PR 2.
+- **No se tocó:** `deploy/deploy.sh` (sus comentarios de cabecera aún hablan del modo de solo lectura de `/admin` y de la bandera de la app; cambiarlo no cambia nada funcional, ver riesgos), `mysql/initdb`, `env-backup.sh`, las unidades `.timer`/`.path`, `.claude/agents/`, `.claude/rules/` ni ningún código de `src/`.
+
+#### Pruebas (`.claude/rules/testing.md`)
+
+Sin pruebas nuevas de Vitest: el cambio es de despliegue y operación. Las comprobaciones de CA-12 y CA-13 viven en los dos `smoke.sh` del CI, que ya existían y se adaptan (como prevé el plan técnico: "CA-12, CA-13 | `ops/backup/ci/smoke.sh`, `deploy/ci/smoke.sh`").
+
+#### Criterios de aceptación (alcance del PR 3)
+
+| CA | Estado |
+| -- | ------ |
+| CA-12 | En local: `ops/backup/ci/smoke.sh` real (respaldo de formato 2 sin `app-data` que pasa la integridad; `restore.sh` y `verify-backup.sh --drill` con los dos formatos; ningún contenedor monta `app-data`). En el VPS, tras el despliegue: `docker volume inspect restaurante_app-data` y `docker ps -a --filter volume=…` vacío, un respaldo a mano y su verificación (despliegue §1.3, paso 6). |
+| CA-13 | En local: `deploy/ci/smoke.sh` real (30 en paralelo → `30 x 302`; `/molotes` 200). En el VPS, con el comando de despliegue §1.3, paso 6. |
+| CA-1 a CA-11, CA-14 | Sin cambios de código: siguen en verde (suite completa). |
+
+#### Validaciones ejecutadas (resultado real)
+
+- `npm run typecheck`: 0.
+- `npm run lint`: 0, sin avisos.
+- `npm test` (MySQL local con `npm run db:up`): `api` 49 archivos / 1162 pruebas; `landing-pages` 58 / 896; `inventory-manager` 16 / 278. Todo en verde.
+- `npm run build:css`: no aplica (sin cambios de estilos ni plantillas).
+- `shellcheck` v0.10.0 (imagen `koalaman/shellcheck`, como el CI): `deploy.sh mysql/initdb/01-usuarios.sh ci/smoke.sh ci/resumen.sh ci/resumen-test.sh` y `-x lib.sh backup.sh env-backup.sh restore.sh verify-backup.sh ci/smoke.sh`: sin avisos (un `SC2016` informativo en la ráfaga paralela, justificado en la línea).
+- `docker compose config` del compose con el `.env` de la plantilla: app con 16 variables (ninguna de base, datos, administrador ni bot), sin volúmenes, routers `restaurante`, `restaurante-http`, `restaurante-www`; `api` con `ADMIN_*` y las variables del bot.
+- Imágenes locales (`docker build --target production|migrate|api|inventory-manager`): `production` sin `/var/lib/restaurante`, usuario `node`.
+- **`deploy/ci/smoke.sh` real** (contenedor `docker:cli` con el socket, `--network host`, registro local y Traefik por digest): **192 ok, "todas las comprobaciones pasaron"** (primer despliegue desde una base vacía, vueltas atrás, `30 x 302` en paralelo, 302/410, las comprobaciones estáticas nuevas y "la app no se recreó y sin la bandera" tras una migración nueva con la `api` rota). Tres ejecuciones: la 1ª falló solo en la ráfaga nueva porque las 30 líneas se mezclaban en la tubería (`curl` y `echo` por separado) y se corrigió con un solo `printf` por petición; la 2ª, lanzada a la vez que la de respaldos, falló solo en "el subdominio recibe 429 tras la ráfaga" (`75 x 200`, el límite de `inventory-manager`, que no cambia aquí: con la máquina cargada la ráfaga se recarga); la 3ª, sola, en verde (`61 x 200; 14 x 429`).
+- **`ops/backup/ci/smoke.sh` real** (mismo método, con `age`): **75 ok, "todas las comprobaciones pasaron"** (dos ejecuciones en verde tras ajustar el entorno: la primera montaba el repositorio en `/repo` y `verify-backup.sh` no podía montar `deploy/mysql/initdb` en el MySQL efímero; se repitió con una copia de `ops/` y `deploy/` en una ruta compartida). Incluye: formato 2 sin `app-data`; formato 1 extraído, verificado y rechazado con un `app-data` alterado; `restore.sh` de formato 2 ("no trae app-data") y de formato 1 sobre un volumen inexistente (lo crea con la etiqueta del proyecto) y sobre uno existente con un JSON cambiado (vuelve al del respaldo), app `healthy`; `verify-backup.sh --drill` con los dos formatos (9 s cada uno) y sin restos. La segunda ejecución comprobó además el borrado del volumen `restaurante-bksmoke_app-data` en la limpieza del script (`compose down -v` no lo borra porque nadie lo monta; se añadió `docker volume rm` a su `cleanup`).
+- `git diff` revisado: solo cambios del PR 3; `Cotizador_Taquiza_Birria.xlsx` fuera.
+
+#### Archivos afectados
+
+- Modificados: `restaurante/deploy/compose.prod.yaml`, `restaurante/deploy/env.production.example`, `restaurante/deploy/ci/smoke.sh`, `restaurante/landing-pages/Dockerfile`, `restaurante/ops/backup/{lib.sh,backup.sh,restore.sh,verify-backup.sh,ci/smoke.sh,systemd/restaurante-backup.service}`, `.github/workflows/ci.yml`, `restaurante/README.md`, `restaurante/docs/{despliegue,arquitectura}.md` y este ticket.
+
+#### Qué cambia en el VPS y en qué orden (sin tocar producción desde aquí)
+
+Detallado en `docs/despliegue.md` §1.3, "Al llegar a `main` la limpieza de REQ-F-045":
+
+Orden corregido en la ronda 1 de QA (DEF-001, opción A): los scripts de respaldos se instalan **antes** del merge.
+
+1. `.env`: nada que cambiar (mismas variables; `ADMIN_*` pasan a la `api`, que las valida con las mismas reglas que la app; con usuarios solo deja `admin_bootstrap_ignored`).
+2. Antes del merge, solo lectura: `sudo docker volume ls | grep app-data` y `sudo docker ps -a --filter volume=restaurante_app-data` (la app del PR 2 todavía lo monta).
+3. Antes del merge, con el compose del PR 2 en marcha: instalar desde la rama del PR `lib.sh`, `backup.sh`, `restore.sh` y `restaurante-backup.service`, y `daemon-reload` (comandos explícitos en §1.3). Desde aquí todos los respaldos son de formato 2 con la app del PR 2, que se restaura y pasa el simulacro sin la base ni `DATA_DIR`.
+4. Antes del merge: respaldo a mano en el VPS y, en el Mac con la rama del PR, `verify-backup.sh --drill` → 0 con `manifiesto: formato 2` y `sin app-data (formato 2, posterior a REQ-F-045)`; el volumen sigue montado por la app. Si sale `formato 1`, repetir el paso 3.
+5. Merge → el job `deploy` falla con el código 4 → reinstalar `deploy/` (§1.3: `compose.prod.yaml`; `deploy.sh` y `01-usuarios.sh` no cambian, pero la suma sí) → re-run del job. Los scripts de respaldos no se reinstalan.
+6. Volver la copia local del Mac a `main`.
+7. Comprobaciones de solo lectura (CA-12 y CA-13) y un respaldo a mano con su verificación (`formato 2`, ya con la imagen del PR 3).
+
+#### Corrección de DEF-001 (QA del PR 3, ronda 1; opción A, decidida por el usuario: "Si")
+
+- **Qué cambió (solo documentación):**
+  - `restaurante/docs/despliegue.md` §1.3, bloque "Al llegar a `main` la limpieza de REQ-F-045": párrafo con el motivo del orden; el paso 2 añade `docker ps -a --filter volume=…`; nuevo paso 3 (instalar los scripts de respaldos desde la rama del PR, **antes del merge**, con los comandos `scp`/`install`/`daemon-reload` exactos y solo los archivos que cambian); nuevo paso 4 (respaldo a mano y `verify-backup.sh --drill` en el Mac con la rama del PR: 0, `manifiesto: formato 2`, `sin app-data (formato 2, posterior a REQ-F-045)`; si sale `formato 1`, repetir el paso 3); el merge pasa a ser el paso 5 (sin reinstalar los scripts); paso 6, volver la copia local a `main`; paso 7, las mismas comprobaciones, con la verificación final en `formato 2`. Se quitó la frase "Sin esto, el respaldo sigue funcionando: el `backup.sh` anterior lee el volumen… y hace respaldos de formato 1" y el "antes de las 03:00".
+  - §11.1 (formatos): el formato 2 empieza al instalar los scripts, justo antes del merge y con la app del PR 2; todos los de formato 1 llevan una imagen anterior a la limpieza, con la carpeta de `DATA_DIR`.
+  - §11.5: excepción documentada (los scripts de la limpieza se instalan desde la rama del PR, antes del merge).
+  - §11.7, casos: respaldo de formato 2 con la app del PR 2 (se restaura como cualquier formato 2) y **limitación conocida** (un formato 1 con la imagen del PR 3 o posterior → 11 en un volumen nuevo y el `--drill` falla; con el orden de §1.3 no se genera; salida: otro respaldo o redesplegar la punta de `main`). §11.8 no suponía el orden anterior: sin cambios.
+  - `restaurante/docs/arquitectura.md` (PR 3 aplicado, "Respaldos") y `restaurante/README.md` ("Archivos de datos"): una frase cada uno sobre la instalación previa al merge, con enlace a §1.3.
+- **Sin cambios de código:** `ops/backup/*.sh`, `verify-backup.sh`, `deploy/` y el compose, intactos respecto a la ronda 1.
+- **Comprobado:**
+  - Lectura del código de los scripts del PR para sostener lo documentado: `backup.sh` ya no abre el volumen (ni `docker volume inspect` ni el `tar` con la imagen de la app) y escribe `format=2`; `restore.sh` solo toca `app-data` con `has_app_data` (formato 1); `verify-backup.sh` imprime `manifiesto: formato N, …` y, con formato 2, `sin app-data (formato 2, posterior a REQ-F-045)`, y en el `--drill` de formato 2 arranca la app sin `DATABASE_URL` ni `DATA_DIR` (la del PR 2 no los necesita: I-1/CA-11 de la ronda 1).
+  - Anclas internas de `despliegue.md`, `README.md`, `arquitectura.md` y `desarrollo.md` con el algoritmo de GitHub (script temporal en el scratchpad): 0 rotas, incluidos los enlaces nuevos hacia `#13-instalar-deploy` (§11.1, §11.5, §11.7, `README.md` y `arquitectura.md`).
+  - `grep` de "backup.sh anterior", "antes de las 03:00", "formato 1" y "paso 4" en los tres documentos: ninguna mención supone el orden anterior.
+  - No se ejecutaron `npm test`, `typecheck`, `lint` ni los `smoke.sh`: el diff entre rondas es solo Markdown (R2-4 del QA). Los comandos nuevos de §1.3 no se ejecutaron contra un VPS (sin tocar producción); su recorrido en una pila local es R2-1 de la ronda 2.
+
+#### Riesgos o pendientes
+
+- **Ventana entre el paso 3 y el merge:** los respaldos ya son de formato 2 con la app del PR 2. Si el día 1 cae en ella, la prueba mensual se hace con la copia local en la rama del PR (el `verify-backup.sh` de `main` anterior no acepta el formato 2). Documentado en los pasos 4 y 6.
+- **Un respaldo de formato 1 con la imagen del PR 3** (solo si no se sigue el orden de §1.3) sigue sin restaurarse en un volumen nuevo: opción A no cambia los scripts. Queda como limitación conocida en §11.7.
+- **Vuelta atrás a una versión anterior a REQ-F-045:** ya no es automática ni posible con el compose nuevo (la app anterior al PR 2 no arranca sin `DATABASE_URL`/`DATA_DIR`). La automática vuelve a la app del PR 2, que sí arranca. Documentado en §6 (revert en `main` o el `deploy/` del commit anterior).
+- **Restaurar un respaldo antiguo (formato 1) cuya app es anterior al PR 2** (en R2 hasta que caduquen; `monthly/` hasta ~186 días): `restore.sh` restaura la base y `app-data` y termina con 12 porque esa app no arranca con este compose. La salida documentada (§11.7) es redesplegar la punta de `main`. No se automatizó un "volver a la app que había" en `restore.sh` para no meter lógica nueva en un script crítico; si se prefiere, es un cambio pequeño.
+- **`deploy.sh` no se tocó:** `protect_running_app` sigue diciendo en su log que "recrea la app con `DATABASE_ALLOW_NEWER_SCHEMA=true`" aunque ya no cambie nada, y su cabecera habla del modo de solo lectura de `/admin`. Es solo texto; cambiarlo no exige otro paso en el VPS (la suma ya cambia por el compose). Lo dejo como propuesta para no ampliar el alcance.
+- **`api` con `ADMIN_*` en producción:** si los valores del `.env` no fueran válidos, la `api` nueva no arrancaría y `deploy.sh` volvería a la anterior (código 15). Son los mismos valores que la app validaba con la misma función (`parseAdminBootstrap`, movida en el PR 1), así que no se espera.
+- Los dos `smoke.sh` solo corren en el CI en el PR de la épica a `main` (en el PR a `epic/arquitectura` se omiten); por eso se ejecutaron aquí en local.
+- `.claude/rules/testing.md` (`setupAdmin`) y `.claude/agents/senior-fullstack.md` siguen desfasados (fuera de lo autorizado; O-6 del QA del PR 2).
+
+#### Limpieza
+
+- Bases: `SHOW DATABASES` sin ninguna `restaurante_test*` (solo `restaurante`, `restaurante_shadow` y las del sistema). MySQL detenido con `npm run db:down` (estaba parado al empezar).
+- Procesos: sin Vitest ni servidores; un solo worktree (`git worktree list`).
+- Docker: sin contenedores de las pruebas de humo ni del runner (solo `restaurante-mysql-dev-1`, parado), sin redes `traefik-public`/`*smoke*` ni volúmenes `*bksmoke*`/`restaurante-verify-*`. Borradas las imágenes `qa-req-f-045c/*` (4), `smoke/*`, `bksmoke/*`, `localhost:5000/*`, `koalaman/shellcheck:v0.10.0` y las descargadas por digest (`traefik`, `registry`, `versity/versitygw`), y las derivadas sin etiqueta de las pruebas de humo. Se conservan `docker:cli`, `mysql:8.4`, `koalaman/shellcheck-alpine:stable` (ya estaba) y 19 imágenes colgantes sin etiqueta que no pude atribuir a esta tarea (una es un `mysql` antiguo; las demás no tienen configuración): no las borré.
+- Scratchpad: borrados los logs, las carpetas de trabajo de las pruebas de humo y la copia de `ops/`/`deploy/`. Quedan `cot.xlsx`, `cotizador-analisis.md` y `venv/`, que no son de esta tarea.
+- `git status`: solo los archivos del PR 3 y `Cotizador_Taquiza_Birria.xlsx` sin seguimiento (no entra en el commit).
+
 ## QA Action Plan (PR 1)
 
 Alcance: **PR 1 de 3** (`feature/REQ-F-045-retirada-admin-actual-1-arranque`, cambios sin commit, PR a `epic/arquitectura`). Preparado el 2026-11-16 por `senior-qa` tras la aprobación de la implementación del PR 1 por el usuario ("si", incluida la desviación de sembrar la página antes que los productos). Análisis con `codegraph_explore` (`prepareInstallation`, `seedPages`, `importBusiness`, `confirmedByOther`, `isWriteConflict`, `safeEqualStrings`, `loadSeedDocument`, `parseAdminBootstrap`, arranque de `landing-pages`) y lecturas dirigidas de Dockerfile, `package.json`, `deploy/ci/smoke.sh`, `ops/backup/ci/smoke.sh`, `ci.yml` y `read-hidden.ts`. NotebookLM: no consultado en esta fase (sus herramientas MCP no se usaron; el ticket y el repositorio son la fuente).
@@ -1459,6 +1570,470 @@ Ninguno que bloquee. Opcional: una mirada visual a 375 px de `/` y `/molotes` cu
 
 QA_APPROVED
 
+## QA Action Plan (PR 3)
+
+Rama `feature/REQ-F-045-retirada-admin-actual-3-limpieza` (árbol de trabajo sin commit sobre `dbba0a9`). Implementación aprobada por el usuario (2026-11-17, transmitida por la sesión principal): "Adelante con tus recomendaciones", con estas decisiones: `restore.sh` se queda como está (el código 12 está documentado para los respaldos cuya app es anterior al PR 2), y el texto desfasado de `deploy.sh` y los puntos de `.claude/` (`rules/testing.md`, `agents/senior-fullstack.md`) van en un cambio aparte, fuera de este PR. Producción y el VPS no se tocan, `admin-recover` no se ejecuta contra producción y `Cotizador_Taquiza_Birria.xlsx` queda fuera.
+
+Referencias que se usan en las pruebas (imágenes construidas desde `git archive`, sin `node_modules`):
+- **PR 3**: el árbol de trabajo.
+- **PR 2**: `dbba0a9`. Es lo que corre hoy en producción, con la app sin base y la imagen que todavía tiene `/var/lib/restaurante`.
+- **Anterior al PR 2**: el primer padre de `9fbb7ee`, la versión que corría en producción antes de #158. Es una app que necesita `DATABASE_URL`, `DATA_DIR` y `app-data`.
+
+CodeGraph: el PR no toca código indexado (solo YAML, shell, Dockerfile, Markdown y el workflow), así que la revisión se hace con `git diff` y lecturas dirigidas. NotebookLM no se consultó: las fuentes de verdad de este PR son el ticket y los scripts del repositorio.
+
+### Objetivo
+
+Comprobar que la limpieza de `deploy/` y `ops/` (RF-9) cumple CA-12 y CA-13 y conserva:
+- la vuelta atrás automática (CA-11 con el compose nuevo);
+- la compatibilidad de los respaldos con los dos formatos;
+- el volumen `app-data`;
+- los procedimientos de operador documentados.
+
+También se comprueba que el resto (CA-1 a CA-10 y CA-14) sigue en verde.
+
+### Requisito bajo prueba
+
+- RF-9: compose, `env.production.example`, respaldos, los dos `smoke.sh` y `despliegue.md` §6.
+- RN-5: respaldos sin `app-data`, los dos formatos aceptados y el volumen sin montar y sin borrar.
+- RN-7: sin router ni límite de `/admin`.
+- RF-10 (PR 3): `despliegue.md` §1, §3, §4, §5, §6 y §11.
+- Los casos límite "Vuelta atrás tras el PR 3" y "Respaldos antiguos con `app-data`".
+
+### Criterios de aceptación (cada uno → pruebas que lo cubren)
+
+| CA | Pruebas |
+| -- | ------- |
+| CA-12 | C-1 a C-4 (compose), B-1 (`ops/backup/ci/smoke.sh` real), B-2 a B-6 (compatibilidad y casos límite de respaldos), M-1 (bash 3.2), V-1 (volumen que sobrevive a `down -v`) |
+| CA-13 | D-1 (`deploy/ci/smoke.sh` real: `30 x 302` en paralelo y `/molotes` 200), R-1 paso 5 (en la pila de vuelta atrás) |
+| CA-11 (con el compose nuevo) | R-1 (vuelta atrás automática de `deploy.sh` a la app del PR 2), D-1 (vueltas atrás del smoke) |
+| CA-1 a CA-3 a través de Traefik sin el router de `/admin` | D-1 (302/410), R-1 paso 5 (`curl` de las 4 rutas de CA-1 y POST/PUT/PATCH/DELETE) |
+| CA-4 (imagen sin `/var/lib/restaurante`) | I-1 (réplica del paso `app-ca9` del CI), I-2 (HTML de la imagen del PR 3 frente a la del PR 2) |
+| CA-1 a CA-10, CA-14 (regresión) | A-1 a A-4 |
+| Procedimientos documentados (RF-9 §6, RF-10) | O-1 (§1.3), O-2 (§6), O-3 (§11.7 y §11.8), Doc-1 a Doc-3 |
+
+### Riesgos identificados
+
+1. **Respaldo de formato 1 con la imagen del PR 3 (ventana de transición).** Si el timer de las 03:00 corre con el `backup.sh` anterior después de desplegar el PR 3 (paso 4 de §1.3 sin hacer), se genera un formato 1 con `app_image` = imagen del PR 3, que ya no tiene `/var/lib/restaurante`. Con un volumen nuevo (un VPS nuevo, o el `--drill` del Mac, que siempre crea `$ID-data`), Docker crea el punto de montaje con dueño root, y el `tar` como `node` podría fallar (código 11 en `restore.sh` y "no se pudo cargar app-data" en `verify-backup.sh`). B-4 lo comprueba.
+2. **`down -v` y el volumen etiquetado.** El volumen de producción lo creó un compose anterior con las etiquetas del proyecto. Hay que confirmar que `down -v` con el compose nuevo no lo borra y que `up` no lo recrea ni avisa (V-1).
+3. **`deploy.sh` sin cambios con un compose sin `DATABASE_ALLOW_NEWER_SCHEMA` en la app.** `protect_running_app` y la vuelta atrás exportan la bandera. Hay que confirmar que no rompe nada y que la vuelta atrás a la app del PR 2 arranca (R-1, D-1).
+4. **Vuelta atrás a mano a una versión anterior al PR 2** (§6 "urgente"): que los pasos escritos funcionen tal cual, que el volumen se vuelva a montar con sus JSON y que no se reimporte nada (O-2).
+5. **`restore.sh` con un respaldo cuya app es anterior al PR 2.** Debe terminar con 12, con la base y `app-data` restaurados, y la salida documentada (redesplegar la punta de `main`) debe funcionar (B-3, O-3).
+6. **Scripts antiguos con formatos nuevos**: el `restore.sh`/`verify-backup.sh` de `dbba0a9` con un formato 2 y el `backup.sh` de `dbba0a9` con el compose nuevo. Se comprueba que el comportamiento es el que documenta §1.3 (pasos 4 y 5) (B-5).
+7. **bash 3.2 de macOS en `verify-backup.sh`/`lib.sh`** (`set -- "$@"`, `[[ ]]`, funciones nuevas con `set -u`) (M-1).
+8. **Inestabilidad de los smoke por carga.** En la implementación, una ejecución en paralelo falló en el 429 del subdominio. Los dos `smoke.sh` se ejecutan **uno detrás de otro**, sin otra carga de Docker a la vez, y se anota cualquier fallo intermitente con su medida.
+9. **Secretos en logs**: `DATABASE_URL` del `--drill` de formato 1, la clave de `age` y `ADMIN_PASSWORD_HASH` ahora en la `api` (S-2).
+10. **Archivos ajenos en el diff** (`Cotizador_Taquiza_Birria.xlsx`, `.claude/` fuera del ticket, `src/`) (G-1).
+
+### Pruebas de configuración del compose (C-*)
+
+- **C-1** `git diff dbba0a9 -- deploy/compose.prod.yaml` revisado línea a línea frente a RF-9 y el Technical Action Plan (PR 3).
+- **C-2** `docker compose -f deploy/compose.prod.yaml --env-file <.env de la plantilla con valores ficticios> config --format json` y `jq`:
+  - la app sin `DATABASE_URL`, `DATABASE_ALLOW_NEWER_SCHEMA`, `DATA_DIR`, `ADMIN_*`, `WHATSAPP_BOT_*`, `WHATSAPP_GRAPH_*` ni `BOT_*`, y sin volúmenes;
+  - la app con `WHATSAPP_MOLOTES`/`BIRRIA` (con sus `_URL` y `_MESSAGE`), `API_INTERNAL_URL`, `ADMIN_NEW_URL`, `INTERNAL_*`, `BUSINESS_TIMEZONE` y `SITE_URL`;
+  - la `api` con `ADMIN_USER`/`ADMIN_PASSWORD_HASH`, todas las del bot y `DATABASE_URL`;
+  - los routers de la app: exactamente `restaurante`, `restaurante-http` y `restaurante-www`, sin ningún `ratelimit`; el webhook y `inventory-manager` sin cambios frente a `dbba0a9` (diff de etiquetas);
+  - redes y `depends_on` de la app sin cambios.
+- **C-3** Variables obligatorias: con `RESTAURANTE_DB_APP_PASSWORD` vacía o ausente, `compose config` falla con "Falta RESTAURANTE_DB_APP_PASSWORD" (ahora solo a través de la `api` y de `mysql`). Lo mismo con `RESTAURANTE_ADMIN_DOMAIN` y `RESTAURANTE_INTERNAL_NOTIFY_TOKEN`. `DATABASE_ALLOW_NEWER_SCHEMA=true` en el entorno no cambia la configuración de la app.
+- **C-4** Diff semántico del `compose config` de `dbba0a9` frente al PR 3 con el mismo `.env`: solo cambia lo previsto (lista de diferencias por servicio).
+- **C-5** `env.production.example` frente al compose: cada variable que el compose lee existe en la plantilla o tiene valor por defecto, y los comentarios no contradicen a qué servicio llega cada una.
+
+### Pruebas de respaldos (B-*), contra un MySQL y un S3 locales, sin R2 ni Healthchecks
+
+- **B-1** `ops/backup/ci/smoke.sh` real con las imágenes `production` y `migrate` del PR 3, en un contenedor `docker:cli` (o Debian si `age`/`flock` fallan en Alpine tras 2 intentos), como en la implementación. Esperado: "todas las comprobaciones pasaron". **Se ejecuta solo, después de D-1** (nunca en paralelo).
+- **B-2** Formato 1 de verdad, hecho con el **`backup.sh` de `dbba0a9`** sobre una pila con el compose y la app de `dbba0a9` y `app-data` con JSON (no construido a mano). Con los scripts nuevos:
+  - `verify-backup.sh --file` → 0, con "app-data: JSON … presentes";
+  - `verify-backup.sh --drill --file` (la app del PR 2) → 0, sin restos (contenedores, volúmenes ni red `restaurante-verify-*`);
+  - `restore.sh <archivo> --confirm restaurante` → 0: base restaurada, `app-data` restaurado, la app del PR 2 `healthy` con el compose nuevo y ningún contenedor montando el volumen.
+- **B-3** Formato 1 cuya app es **anterior al PR 2** (el mismo método, con la pila del primer padre de `9fbb7ee`):
+  - `restore.sh` → **12**, con el mensaje que remite a 11.7, la base y `app-data` restaurados y `release.env` según lo que haga el script (se anota);
+  - después se sigue 11.7 al pie de la letra ("redesplegar la punta de `main`", con `deploy.sh` y las imágenes del PR 3) → 0 y landings 200;
+  - `verify-backup.sh --drill --file` con ese respaldo → 0 (la app de entonces recibe base y `DATA_DIR`).
+- **B-4 (riesgo 1)** Formato 1 hecho con el `backup.sh` de `dbba0a9` **con el compose y la app del PR 3 ya desplegados** (la ventana del paso 4 de §1.3). Se comprueban cuatro cosas:
+  - `backup.sh` antiguo → 0 (el volumen existe);
+  - `restore.sh` nuevo sobre el volumen existente → 0;
+  - `restore.sh` nuevo sobre un volumen inexistente (VPS nuevo) → resultado anotado;
+  - `verify-backup.sh --drill --file` (crea un volumen nuevo) → resultado anotado.
+
+  Si alguno no termina en 0, se clasifica según su impacto: si queda fuera de los procedimientos documentados, como `REQUIREMENT_AMBIGUITY`/observación; si incumple "restaurar y verificar aceptan los dos formatos" (RN-5, CA-12), como defecto.
+- **B-5 (riesgo 6)** Scripts de `dbba0a9` con un respaldo de formato 2:
+  - `restore.sh` y `verify-backup.sh` antiguos → fallan antes de borrar nada (código y mensaje anotados; la base y la app intactas);
+  - `backup.sh` antiguo con el compose del PR 3 → 0 y formato 1 (lo que afirma el paso 4 de §1.3).
+- **B-6** Negativos con los scripts nuevos:
+  - formato desconocido (`format=3`) → rechazado;
+  - formato 2 con un `app-data.tar` añadido → se ignora sin error (se anota);
+  - formato 1 sin `app-data.tar` → rechazado;
+  - suma del volcado alterada en un formato 2 → rechazada;
+  - `restore.sh` sin `--confirm` y sin terminal → 2;
+  - el texto de la confirmación interactiva dice "la base restaurante" (formato 2) y "la base restaurante y app-data" (formato 1), con un pseudo-terminal (`script`), respondiendo algo distinto de "restaurante" → 2 sin tocar nada.
+
+### Pruebas en macOS (M-*)
+
+- **M-1** `verify-backup.sh --file` y `--drill --file` con el `/bin/bash` 3.2 del Mac, Docker Desktop y `age` de Homebrew, con un respaldo de cada formato (los de B-2 y B-1). Configuración ficticia en `RESTAURANTE_BACKUP_CONFIG` y `RESTAURANTE_BACKUP_LOG` en el scratchpad (no se toca `~/.config/restaurante-backup`). Esperado: 0 en los dos y sin restos. Si Docker Desktop no permite montar `deploy/mysql/initdb` desde el árbol, se repite desde una copia en el scratchpad y se anota.
+
+### Vuelta atrás y despliegue con `deploy.sh` (R-*, V-*), en una pila local con Traefik y registro locales
+
+Se parte de una copia reducida de `deploy/ci/smoke.sh` en el scratchpad (preparación, registro, Traefik y `deploy.sh` real instalado como en el VPS).
+
+- **R-1 (CA-11 con el compose nuevo, CA-13).** Pasos:
+  1. Instalar el `deploy/` de `dbba0a9` y desplegar las imágenes del PR 2 sobre una base vacía → 0. Se deja `app-data` con JSON.
+  2. Reproducir §1.3 tal como está escrito: el `deploy.sh` instalado con el compose antiguo frente al `deploy/` nuevo → **4**, sin tocar nada. Después, reinstalación con los comandos de §1.3 (suma comparada como dice el texto) y redespliegue → 0 con las imágenes del PR 3. Se comprueban:
+     - la app recreada sin `DATABASE_URL`, `DATA_DIR` ni montajes;
+     - la `api` con `ADMIN_*` y `admin_bootstrap_ignored` (sin `admin_bootstrap_created`);
+     - el volumen existe y nadie lo monta.
+  3. Despliegue con una app rota (derivada que sale con 1) → **21**, y vuelve la app del **PR 2** (`dbba0a9`), `healthy` con el compose nuevo, con las landings 200.
+  4. Despliegue con una migración nueva y la `api` rota → 15; la app sigue `healthy`.
+  5. Redespliegue correcto del PR 3 → 0, y comprobaciones de §1.3 paso 6 tal como están escritas (adaptadas solo en el dominio, con `--resolve` a Traefik): `30 x 302`, `/molotes` 200, logs de la `api`, CA-1 (4 rutas, 302 a la raíz del admin, sin `set-cookie`) y CA-2 (POST/PUT/PATCH/DELETE → 410).
+- **V-1 (volumen, CA-12).** Con el volumen creado por el compose de `dbba0a9` (con sus etiquetas):
+  - `compose down` y `compose down -v` con el compose del PR 3 → el volumen y sus JSON siguen ahí;
+  - `compose up` no lo recrea ni avisa;
+  - `docker ps -a --filter volume=…` vacío.
+
+  Se repite con el volumen inexistente: `up` no lo crea.
+
+### Procedimientos de operador (O-*), ejecutados como están escritos (con la pila de R-1 como sustituto del VPS)
+
+- **O-1** `despliegue.md` §1.3, bloque "Al llegar a `main` la limpieza de REQ-F-045":
+  - cada comando se ejecuta tal cual o se comprueba (rutas, nombres de volumen, `C` del paso 5, el `seq | xargs | curl`, el `grep` de los logs de la `api`);
+  - las afirmaciones se contrastan con la realidad ("`deploy.sh` y `mysql/initdb/` no cambian", la suma de §1.3 cambia, "`env-backup.sh` no cambia", la unidad "solo cambia su descripción", el job falla con 4);
+  - se revisa que el orden de los pasos no deje una ventana peligrosa (riesgo 1).
+- **O-2** §6, "Volver a una versión anterior a REQ-F-045", vía "Urgente, en el VPS". Pasos:
+  1. Instalar con §1.3 el `deploy/` de `dbba0a9`.
+  2. Ejecutar el `sudo env DATABASE_ALLOW_NEWER_SCHEMA=true RESTAURANTE_APP_IMAGE=… $CE up -d --no-deps app` (sin `sudo` en local) con la app anterior al PR 2.
+  3. Comprobar que queda `healthy`, que monta `app-data` con sus JSON, sin `page_import_*` de reimportación ni `page_json_diverged`, y con las landings 200 y `/admin` en el comportamiento de esa versión.
+  4. Comprobar que el siguiente `deploy.sh` desde el `deploy/` nuevo falla con 4 hasta reinstalar, y que después vuelve a 0.
+
+  También se revisa la vía "Revert en `main`" (coherencia con el job y el código 4) y el paso 4 de §6 (la app con este compose solo a una versión de REQ-F-045 o posterior).
+- **O-3** §11.7 (los casos "respaldo anterior a REQ-F-045", RN-4 con $195/$145, `MIGRATIONS_PENDING` con la `api`) y §11.8 frente a B-2, B-3 y M-1: cada orden y cada código citado coincide con lo observado.
+- **O-4** `systemd-analyze verify` de `restaurante-backup.service` (y de `.timer`) en un contenedor Debian con systemd, con stubs de `/opt/restaurante/ops/backup/backup.sh`, el usuario `deploy` y las rutas de `ReadWritePaths`. Se compara con la misma ejecución sobre la unidad de `dbba0a9`: sin avisos nuevos.
+
+### Pruebas de imagen (I-*)
+
+- **I-1** Réplica local del paso "imagen production escucha en 0.0.0.0 y queda healthy" del job `docker` de `ci.yml`, tal como queda en el PR (`app-ca9` sin `DATABASE_URL` ni `DATA_DIR`) → `healthy` y 200. Contenido de la imagen: sin `/var/lib/restaurante`, usuario `node`.
+- **I-2** HTML de `/`, `/molotes` y `/birria` (con `?dia=` en desarrollo o con fecha fija) de la imagen `production` del PR 3 frente a la de `dbba0a9`, con la misma `api`: `cmp` byte a byte.
+
+### Pruebas de seguridad (S-*)
+
+- **S-1** `shellcheck` v0.10.0 (como el CI) de los mismos archivos que el CI y `bash -n` → 0 avisos nuevos; los `disable` nuevos llevan justificación.
+- **S-2** En todos los logs de B-*, M-1, R-1 y D-1 (salidas de los scripts, `docker logs` y `pruebas.log`) se buscan la clave privada de `age`, `RESTAURANTE_DB_APP_PASSWORD`, `ADMIN_PASSWORD_HASH`, `INTERNAL_NOTIFY_TOKEN` y los tokens del bot ficticios → ninguna aparición. `verify-backup.sh` pasa `DATABASE_URL` por nombre (`-e DATABASE_URL`), no por valor en los argumentos (`ps` durante el `--drill`).
+
+### Pruebas de humo del CI (D-*)
+
+- **D-1** `deploy/ci/smoke.sh` real (contenedor `docker:cli`, socket, `--network host`, `SMOKE_WORKDIR` en el scratchpad), **solo, sin otra carga de Docker**, con salida con marca de tiempo. Esperado: "todas las comprobaciones pasaron", incluidas las comprobaciones estáticas nuevas, `30 x 302`, 302/410 y "la app no se recreó y sin la bandera". Si falla algo ajeno a este PR por carga (el 429 del subdominio), se repite una vez y se anotan las dos ejecuciones.
+- Orden fijo: **D-1 → B-1 → resto de pilas**. Nunca dos pilas a la vez.
+
+### Pruebas de regresión y automatizadas (A-*)
+
+- **A-1** `npm test` completo desde `restaurante/` (las 3 apps, MySQL de pruebas con `npm run db:up`) → todo en verde.
+- **A-2** `npm run typecheck` → 0.
+- **A-3** `npm run lint` → 0 sin avisos (sin `lint:fix`).
+- **A-4** CA-14: `grep -rn 'DATA_DIR\|DATABASE_URL\|ADMIN_USER\|admin-recover' landing-pages/src landing-pages/scripts` vacío.
+- Sin sondas de Vitest: este PR no cambia código. Las comprobaciones de mudanza (B-*, R-*, V-*, O-*, I-*) son scripts temporales en el scratchpad y **no se commitean** (`testing.md`); su resultado queda en el QA Report.
+
+### Documentación (Doc-*)
+
+- **Doc-1** Revisión de `despliegue.md` (todas las secciones tocadas), `README.md` y `arquitectura.md`:
+  - cada ruta, variable, código de salida y nombre de volumen existe;
+  - ningún texto describe todavía la app con base, `DATA_DIR`, `app-data` montado, el router de `/admin` o el 429 como vigentes (salvo los marcados como históricos);
+  - las anclas internas (`#volver-a-una-versión-anterior-a-req-f-045`, `#115-instalar-en-el-vps`, etc.) resuelven a un encabezado existente con el algoritmo de GitHub.
+- **Doc-2** Coherencia entre el texto de la cabecera de `restore.sh`, `verify-backup.sh`, `lib.sh` y `backup.sh` y su comportamiento observado (códigos, mensajes).
+- **Doc-3** El desfase de `deploy.sh` (cabecera y log de `protect_running_app`) y los de `.claude/` quedan como **observación ya decidida por el usuario** (cambio aparte), no como defecto.
+
+### Diff y alcance (G-*)
+
+- **G-1** `git status` y `git diff --name-only`: exactamente los 15 archivos de la lista de la implementación. Sin cambios en `src/`, `.claude/agents`, `.claude/rules` ni `.claude/CLAUDE.md`. `Cotizador_Taquiza_Birria.xlsx` sin seguimiento y fuera de cualquier `git add`. Sin archivos de prueba nuevos.
+
+### Pruebas en navegador / responsive / accesibilidad / UX / SEO / performance
+
+No aplican: el PR no cambia plantillas, CSS, JavaScript ni contenido. I-2 (HTML byte a byte frente al PR 2) cubre la no regresión. Si I-2 mostrara alguna diferencia, se añadiría un recorrido en el navegador de las secciones afectadas (375×812, 768×1024 y 1440×900). Performance: solo se anotan las duraciones de `verify-backup.sh --drill` por formato y el tamaño del respaldo de formato 2 frente al de formato 1 (informativo).
+
+### Autorizaciones temporales que pido
+
+1. **MySQL de pruebas**: `npm run db:up`/`npm run db:down`, solo bases `restaurante_test*`. Hoy está parado y se vuelve a parar.
+2. **Docker local**:
+   - construir las imágenes `production`, `migrate`, `api` e `inventory-manager` del PR 3, de `dbba0a9` y del primer padre de `9fbb7ee` (`qa-req-f-045c-*`, desde `git archive` en el scratchpad);
+   - levantar pilas efímeras (proyectos `qa-req-f-045c-*`, puertos solo en `127.0.0.1`, credenciales inventadas, sin el `.env` real);
+   - ejecutar los dos `smoke.sh` en contenedores auxiliares con el socket de Docker y `--network host`;
+   - descargar las imágenes fijadas por digest que usan (`traefik`, `registry`, `versity/versitygw`, `mysql:8.4`), `koalaman/shellcheck:v0.10.0` y `debian:stable-slim` (O-4 y el posible respaldo de Alpine).
+3. **macOS (M-1)**: ejecutar `verify-backup.sh` con el `/bin/bash` del sistema y Docker Desktop, con configuración y log en el scratchpad. No toca `~/.config/restaurante-backup` ni R2.
+4. **Scripts temporales** en el scratchpad: la copia reducida del smoke para R-1/O-2, la generación de respaldos de formato 1 con el `backup.sh` de `dbba0a9`, los comprobadores de `compose config` y de anclas. Se borran al terminar.
+5. **Remanentes previos**: si al empezar hay imágenes `smoke/*`, `bksmoke/*` o `localhost:5000/*` que los smoke vuelven a crear con el mismo nombre, borrarlas al final. Las 19 imágenes colgantes que la implementación no pudo atribuir se dejan como están.
+
+Nada toca producción, el VPS, GHCR, R2 ni Healthchecks. No se ejecuta `admin-recover` real ni ningún `restore.sh` fuera de las pilas efímeras.
+
+### Limpieza (se comprueba, no se supone)
+
+- Bases: `SHOW DATABASES LIKE 'restaurante\_test%'` vacío; MySQL detenido con `npm run db:down`.
+- Procesos y puertos: sin Vitest, servidores ni contenedores auxiliares (`ps`, `lsof -iTCP -sTCP:LISTEN`, `docker ps -a`).
+- Docker:
+  - sin contenedores, redes (`traefik-public` creada por la prueba, `*smoke*`, `qa-req-f-045c-*`, `restaurante-verify-*`) ni volúmenes (`*bksmoke*`, `*_app-data` de las pilas de QA, `restaurante-verify-*`) de QA;
+  - borradas las imágenes `qa-req-f-045c-*`, `smoke/*`, `bksmoke/*`, `localhost:5000/*` y las descargadas solo para esto (`traefik`, `registry`, `versitygw`, `koalaman/shellcheck:v0.10.0`, `debian:stable-slim` si no estaba);
+  - se conservan `docker:cli`, `mysql:8.4` y las imágenes que ya estaban.
+- Archivos: copias de `git archive`, scripts, logs y respaldos de prueba del scratchpad borrados (quedan los ajenos: `cot.xlsx`, `cotizador-analisis.md` y `venv/`). `git worktree list` con un solo árbol. `git status` igual que al empezar (los 15 archivos del PR y el `.xlsx` sin seguimiento), más el ticket.
+- Navegador: no se usa salvo el caso de I-2. Si se abre, la pestaña se cierra.
+
+### Evidencia requerida
+
+- Salidas de C-2 a C-5 (listas de variables, routers y el diff de `compose config`).
+- Resumen de D-1 y B-1 (recuento de `ok` y la línea final) con sus marcas de tiempo.
+- Códigos de salida, logs y recuentos SQL de B-2 a B-6, R-1, V-1 y O-2.
+- Salida de M-1 con `bash --version` y de O-4 (unidad nueva frente a la antigua).
+- `cmp` de I-2, `shellcheck`, `npm test` por app, `typecheck` y `lint`.
+- Resultado de S-2 (los `grep` de secretos con 0 apariciones).
+- `git status`/`git diff --name-only` de G-1 y el registro de la limpieza.
+
+### Criterios de aprobación
+
+- CA-12 y CA-13 en PASS con evidencia de ejecución real (los dos `smoke.sh`, B-2, B-3 y V-1). CA-11 en PASS con el compose nuevo (R-1).
+- Los dos `smoke.sh` en verde ejecutados uno tras otro. `typecheck`, `lint` y `npm test` en 0. I-1 `healthy` e I-2 idéntico.
+- Los procedimientos de §1.3, §6 y §11.7 se pueden ejecutar tal como están escritos y llevan al estado que describen (O-1 a O-3). Una instrucción que, seguida al pie de la letra, deja producción sin servicio o borra datos es al menos `MAJOR`.
+- Sin secretos en los logs (S-2) y sin archivos ajenos en el diff (G-1).
+- Sin defectos `BLOCKER`/`CRITICAL`. Un `MAJOR` (por ejemplo, B-4 con el volumen inexistente si se considera dentro de RN-5) se lleva al usuario como `NEEDS_USER_DECISION`. Lo que ya decidió el usuario (código 12 de `restore.sh` con una app anterior al PR 2 y textos de `deploy.sh` y `.claude/`) no se reabre como defecto.
+
+### Aprobación del QA Action Plan (PR 3)
+
+El usuario lo aprueba el 2026-11-17, con las autorizaciones 1 a 5. Cita textual (transmitida por la sesión principal): "Apruebo con tus recomendaciones".
+
+## QA Report (PR 3)
+
+### Ronda
+
+1 (2026-11-17). Árbol de trabajo sin commit de `feature/REQ-F-045-retirada-admin-actual-3-limpieza` sobre `dbba0a9`. Imágenes `qa-req-f-045c-{pr3,pr2,pre}/{production,migrate,api,inventory-manager}` construidas desde el árbol de trabajo, `git archive dbba0a9` y `git archive 8f37f4e` (primer padre de `9fbb7ee`, lo que corría en producción antes de #158).
+
+### Pruebas ejecutadas
+
+| Prueba | Acción | Resultado real |
+| ------ | ------ | -------------- |
+| G-1 | `git status`/`git diff --name-only` | Los 15 archivos de la implementación más este ticket; `Cotizador_Taquiza_Birria.xlsx` sin seguimiento; sin cambios en `src/`, `.claude/agents`, `.claude/rules` ni `.claude/CLAUDE.md`; sin pruebas nuevas |
+| C-1/C-2 | `docker compose config --format json` con la plantilla y valores ficticios + `jq` | App con 16 variables (`ADMIN_NEW_URL API_INTERNAL_URL BUSINESS_TIMEZONE HOST INTERNAL_NOTIFY_TOKEN INTERNAL_PORT NODE_ENV PORT SITE_URL TRUST_PROXY WHATSAPP_{MOLOTES,BIRRIA}{,_URL,_MESSAGE}`), sin volúmenes; routers `["restaurante","restaurante-http","restaurante-www"]`; el único `ratelimit` es el de `inventory-manager`; `api` con `ADMIN_USER`, `ADMIN_PASSWORD_HASH`, `DATABASE_URL` y 34 variables del bot; redes y `depends_on` de la app iguales a `dbba0a9` |
+| C-3 | Variables vacías | `RESTAURANTE_DB_APP_PASSWORD` vacía → falla por `api.DATABASE_URL` y `mysql`; `RESTAURANTE_ADMIN_DOMAIN` → falla (`app.ADMIN_NEW_URL`, labels de `inventory-manager`); `RESTAURANTE_INTERNAL_NOTIFY_TOKEN` → falla (`api` y `app`). `DATABASE_ALLOW_NEWER_SCHEMA=true` en el entorno: la configuración de la app es idéntica |
+| C-4 | Diff semántico `dbba0a9` → PR 3 | `mysql`, `migrate`, `inventory-manager`: sin cambios. `api`: +`ADMIN_USER`, +`ADMIN_PASSWORD_HASH`. `app`: −`ADMIN_*`, −22 `BOT_*`, −`DATABASE_ALLOW_NEWER_SCHEMA`, −`DATABASE_URL`, −`DATA_DIR`, −12 `WHATSAPP_BOT_*`/`WHATSAPP_GRAPH_*`, −router `restaurante-admin` y su middleware, −montaje de `app-data`. Nivel superior: `app-data` desaparece del `config` (declarado y sin montar). Nada más |
+| C-5 | Variables del compose frente a la plantilla | Las que lee el compose y no están en la plantilla tienen valor por defecto (`BOT_*` opcionales, imágenes de `release.env`, `COMPOSE_PROJECT_NAME`, `DATABASE_ALLOW_NEWER_SCHEMA`, `RESTAURANTE_API_WEBHOOK`), igual que antes; sin incoherencias en los comentarios |
+| S-1 | `shellcheck` v0.10.0 (los mismos archivos que el CI) y `bash -n` (bash 3.2) | 0 avisos en `deploy/` y en `ops/backup/`; los `disable` nuevos (SC2016) llevan justificación |
+| D-1 | `deploy/ci/smoke.sh` real en `docker:cli` (socket, `--network host`), solo | **192 ok, 0 fallos, "todas las comprobaciones pasaron"** (06:41:50 → 06:49:56). Incluye los routers solo raíz/www/http, sin `ratelimit`, `30 x 302` en paralelo, 302 sin cookies y 410, "la app no se recreó" y "sin `DATABASE_ALLOW_NEWER_SCHEMA`" tras la migración nueva con la `api` rota (15), y el 429 del subdominio (`61 x 200; 14 x 429`) |
+| B-1 | `ops/backup/ci/smoke.sh` real, después de D-1 | **75 ok, 0 fallos, "todas las comprobaciones pasaron"** (06:50:22 → 06:52:04) |
+| Pila (R-1, V-1, O-1 a O-3, B-2 a B-6, S-2) | Script temporal con `deploy.sh` real, registro y Traefik locales, S3 local (versitygw) y los scripts de respaldos reales. Recorre la historia de producción: app anterior al PR 2 → PR 2 → PR 3 | 128 ok y 1 fallo (S-2, un artefacto de la prueba: ver abajo). 06:52:21 → 06:59:20 |
+| M-1 | `verify-backup.sh` con `/bin/bash` 3.2.57 de macOS, Docker Desktop y `age` de Homebrew; configuración y log en el scratchpad | `--file` y `--drill --file` → **0** con el formato 2 (6 s/9 s), el formato 1 del PR 2 (7 s/10 s) y el formato 1 anterior al PR 2 (7 s/11 s). Sin restos. El formato 1 de la ventana → 1 (DEF-001) |
+| O-4 | `systemd-analyze verify` (systemd 257, Debian), como en el CI, con un `docker.service` de relleno | Unidades de `dbba0a9` y del PR 3: exit 0, sin avisos |
+| I-1 | Réplica del paso `app-ca9` del CI: MySQL efímero con la collation de `initdb`, `migrate` y `api` del PR 3, y la app sin `DATABASE_URL` ni `DATA_DIR` | `healthy`, `server_started` en `0.0.0.0`, `/molotes` 200, `landing_products_loaded` con `source: api`, ningún `database_*`/`menu_*`/`page_import*`. La imagen no tiene `/var/lib/restaurante` (`dbba0a9` sí: `drwx------ node`); usuario `node` |
+| I-2 | HTML de `/`, `/molotes` y `/birria` de la app del PR 3 y de la del PR 2, con la misma `api` (sin el `nonce`) | **Idénticos** byte a byte (64378, 58929 y 62523 B); `Cache-Control` y `Content-Type` iguales |
+| A-1 | `npm test` (MySQL de pruebas) | 0: `api` 49/1162, `landing-pages` 58/896, `inventory-manager` 16/278 |
+| A-2/A-3 | `npm run typecheck`, `npm run lint` | 0 y 0 (`--max-warnings 0`) |
+| A-4 | `grep -rn 'DATA_DIR\|DATABASE_URL\|ADMIN_USER\|admin-recover' landing-pages/src landing-pages/scripts` | Vacío |
+| Doc-1 | Anclas internas de `despliegue.md`, `README.md`, `arquitectura.md` y `desarrollo.md` con el algoritmo de GitHub; `grep` de menciones de 429, `restaurante-admin`, `DATA_DIR`, `app-data` y la bandera | 0 anclas rotas. Las menciones restantes son históricas o describen la ausencia de esos elementos |
+
+### Criterios de aceptación
+
+| CA | Estado | Evidencia |
+| -- | ------ | --------- |
+| CA-12 | **FAIL parcial (DEF-001)** | Pasan: B-1; `backup.sh` nuevo → formato 2 (`manifest.txt dump.sql.gz`, sin `app_data*`, 20680 B frente a 51400 B del formato 1); volumen con sus JSON tras `down`, `up` y `down -v` del compose nuevo; `up` sin el volumen no lo crea; nadie lo monta. Restaurar y verificar funcionan con formato 2, con formato 1 del PR 2 y con formato 1 anterior al PR 2 (12 documentado). **No pasa** con un formato 1 hecho por el `backup.sh` antiguo con la app del PR 3 ya desplegada (la ventana del paso 4 de §1.3): `restore.sh` sobre un volumen inexistente → 11 y `verify-backup.sh --drill` → 1 |
+| CA-13 | PASS | D-1 (`30 x 302`, `/molotes` 200); pila: §1.3 paso 6 tal cual (`30 302`, `/molotes` 200) |
+| CA-11 (compose nuevo) | PASS | Primer despliegue tras reinstalar el `deploy/` del PR 3 con una app rota → **21** ("versión anterior restaurada"). Vuelve la app del PR 2, `healthy`, sin montajes ni `DATABASE_URL`/`DATA_DIR`; `/`, `/molotes` y `/birria` 200; `/admin` 302. Después, el despliegue correcto → 0 |
+| CA-1/CA-2 por Traefik sin router de `/admin` | PASS | GET y HEAD de `/admin`, `/admin/login?x=1`, `/admin/bot` y `/admin/api/molotes/productos` → 302 a `https://admin.birriaelmuneco.com/` sin `set-cookie`; POST, PUT, PATCH y DELETE → 410 |
+| CA-4 (imagen sin `/var/lib/restaurante`) | PASS | I-1, I-2 |
+| CA-6/CA-7 (`ADMIN_*` ahora en la `api` del compose) | PASS | Con usuarios en la base: `admin_bootstrap_ignored`, ningún `admin_bootstrap_created`; el hash no aparece en el log de la `api` |
+| CA-1 a CA-10, CA-14 (regresión) | PASS | A-1 a A-4 |
+
+### Defectos encontrados
+
+#### DEF-001
+
+- **Severidad:** MAJOR.
+- **Criterio de aceptación afectado:** CA-12 y RN-5 ("restaurar y verificar aceptan los dos formatos").
+- **Descripción:** un respaldo de formato 1 cuya `app_image` es la imagen del PR 3 no se restaura sobre un volumen `app-data` nuevo y no pasa el `--drill`. La imagen del PR 3 ya no tiene `/var/lib/restaurante`. Al montar un volumen nuevo ahí, el punto de montaje queda con dueño root, y el `tar` que ejecutan `restore.sh` y `verify-backup.sh` como `node` falla con `tar: can't make dir ./molotes: Permission denied`. Con el volumen existente (el VPS actual), `restore.sh` sí termina con 0.
+- **Cómo se produce ese respaldo:** el procedimiento documentado lo admite expresamente. El paso 4 de §1.3 dice: "Sin esto, el respaldo sigue funcionando: el `backup.sh` anterior lee el volumen, que no se borra, y hace respaldos de formato 1". Si el timer de las 03:00 corre entre el despliegue del PR 3 y la reinstalación de los scripts, ese respaldo va a R2 con la imagen del PR 3. Esos respaldos se conservan en `daily/`, `weekly/` y, si cae en día 1, en `monthly/` hasta unos 186 días.
+- **Pasos para reproducir:**
+  1. Desplegar el PR 3 con `deploy.sh`, con los scripts de respaldos de `dbba0a9` aún instalados.
+  2. Ejecutar `backup.sh` → 0, `format=1`, `app_image` del PR 3.
+  3. Instalar los scripts nuevos y ejecutar `docker volume rm <proyecto>_app-data` (equivale a un VPS nuevo).
+  4. Ejecutar `restore.sh <archivo> --confirm restaurante` → **11**.
+  5. Ejecutar `verify-backup.sh --drill --file <archivo>`, en la pila Linux y en el Mac con bash 3.2 → **1** ("no se pudo cargar app-data en el volumen").
+- **Resultado esperado:** 0 en los dos. Es un respaldo de formato 1 válido, y `verify-backup.sh --file` sin simulacro sí pasa con 0.
+- **Resultado actual:** `restore.sh` termina con 11 y deja la base restaurada y **la app parada** ("la app sigue parada"). El simulacro mensual falla (falsa alarma en Healthchecks si ese es el último respaldo de `daily/`).
+- **Evidencia:** logs `r-win-nuevo.log` y `vd-win.log` de la pila y `mac-win.log` (`Permission denied`); `B4 existe=0 nuevo=11 drill=1`.
+- **Impacto:**
+  - **Cuándo ocurre:** solo con los respaldos de la ventana y solo en un VPS nuevo o en el simulacro.
+  - **Alternativas:** usar otro respaldo, o terminar la recuperación redesplegando la punta de `main`, que arranca la app sin necesitar `app-data`.
+  - **Por qué es MAJOR:** el escenario es la recuperación ante un desastre, y el runbook (§11.7) no menciona este código ni este caso.
+- **Recomendación (no impone solución):** que ningún respaldo de formato 1 dependa de que su imagen tenga la carpeta de `DATA_DIR`, o que la ventana no exista. Dos opciones:
+  - Que el orden de §1.3 instale los scripts de respaldos nuevos **antes** del merge. El `backup.sh` nuevo funciona con el compose del PR 2: no lee el volumen.
+  - Que `restore.sh` y `verify-backup.sh` preparen el dueño del volumen nuevo, o escriban con un usuario que pueda hacerlo.
+
+### Observaciones (no son defectos)
+
+- **O-1:** un respaldo de formato 2 con un `app-data.tar` añadido a mano se acepta e ignora ese archivo (`verify` → 0, "sin app-data (formato 2…)"). Es coherente con la definición del formato.
+- **O-2 (S-2):** la única aparición de un secreto está en los dos registros de la prueba de la confirmación interactiva con `script(1)`. Es la clave de `age` que **el propio pseudo-terminal** repite porque se escribió antes de que `read -s` desactivara el eco; aparece antes del texto "Pega la clave privada…". No la imprime ningún script. En el resto (`deploy.sh`, `backup.sh`, `restore.sh`, `verify-backup.sh`, `pruebas.log`, `state/`, `docker logs` de app, `api` e `inventory-manager`) no aparece ninguna contraseña, token, clave de S3, clave de `age` ni el hash/contraseña de `ADMIN_*`. Durante un `--drill` de formato 1, `ps` no mostró `mysql://` en ningún argumento (se pasa `-e DATABASE_URL` por nombre).
+- **O-3:** tras `restore.sh` → 12 con la app anterior al PR 2, `state/release.env` sigue apuntando a la app que había, y el contenedor de la app del respaldo queda en `restarting` hasta el redespliegue. Seguir §11.7 al pie de la letra ("redesplegar la punta de `main`") deja todo en 0 y las landings en 200.
+- **O-4:** con el `deploy/` de `dbba0a9` instalado y la app anterior al PR 2, `/admin/login` responde 200 (el `/admin` de esa versión), como describe §6.
+- **Ya decididas por el usuario, no se reabren:** el código 12 de `restore.sh` con una app anterior al PR 2, y los textos de `deploy.sh` (cabecera y log de `protect_running_app`) y de `.claude/`.
+
+### Regresión
+
+- `npm test`, `typecheck` y `lint` en 0.
+- D-1 completo (incluidas las vueltas atrás de la `api` y `inventory-manager`, el webhook y los volcados) y B-1 completo.
+- I-2: HTML y cabeceras idénticos al PR 2.
+- C-4: `mysql`, `migrate` e `inventory-manager` sin cambios en el compose.
+
+### Procedimientos de operador
+
+- **O-1, §1.3, bloque REQ-F-045:**
+  - Las afirmaciones son ciertas: `deploy.sh` y `01-usuarios.sh` son idénticos a `dbba0a9`, la suma cambia, el job falla con **4** sin tocar nada, `env-backup.sh` no cambia, la unidad solo cambia la descripción y la `api` deja `admin_bootstrap_ignored`.
+  - La reinstalación con los comandos de §1.3 da la suma esperada, y los comandos del paso 6 funcionan tal cual.
+  - Única salvedad: el paso 4 (DEF-001).
+- **O-2, §6 "Volver a una versión anterior a REQ-F-045", vía urgente, ejecutada tal cual:**
+  - instalar el `deploy/` de `dbba0a9` y lanzar `env DATABASE_ALLOW_NEWER_SCHEMA=true RESTAURANTE_APP_IMAGE=… $CE up -d --no-deps app` → 0;
+  - la app anterior queda `healthy` y monta `app-data` con sus JSON, sin `page_imported`, `products_imported` ni `page_json_diverged`;
+  - `/`, `/molotes` y `/birria` responden 200;
+  - el siguiente despliegue desde `main` → **4** (la app anterior sigue); tras reinstalar el `deploy/` del PR 3 → 0, sin montajes y con los JSON intactos.
+- **O-3, §11.7 y §11.8:**
+  - los pasos, códigos y mensajes coinciden con B-2, B-3 y M-1 (12 con el mensaje que remite a 11.7, formato 2 "no trae app-data", texto de la confirmación según el formato);
+  - el caso de DEF-001 no está documentado.
+
+### Responsive / Accesibilidad / UX/UI / SEO
+
+No aplican: sin cambios de plantillas, CSS ni JS. I-2 demuestra HTML idéntico, así que no se usó el navegador.
+
+### Performance
+
+- `verify-backup.sh --drill`: 9 s con formato 2 y 9-11 s con formato 1 (Linux y Mac).
+- Respaldo de formato 2: 20680 B, frente a 51400 B del formato 1 en la misma base.
+- Pila completa: 7 min. D-1: 8 min. B-1: 1 min 42 s.
+
+### Pruebas no repetidas o no ejecutadas, con su motivo
+
+- R-1, paso 4 ("migración nueva y `api` rota → 15") no se repitió en la pila propia: lo cubre D-1, con el compose del PR 3 ("la app no se recreó", "sin `DATABASE_ALLOW_NEWER_SCHEMA`", `healthy` tras reiniciar).
+- I-1 no usa el `mysql-dev` del CI: usa un MySQL efímero con la misma collation (`utf8mb4_es_0900_as_cs`). Un primer intento con la collation por defecto dio `DATABASE_CHARSET_INVALID` en la `api`, como corresponde.
+
+### Pendientes de revisión manual
+
+- Ninguno de navegador.
+- En producción, tras el despliegue (fuera de este QA): las comprobaciones del paso 6 de §1.3 y un respaldo a mano con su verificación.
+
+### Limpieza
+
+- **Bases:** `SHOW DATABASES LIKE 'restaurante\_test%'` vacío; MySQL detenido con `npm run db:down` (estaba parado al empezar).
+- **Docker:**
+  - sin contenedores de QA (solo `restaurante-mysql-dev-1`, parado);
+  - redes iguales a las del inicio (`traefik-public` y `qa045c-i` borradas);
+  - borrados los 19 volúmenes anónimos creados por las pruebas (el anónimo del MySQL de I-1 y los de las pilas), comparando con la lista del inicio; ninguno estaba en uso. Los volúmenes `qa045c_*`, `restaurante-smoke_*`, `restaurante-bksmoke_*` y `restaurante-verify-*` también;
+  - borradas todas las imágenes creadas: `qa-req-f-045c-*`, `qa045c/*`, `smoke/*`, `bksmoke/*`, `localhost:5000/*`, `localhost:5055/*`, `traefik`, `registry`, `versity/versitygw`, `koalaman/shellcheck:v0.10.0` y `debian:stable-slim`;
+  - las imágenes coinciden exactamente con las del inicio (43).
+- **Procesos y puertos:** sin Vitest, servidores ni contenedores auxiliares. Ningún puerto de las pruebas escuchando (el `:5000` es `ControlCenter` de macOS, ajeno).
+- **Archivos:**
+  - `git worktree list` con un solo árbol;
+  - `git status` igual que al inicio (más este ticket);
+  - el scratchpad de QA (copias de `git archive`, scripts, logs, respaldos de prueba y la clave de `age` desechable) se borra al cerrar este informe;
+  - quedan `cot.xlsx`, `cotizador-analisis.md` y `venv/`, ajenos.
+- **Navegador:** no se abrió.
+
+### Decisión del usuario sobre DEF-001
+
+Cita textual (transmitida por la sesión principal, 2026-11-17): "Si", en respuesta a "¿Aplico la opción A?". DEF-001 **se corrige en este PR** con la opción A:
+- solo se cambia el orden documentado en `docs/despliegue.md` §1.3: los scripts de respaldos nuevos se instalan en el VPS **antes** del merge;
+- no se tocan `restore.sh` ni `verify-backup.sh`.
+
+### Alcance de la corrección (para `senior-fullstack`)
+
+1. **§1.3, bloque "Al llegar a `main` la limpieza de REQ-F-045":**
+   - instalar `lib.sh`, `backup.sh`, `restore.sh` y `restaurante-backup.service` (+ `daemon-reload`) antes del merge, con el compose del PR 2 todavía en marcha;
+   - quitar la afirmación de que el `backup.sh` anterior "sigue funcionando y hace respaldos de formato 1" tras el despliegue como algo admisible, de modo que ya no exista la ventana en la que se generan respaldos de formato 1 con la imagen del PR 3;
+   - mantener coherentes los pasos 2, 3, 5 y 6 con el nuevo orden.
+2. **Revisar el resto de `despliegue.md`** (§11.1, §11.5, §11.7, §11.8) y `README.md`/`arquitectura.md` por cualquier frase que suponga el orden anterior, y ajustarla.
+3. **Sin cambios de código:** ni en `ops/backup/*.sh` ni en `deploy/`.
+
+### Re-verificación prevista (ronda 2; regresión selectiva según el diff entre rondas)
+
+- **R2-1, recorrer §1.3 como operador con el orden nuevo, en una pila local con `deploy.sh` real.** Pasos:
+  1. Pila con el compose, la app y los scripts de `dbba0a9`, y `app-data` con JSON.
+  2. Instalar los scripts nuevos con los comandos de §11.5, tal como queden escritos.
+  3. Ejecutar `backup.sh` → 0, **formato 2**, sin leer ni montar el volumen. El volumen y sus JSON quedan intactos y la app del PR 2 sigue montándolo y `healthy`.
+  4. `restore.sh` nuevo con ese formato 2 sobre la pila del PR 2 → 0, con la app del PR 2 `healthy`. `verify-backup.sh --drill --file` → 0.
+  5. Merge simulado: `deploy.sh` → 4, reinstalación de `deploy/` → 0 con el PR 3.
+  6. Comprobaciones del paso 6.
+  7. Ningún respaldo posterior es de formato 1.
+- **R2-2:** el `backup.sh` nuevo no accede al volumen. Sin contenedores auxiliares que lo monten durante el respaldo, y `docker ps -a --filter volume=…` durante la ejecución solo muestra la app del PR 2.
+- **R2-3:** `grep` en `despliegue.md`, `README.md` y `arquitectura.md` de "formato 1", "backup.sh anterior", "antes de las 03:00", "11.5" y "paso 4": ninguna mención contradice el orden nuevo. Las anclas internas siguen resolviendo (el mismo comprobador de la ronda 1).
+- **R2-4:** `git diff` entre rondas. Si solo cambia documentación, **no se repiten** `npm test`, los dos `smoke.sh`, M-1, O-4, I-1 ni I-2, porque lo que comprueban no cambió, y se lista en el QA Report. Si cambia algún script o el compose, se repiten los afectados (como mínimo, los dos `smoke.sh` en serie y B-2 a B-6), además de `shellcheck`.
+- **R2-5:** DEF-001 se reproduce con el mismo escenario de la ronda 1 **siguiendo el procedimiento nuevo**: con el orden documentado no debe poder generarse un respaldo de formato 1 con la imagen del PR 3. El comportamiento de `restore.sh` y `verify-backup.sh` frente a un respaldo así no cambia (opción A), y se anota como limitación conocida si sigue documentado como tal.
+- **R2-6:** limpieza total, como en la ronda 1.
+
+### Resultado final
+
+NEEDS_USER_DECISION (ronda 1, antes de la decisión). Tras la decisión del usuario: **QA_REJECTED** (ronda 1), por DEF-001 (MAJOR), que el usuario decide corregir con la opción A.
+
+
+## QA Report (PR 3, ronda 2)
+
+### Ronda
+
+2 (2026-11-17). Revalidación tras la corrección de DEF-001 con la opción A. La corrección fue aprobada por el usuario: "Si", en respuesta a "¿Apruebas la corrección para que senior-qa haga la ronda 2?". El QA Report de la ronda 1 se conserva arriba.
+
+### Qué cambió entre rondas (R2-4)
+
+- **Solo documentación:** `restaurante/docs/despliegue.md`, `restaurante/README.md` y `restaurante/docs/arquitectura.md` (y este ticket), todos modificados después del inicio de la ronda 1 (06:41).
+- **El resto del diff no cambió desde la ronda 1:** `ci.yml`, `deploy/ci/smoke.sh`, `compose.prod.yaml`, `env.production.example`, `Dockerfile`, `ops/backup/{lib,backup,restore,verify-backup}.sh`, `ops/backup/ci/smoke.sh` y la unidad tienen la hora de modificación entre las 00:47 y las 01:21, anterior a la ronda 1.
+- **Lo que no se repite y por qué:** `npm test`, `typecheck`, `lint`, los dos `smoke.sh`, `shellcheck`, `systemd-analyze`, I-1, I-2, B-1 a B-6 y M-1 con los respaldos antiguos. Lo que comprueban (código, scripts, compose, imágenes y unidades) no cambió desde la ronda 1, donde todos pasaron. Las pruebas de la ronda 2 usan los mismos scripts del PR y confirman de paso su comportamiento.
+
+### Pruebas ejecutadas
+
+| Prueba | Acción | Resultado real |
+| ------ | ------ | -------------- |
+| R2-1 | Pila efímera con `deploy.sh` real, registro, Traefik y S3 locales. Historia de producción: app anterior al PR 2 (con JSON en `app-data`) → PR 2, con los scripts de respaldos de `dbba0a9` (respaldo de formato 1, como hoy). Después, §1.3 **en el nuevo orden y con sus comandos** | **0 fallos** (07:37:04 → 07:39:45) |
+| §1.3 paso 2 | `docker volume ls \| grep app-data`; `docker ps -a --filter volume=…` | Existe y lo monta la app del PR 2 |
+| §1.3 paso 3 | Copia de `ops/backup` del PR (en lugar de `scp`) y `install` de `lib.sh`, `backup.sh`, `restore.sh` y `restaurante-backup.service` tal como están escritos | Los tres scripts instalados son los del PR. `env-backup.sh` es idéntico al de `dbba0a9` ("no cambia"); la unidad solo difiere en `Description=` |
+| §1.3 paso 4 | Respaldo a mano con el `backup.sh` nuevo, con el compose y la app del PR 2 | 0 y "respaldo completo". `format=2`, partes `manifest.txt dump.sql.gz`, `app_image` del PR 2 |
+| §1.3 paso 4, simulacro | `verify-backup.sh --drill --file`, en Linux y en **macOS con `/bin/bash` 3.2.57** | 0 en los dos (10 s en el Mac). Imprime `manifiesto: formato 2` y `sin app-data (formato 2, posterior a REQ-F-045)`. El volumen sigue igual (mismos JSON) y montado por la app. Sin restos |
+| R2-1 (restauración antes del merge) | `restore.sh` nuevo con ese formato 2 sobre la pila del PR 2 | 0; la app del PR 2 queda `healthy` montando el volumen (compose del PR 2), JSON intactos y landings 200 |
+| §1.3 paso 5 | Merge simulado | `deploy.sh` → **4** sin tocar nada (misma app); tras reinstalar `deploy/` → 0 con el PR 3; los scripts de respaldos no se reinstalan |
+| §1.3 paso 7 | Comprobaciones tal como están escritas (con `--resolve` a Traefik) | Volumen existe; `ps --filter volume=` vacío; `30 302`; `/molotes` 200; ningún `admin_bootstrap_created`. Respaldo a mano → 0, y `verify --drill` → 0 con `manifiesto: formato 2` y la imagen de la limpieza |
+| §11.7, caso nuevo | Respaldo de formato 2 con la app del PR 2, restaurado con el compose del PR 3 | 0; la app del PR 2 queda `healthy`, sin montajes. Después, redeploy de `main` → 0 |
+| R2-2 | Vigilancia de `docker ps -a --filter volume=…` cada 0,3 s durante los respaldos y `docker events` de creación de contenedores | Con el `backup.sh` nuevo, el volumen solo lo monta la app del PR 2 y **no se crea ningún contenedor**. El antiguo creaba uno con la imagen de la app para leer el volumen |
+| R2-5 | Manifiestos de todos los respaldos de la pila | `formato 1, app PR 2` (antes del paso 3), `formato 2, app PR 2` y `formato 2, app PR 3`. **Ninguno de formato 1 con la imagen de la limpieza**: con el orden documentado, la ventana de DEF-001 ya no existe |
+| R2-3 | Anclas internas de `despliegue.md`, `README.md`, `arquitectura.md` y `desarrollo.md`; `grep` de frases del orden anterior ("Reinstala los scripts…", "mismo día", "sigue funcionando… formato 1", "actualiza tu copia local") | 144 anclas, 0 rotas. Ninguna frase contradice el nuevo orden. §11.1, §11.5 (excepción: los de la limpieza se instalan desde la rama del PR antes del merge), §11.7 (caso del formato 2 con la app del PR 2 y la limitación conocida), `README.md` ("Archivos de datos") y `arquitectura.md` son coherentes con §1.3 |
+
+Primera ejecución de R2-1 (descartada, artefacto de la prueba): los respaldos del paso 1 y del paso 4 cayeron en el **mismo segundo**. Les tocó el mismo nombre (`restaurante-<UTC hasta segundos>.tar.age`), y el segundo terminó con el error de subida ("ya existe con otro contenido (no se sobrescribe)"), que es el comportamiento correcto. En producción los respaldos están separados por horas. Se repitió con 2 s entre respaldos: 0 fallos.
+
+### Criterios de aceptación
+
+| CA | Estado | Evidencia |
+| -- | ------ | --------- |
+| CA-12 | PASS | Ronda 1 (formato 2, formato 1 del PR 2 y anterior al PR 2, volumen conservado y sin montar), más R2-1, R2-2 y R2-5: con el procedimiento documentado ningún respaldo de formato 1 lleva la imagen de la limpieza. El caso de DEF-001 queda documentado como "limitación conocida" en §11.7, con su salida, y ya no se genera |
+| CA-13 | PASS | Ronda 1 (D-1) y ronda 2 (§1.3 paso 7: `30 302`, `/molotes` 200) |
+| CA-11 (compose nuevo) | PASS | Ronda 1 (vuelta atrás a la app del PR 2 → 21 y `healthy`); sin cambios desde entonces |
+| CA-1 a CA-10, CA-14 | PASS | Ronda 1 (suite, lint y typecheck en verde); sin cambios de código desde entonces |
+
+### Defectos encontrados
+
+- **DEF-001 (MAJOR): corregido** con la opción A. Se reprodujo el mismo escenario siguiendo el procedimiento nuevo: el respaldo que hacía fallar `restore.sh` (11) y el `--drill` ya no puede generarse. `restore.sh` y `verify-backup.sh` siguen sin aceptar ese respaldo sobre un volumen nuevo (no se tocaron, como decidió el usuario). Queda como limitación conocida y documentada.
+- Sin defectos nuevos.
+
+### Observaciones
+
+- **O-5:** dos respaldos en el mismo segundo comparten nombre; el segundo no sobrescribe y termina con error de subida. Es el comportamiento anterior a este ticket y no alcanzable con un respaldo diario; no es un defecto de este PR.
+- Se mantienen las observaciones O-1 a O-4 de la ronda 1.
+
+### Regresión, Responsive, Accesibilidad, UX/UI, Performance y SEO
+
+Sin cambios desde la ronda 1 (solo documentación). `verify-backup.sh --drill` con formato 2: 9-10 s.
+
+### Pendientes de revisión manual
+
+En producción (fuera de este QA): seguir §1.3 en el nuevo orden. Los pasos 3 y 4 se hacen antes del merge, desde la rama del PR.
+
+### Limpieza
+
+- **Docker:**
+  - sin contenedores de QA (solo `restaurante-mysql-dev-1`, parado, que no se usó en esta ronda);
+  - imágenes, volúmenes y redes **iguales a la lista tomada al inicio de la ronda 2**: 0 extra. Se borraron las imágenes `qa-req-f-045c-*`, `localhost:5055/*`, `traefik`, `registry` y `versitygw`, y los 7 volúmenes anónimos de la pila (ninguno en uso).
+- **MySQL de pruebas:** no se levantó; no hay bases `restaurante_test*` de esta ronda.
+- **Procesos:** ninguno.
+- **Git:** un solo worktree; `git status` con los mismos 16 elementos (15 archivos del PR y `Cotizador_Taquiza_Birria.xlsx` sin seguimiento).
+- **Scratchpad:** se borra la carpeta `qa2/` (copias de `git archive`, script, logs, respaldos de prueba y clave de `age` desechable). Quedan los archivos ajenos (`cot.xlsx`, `cotizador-analisis.md`, `venv/`).
+- **Navegador:** no se usó.
+
+### Resultado final
+
+QA_APPROVED
+
 ## Historial de cambios
 
 ### Versión 1
@@ -1504,3 +2079,54 @@ El usuario aprueba el QA Action Plan del PR 2 y las autorizaciones 1 a 7 ("Aprue
 ### PR 2 abierto (2026-11-17)
 
 Tras `QA_APPROVED` del PR 2, commit `69c0c7e` (`feat: las landings dejan el /admin actual y funcionan sin base de datos`) y PR #157 hacia `epic/arquitectura`, abierto como borrador y marcado listo después del último push. Estado: `READY_FOR_MERGE` (PR 2 de 3), sujeto al CI en verde del PR listo. El ticket sigue en `in-progress/` hasta el PR 3.
+
+### PR 3 implementado (2026-11-17)
+
+Con los PR 1 y 2 mergeados y desplegados (#158) y la confirmación del usuario de que producción está estable ("Todo está bien"), `senior-fullstack` implementa el PR 3 en `feature/REQ-F-045-retirada-admin-actual-3-limpieza`: compose sin base, `DATA_DIR`, `app-data`, `ADMIN_*` ni bot en la app, `ADMIN_*` en la `api`, sin router ni límite de `/admin`; respaldos de formato 2 con `restore.sh` y `verify-backup.sh` compatibles con el 1; `Dockerfile` sin la carpeta de `DATA_DIR`; los dos `smoke.sh` y el job `docker` del CI adaptados; `despliegue.md` (incluidos los pasos en el VPS), `README.md` y `arquitectura.md`. Validaciones en verde, incluidos los dos `smoke.sh` reales en local. Estado: `NEEDS_IMPLEMENTATION_APPROVAL` (PR 3 de 3). Sin commit.
+
+### QA Action Plan del PR 3 (2026-11-17)
+
+El usuario aprueba la implementación del PR 3 ("Adelante con tus recomendaciones"): `restore.sh` se queda como está, y el texto de `deploy.sh` y los puntos de `.claude/` van en un cambio aparte. `senior-qa` añade "QA Action Plan (PR 3)". Cubre:
+
+- el compose (`config`, variables obligatorias y diff semántico frente a `dbba0a9`);
+- los dos `smoke.sh` reales, en serie;
+- los respaldos de formato 1 reales con las apps del PR 2 y anterior al PR 2, incluida la ventana de transición del `backup.sh` antiguo con la app del PR 3;
+- los scripts antiguos frente al formato 2 y bash 3.2 en macOS;
+- el volumen frente a `down -v`;
+- la vuelta atrás de `deploy.sh` a la app del PR 2 y los procedimientos de §1.3, §6 y §11.7 ejecutados como están escritos;
+- `systemd-analyze verify`, la imagen sin `/var/lib/restaurante`, los secretos en los logs, el alcance del diff, la regresión, las autorizaciones y la limpieza.
+
+Sin ejecutar pruebas. Estado: `NEEDS_QA_PLAN_APPROVAL` (PR 3 de 3).
+
+### QA del PR 3, ronda 1 (2026-11-17)
+
+El usuario aprueba el QA Action Plan del PR 3 y las autorizaciones 1 a 5 ("Apruebo con tus recomendaciones"). `senior-qa` lo ejecuta:
+
+- `typecheck`, `lint` y `npm test` en verde;
+- los dos `smoke.sh` reales en serie (192 y 75 ok);
+- pila con `deploy.sh` real que recorre la historia de producción, con respaldos reales de formato 1 y 2, la vuelta atrás a la app del PR 2 (CA-11), el volumen frente a `down -v` y los procedimientos de §1.3, §6 y §11.7 ejecutados tal cual;
+- `verify-backup.sh` en bash 3.2 de macOS, `systemd-analyze verify`, la imagen sin `/var/lib/restaurante` y HTML idéntico al PR 2.
+
+Encuentra DEF-001 (MAJOR): un respaldo de formato 1 hecho por el `backup.sh` antiguo con la app del PR 3 ya desplegada (la ventana del paso 4 de §1.3) no se restaura en un volumen nuevo (11, con la app parada) ni pasa el `--drill`. Hay cuatro observaciones. Limpieza comprobada. Estado: `NEEDS_USER_DECISION` (PR 3 de 3).
+
+### Decisión sobre DEF-001 y QA_REJECTED del PR 3, ronda 1 (2026-11-17)
+
+El usuario decide corregir DEF-001 en este PR con la opción A ("Si"): solo cambiar el orden documentado en `despliegue.md` §1.3, instalando los scripts de respaldos nuevos antes del merge, sin tocar `restore.sh` ni `verify-backup.sh`. `senior-qa` registra la decisión, el alcance de la corrección y la re-verificación prevista (R2-1 a R2-6). Estado: `QA_REJECTED` (PR 3 de 3, ronda 1).
+
+### DEF-001 del PR 3 corregido (2026-11-17)
+
+`senior-fullstack` aplica la opción A, solo en documentación: `docs/despliegue.md` §1.3 instala los scripts de respaldos (`lib.sh`, `backup.sh`, `restore.sh`, `restaurante-backup.service` y `daemon-reload`) desde la rama del PR **antes del merge**, con la app del PR 2 en marcha, y añade una comprobación previa al merge de que el respaldo es de formato 2 (`verify-backup.sh --drill`). Se quita la frase que admitía respaldos de formato 1 tras el despliegue. Ajustes coherentes en §11.1, §11.5 y §11.7 (caso del formato 2 con la app del PR 2 y limitación conocida), `arquitectura.md` y `README.md`. Sin cambios en scripts, compose ni código. Anclas internas: 0 rotas. Estado: `NEEDS_IMPLEMENTATION_APPROVAL` (PR 3 de 3). Sin commit.
+
+### QA del PR 3, ronda 2 (2026-11-17)
+
+El usuario aprueba la corrección de DEF-001 ("Si"). `senior-qa` comprueba que entre rondas solo cambió documentación, recorre §1.3 en el nuevo orden con `deploy.sh` real y comprueba:
+
+- el `backup.sh` nuevo con el compose del PR 2: formato 2, sin leer el volumen ni crear contenedores;
+- el `--drill` en Linux y en bash 3.2 de macOS;
+- la restauración antes y después del merge;
+- el código 4 y la reinstalación de `deploy/`;
+- las comprobaciones del paso 7;
+- que ningún respaldo de formato 1 lleva la imagen de la limpieza;
+- las anclas, y que ninguna frase contradice el orden.
+
+No repite `npm test` ni los dos `smoke.sh`, porque su objeto no cambió. Limpieza comprobada. Estado: `QA_APPROVED` (PR 3 de 3).

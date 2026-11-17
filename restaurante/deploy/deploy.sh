@@ -12,10 +12,11 @@
 # salud (healthy + Traefik) -> registro. Si falla antes del cambio de la app, no la toca: si la api
 # nueva no queda healthy o Traefik no le enruta el webhook, vuelve a la api anterior y termina con 15;
 # si inventory-manager no queda healthy, vuelve al anterior (o lo detiene si no lo había), deja la app
-# como estaba y la api nueva en marcha y termina con 16. La app va la última porque la nueva activa el
-# modo de solo lectura de los productos de /admin y, desde REQ-F-042, ya no atiende el webhook. Si
-# falla la salud de la app, vuelve a los digests anteriores de app, api e inventory-manager (o lo
-# detiene) con DATABASE_ALLOW_NEWER_SCHEMA=true (D-1) y termina con error.
+# como estaba y la api nueva en marcha y termina con 16. La app va la última: solo se cambia cuando la
+# api, de la que lee productos y datos de página, y el admin nuevo ya están sanos (desde REQ-F-045 la
+# app no tiene /admin ni usa MySQL). Si falla la salud de la app, vuelve a los digests anteriores de
+# app, api e inventory-manager (o lo detiene), la api con DATABASE_ALLOW_NEWER_SCHEMA=true (D-1), y
+# termina con error.
 #
 # El router del webhook sigue a la imagen de la api (REQ-F-042, RF-13): cada `compose` calcula
 # RESTAURANTE_API_WEBHOOK con la imagen de api que recibe, de modo que una api anterior, sin el bot,
@@ -304,16 +305,16 @@ probe_webhook() {
 }
 
 # DEF-001 (REQ-F-038): si este despliegue aplicó migraciones y algo falla antes de cambiar la app, la
-# app en marcha (creada sin DATABASE_ALLOW_NEWER_SCHEMA) no podría volver a arrancar sobre la base
-# migrada si se reinicia (DATABASE_NEWER_THAN_CODE). Se recrea con su misma imagen y la bandera (D-1):
-# un corte de unos segundos ahora en lugar de una caída total en el próximo reinicio. Sin migraciones
-# nuevas (o sin app en marcha), la app no se toca.
+# app en marcha se recrea con su misma imagen. Se hizo porque la app usaba MySQL y no habría vuelto a
+# arrancar sobre la base migrada (DATABASE_NEWER_THAN_CODE); desde REQ-F-045 la app no usa MySQL ni
+# recibe DATABASE_ALLOW_NEWER_SCHEMA, así que la recreación ya no es necesaria (se conserva hasta
+# decidir retirarla). Sin migraciones nuevas (o sin app en marcha), la app no se toca.
 # protect_running_app <imagen api vigente> <imagen inventory vigente> <resultado> <código> <mensaje>
 protect_running_app() {
   local api_image=$1 inventory_image=$2 result=$3 code=$4 message=$5 running
   running=$(running_image app)
   if [[ -n "$running" && ( -z "$MIGRATIONS_AFTER" || "$MIGRATIONS_AFTER" != "$MIGRATIONS_BEFORE" ) ]]; then
-    log "hubo migraciones nuevas: la app en marcha ($running) se recrea con DATABASE_ALLOW_NEWER_SCHEMA=true"
+    log "hubo migraciones nuevas: la app en marcha ($running) se recrea con su misma imagen"
     export DATABASE_ALLOW_NEWER_SCHEMA=true
     compose "$running" "$MIGRATE_IMAGE" "$api_image" "$inventory_image" up -d --no-deps app
     if ! wait_healthy app "$running" "$MIGRATE_IMAGE" "$api_image" "$inventory_image" || ! probe_traefik; then
@@ -321,14 +322,14 @@ protect_running_app() {
       fail 22 "$message; la app recreada tampoco quedó healthy: restaura la base desde $(basename -- "$DUMP") (docs/despliegue.md)"
     fi
     record "$result"
-    fail "$code" "$message; la app sigue con su versión, recreada con DATABASE_ALLOW_NEWER_SCHEMA=true por las migraciones nuevas"
+    fail "$code" "$message; la app sigue con su versión, recreada por las migraciones nuevas"
   fi
   record "$result"
   fail "$code" "$message; la app no se tocó"
 }
 
 # Versión de inventory-manager a la que se vuelve si algo falla: la anterior o, si no la había,
-# ninguna (se detiene). Así nunca queda el admin nuevo junto a una app que todavía edita productos.
+# ninguna (se detiene).
 # restore_inventory <imagen app> <imagen api>
 restore_inventory() {
   if [[ -n "$PREVIOUS_INVENTORY_IMAGE" ]]; then
@@ -362,8 +363,8 @@ if ! wait_healthy api "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" "$INVENTORY_IMA
 fi
 log 'api healthy'
 
-# 6. inventory-manager (REQ-F-039). Antes que la app: la app nueva activa el modo de solo lectura de los
-# productos de /admin, y no debe hacerlo si el admin nuevo no queda sano.
+# 6. inventory-manager (REQ-F-039). Antes que la app: la app no se cambia si el admin nuevo no queda
+# sano.
 compose_new up -d --no-deps inventory-manager
 if ! wait_healthy inventory-manager "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" "$INVENTORY_IMAGE" || ! probe_admin; then
   log 'inventory-manager no pasó la comprobación de salud'
@@ -396,13 +397,13 @@ if [[ -z "$PREVIOUS_APP_IMAGE" ]]; then
   fail 20 'primer despliegue: no hay versión anterior a la que volver'
 fi
 log "volviendo a $PREVIOUS_APP_IMAGE"
-# La versión anterior no conoce las migraciones que se acaban de aplicar: las tolera (D-1).
+# La api anterior no conoce las migraciones que se acaban de aplicar: las tolera (D-1).
 export DATABASE_ALLOW_NEWER_SCHEMA=true
 # La api vuelve también a la anterior si la hay; si no (primer despliegue con api), se queda la nueva.
 ROLLBACK_API_IMAGE=${PREVIOUS_API_IMAGE:-$API_IMAGE}
 ROLLBACK_MIGRATE_IMAGE=${PREVIOUS_MIGRATE_IMAGE:-$MIGRATE_IMAGE}
 ROLLBACK_INVENTORY_IMAGE=${PREVIOUS_INVENTORY_IMAGE:-$INVENTORY_IMAGE}
-# inventory-manager también vuelve (o se detiene): la app anterior puede editar productos.
+# inventory-manager también vuelve (o se detiene) con el resto de la versión anterior.
 restore_inventory "$PREVIOUS_APP_IMAGE" "$ROLLBACK_API_IMAGE"
 compose "$PREVIOUS_APP_IMAGE" "$ROLLBACK_MIGRATE_IMAGE" "$ROLLBACK_API_IMAGE" "$ROLLBACK_INVENTORY_IMAGE" up -d --no-deps app
 if wait_healthy app "$PREVIOUS_APP_IMAGE" "$ROLLBACK_MIGRATE_IMAGE" "$ROLLBACK_API_IMAGE" "$ROLLBACK_INVENTORY_IMAGE" && probe_traefik; then

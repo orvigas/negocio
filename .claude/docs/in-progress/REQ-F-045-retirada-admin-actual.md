@@ -2,11 +2,12 @@
 
 ## Estado
 
-QA_APPROVED (PR 3 de 3; QA ronda 2)
+READY_FOR_MERGE (PR 3 de 3)
 
 - PR 1: #156 (https://github.com/orvigas/negocio/pull/156), mergeado en `epic/arquitectura` (`425e21a`).
 - PR 2: #157 (https://github.com/orvigas/negocio/pull/157), mergeado en `epic/arquitectura` (`dbba0a9`) y desplegado en producción con el PR #158 (épica → `main`, `9fbb7ee`).
-- PR 3: implementado en `feature/REQ-F-045-retirada-admin-actual-3-limpieza` (desde `origin/epic/arquitectura` = `dbba0a9`), sin commit. Implementación aprobada por el usuario ("Adelante con tus recomendaciones"); QA Action Plan (PR 3) aprobado ("Apruebo con tus recomendaciones"); QA ronda 1: QA_REJECTED por DEF-001 (MAJOR), corregido en este PR con la opción A (orden de §1.3: scripts de respaldos antes del merge), pendiente de la aprobación del usuario y de la QA ronda 2.
+- PR 3: #160 (https://github.com/orvigas/negocio/pull/160) hacia `epic/arquitectura`, rama `feature/REQ-F-045-retirada-admin-actual-3-limpieza` (avanzada por fast-forward hasta `origin/epic/arquitectura` = `10652da`), commit `df20046`. QA_APPROVED en la ronda 2 (DEF-001 corregido con la opción A). CI del PR listo: ver el historial ("PR 3 abierto").
+- El ticket sigue en `in-progress/` hasta que el usuario confirme producción estable tras desplegar la épica en `main` siguiendo `docs/despliegue.md` §1.3 (scripts de respaldos y su verificación **antes** del merge de la épica a `main`; después, código 4, reinstalar `deploy/` y relanzar el job).
 
 ## Aprobación
 
@@ -2130,3 +2131,7 @@ El usuario aprueba la corrección de DEF-001 ("Si"). `senior-qa` comprueba que e
 - las anclas, y que ninguna frase contradice el orden.
 
 No repite `npm test` ni los dos `smoke.sh`, porque su objeto no cambió. Limpieza comprobada. Estado: `QA_APPROVED` (PR 3 de 3).
+
+### PR 3 abierto (2026-11-17)
+
+Tras `QA_APPROVED` del PR 3 (ronda 2), la rama se avanza por fast-forward hasta `origin/epic/arquitectura` (`10652da`: solo los merges #158 y #159, sin cambios de archivos). Commit `df20046` (`feat: el despliegue y los respaldos dejan la base y app-data de las landings`) y PR #160 hacia `epic/arquitectura`, abierto como borrador y marcado listo en un comando aparte después del último push. La descripción incluye el orden de despliegue de `docs/despliegue.md` §1.3. Estado: `READY_FOR_MERGE` (PR 3 de 3), sujeto al CI en verde del PR listo (`calidad`, `docker`, `auditoria` y `pruebas` 1/2 y 2/2 en `pass`). El ticket sigue en `in-progress/` hasta que el usuario confirme producción estable tras el despliegue.

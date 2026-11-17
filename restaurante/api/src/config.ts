@@ -117,7 +117,7 @@ const isNotifyToken = (value: string): boolean => value.length >= MIN_NOTIFY_TOK
 
 /**
  * Números de WHATSAPP_MOLOTES y WHATSAPP_BIRRIA (los del CTA de las landings): el bot solo los usa
- * para D-6 y como emisor con Twilio (D-8). Mismo texto que la validación de landing-pages. Sus
+ * para D-6 y como emisor con Twilio (D-8). Mismo formato que la validación del CTA en landing-pages. Sus
  * variantes _URL y _MESSAGE son solo de las landings.
  */
 function parseBotPhones(env: Env, issues: string[]): Partial<Record<BusinessId, string>> {

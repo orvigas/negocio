@@ -157,18 +157,22 @@ say 'producción simulada'
 compose up -d --wait --wait-timeout 240 mysql
 compose run --rm --no-deps migrate >/dev/null
 compose up -d --no-deps --wait --wait-timeout 180 app
-# Un usuario de prueba (la importación de productos ya creó los productos al arrancar la app).
+# Un usuario y un producto de prueba. Desde REQ-F-045 la app no usa la base (la instalación nueva la
+# prepara la api, que esta prueba no levanta): los datos se escriben aquí.
 # shellcheck disable=SC2016 # Comillas invertidas de SQL.
 mysql_root "INSERT INTO user (username, username_key, display_name, role, password_hash, updated_at) VALUES ('smoke', 'smoke', 'Smoke', 'admin', 'scrypt\$x', NOW(3))"
+mysql_root "INSERT INTO product (business, category, slug, name, position, updated_at) VALUES ('molotes', 'platillo', 'smoke', 'Smoke', 1, NOW(3))"
 USERS=$(mysql_root 'SELECT COUNT(*) FROM user')
 PRODUCTS=$(mysql_root 'SELECT COUNT(*) FROM product')
 check "hay datos de prueba (usuarios $USERS, productos $PRODUCTS)" test "$USERS" -ge 1 -a "$PRODUCTS" -ge 1
 printf 'RESTAURANTE_APP_IMAGE=%s\nRESTAURANTE_MIGRATE_IMAGE=%s\nRESTAURANTE_COMMIT=%s\n' "$APP_SRC" "$MIGRATE_SRC" "$(printf '1%.0s' {1..40})" >"$BASE/state/release.env"
-# Un JSON propio en app-data para comprobar que se restaura tal cual.
+# JSON propios en app-data: uno en cada carpeta, como los que dejaba la app hasta REQ-F-045 (backup.sh
+# y verify-backup.sh los exigen hasta que el PR 3 acepte respaldos sin app-data), y el de Birria para
+# comprobar que se restaura tal cual. La app ya no escribe nada ahí.
 APP_ID=$(compose ps -q app)
-docker exec "$APP_ID" sh -c 'mkdir -p /var/lib/restaurante/molotes /var/lib/restaurante/birria && printf "{\"smoke\":1}\n" > /var/lib/restaurante/birria/smoke.json && touch /var/lib/restaurante/molotes/.current.json.1.ab.tmp'
+docker exec "$APP_ID" sh -c 'mkdir -p /var/lib/restaurante/molotes /var/lib/restaurante/birria && printf "{\"smoke\":1}\n" > /var/lib/restaurante/birria/smoke.json && printf "{\"smoke\":1}\n" > /var/lib/restaurante/molotes/smoke.json && touch /var/lib/restaurante/molotes/.current.json.1.ab.tmp'
 docker exec "$APP_ID" sh -c 'ls /var/lib/restaurante/molotes/*.json /var/lib/restaurante/birria/*.json' >/dev/null ||
-  ko 'la app no escribió los JSON de app-data'
+  ko 'no se pudieron escribir los JSON de app-data'
 
 # --- Configuración inválida ----------------------------------------------------------------------
 say 'configuración (CA-5)'

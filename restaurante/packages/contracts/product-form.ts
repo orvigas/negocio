@@ -3,7 +3,7 @@ import type { AdminProduct, ProductFormField } from './admin.ts';
 /**
  * Formulario HTML de un producto <-> entrada de `/api/v1/admin` (REQ-F-039), guiado por el
  * descriptor que sirve la API (`/productos/campos`, que sale de core). Misma forma que el
- * formulario del /admin actual (REQ-F-008, RF-6 y DT-12): nombres planos ("price", "image.src",
+ * formulario del /admin retirado (REQ-F-008, RF-6 y DT-12): nombres planos ("price", "image.src",
  * "variants.2.label"); variantes y chips en filas fijas con "Posición" y "Quitar". Las filas vacías o
  * marcadas para quitar se ignoran y el resto se ordena por posición: así se agregan, quitan y
  * reordenan sin JavaScript. Aquí no hay reglas de validación: las aplica la API (422 con `fields`).

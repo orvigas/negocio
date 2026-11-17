@@ -2,9 +2,10 @@
 
 ## Estado
 
-READY_FOR_MERGE (PR 1 de 3)
+QA_APPROVED (PR 2 de 3)
 
-- PR 1: #156 (https://github.com/orvigas/negocio/pull/156), hacia `epic/arquitectura`. CI con el PR listo: `calidad`, `docker`, `auditoria` y `pruebas` en `pass` (se comprueba al marcarlo listo; el resultado queda en el informe del PR).
+- PR 1: #156 (https://github.com/orvigas/negocio/pull/156), mergeado en `epic/arquitectura` (`425e21a`).
+- PR 2: implementado en `feature/REQ-F-045-retirada-admin-actual-2-retirada` (sin commit). Implementación aprobada ("Si la apruebo"), QA Action Plan aprobado ("Apruebo todo") y QA ronda 1 aprobada; listo para commit y PR a `epic/arquitectura`.
 
 ## Aprobación
 
@@ -734,7 +735,86 @@ Decisión del usuario (cita textual): "corrigelo y termina".
 - **DEF-001 pendiente del PR 2:** ajustar `ops/backup/ci/smoke.sh:169-171` (que escriba ella misma un JSON en cada carpeta) y tener en cuenta `ops/backup/verify-backup.sh:139-140`, que seguirá exigiendo un JSON en `molotes/` y `birria/` en una instalación nueva hasta que el PR 3 acepte respaldos sin `app-data`.
 - Validaciones tras la corrección: `npm run typecheck` 0, `npm run lint` 0, `npm test` en verde (api 49/1162, landing-pages 94/1310, inventory-manager 16/278). Limpieza: sin bases `restaurante_test*`, sin procesos, un solo worktree, MySQL detenido.
 
-## QA Action Plan
+### PR 2 — Retirada en `landing-pages`
+
+#### Rama
+
+`feature/REQ-F-045-retirada-admin-actual-2-retirada`, desde `epic/arquitectura` = `425e21a` (con el PR 1; `main` no tiene nada que la épica no tenga). PR destino: `epic/arquitectura`. Sin commit todavía.
+
+#### Cambios realizados
+
+- **`/admin` retirado (RF-1):** `landing-pages/src/middleware/admin-moved.ts` (nuevo), antes de `koa-static`. Con `ADMIN_NEW_URL`, GET y HEAD de `/admin` y `/admin/*` → 302 a `<ADMIN_NEW_URL>/` (destino fijo, sin la ruta ni la query), con `Cache-Control: no-store` y `X-Robots-Tag: noindex, nofollow`; cualquier otro método → 410 `{ error: { code: 'ADMIN_MOVED', … } }` sin leer el cuerpo. Sin `ADMIN_NEW_URL` → sigue al router (404 con el formato común). Nunca pone ni lee cookies.
+- **Código borrado** (`git rm`): `routes/admin.ts`, `routes/admin-api.ts`, los 9 `controllers/admin*.ts`, `middleware/admin-guard.ts`, `services/{admin-bootstrap,admin-form,product-form,page-import}.ts`, `repositories/` (las 3), `views/admin/` y `styles/admin/`; scripts `build:css:admin` y `watch:css:admin`.
+- **`app.ts`:** `AppOptions` = `{ config, landingProducts, landingPage, logger, now, viewsDir, publicDir }`; sin `products`, `pages`, `users`, `botControl`, `hashParams`, `createAdminGate` ni la suscripción `products.onChange` (la invalidación llega por el aviso interno).
+- **`server.ts`:** `loadConfig` → cliente de la API → `landingProducts`/`landingPage` + `warmUp` → `createApp` → `listen` → `createInternalApp`. Sin Prisma, `verifyDatabase`, `DATA_DIR`, importaciones, `bootstrapAdmin` ni `botControl`. `server_started` lleva `adminMoved` en lugar de `adminStatus`, `botPanel`, `allowNewerSchema` y `*ReadOnly`.
+- **`config/env.ts` (RF-2, P-T4):** sin `dataDir`, `database`, `allowNewerSchema`, `adminBootstrap`, `botPanel`, `botLimits`, `botKeys`, `loadDatabaseConfig`, `DEFAULT_DATA_DIR` ni la regla D-6; sin imports de `db`, `core/identity` ni `core/bot-control`. Esas variables se ignoran sin validarse. La regla D-6 la sigue comprobando la `api` con sus propias variables (`api/src/config.ts`), así que solo se retiró de las landings.
+- **`routes/index.ts`** sin `admin`/`AdminRouteDeps`/`products`; **`controllers/landing.ts`**: comentario reescrito sin `DATA_DIR` (hallazgo 6).
+- **Lint (RF-7):** `LANDING_CODE_FILES` = `landing-pages/src/**/*.ts` y `landing-pages/scripts/**/*.ts`; prohibidos `@restaurante/db`, Prisma, `mariadb`, `@prisma/*`, `core/identity` y `core/bot-control` (también con `import()`), y `@restaurante/core/catalog` con `allowImportNames` (`buildVisibleMenu`, `formatPesos`, `loadSeedDocument`, `mergePageData`, `pickPageData`, `SEED_FILES`, `validateMenuDocument` y los tipos `MenuDataByBusiness`, `MenuDocument`, `VisibleBirriaItem`, `VisibleMenuByBusiness`). Borrada la "REGLA DE TRANSICIÓN — TEMPORAL". `internal-app.ts` ya usaba `safeEqualStrings` de `core/shared` (PR 1).
+- **`packages/` (RF-6):** borrados `parseChangeLog`/`parseChangeLine` (y su sección de `page-import.ts`), `addImportedChanges` (contrato, Prisma y memoria), `IMPORT_BATCH_SIZE` y `PageTransactionOptions` (solo los usaba `importPages`). `parseBotPanel`/`BotPanelConfig` (`core/bot-control/bot-config.ts`) quedaron sin uso y se borraron. Se conservan `planPageImport`, `seedPages`, `readImports`, `hasProductImports` y `PAGE_ACTIONS.RESTORE_SEED`. Comentarios que hablaban del `/admin` actual o de la importación desde `DATA_DIR` actualizados en `core`, `contracts`, `api` e `inventory-manager` (sin cambios de código).
+- **CI (DEF-001 y hallazgo 3):**
+  - `deploy/ci/smoke.sh`: el 503 `ADMIN_UNAVAILABLE` pasa a "302 a `https://$ADMIN_DOMAIN/`", "sin `Set-Cookie`" y "un POST a `/admin` → 410". El check de la vuelta atrás tras una migración nueva (`database_newer_than_code_allowed` en el log de la app) ya no puede cumplirse (la app no verifica la base): pasa a "sin ningún `database_*` en el log de la app". El 429 de la ráfaga sigue (el router `restaurante-admin` se conserva hasta el PR 3).
+  - `ops/backup/ci/smoke.sh`: la app ya no importa productos ni escribe en `app-data`, y esta prueba no levanta la `api`. Inserta por SQL un producto de prueba (junto al usuario que ya insertaba) y escribe un JSON en `molotes/` y otro en `birria/` (como ya hacía con `birria/smoke.json`), así `backup.sh` y `verify-backup.sh` siguen pasando hasta el PR 3. `verify-backup.sh` no se toca (RN-6): seguirá exigiendo los JSON en una instalación nueva hasta el PR 3, que acepta respaldos sin `app-data`.
+- **Documentación:** `README.md` (monorepo, regla de dependencias, puesta en marcha, scripts, pruebas HTTP, Docker/producción, API propia, admin nuevo, configuración, HTTP, bot, menús, nueva sección "Administración" con la tabla 302/410/404, usuarios, recuperar el acceso, `DATA_DIR`, base de datos y estructura); `docs/desarrollo.md` §3, §4 (ahora "MySQL local"), §5 y §8.3; `docs/arquitectura.md` §1, §4 (fin de la regla de transición y lista cerrada de `core/catalog`), §6, §8 (fila del ticket 6 y "Paso 4, ticket 6, PR 2 aplicado") y §10; `docs/despliegue.md` §8 punto 2 (comprobación del 302/410 y de que la app no usa la base), punto 4 y punto 5 (sin `/admin`), y la fila "El sitio sigue igual" de la tabla del webhook; `landing-pages/.env.example` (sin `DATABASE_URL`, `DATA_DIR`, `ADMIN_*`, `WHATSAPP_BOT_*` ni `DATABASE_ALLOW_NEWER_SCHEMA`; `ADMIN_NEW_URL` con el comportamiento nuevo); `landing-pages/.gitignore` (comentario de `data/`); `description` de `restaurante/package.json`; `.claude/CLAUDE.md` §8 (solo la frase autorizada).
+- **Fuera de este PR (RF-8, RN-6):** `deploy/` (salvo `ci/smoke.sh`), compose, `ops/` (salvo `backup/ci/smoke.sh`), `Dockerfile` y `.github/` sin cambios. El CI del job `docker` sigue pasando `DATABASE_URL`/`DATA_DIR` a la app: ahora las ignora.
+
+#### Pruebas (`.claude/rules/testing.md`)
+
+- **Única prueba nueva:** `describe('/admin retirado de las landings (REQ-F-045, RF-1)')` en `tests/integration/app.test.ts` (8 casos): GET y HEAD de `/admin`, `/admin/login?x=1`, `/admin/bot` y `/admin/api/molotes/productos` → 302 a `<ADMIN_NEW_URL>/`, sin `Set-Cookie` y con `no-store`; POST, PUT, PATCH y DELETE con cuerpo → 410 `ADMIN_MOVED` sin cookies; sin la variable → 404; `/administracion` → 404. El cuerpo del 410 es de 32 KiB: con 2 MiB, PUT y PATCH daban `ECONNRESET` en el cliente (el servidor responde sin leerlo y cierra mientras el cliente aún envía); 10 ejecuciones seguidas 8/8. Comprobación de mutación (descartada): si GET deja de ser la condición del 302, fallan 3 casos.
+- **Retiradas** (`git rm`), como en (b): 30 de `integration/` (las `admin-*` de `/admin`, `db-outage`, `bot-pantalla-qa-*`, `bot-protection-qa-*`, `users-api-qa-*`, `users-api-process`, `admin-bot-api-process`), 6 de `unit/` (`admin-form`, `product-form`, `promo-form`, `file-menu-repository`, `menu-repository-contract`, `bot-control-qa-req-f-043`) y 9 soportes (`admin-page`, `admin-products-api`, `admin-products-page`, `admin-authorization-matrix`, `admin-bot-qa-req-f-043-proceso`, `bot-pantalla-qa-req-f-043`, `bot-procesos-qa-req-f-042`, `users-api-qa-req-f-040`, `users-api-process`). `database-admin.ts` se conserva (lo usa la infraestructura de MySQL).
+- **Retargeted a la `api` (obligatorias):**
+  - `admin-recover.test.ts`: la sesión que se comprueba cerrada es la de `/api/v1/admin/sesion` (401 tras la recuperación; login 201 con la contraseña nueva).
+  - `admin-recover-errores.test.ts`: la base de prueba con un administrador sin `setupAdmin`.
+  - `last-admin-concurrency.test.ts`: el `describe` HTTP desactiva por `POST /api/v1/admin/usuarios/:id/desactivar` del proceso real de la `api` en paralelo con `../api/scripts/admin-recover.ts` (200 o 409; nunca cero administradores). El `describe` de repositorio no cambia.
+  - `server-startup.test.ts` (CA-9): los cinco casos arrancan `../api/src/server.ts`. `server-startup-base.test.ts`: cae el caso de `DATA_DIR`.
+  - Soporte: `support/admin.ts` reducido a credenciales, `makeClock`, `createUser`, `TEST_*` y `startApiAdmin()` (api real sobre una base de pruebas; login, petición con Bearer y CSRF, y desactivar). `support/server-startup.ts` sin `boot`/`dataDir`. `support/process.ts`: solo la `api` recibe una base de pruebas automática (las landings y el admin nuevo arrancan sin ella).
+- **Modificadas y conservadas:** `admin-e2e` (CA-5) y `admin-users-e2e`: la landing arranca solo con `API_INTERNAL_URL` (y `ADMIN_NEW_URL`); en `admin-users-e2e` la `api` recibe `ADMIN_*` y las aserciones del `/admin` actual pasan a "302 al admin nuevo, 410 en un POST y sin cookies". `db-text-roundtrip` y `admin-products-atomicity` → `product-repository-atomicity` (`git mv`): mismos casos sobre los repositorios, `validateUserData` y el autenticador de `core/identity`. `landing-products`: caen "importación y landings" y "fallo de la base"; CA-7 a CA-11 con el doble de la API y la caché real. `landing-products-api`: caen CA-4 y DEF-003; quedan CA-5 a CA-7. `icons`: caen "favicon en /admin" y "administración deshabilitada", y la parte de `/admin/login` del caso de zona horaria. `server-startup-config`: cae REQ-F-025; el arranque de producción de CA-14 lleva ahora `DATABASE_URL` hacia un centinela y un `DATA_DIR` inexistente y comprueba que arranca sin ninguna conexión (RF-2). `api-process` CA-10: la landing arranca sin base y no registra nada de base ni de importación. `config.test.ts`: caen `DATA_DIR`, `DATABASE_URL`, `ADMIN_*` y bot; un caso nuevo por adaptación: "con esas variables presentes, incluso inválidas, la configuración es la misma" (test y production). `page-import.test.ts`: cae `parseChangeLog`. `helpers.ts`: `VALID_ENV` sin `DATABASE_URL`, sin `BOT_ENV`, `TWILIO_BOT_ENV`, `makeRepository` ni `seedPage`. `app.test.ts`, `landing-html-reference`, `request-logger`, `landing-products-api`: `createApp` sin `products`. Sin uso y borrados: `runningAsRoot` (`support/database.ts`), `landingPageFrom` (`support/landing-products.ts`), `sourcesFrom`/`makeProductsFor` (`support/products.ts`).
+
+#### Criterios de aceptación (alcance del PR 2)
+
+| CA | Estado |
+| -- | ------ |
+| CA-1 | Cumplido en local: `app.test.ts` (nueva) y `admin-users-e2e` (proceso real). En el VPS, tras el despliegue de la épica (`despliegue.md` §8.2). |
+| CA-2 | Cumplido en local: 410 sin leer el cuerpo (`app.test.ts`). La base no puede cambiar: `landing-pages` ya no tiene base. |
+| CA-3 | Cumplido: `app.test.ts` (404 sin `ADMIN_NEW_URL`). |
+| CA-4 | Cumplido en local: `landing-html-reference` (21 respuestas byte a byte) y `landing-snapshot` en verde; `server-startup-config` CA-14 arranca en producción con `DATABASE_URL` hacia un centinela (0 conexiones) y `DATA_DIR` inexistente. El HTML de los 7 días contra `main` queda para QA. |
+| CA-5 | Cumplido en local: `admin-e2e` (aviso interno → `products_change_notified` con `landing:true`), `internal-app` e `internal-notify-process` (401 sin credencial). |
+| CA-8 / CA-9 | Cumplidos en local con la `api` real: `admin-recover*`, `last-admin-concurrency` y `server-startup` (5 casos) contra `../api/src/server.ts`. |
+| CA-10 | Cumplido: `npm run lint` en 0 con el árbol real. A mano con `eslint --stdin` (sin escribir archivos) en `src/controllers/landing.ts` y `scripts/dev-server.ts`: fallan `@restaurante/db/client`, `core/identity`, `core/bot-control`, `createProductRepository` y `type PageRepository` de `core/catalog`, `@prisma/client` (`no-restricted-imports`) e `import('@restaurante/db/client')`/`import('@restaurante/core/identity')` (`no-restricted-syntax`); pasa `formatPesos` + `type MenuDocument`. |
+| CA-11 | Sin cambios en el compose (RF-8): la vuelta atrás automática usa el mismo compose. Comprobación con la imagen anterior: QA. |
+| CA-14 | Cumplido: `typecheck`, `lint` y `npm test` en verde; `grep -rn 'DATA_DIR\|DATABASE_URL\|ADMIN_USER\|admin-recover' landing-pages/src landing-pages/scripts` sin resultados. |
+| CA-6, CA-7 | Del PR 1 (siguen en verde: `server-startup-base`, `admin-bootstrap` de la `api`). |
+| CA-12, CA-13 | PR 3. |
+
+#### Validaciones ejecutadas (resultado real)
+
+- `npm run build:css`: 0 (sin la hoja de la administración).
+- `npm run typecheck`: 0.
+- `npm run lint`: 0, sin avisos.
+- `npm test` (MySQL local con `npm run db:up`): `api` 49 archivos / 1162 pruebas; `landing-pages` 58 / 896; `inventory-manager` 16 / 278. Todo en verde. Las pruebas con procesos más largas: CA-10 de `api-process` 7,1 s (archivo ~16 s), `admin-users-e2e` 6,3 s, `admin-e2e` 5,2 s, `last-admin-concurrency` ~13 s el archivo.
+- `bash -n` de los dos `smoke.sh`: 0. No se ejecutaron: `deploy/ci/smoke.sh` y `ops/backup/ci/smoke.sh` solo corren en el PR de la épica a `main` (el de respaldos necesita Linux, `age` y systemd; aquí tampoco hay `shellcheck`). Revisión de lectura: el 302 usa `redirect_of` (`%{redirect_url}` absoluto); el usuario `root` de MySQL inserta el producto con solo las columnas sin valor por defecto (`business`, `category`, `slug`, `name`, `position`, `updated_at`); el conteo `PRODUCTS` del manifiesto se compara con el de la base, no con un número fijo; los JSON se escriben con `docker exec` en la app, como ya se hacía.
+- `git diff` revisado: solo cambios del PR 2; `Cotizador_Taquiza_Birria.xlsx` fuera.
+
+#### Archivos afectados
+
+- Nuevo: `restaurante/landing-pages/src/middleware/admin-moved.ts`.
+- Borrados: el código de `/admin` listado arriba (`src/routes/admin*.ts`, `src/controllers/admin*.ts`, `src/middleware/admin-guard.ts`, `src/services/{admin-bootstrap,admin-form,product-form,page-import}.ts`, `src/repositories/`, `src/views/admin/`, `src/styles/admin/`) y las pruebas y soportes retirados.
+- Movido: `landing-pages/tests/integration/admin-products-atomicity.test.ts` → `product-repository-atomicity.test.ts`.
+- Modificados: `landing-pages/{src/app.ts,src/server.ts,src/config/env.ts,src/routes/index.ts,src/controllers/landing.ts,package.json,.env.example,.gitignore}`, las pruebas listadas, `eslint.config.ts`, `package.json`, `packages/core/{catalog/page-import.ts,catalog/page-store.ts,catalog/memory-page-store.ts,catalog/product-repository.ts,catalog/product-form-fields.ts,catalog/menu-schema.ts,bot-control/bot-config.ts,bot-control/bot-control.ts,identity/session-store.ts,identity/user-schema.ts}`, `packages/db/src/prisma-page-store.ts`, `packages/contracts/product-form.ts`, `api/src/{config.ts,install/index.ts,admin/index.ts,admin/user-routes.ts,admin/account-routes.ts,bot/control-timers.ts}` (comentarios), `inventory-manager/src/controllers/account.ts` (comentario), `deploy/ci/smoke.sh`, `ops/backup/ci/smoke.sh`, `README.md`, `docs/{arquitectura,desarrollo,despliegue}.md` y `.claude/CLAUDE.md` §8.
+
+#### Riesgos o pendientes
+
+- **`deploy/ci/smoke.sh`:** ahora hace tres peticiones a `/admin` (302, cabeceras y POST 410) en lugar de una, más tarde que la ráfaga de 30. Si el límite de `restaurante-admin` (10/min, ráfaga 20) no se hubiera recargado, saldría 429. Entre las dos secciones hay varios despliegues (más de un minuto), y la comprobación anterior del 503 tenía el mismo riesgo; se verá en el PR de la épica a `main`.
+- **Los dos `smoke.sh` no se pudieron ejecutar aquí** (solo corren hacia `main`); queda para el CI de la épica o para QA (D-7 del PR 1).
+- **`verify-backup.sh`** sigue exigiendo un JSON en `molotes/` y `birria/` de `app-data`: en una instalación nueva hecha con el PR 2 (no es el caso de producción) un respaldo fallaría la verificación hasta el PR 3. La prueba de humo de respaldos escribe ella misma esos JSON (DEF-001).
+- **`.claude/rules/testing.md`** (líneas 25 y 31) sigue citando `setupAdmin`, que ya no existe (ahora `startApiAdmin` y `makeDatabase`). No lo toqué: editar las reglas no está autorizado en este ticket. `.claude/agents/senior-fullstack.md` también describe el `/admin` de `landing-pages` (fuera de lo autorizado, como en el PR 1).
+- **Código de `core` que solo queda en uso por pruebas**, fuera del alcance acordado y sin tocar: el modo `'panel'` de `createBotControl` (solo lo usa `api/tests/unit/bot-control-timers.test.ts` para simular un segundo proceso) y las ramas `current`/`previous` de `planPageImport` (la siembra de la `api` solo usa la semilla; se conservan con sus pruebas, como decía (b)). Retirarlos sería un cambio de `core` y de pruebas de la `api`; se propone como tarea aparte.
+- La imagen `production` sigue llevando `packages/db` y Prisma (adelgazarla está fuera de alcance), y el `Dockerfile` conserva el `mkdir /var/lib/restaurante` hasta el PR 3.
+
+#### Limpieza
+
+Sin bases `restaurante_test*` en el MySQL de pruebas (`SHOW DATABASES`: solo `restaurante`, `restaurante_shadow` y las del sistema), sin procesos de Vitest, `src/server.ts` ni `admin-recover`, sin puertos de node escuchando, un solo worktree (`git worktree list`). La copia de la comprobación de mutación se borró y `admin-moved.ts` quedó como estaba (`git diff` sin cambios tras restaurarlo). MySQL detenido con `npm run db:down` (estaba apagado al empezar). En el scratchpad quedan `cot.xlsx`, `cotizador-analisis.md` y `venv/`, que no son de esta tarea.
+
+## QA Action Plan (PR 1)
 
 Alcance: **PR 1 de 3** (`feature/REQ-F-045-retirada-admin-actual-1-arranque`, cambios sin commit, PR a `epic/arquitectura`). Preparado el 2026-11-16 por `senior-qa` tras la aprobación de la implementación del PR 1 por el usuario ("si", incluida la desviación de sembrar la página antes que los productos). Análisis con `codegraph_explore` (`prepareInstallation`, `seedPages`, `importBusiness`, `confirmedByOther`, `isWriteConflict`, `safeEqualStrings`, `loadSeedDocument`, `parseAdminBootstrap`, arranque de `landing-pages`) y lecturas dirigidas de Dockerfile, `package.json`, `deploy/ci/smoke.sh`, `ops/backup/ci/smoke.sh`, `ci.yml` y `read-hidden.ts`. NotebookLM: no consultado en esta fase (sus herramientas MCP no se usaron; el ticket y el repositorio son la fuente).
 
@@ -893,7 +973,7 @@ Salidas de `npm test` (resumen por app), `typecheck`, `lint`; recuentos SQL ante
 
 El usuario lo aprueba el 2026-11-16. Cita textual: "apruebo todo con b". Quedan aprobadas las autorizaciones 1 a 3 y D-7, con la opción (b) para el alias `admin:recover`.
 
-## QA Report
+## QA Report (PR 1)
 
 ### Ronda
 
@@ -1025,6 +1105,360 @@ Ninguno.
 
 QA_APPROVED
 
+## QA Action Plan (PR 2)
+
+Alcance: **PR 2 de 3** (`feature/REQ-F-045-retirada-admin-actual-2-retirada`, base `425e21a`, cambios sin commit: 215 entradas en `git status`; PR a `epic/arquitectura`). Preparado el 2026-11-16 por `senior-qa` tras la aprobación de la implementación del PR 2 por el usuario ("Si la apruebo"). Análisis con `codegraph_explore` (`createApp`, `createAdminMoved`, `loadConfig`/`parseAdminNewUrl`, `server.ts` de las tres apps, controlador de landing y caché) y lecturas dirigidas de lo que no indexa (ticket, `git diff`, `eslint.config.ts`, los dos `smoke.sh`, `ci.yml`, Dockerfile, `compose.prod.yaml`). NotebookLM: sus herramientas MCP no están expuestas en esta sesión; no se consultó.
+
+Hechos de partida observados en el repositorio (no inferidos):
+- `deploy/compose.prod.yaml`, `deploy.sh`, `deploy/mysql/` y `env.production.example` son idénticos a `origin/main` (`8f37f4e`, lo desplegado): la suma de `deploy/` no cambia y el VPS no necesita reinstalar `deploy/`.
+- `.claude/` solo cambia en `.claude/CLAUDE.md` (una línea de §8) y en este ticket; `.claude/agents/` y `.claude/rules/` sin cambios.
+- `deploy/ci/smoke.sh`: la ráfaga de 30 peticiones a `/admin/login` (línea 330) y las tres nuevas peticiones a `/admin` (líneas 404 a 406) están en el **mismo despliegue**, sin otro despliegue entre medias (el "deploy v2" está en la línea 426). La afirmación del Implementation Result ("entre las dos secciones hay varios despliegues") no se sostiene: el margen depende solo del tiempo que tardan las secciones 335 a 401.
+- `ops/backup/ci/smoke.sh` no necesita systemd (eso es el paso `systemd-analyze` aparte del CI): pide Docker con compose, bash, curl, `age`, gzip, tar, flock y coreutils de GNU.
+- El job `docker` del CI (que sí corre en el PR a `epic/arquitectura`) sigue pasando `DATABASE_URL` y `DATA_DIR` a la imagen `production` y exige `landing_products_loaded` con `source: api`; `shellcheck` de los dos `smoke.sh` también corre en ese PR. Los dos `smoke.sh` solo corren hacia `main`.
+- Quedan en Docker 10 imágenes `smoke/*` de hace 6-7 horas (las crea `derive` de `deploy/ci/smoke.sh`; casi seguro, de D-7 del QA del PR 1) y el contenedor `restaurante-mysql-dev-1` parado. No se reutilizan; ver la autorización 7.
+
+### Objetivo
+
+Comprobar con evidencia que `/admin*` responde 302/410/404 como dice RN-1 sin redirección abierta ni cookies; que `landing-pages` arranca y sirve las mismas landings sin base, sin `DATA_DIR` y sin cargar `db`, Prisma, `mariadb`, `identity` ni `bot-control`; que el lint impide que vuelvan; que la `api` y `inventory-manager` no cambian de comportamiento; que las pruebas obligatorias siguen existiendo contra la `api` y que ninguna prueba retirada se llevó cobertura funcional sin sustituto; que los dos `smoke.sh` ajustados pasan de verdad; que la vuelta atrás de un despliegue del PR 2 devuelve la app anterior (la de producción) con el compose vigente; y que la documentación dice lo que hace el código.
+
+### Requisito bajo prueba
+
+- RF-1 / RN-1 (`/admin` retirado), RF-2 (landings sin base ni `DATA_DIR`), RF-3 (aviso interno), RF-6 (importación desde JSON retirada, también en `packages/`), RF-7 (lint), RF-8 (compose sin cambios), RF-10 (documentación del PR 2 y `.claude/CLAUDE.md` §8).
+- CA-1, CA-2, CA-3, CA-4, CA-5, CA-8 (reapuntada), CA-9 (reapuntada), CA-10, CA-11 y CA-14. CA-6 y CA-7 se repiten solo como regresión del PR 1.
+- Technical Action Plan, PR 2, y las decisiones P-T4 (regla D-6 retirada de las landings) y P-T1 (compose sin `ADMIN_*` en la `api` hasta el PR 3).
+- Fuera de este QA: CA-12 y CA-13 (PR 3) y las comprobaciones en el VPS (tras la épica a `main`).
+
+### Criterios de aceptación (cada uno → pruebas que lo cubren)
+
+| CA / requisito | Pruebas |
+| -- | -- |
+| CA-1 (GET/HEAD → 302 fijo, sin `Set-Cookie`) | F-1, F-2, F-4, N-1, N-2, D-4, D-7, A-1 (`app.test.ts`, `admin-users-e2e`) |
+| CA-2 (otros métodos → 410, la base no cambia) | F-3, N-3, D-4, D-6, A-1 |
+| CA-3 (sin `ADMIN_NEW_URL` → 404) | F-5, A-1 |
+| CA-4 (mismo HTML los 7 días; arranque sin MySQL ni `DATA_DIR`, también con las variables presentes) | H-1 a H-5, B-1 a B-4, D-3, D-6 |
+| CA-5 (escritura en el admin nuevo → `products_change_notified` con `landing:true` y la landing lo muestra; aviso sin credencial → 401) | D-6, R-3, A-1 (`admin-e2e`, `internal-app`, `internal-notify-process`) |
+| CA-8 (recuperación en la `api`; concurrencia del último administrador) | T-1, T-2, D-6, A-1 |
+| CA-9 (base inválida → código ≠ 0 sin detalles, en la `api`) | T-3, A-1 (`server-startup`, `server-startup-base`) |
+| CA-10 (lint rechaza los imports prohibidos y acepta el árbol real) | L-1 a L-3, A-3 |
+| CA-11 (vuelta atrás del PR 2 → la app anterior arranca con el compose vigente) | D-6, D-7 |
+| CA-14 (typecheck, lint y tests; sin `DATA_DIR`, `DATABASE_URL`, `ADMIN_USER` ni `admin-recover` en `src/` y `scripts/`) | A-1 a A-4 |
+| RF-3 (aviso interno igual) | R-3, A-1 |
+| RF-6 (código muerto de `packages/` retirado sin romper la siembra) | R-4, R-5, A-1 |
+| RF-8 (compose y `deploy/`/`ops/` sin cambios salvo los dos `smoke.sh`) | R-6 |
+| Pruebas retiradas sin pérdida de cobertura funcional | P-1 a P-4 |
+| `api` e `inventory-manager` sin cambio de comportamiento | R-4, D-6, A-1 |
+| `smoke.sh` ajustados | D-7, D-8, S-1 |
+| Documentación vs implementación; `.claude/CLAUDE.md` §8; `.claude/agents/` intacto | Doc-1 a Doc-5 |
+
+### Riesgos identificados
+
+1. **429 en `deploy/ci/smoke.sh`**: con la ráfaga (`average=10`, `period=1m`, `burst=20`: un permiso cada 6 s), las tres peticiones nuevas a `/admin` necesitan que pasen al menos unos 18 s desde la ráfaga; antes bastaba una (6 s). En un runner más rápido que la máquina local el margen puede faltar, y el fallo solo se vería en el PR de la épica a `main` (riesgo de PR atascado).
+2. **410 con cuerpos grandes**: el middleware responde sin leer el cuerpo. El propio Implementation Result vio `ECONNRESET` en el cliente con 2 MiB (por eso la prueba usa 32 KiB). Hay que saber qué recibe un cliente real con cuerpos grandes directo al proceso y, sobre todo, a través de Traefik (topología de producción), y que el proceso no acumula el cuerpo en memoria.
+3. **Variantes de ruta**: `isAdminPath` es exacto y sensible a mayúsculas (`/admin` o `/admin/…`). `/ADMIN`, `//admin`, `/admin;x`, `/%61dmin` o `/admin%2Flogin` darán 404 y no 302. RN-1 no define estas variantes: si alguna difiere de lo esperable, se clasifica como observación o `REQUIREMENT_AMBIGUITY`, no como defecto.
+4. **Redirección abierta**: el destino debe ser siempre `<ADMIN_NEW_URL>/`, sin depender de la ruta, la query, `Host`, `X-Forwarded-Host` ni `TRUST_PROXY`.
+5. **CSS de las landings**: Tailwind v4 detecta las fuentes automáticamente; al borrar `views/admin/` y `styles/admin/`, el CSS compilado de Molotes o Birria podría cambiar. Si cambia, hay que ver si alguna clase usada por las landings desapareció (impacto visual).
+6. **Pérdida de cobertura**: 46 archivos de prueba retirados y 26 modificados. Algunos retirados no eran solo de `/admin` (`admin-db-security`, `admin-produccion`, `bot-protection-qa-req-f-025`, `users-api-process`, `admin-bot-api-process`, `db-outage`, `admin-products-pagina`, casos de `landing-products`, `icons`, `server-startup-config`, `prisma-page-store`). `testing.md` exige conservar una cadena real de punta a punta por flujo principal (productos, usuarios y página), la concurrencia del último administrador y "no arranca con configuración peligrosa o una base inválida".
+7. **Cambios en `api`, `inventory-manager` y `packages/` que deberían ser solo comentarios o código muerto** (19 archivos, +42/−167): que no se haya colado un cambio de comportamiento.
+8. **Vuelta atrás real (CA-11)**: `deploy/ci/smoke.sh` solo vuelve a imágenes del mismo commit; no prueba volver del PR 2 a la app de `main` (la de producción, con su importación, `DATA_DIR` y `/admin` en solo lectura) con una `api` del PR 1 + PR 2. Tampoco prueba la subida real `main` → épica sobre una base creada por `main`.
+9. **`ops/backup/ci/smoke.sh`**: ahora inserta un producto por SQL con solo las columnas sin valor por defecto; si el esquema exige otra columna o el conteo del manifiesto se compara mal, falla solo hacia `main`.
+10. **Comprobación de la vuelta atrás tras una migración nueva** (`deploy/ci/smoke.sh:548`): pasa de `database_newer_than_code_allowed` a "ningún `database_*`". Como la app de esa vuelta atrás es del mismo commit, la comprobación nueva es trivial; hay que ver si la `api` cubre lo que se dejó de comprobar.
+11. **Duración por archivo** (`testing.md`, 20 s en el CI): `api-process` (~16 s), `last-admin-concurrency` (~13 s) y los e2e cerca del límite.
+12. **Documentación**: comentarios del Dockerfile (la etapa `production` aún dice que la app "lee las migraciones para verificar el estado"), `docs/arquitectura.md:400` (cita `build:css:admin`, ya inexistente), `.claude/rules/testing.md` (cita `setupAdmin`, retirado) y `.claude/agents/senior-fullstack.md` (describe el `/admin` de las landings). Los dos últimos están fuera de lo autorizado: se reportan, no se corrigen.
+
+### Pruebas funcionales (`/admin*`, proceso real; sondas temporales)
+
+App en proceso con `listenLocal` y, además, el proceso real `node src/server.ts` en producción (con `ADMIN_NEW_URL=https://admin.example.test` y `TRUST_PROXY=true`) y en desarrollo:
+- **F-1** GET y HEAD de `/admin`, `/admin/`, `/admin/login?x=1`, `/admin/bot`, `/admin/api/molotes/productos`, `/admin/x/y/z`, `/admin//login` → 302, `Location` exactamente `https://admin.example.test/`, `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`, sin `Set-Cookie`, cuerpo vacío en HEAD. Se registran también las cabeceras de Helmet.
+- **F-2** Con `Cookie: koa.sess=…; koa.sess.sig=…` y cabeceras de sesión de la app anterior → la misma respuesta, sin `Set-Cookie` (no hay middleware de sesión en la app: se confirma con CodeGraph).
+- **F-3** POST, PUT, PATCH, DELETE, OPTIONS y un método no estándar admitido por Node (p. ej. `PROPFIND`) en `/admin`, `/admin/login` y `/admin/api/molotes/productos`, con y sin cuerpo (formulario, JSON) → 410 `{ error: { code: 'ADMIN_MOVED', … } }`, `no-store`, sin `Set-Cookie`.
+- **F-4** `ADMIN_NEW_URL` con barra final y con ruta (`https://admin.example.test/panel/`) → `Location` normalizada con una sola barra final.
+- **F-5** Sin `ADMIN_NEW_URL` → `/admin`, `/admin/login` y un POST → 404 con el formato común de errores (no 410).
+- **F-6** `/administrador`, `/administracion`, `/adminx`, `/admin.html` → 404 en los dos modos.
+
+### Pruebas negativas y casos límite
+
+- **N-1 Redirección abierta**: `/admin?next=https://evil.test`, `/admin/https://evil.test`, `/admin/%2F%2Fevil.test`, `/admin/..%2F..%2Fevil`, `/admin/../molotes` con `--path-as-is`, `Host: evil.test`, `X-Forwarded-Host: evil.test` y `X-Forwarded-Proto: http` con `TRUST_PROXY=true` → siempre `Location: https://admin.example.test/`.
+- **N-2 Variantes de ruta**: `/ADMIN`, `/Admin/login`, `//admin`, `/admin;x`, `/%61dmin`, `/admin%2Flogin`, `/admin%2e`, `/%2e/admin` → se registra el código de cada una y se clasifica según el riesgo 3 (ninguna puede responder 200 con contenido de administración ni redirigir a otro destino).
+- **N-3 Cuerpos grandes**: POST y PUT a `/admin/login` con 0 B, 32 KiB, 1 MiB, 10 MiB y 100 MiB, con y sin `Expect: 100-continue`, en `Content-Length` y en `chunked`: (a) directo al proceso y (b) a través de Traefik (pila de D-7 o D-6). Se registra el código que recibe el cliente o el error de conexión, el tiempo y el RSS del proceso antes y después (no debe crecer con el tamaño). Además, `wc -c` del cuerpo nunca aparece en el log y el log de petición no registra el cuerpo.
+- **N-4** Muchas peticiones seguidas a `/admin` (200 en paralelo) directo al proceso → todas 302, sin errores en el log ni fugas de sockets.
+- **N-5** `ADMIN_NEW_URL` inválida (http en producción, con query o credenciales) → la app no arranca, con el mensaje de `env.ts` sin repetir el valor (regresión de REQ-F-039).
+
+### Pruebas de las landings sin base ni `DATA_DIR` (CA-4, RF-2)
+
+- **B-1** Proceso real en producción con `DATABASE_URL` hacia un centinela TCP propio que cuenta conexiones, `DATA_DIR` hacia una ruta inexistente y todas las variables retiradas presentes **e inválidas** (`ADMIN_USER` con caracteres prohibidos, `ADMIN_PASSWORD_HASH=x`, `WHATSAPP_BOT_*` y `BOT_*` basura, `DATABASE_ALLOW_NEWER_SCHEMA=quizá`, `WHATSAPP_MOLOTES` y `WHATSAPP_BIRRIA` distintos con `WHATSAPP_BOT_NUMBER` presente: regla D-6 retirada, P-T4) → arranca (`server_started`), 0 conexiones al centinela, `DATA_DIR` sigue sin existir, sin eventos `database_*`, `menu_*`, `page_import_*`, `admin_*` ni `bot_*` en el log, y `/molotes` 200.
+- **B-2** Igual sin ninguna de esas variables → mismo resultado y mismo `server_started` salvo los campos.
+- **B-3** Módulos cargados: el proceso real con un `--import` de sonda que registra `module.registerHooks` (Node 24) y anota cada especificador resuelto → ninguno de `@restaurante/db`, `prisma`, `@prisma/*`, `mariadb`, `@restaurante/core/identity` ni `@restaurante/core/bot-control`, ni durante el arranque ni tras pedir `/`, `/molotes`, `/birria`, `/admin` y el aviso interno.
+- **B-4** Imagen `production` con la raíz de solo lectura (`docker run --read-only --tmpfs /tmp`), sin volumen y con `DATABASE_URL` hacia un MySQL apagado → `healthy`, landings 200 (semilla o API según el caso), sin escrituras.
+
+### Pruebas de regresión del HTML (CA-4)
+
+Referencia: la app de `425e21a` (épica antes del PR 2; el PR 1 no cambió HTML) y, para la topología real, la de `origin/main` (`8f37f4e`, producción). Ambas desde imágenes `production` construidas desde `git archive` (ver la autorización 3), contra la misma `api` y la misma base de prueba.
+- **H-1** Desarrollo, `?dia=` con los 7 valores que acepta `parseForcedDay` × `/`, `/molotes`, `/birria` (21 respuestas) → cuerpo byte a byte igual entre la app de `425e21a` y la del PR 2; mismas cabeceras salvo `Date` (incluida la CSP).
+- **H-2** Producción, día real: `/`, `/molotes`, `/birria` y HEAD → iguales byte a byte; canonical, `og:*`, `title`, meta description y un solo `h1` según el negocio (SEO).
+- **H-3** Con la `api` caída (semilla de respaldo): las dos apps sirven el mismo HTML, con $145 en Molotes y $195 en Birria, y lo registran (`landing_*_fallback`, `source: seed`).
+- **H-4** Recursos referenciados por el HTML (CSS, JS, imágenes, iconos, `manifest`, `robots.txt` y `sitemap` si existen) y una ruta inexistente → mismo código y mismos bytes en las dos apps. CSS: `public/css/{molotes,birria}/main.css` compilado desde `425e21a` y desde el PR 2 (`npm run build:css` en cada imagen) comparado byte a byte (riesgo 5).
+- **H-5** Avisos del día y pedido por WhatsApp en el HTML del PR 2: lunes (Descanso en `/` y `/molotes`), martes a viernes (Molotes en `/`, nada en `/molotes`), sábado y domingo (nada en `/`, "Hoy toca birria" en `/molotes`), `/birria` nunca; enlace de WhatsApp de cada landing con `href` (`wa.me`, número y `text` codificado), `target` y `rel` iguales que antes. Como H-1 compara byte a byte, este punto solo documenta el contenido.
+
+### Pruebas de las pruebas trasladadas o reapuntadas (CA-8, CA-9)
+
+- **T-1** `last-admin-concurrency.test.ts` ×10 → 10/10; la sonda lee del log y de la base que el `describe` HTTP de verdad desactiva por `POST /api/v1/admin/usuarios/:id/desactivar` del proceso de la `api` y lanza `../api/scripts/admin-recover.ts` (no un doble) y que nunca queden cero administradores.
+- **T-2** `admin-recover.test.ts` y `admin-recover-errores.test.ts` ×5 → la sesión cerrada es la de `/api/v1/admin/sesion` (401) y el login nuevo 201; los errores (base caída, sin migrar) con el mensaje sin detalles.
+- **T-3** `server-startup.test.ts` y `server-startup-base.test.ts` ×5 → los cinco y los tres casos arrancan `../api/src/server.ts` (se confirma en el código de la prueba y con el `service` del log), código 1 y mensajes sin URL, SQL ni traza.
+- **T-4** `api-process.test.ts` ×10, `admin-e2e` ×5, `admin-users-e2e` ×5 y el `describe` nuevo de `app.test.ts` ×20 (por el `ECONNRESET` que vio la implementación).
+
+### Pruebas retiradas: ¿se perdió cobertura funcional? (contra `425e21a`)
+
+- **P-1** Inventario: para cada uno de los 46 archivos borrados y los 26 modificados, títulos de `describe`/`it` en `425e21a` frente al árbol (extraídos con un script de la sonda, sin ejecutar nada).
+- **P-2** Cada caso que desaparece se clasifica: (a) solo `/admin` retirado; (b) cubierto en otro sitio, con la referencia `archivo › caso` (en `landing-pages/tests`, `api/tests`, `inventory-manager/tests` o `packages`); (c) sin sustituto. Revisión obligatoria, caso a caso, de `admin-db-security`, `admin-produccion`, `admin-products-pagina`, `bot-protection-qa-req-f-025`, `users-api-process`, `admin-bot-api-process`, `db-outage`, `file-menu-repository` y `menu-repository-contract` (lo que probaban de `packages/`), y de los casos caídos de `landing-products`, `landing-products-api`, `icons`, `server-startup-config`, `config`, `page-import` y `prisma-page-store`.
+- **P-3** Las pruebas que `testing.md` obliga a conservar existen y pasan: cadena real de punta a punta de productos (`admin-e2e`), de usuarios (`admin-users-e2e`) y **de página** (se identifica cuál es: si no queda ninguna con `inventory-manager` → `api` → aviso → landing para los datos de página, es un hallazgo), concurrencia del último administrador, y "no arranca con configuración peligrosa o una base inválida" (`server-startup*` y `server-startup-config`).
+- **P-4** Las pruebas modificadas no se debilitaron: los casos que siguen tienen las mismas aserciones salvo lo que exige la retirada (diff de cada `it` conservado). Un caso (c) que proteja comportamiento de la app es un defecto (la severidad según lo que deje sin proteger); uno que solo protegía `/admin` no lo es.
+
+### Pruebas de `api`, `inventory-manager` y `packages/` (riesgo 7)
+
+- **R-1** `git diff 425e21a` de `api/src`, `inventory-manager/src`, `packages/contracts` y de los archivos de `packages/core` y `packages/db` → por cada archivo, la salida de `ts.transpileModule` con `removeComments` (TypeScript del propio repositorio, desde la sonda) antes y después: idéntica salvo las retiradas listadas en el Implementation Result.
+- **R-2** Cada símbolo retirado de `packages/` (`parseChangeLog`, `parseChangeLine`, `addImportedChanges`, `IMPORT_BATCH_SIZE`, `PageTransactionOptions`, `parseBotPanel`, `BotPanelConfig`) no tiene consumidores (CodeGraph) y `typecheck` pasa.
+- **R-3** Aviso interno (RF-3): 401 sin credencial y con una incorrecta, 404 fuera de su ruta, invalidación con credencial correcta y `products_change_notified` (prueba existente + D-6).
+- **R-4** La siembra de la `api` (PR 1) sigue igual tras la poda de `page-import.ts`: `server-startup-base` (CA-6) y `admin-bootstrap` (CA-7) en A-1, y en D-6 una base vacía.
+- **R-5** `inventory-manager` completo contra la `api` real: suite en A-1 y el recorrido de D-6.
+- **R-6** `git diff 425e21a --stat -- restaurante/deploy restaurante/ops restaurante/compose.yaml restaurante/landing-pages/Dockerfile .github` → solo `deploy/ci/smoke.sh` y `ops/backup/ci/smoke.sh`; y `git diff origin/main` de `compose.prod.yaml`, `deploy.sh`, `deploy/mysql/` y `env.production.example` vacío.
+
+### Lint de dependencias (CA-10)
+
+Con `npx eslint --stdin --stdin-filename <ruta existente>`, sin escribir archivos:
+- **L-1 Deben fallar** en `landing-pages/src/controllers/landing.ts` y en `landing-pages/scripts/dev-server.ts`: `@restaurante/db`, `@restaurante/db/client`, `prisma`, `@prisma/client`, `mariadb`, `@restaurante/core/identity` (y una subruta), `@restaurante/core/bot-control`; de `@restaurante/core/catalog`: `createProductRepository`, `createPageRepository`, `ProductStore`, `type PageRepository`, un nombre inventado (lista de permitidos), `import * as catalog` y `export { createPageRepository } from`; `import()` dinámico de `@restaurante/db/client`, `@restaurante/core/identity` y `@restaurante/core/bot-control`; `../../../packages/db/src/client.ts` (ruta interna); `../../api/src/…` (otra app).
+- **L-2 Deben pasar**: cada uno de los 11 nombres permitidos de `core/catalog`, `safeEqualStrings` de `@restaurante/core/shared`, `@restaurante/core/schedule`, `@restaurante/contracts` y `@restaurante/web`.
+- **L-3** Las pruebas quedan fuera a propósito: `@restaurante/db` en `landing-pages/tests/...` pasa. Y la regla de transición ya no está en `eslint.config.ts`.
+
+### Docker, despliegue y vuelta atrás (locales, se descartan)
+
+- **D-1** Imágenes del PR 2: `production`, `api`, `migrate` e `inventory-manager` (`qa-req-f-045b-*`); referencias `425e21a` y `origin/main` (`production`, `api`, `migrate` e `inventory-manager`), desde `git archive`.
+- **D-2** Réplica local del job `docker` del CI (pasos "contenido de las imágenes" e "imagen production escucha en 0.0.0.0…"), tal como están en `ci.yml`, con las imágenes del PR 2 → todo en verde, incluido `landing_products_loaded` con `source: api`.
+- **D-3** Contenido de la imagen `production`: sin `src/views/admin`, `src/styles/admin`, `public/css/admin` ni `scripts/`; arranca con la raíz de solo lectura (B-4).
+- **D-4** CA-1/CA-2 contra la imagen local detrás de Traefik (pila de D-7 o D-6): `curl -sI` de las 4 rutas de CA-1 → 302 y sin `set-cookie`; POST/PUT/PATCH/DELETE → 410; N-3 (b).
+- **D-6 Vuelta atrás y subida reales con `deploy.sh`** (CA-11 y CA-5 en la topología real). Copia temporal de `deploy/ci/smoke.sh` en el scratchpad, reducida a su preparación (registro local, Traefik, `.env` de la plantilla, `deploy.sh` real instalado como en el VPS) y con esta secuencia propia:
+  1. Despliegue de las imágenes de `origin/main` sobre una base vacía (lo que hoy corre en producción) → 0; `/admin` de la landing en solo lectura; `app-data` con sus JSON; `page_import` y `product_import` con 2 filas.
+  2. Despliegue de la épica con la app rota (`api`, `migrate` e `inventory-manager` del PR 2; la app, la derivada que sale con 1) → **21**; la app de `main` vuelve y queda `healthy` con el compose vigente (sin cambios), landings 200, sin `page_json_diverged` ni reimportación, recuentos de tablas iguales. Se registra qué `api` queda en marcha y que la app de `main` funciona con ella.
+  3. Despliegue de la épica correcta (subida `main` → PR 2) → 0; la `api` no siembra ni crea usuarios (`products_imported`, `page_seeded` y `admin_bootstrap_created` ausentes); la app sin ningún `database_*`, `menu_*` ni `page_import_*`; landings con el mismo HTML que en el paso 1 (H-2 en producción a través de Traefik); `/admin*` 302/410.
+  4. CA-5 y CA-8 en esa pila: `docker exec <api> node scripts/admin-recover.ts --usuario qa` (contraseña por tubería) → `console_recovery`; login en el admin nuevo por Traefik (`admin.<dominio>`), un cambio de precio de un producto y otro de la página (hero) con su CSRF → `products_change_notified` con `landing:true` en el log de la app y el cambio visible en `/molotes` y `/birria`; se deshacen. Aviso sin credencial → 401.
+  5. Nuevo despliegue con la app rota → 21 y vuelve la app del PR 2.
+- **D-7 `deploy/ci/smoke.sh` real** (como D-7 del PR 1): contenedor `docker:cli` con `bash curl jq gzip util-linux coreutils findutils`, socket de Docker, `--network host`, `SMOKE_WORKDIR` en el scratchpad y el repositorio montado completo (con `docs/`). Salida con marca de tiempo por línea para medir el **tiempo entre el fin de la ráfaga (línea 331) y las comprobaciones de las líneas 404 a 406** (riesgo 1). Resultado esperado: "todas las comprobaciones pasaron". Si el margen medido es menor que el doble de los ~18 s necesarios, se registra como riesgo de inestabilidad con la medida, aunque pase.
+- **D-8 `ops/backup/ci/smoke.sh` real** en un contenedor `docker:cli` con `bash curl age gzip tar util-linux coreutils findutils jq` (sin systemd: el script no lo usa), el socket de Docker y el trabajo en el scratchpad, con las imágenes `production` y `migrate` del PR 2. Esperado: todas las comprobaciones en verde, incluidos "hay datos de prueba", `backup.sh`, `verify-backup.sh` y la restauración de `birria/smoke.json`. Si `age` o `flock` no funcionan en Alpine tras 2 intentos, se prueba con una imagen Debian (`debian:stable-slim` + `docker.io`); si tampoco, queda **no ejecutado** con revisión estricta (columnas del `INSERT` contra `schema.prisma` y las migraciones, conteo del manifiesto contra `backup.sh`, rutas de `docker exec`) y pasa a pendiente del PR de la épica a `main`. `systemd-analyze verify` no se ejecuta (las unidades no cambian; queda explícitamente fuera).
+- **S-1 `shellcheck`** de los mismos archivos que el CI (`deploy.sh mysql/initdb/01-usuarios.sh ci/smoke.sh ci/resumen.sh ci/resumen-test.sh` y `lib.sh backup.sh env-backup.sh restore.sh verify-backup.sh ci/smoke.sh -x`) con la imagen `koalaman/shellcheck` (la versión más cercana a la del runner) → 0 avisos; y `bash -n`.
+
+### Pruebas automatizadas
+
+- **A-1** `npm test` completo desde `restaurante/` (las 3 apps, MySQL de pruebas) → todo en verde; con el informe de duración por archivo (ningún archivo cerca de 20 s sin anotarlo; riesgo 11).
+- **A-2** `npm run typecheck` → 0.
+- **A-3** `npm run lint` → 0 sin avisos (no `lint:fix`).
+- **A-4** `npm run build:css` → 0; CA-14: `grep -rn 'DATA_DIR\|DATABASE_URL\|ADMIN_USER\|admin-recover' landing-pages/src landing-pages/scripts` vacío, y además `grep -rni 'prisma\|mariadb\|@restaurante/db\|core/identity\|core/bot-control' landing-pages/src landing-pages/scripts` (solo restos justificados en comentarios, si los hay).
+- **A-5** `testing.md`: la única prueba nueva es el `describe` de `app.test.ts`; sin archivos `qa-req-f-*` ni pruebas de arquitectura nuevas; `product-repository-atomicity` es un `git mv` con los mismos casos.
+- **Sondas** (F-*, N-*, B-1 a B-3, P-1, R-1, H-*): en `restaurante/landing-pages/tests/qa-req-f-045b-*` (y scripts auxiliares en el scratchpad), usando `listenLocal`, `makeScratchDatabase` y el soporte de procesos existente. **Se borran al terminar y no se commitean.** Si una encuentra un caso sin cubrir, se propone (no se añade) la prueba funcional más barata.
+
+### Documentación vs implementación
+
+- **Doc-1** `README.md` (sección "Administración" con la tabla 302/410/404, configuración, HTTP, puesta en marcha, scripts, recuperar el acceso, estructura), `docs/desarrollo.md` §3, §4, §5 y §8.3, `docs/arquitectura.md` §1, §4, §6, §8 y §10, `docs/despliegue.md` §8 (puntos 2, 4 y 5) y la tabla del webhook: cada comando citado se ejecuta tal como está escrito (en local con la base de prueba o en la pila de D-6; los de VPS, con la pila como sustituto) y cada ruta, script y variable existe. Nada describe un `/admin` vivo en las landings ni `DATA_DIR`/`DATABASE_URL` como necesarios para ellas.
+- **Doc-2** `landing-pages/.env.example` frente a `config/env.ts`: sin `DATABASE_URL`, `DATA_DIR`, `ADMIN_*`, `WHATSAPP_BOT_*` ni `DATABASE_ALLOW_NEWER_SCHEMA`; `ADMIN_NEW_URL` describe 302/410/404. `npm run dev` arranca con una `.env` creada desde el `.env.example` en una carpeta temporal (no se toca la `.env` real).
+- **Doc-3** `.claude/CLAUDE.md`: `git diff 425e21a -- .claude/CLAUDE.md` → solo la frase autorizada de §8 ("En transición, contiene también `/admin` y la importación única de la página desde los JSON al arrancar."). `git diff 425e21a -- .claude/agents .claude/rules` → vacío.
+- **Doc-4** Restos: grep en el repositorio (sin `.claude/docs/done/` ni el historial de los tickets) de `build:css:admin`, `views/admin`, `setupAdmin`, `ADMIN_UNAVAILABLE`, `admin-guard`, `file-menu-repository`, `importPages`, `parseChangeLog` y `DATA_DIR` → cada aparición justificada o anotada (riesgo 12).
+- **Doc-5** Comentario del Dockerfile y `compose.prod.yaml` (líneas 119 a 122, "modo de solo lectura"): se anotan como desfase de documentación del PR 3 si lo son (RN-6 impide tocarlos en este PR).
+
+### Pruebas en navegador / responsive / accesibilidad / UX / SEO / performance
+
+- La no regresión visual se demuestra con H-1, H-2 y H-4 (HTML, cabeceras y CSS byte a byte). **Si todo es idéntico**, no hay cambio visual posible y el navegador solo se usa para un recorrido corto: `/`, `/molotes` y `/birria` en 375×812, 768×1024 y 1440×900 (sin desbordamiento horizontal, CTA de WhatsApp visible sin scroll en móvil, foco visible al tabular, consola sin errores) y `/admin` con `ADMIN_NEW_URL` hacia el `inventory-manager` local (llega a su login). **Si el CSS o el HTML difieren** (riesgo 5), el recorrido se amplía a las secciones afectadas y se compara con `_stich_source_/`.
+- Accesibilidad y SEO: los de H-2 (un `h1`, canonical, `og:*`, `title`, description, `X-Robots-Tag: noindex` en `/admin*`).
+- Performance: tiempo de arranque de `landing-pages` (de `node src/server.ts` a `server_started`) frente a `425e21a` con la misma `api`; RSS en reposo de las dos; N-3 (RSS con cuerpos grandes). Informativo, salvo que algo empeore.
+- Si la extensión de Chrome no responde tras 2-3 intentos, el recorrido queda pendiente de revisión manual; no bloquea si H-1 a H-4 son idénticos (ningún CA depende solo del navegador).
+
+### Autorizaciones temporales que pido
+
+1. **MySQL de pruebas**: `npm run db:up` / `npm run db:down` (contenedor `mysql-dev`; solo bases `restaurante_test*`; está parado ahora y se vuelve a parar).
+2. **Sondas** en `restaurante/landing-pages/tests/qa-req-f-045b-*` y scripts en el scratchpad (copia reducida de `deploy/ci/smoke.sh` para D-6, centinela TCP, gancho de `registerHooks`, extractor de títulos, comparador de `transpileModule`), borrados al terminar.
+3. **Copias del árbol de referencia** con `git archive` de `425e21a` y de `origin/main` en el scratchpad, **sin `node_modules`** (solo como contexto de `docker build`), borradas al terminar.
+4. **Docker**: construir las imágenes de D-1 (`qa-req-f-045b-*`), levantar las pilas efímeras (red, volúmenes y contenedores `qa-req-f-045b-*`, puertos solo en `127.0.0.1`, credenciales inventadas, sin `.env` real) y ejecutar D-6, D-7 y D-8 en contenedores auxiliares con el socket de Docker y `--network host`; descargar las imágenes fijadas por digest que esos scripts usan (`traefik`, `registry`, `mysql:8.4`) y, para S-1, `koalaman/shellcheck`; para D-8, instalar `age` con `apk` dentro del contenedor auxiliar (o `debian:stable-slim` si Alpine falla). Nada toca producción, GHCR ni el VPS.
+5. **Navegador** (Claude in Chrome) en una pestaña nueva, contra los servidores locales; se cierra al terminar.
+6. **Mutaciones (opcional)**: comprobar que el `describe` nuevo de `app.test.ts` detecta 4 mutaciones de `admin-moved.ts` (destino con la ruta de la petición, 405 en lugar de 410, `startsWith('/admin')` sin barra y un `Set-Cookie`). Requiere un `git worktree` temporal en el scratchpad con `node_modules` enlazado al del árbol principal, sin tocar el árbol de trabajo; se borra al terminar. Si no se autoriza, se omite y se dice en el informe.
+7. **Remanentes previos**: borrar al final las 10 imágenes `smoke/*` que ya estaban (D-7 las vuelve a crear con los mismos nombres; quedarían igual al terminar). El contenedor `restaurante-mysql-dev-1` parado es el de `npm run db:up` y se deja como está.
+
+### Limpieza (se comprueba, no se supone)
+
+- Bases: `SHOW DATABASES LIKE 'restaurante\_test%'` vacío al final; solo se borran bases con ese prefijo y sin ejecución en curso.
+- Procesos y puertos: sin Vitest, `node …/server.ts`, `admin-recover`, centinelas ni contenedores auxiliares (`ps`, `lsof -iTCP -sTCP:LISTEN`, `docker ps -a`).
+- Docker: `docker rm -f`, `docker network rm`, `docker volume rm` e `docker image rm` de todo `qa-req-f-045b-*`, `restaurante-smoke`/`smoke-*`, `smoke/*` y `localhost:5000/*`; sin red `traefik-public` creada por la prueba; `docker builder prune` solo si la caché creada crece de forma notable. Se conservan `docker:cli`, `mysql:8.4` y las imágenes que ya estaban.
+- Archivos: sondas borradas (`git status` con las mismas 215 entradas del inicio y ninguna `qa-`), copias de `git archive`, worktree de mutaciones (`git worktree list` con un solo árbol) y scratchpad sin mis archivos (quedan `cot.xlsx`, `cotizador-analisis.md` y `venv/`, que no son de este QA).
+- Navegador: la pestaña de la prueba cerrada.
+- MySQL detenido con `npm run db:down`.
+
+### Evidencia requerida
+
+Tablas de códigos y cabeceras de F-*/N-* (incluida la de cuerpos grandes con códigos, tiempos y RSS); log de B-1/B-2, contador del centinela y lista de módulos de B-3; `cmp`/SHA-256 de las 21 + 3 respuestas, de los recursos y del CSS (H-*); inventario de casos retirados con su clasificación (P-*); diff de `transpileModule` (R-1); salidas de ESLint `--stdin` (L-*); resultados de las repeticiones (T-*); salida de D-2, D-6 (códigos de `deploy.sh`, `ps`, logs y recuentos SQL por paso), D-7 y D-8 con su resumen y la medida del margen del 429; `shellcheck`; `npm test` por app con duraciones, `typecheck`, `lint`, `build:css`; diffs de `deploy/`, `ops/`, `.claude/`; registro de la limpieza.
+
+### Criterios de aprobación
+
+- CA-1, CA-2, CA-3, CA-4, CA-5, CA-8, CA-9, CA-10, CA-11 y CA-14 en PASS con evidencia de proceso real o imagen (no solo de pruebas en proceso).
+- `typecheck`, `lint` y `npm test` en 0; T-1 10/10 y T-4 sin fallos.
+- `deploy/ci/smoke.sh` real en verde (D-7) y D-6 con los códigos esperados. `ops/backup/ci/smoke.sh` en verde (D-8) o, si el entorno no lo permite, revisión estricta sin hallazgos y pendiente explícito para el PR de la épica a `main`.
+- HTML, cabeceras y CSS de las landings idénticos a `425e21a` (o diferencias explicadas y sin impacto visual comprobado en el navegador).
+- Ninguna prueba retirada deja sin proteger un comportamiento de la app (P-2 sin casos (c) relevantes) y siguen las pruebas obligatorias de `testing.md` (P-3).
+- `api`, `inventory-manager` y `packages/` sin cambios de comportamiento fuera de lo retirado (R-1, R-2).
+- Sin defectos `BLOCKER`/`CRITICAL`. Un `MAJOR` (por ejemplo, un cliente que no recibe el 410 a través de Traefik, la pérdida de la cadena de punta a punta de página o un margen del 429 que haga fallar el smoke) se lleva al usuario como `NEEDS_USER_DECISION`. Las variantes de ruta no definidas por RN-1 (riesgo 3) se tratan como observación o `REQUIREMENT_AMBIGUITY`, no como defecto.
+
+### Aprobación del QA Action Plan (PR 2)
+
+El usuario lo aprueba el 2026-11-16. Cita textual: "Apruebo todo". Quedan aprobadas las autorizaciones 1 a 7, incluida la 6 (mutaciones).
+
+## QA Report (PR 2)
+
+### Ronda
+
+1 (PR 2). Ejecutada el 2026-11-16/17 sobre `feature/REQ-F-045-retirada-admin-actual-2-retirada` (base `425e21a`, cambios sin commit; `git status` con 215 entradas antes y después del QA). Exploración con `codegraph_explore`; NotebookLM no disponible en la sesión.
+
+### Pruebas ejecutadas
+
+| Prueba | Acción | Resultado real |
+| -- | -- | -- |
+| A-2 | `npm run typecheck` | 0 |
+| A-3 | `npm run lint` | 0, sin avisos |
+| A-4 | `npm run build:css` | 0. CA-14: `grep -rn 'DATA_DIR\|DATABASE_URL\|ADMIN_USER\|admin-recover' landing-pages/src landing-pages/scripts` vacío; `grep -rni 'prisma\|mariadb\|@restaurante/db\|core/identity\|core/bot-control'` en los mismos, vacío. |
+| A-1 | `npm test` por app (Vitest con informe JSON) | `api` 49 archivos / 1162 pruebas; `landing-pages` 58 / 896; `inventory-manager` 16 / 278; 0 fallos, 0 omitidas. Archivos más lentos en local (todo en paralelo): `product-repository-contract-prisma-actualizar` 21,6 s (sin cambios en este PR), `api-process` 19,7 s, `last-admin-concurrency` 16,7 s, `server-startup` 12,9 s. |
+| A-5 | `git status` / diff de títulos | La única prueba nueva es el `describe` de `app.test.ts` (4 `it` parametrizados, 8 casos); `product-repository-atomicity` tiene los mismos 5 casos que `admin-products-atomicity`; no se añadió ningún `qa-req-f-*`. |
+| T-4 | `app.test.ts -t "admin retirado"` ×20 | 20/20 |
+| T-1 | `last-admin-concurrency.test.ts` ×10 | 10/10. El `describe` HTTP usa `startApiAdmin()` (proceso real `../api/src/server.ts`) y `runNode(['../api/scripts/admin-recover.ts', …])`. |
+| T-2 | `admin-recover.test.ts` + `admin-recover-errores.test.ts` ×5 | 5/5 |
+| T-3 | `server-startup.test.ts` + `server-startup-base.test.ts` ×5 | 5/5; todos los casos usan `bootApi` (`API_ENTRY = ../api/src/server.ts`). |
+| T-4 | `api-process` ×10, `admin-e2e` ×5, `admin-users-e2e` ×5 | 10/10, 5/5, 5/5 |
+| Mutaciones (aut. 6) | `git worktree` temporal; 4 mutaciones de `admin-moved.ts` contra el `describe` nuevo | Sin mutar 8/8. M1 (destino con la ruta): 2 fallan; M2 (405 en lugar de 410): 4 fallan; M3 (`startsWith('/admin')` sin barra): 1 falla; M4 (`Set-Cookie`): 6 fallan. Las 4 detectadas. |
+| F-1 | Proceso real en producción (`ADMIN_NEW_URL=https://admin.example.test`, `TRUST_PROXY=true`), GET y HEAD de `/admin`, `/admin/`, `/admin/login?x=1`, `/admin/bot`, `/admin/api/molotes/productos`, `/admin/x/y/z`, `/admin//login` | Todas 302, `Location: https://admin.example.test/`, `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`, sin `Set-Cookie`; HEAD con 0 bytes de cuerpo (GET: "Found", 5 bytes, el de Koa). |
+| F-2 | Mismo GET con `Cookie: koa.sess=…; koa.sess.sig=…; restaurante.sid=…` | 302 igual, sin `Set-Cookie`. |
+| F-3 | POST, PUT, PATCH, DELETE, OPTIONS y PROPFIND en `/admin`, `/admin/login` y `/admin/api/molotes/productos`, con JSON y sin cuerpo | Todos 410 `{"error":{"code":"ADMIN_MOVED","message":"La administración se mudó al admin nuevo."}}`, `no-store`, sin `Set-Cookie`. |
+| F-4 | `ADMIN_NEW_URL=https://admin.example.test/panel/` | `Location: https://admin.example.test/panel/` (una sola barra). |
+| F-5 | Desarrollo sin `ADMIN_NEW_URL`: GET y POST de `/admin` y `/admin/login` | 404 `NOT_FOUND` con el formato común (en desarrollo incluye `stack`, como cualquier 404 de esa app). |
+| F-6 | `/administrador`, `/administracion`, `/adminx`, `/admin.html` en producción y desarrollo | 404 en todas. |
+| N-1 | Redirección abierta: `?next=https://evil.test`, `/admin/https://evil.test`, `/admin/%2F%2Fevil.test`, `/admin/..%2F..%2Fevil`, `/admin/../molotes` (`--path-as-is`), `/admin/\evil.test`, `Host: evil.test`, `X-Forwarded-Host: evil.test` + `X-Forwarded-Proto: http` | Siempre 302 a `https://admin.example.test/`. |
+| N-2 | `/ADMIN`, `/Admin/login`, `//admin`, `/admin;x`, `/%61dmin`, `/admin%2Flogin`, `/admin%2e`, `/%2e/admin` | 404 todas salvo `//admin` → 400 `Malicious Path` (de `koa-static`, igual para cualquier ruta que empiece por `//`, p. ej. `//molotes`). Ninguna sirve administración ni redirige a otro destino. Ver O-3. |
+| N-3 (a) | POST y PUT de 0 B, 32 KiB, 1 MiB, 10 MiB y 100 MiB directo al proceso, con `Content-Length` (con y sin `Expect: 100-continue`) y `chunked` (`curl`) | 30/30 → 410 en ~1 ms; `curl` deja de subir en cuanto llega el 410 (≤1,1 MB subidos con 100 MiB); RSS 138 → 146 MB sin relación con el tamaño. El log nunca registra el cuerpo. |
+| N-3 (b) | Lo mismo con POST a través de Traefik (pila de D-6) | 15/15 → 410 (≤57 ms; con 100 MiB Traefik reenvía 28-37 MB y corta); memoria de la app 48,8 MiB. |
+| N-4 | 200 GET a `/admin/login` con 50 en paralelo | 200 × 302; 0 errores en el log; 2 sockets abiertos al final. |
+| N-5 | `ADMIN_NEW_URL` http en producción, con query o con credenciales | Código 1 con el mensaje de `env.ts`; el valor no aparece en la salida. |
+| B-1 / B-3 | Proceso real en producción con `DATABASE_URL` hacia un centinela TCP, `DATA_DIR` inexistente, `ADMIN_USER='bad user!'`, `ADMIN_PASSWORD_HASH=x`, `WHATSAPP_BOT_*` y `BOT_*` basura, `DATABASE_ALLOW_NEWER_SCHEMA=quiza` y `WHATSAPP_BOT_NUMBER` distinto de `WHATSAPP_*` (D-6 retirada), con un gancho `module.registerHooks` que anota cada módulo resuelto | Arranca (`server_started` con `adminMoved:true`); el centinela recibe **0 conexiones**; `DATA_DIR` sigue sin existir; eventos solo `landing_*_fallback`, `request`, `internal_notify_rejected`; `/`, `/molotes`, `/birria` 200, `/admin*` 302, aviso interno sin credencial 401. De 555 resoluciones, **ninguna** de `@restaurante/db`, `prisma`, `@prisma/*`, `mariadb`, `core/identity` ni `core/bot-control`. |
+| B-2 | Mismo arranque sin ninguna de esas variables | Igual (`server_started`, fallbacks, 200). |
+| B-4 | Imagen `production` con `--read-only --tmpfs /tmp`, sin volumen, `DATABASE_URL` hacia un MySQL apagado | `healthy`; `/molotes` y `/birria` 200, `/admin` 302; `/var/lib/restaurante` vacío. |
+| R-1 | `ts.transpileModule` sin comentarios, `425e21a` frente al árbol, de los 19 archivos cambiados de `api/src`, `inventory-manager/src` y `packages/` | 15 idénticos; los 4 distintos (`bot-config.ts`, `memory-page-store.ts`, `page-import.ts`, `prisma-page-store.ts`) solo pierden `parseBotPanel`/`BotPanelConfig`, `parseChangeLog`/`parseChangeLine`/`ParsedChangeLog`, `addImportedChanges`, `IMPORT_BATCH_SIZE` y la opción `timeoutMs` de `transaction` (su valor de 5000 ms era el mismo que el predeterminado de Prisma). |
+| R-2 | Símbolos retirados | Sin consumidores (`typecheck` en 0). |
+| R-6 | `git diff 425e21a --stat` de `deploy`, `ops`, `compose.yaml`, `Dockerfile`, `.github`; `git diff origin/main` de `compose.prod.yaml`, `deploy.sh`, `deploy/mysql`, `env.production.example` | Solo `deploy/ci/smoke.sh` (+7/−4) y `ops/backup/ci/smoke.sh` (+8/−4); lo segundo, vacío (la suma de `deploy/` no cambia). |
+| L-1 / L-2 / L-3 | `eslint --stdin` en `src/controllers/landing.ts` y `scripts/dev-server.ts` | Fallan los 20 imports prohibidos en los dos (incluidos `import *`, `export … from`, un nombre inventado de `core/catalog`, `type PageRepository`, `import()` dinámicos, ruta interna de `packages/db` y otra app). Pasan los 11 nombres permitidos de `core/catalog` más `core/shared`, `core/schedule`, `contracts` y `web`. En `tests/helpers.ts`, `@restaurante/db/client` pasa. La "REGLA DE TRANSICIÓN" ya no está. |
+| P-1 a P-4 | Títulos de `describe`/`it` de los 46 archivos borrados y 26 modificados contra `425e21a` | Ver "Pruebas retiradas". |
+| H-1 | Pila Docker: MySQL 8.4, `migrate` y `api` del PR 2; app de `425e21a` y app del PR 2 en desarrollo, misma `api` | 21 respuestas (`?dia=` × 3 rutas) + 3 sin `dia`: **24/24 idénticas byte a byte** y con las mismas cabeceras salvo `Date`; HEAD de las 3 rutas, iguales. |
+| H-2 | Las dos apps en producción, día real | `/` (64 375 B), `/molotes` (60 448 B), `/birria` (62 783 B) idénticos. |
+| H-3 | La `api` detenida y las dos apps reiniciadas | Las 3 páginas idénticas; `landing_products_fallback` `source: seed`; $145 en Molotes y $195 en Birria. |
+| H-4 | Los 31 recursos referenciados por el HTML más `/robots.txt`, `/sitemap.xml`, `/favicon.ico`, una ruta inexistente | 36/36 iguales (código y bytes); CSS de Molotes y de Birria con el mismo SHA-256. Única diferencia: `/css/admin/main.css` 200 → 404 (se retiró a propósito). |
+| H-5 | Contenido de los avisos y del pedido | Lunes: `rest` en `/` y `/molotes`; martes: `molotes` en `/`, nada en `/molotes`; sábado: nada en `/`, `weekend` en `/molotes`; `/birria`, nunca. WhatsApp: `https://wa.me/<número>`, `target="_blank"`, `rel="noopener noreferrer"`, `data-action="whatsapp-order"` en cada landing. Un `h1` por página; `title` y canonical del negocio. |
+| D-2 | Réplica local del job `docker` del CI con las imágenes del PR 2 | Los 7 controles de "contenido de las imágenes" en verde; `migrate` sobre base vacía 0; `api` `healthy` con `server_started`; app `healthy` en `0.0.0.0`, `/molotes` 200 y `landing_products_loaded` `source: api`; `inventory-manager` `healthy`. Base `restaurante_test_ci` creada y borrada. |
+| D-3 | Contenido de la imagen `production` | Sin `src/views/admin`, `src/styles/admin`, `public/css/admin`, `scripts/`, `src/repositories` ni `routes/admin.ts`. |
+| S-1 | `koalaman/shellcheck:v0.10.0` con los mismos archivos y opciones que el CI | 0 en `deploy/` y 0 en `ops/backup/` (`-x`); `bash -n` de los dos `smoke.sh`, 0. |
+| D-7 | `deploy/ci/smoke.sh` real (contenedor `docker:cli`, marca de tiempo por línea) | **186 ok, "todas las comprobaciones pasaron"**, incluidos los 3 checks nuevos de `/admin` y "sin tocar la base (ningún database_* en su log)". |
+| D-7 (margen del 429) | Marcas de tiempo | Ráfaga: 20 × 302 y 10 × 429 a las T+0. Checks nuevos (302, sin cookies, 410): **T+71 s**. Hacen falta unos 18 s. El margen no depende de la velocidad del runner: entre medias el propio script hace `sleep 61` (sección del admin nuevo, `deploy/ci/smoke.sh:390`), así que el mínimo es 61 s. **Riesgo 1 descartado.** |
+| D-8 | `ops/backup/ci/smoke.sh` real (contenedor `docker:cli` con `age`, `flock`, coreutils; descarga `versitygw` fijada por digest) | **58 ok, "todas las comprobaciones pasaron"**: "hay datos de prueba (usuarios 1, productos 1)", verificación de sumas, `app-data` con `birria/smoke.json`, restauración, `verify-backup.sh --drill` 0. |
+| D-6 | Copia temporal reducida de `deploy/ci/smoke.sh` con `deploy.sh` real, registro, Traefik y la plantilla de `.env` | **"todas las comprobaciones pasaron"** (EXIT 0). Detalle abajo. |
+| Doc-1 a Doc-5 | Lectura y ejecución | Ver "Documentación". |
+| Navegador | Claude in Chrome, pestaña nueva contra la app del PR 2 en producción (`127.0.0.1`) | `/molotes`: un `h1`, sin desbordamiento horizontal, CTA de WhatsApp visible sin scroll, aviso "Descanso" (lunes en México), consola sin errores. Ver O-7. |
+
+**D-6, paso a paso (CA-11, CA-5, CA-8 en la topología real):**
+1. Imágenes de `origin/main` (`8f37f4e`, producción) sobre una base vacía → `deploy.sh` 0; recuentos `product 16, product_change 16, product_import 2, page_version 4, page_import 2, page_change 0, user 0, user_audit 0`; `app-data` con `current.json` y `previous.json` de los dos negocios; `/admin/login` de esa app 503 (sin usuarios, como en el PR 1).
+2. Épica con la app rota (`api`, `migrate` e `inventory-manager` del PR 2) → **21**; vuelve **toda** la versión anterior (app, `api` e `inventory-manager` de `main`, según `releases.log`), la app de `main` queda `healthy` con el compose vigente, landings 200, sin `page_json_diverged`, `page_import_*`, `products_imported` ni `*_failed`; recuentos iguales; HTML de las 3 rutas idéntico al del paso 1.
+3. Subida `main` → PR 2 → 0; la `api` no siembra ni crea usuarios; la app sin `database_*`, `menu_*`, `page_import*` ni `admin_*`; recuentos iguales; **HTML del PR 2 idéntico al de `main` a través de Traefik**; `/admin/login?x=1` 302 a `https://admin.birriaelmuneco.com/`; HEAD de `/admin`, `/admin/bot` y `/admin/api/molotes/productos` 302 sin `set-cookie`; POST/PUT/PATCH/DELETE 410; recuentos (incluida `user_audit`) sin cambios.
+4. `docker exec -i <api> node scripts/admin-recover.ts --usuario qa` (contraseña de prueba por tubería) → 0, `console_recovery` en la auditoría, contraseña ausente de la salida. Login en el admin nuevo por Traefik (303); "Bajar" el primer producto de Molotes → la landing cambia el orden en la siguiente visita y la app registra `products_change_notified` `{"business":"molotes","landing":true}`; "Subir" lo deshace (segundo `products_change_notified`). Página de Molotes: precio del hero 145.00 → 150.00 → `?ok=saved&landing=confirmed`, `$150` aparece en `/molotes`; vuelta a 145.00 → `$150` desaparece. Aviso interno sin credencial desde la `api` → 401.
+5. Nueva app rota → 21 y vuelve la app del PR 2; landings 200.
+
+### Criterios de aceptación
+
+| CA | Resultado | Evidencia |
+| -- | -- | -- |
+| CA-1 | PASS | F-1, F-2, F-4, N-1, D-6 paso 3, D-7; `app.test.ts` y `admin-users-e2e` en A-1/T-4. |
+| CA-2 | PASS | F-3, N-3 (directo y por Traefik, hasta 100 MiB), D-6 paso 3 (recuentos y `user_audit` sin cambios). La app no tiene base (B-1, B-3). |
+| CA-3 | PASS | F-5, F-6; `app.test.ts`. |
+| CA-4 | PASS | H-1 (24/24), H-2, H-3, H-4, D-6 pasos 2 y 3 (HTML idéntico por Traefik), B-1 a B-4 (0 conexiones, sin `DATA_DIR`, sin módulos de base). |
+| CA-5 | PASS | D-6 paso 4 (producto y página desde el admin nuevo, `landing:true`, cambio visible, aviso sin credencial 401); `admin-e2e`, `internal-app`, `internal-notify-process` en A-1. |
+| CA-8 | PASS | T-1, T-2, D-6 paso 4. |
+| CA-9 | PASS | T-3 (contra la `api`). |
+| CA-10 | PASS | L-1 a L-3, A-3. |
+| CA-11 | PASS | D-6 paso 2 (vuelta atrás a la versión de producción con el compose vigente) y paso 5; D-7. |
+| CA-14 | PASS | A-1 a A-4. |
+| RF-3 | PASS | B-1, D-6 paso 4, A-1. |
+| RF-6 | PASS | R-1, R-2, A-1 (`server-startup-base`, `admin-bootstrap` de la `api`). |
+| RF-8 | PASS | R-6. |
+| CA-6 / CA-7 (regresión del PR 1) | PASS | `server-startup-base` y `admin-bootstrap` (api) en A-1 y T-3; D-6 paso 1 (base vacía) y paso 3 (instalación existente). |
+| CA-12, CA-13 | Fuera de alcance (PR 3). | |
+
+### Defectos encontrados
+
+Ninguno.
+
+### Pruebas retiradas (P-1 a P-4)
+
+- **Solo `/admin` retirado (a):** 41 de los 46 archivos borrados (`admin-*`, `bot-pantalla-qa-*`, `admin-qa-round1`, `admin-produccion`, `admin-db-security`, `admin-products-logs`, `db-outage` —503 de `/admin` con la base caída—, `file-menu-repository`, `menu-repository-contract`, `admin-form`, `product-form`, `promo-form`) y los casos caídos de `icons` (favicon de `/admin`), `landing-products` (importación desde `DATA_DIR`; fallo de la base de la landing), `landing-products-api` (CA-4 y DEF-003 del `/admin` viejo), `server-startup-config` (umbral del bot en la landing), `config` (`DATA_DIR`, `DATABASE_URL`, `ADMIN_*`, bot y D-6 en la landing) y `page-import` (`parseChangeLog`, retirado).
+- **Cubiertos en otro sitio (b):** `users-api-process` → `user-repository.test.ts` (MySQL) y `api/tests/integration/admin-users-api.test.ts`; `admin-bot-api-process` → `bot-control-store.test.ts` y `api/tests/integration/admin-bot-api.test.ts`; la privacidad de las tablas del bot (QA-T3) → `bot-control-store` ("ninguna columna guarda el número completo"); la mayoría de `bot-control-qa-req-f-043` → `api/tests/unit/bot-control.test.ts` (rotación, enmascarado), `bot-control-reached.test.ts` (token del día, salida de la lista, marca de bloqueo) y `bot-protection-release.test.ts`.
+- **Sin sustituto exacto (c), en sondas `qa-req-f-*` que el plan aprobado mandaba retirar:** ver O-1. Ninguno protege comportamiento que cambie en este PR (R-1: `core/bot-control` y los repositorios de usuarios no cambian salvo comentarios).
+- **Obligatorias de `testing.md` (P-3):** concurrencia del último administrador (`last-admin-concurrency`, 10/10), "no arranca con base inválida" (`server-startup*`) y con configuración peligrosa (`server-startup-config`), cadena real de productos (`admin-e2e`) y de usuarios (`admin-users-e2e`): presentes y en verde. No hay una cadena real de punta a punta para los datos de página, ni la había en `425e21a` (O-2).
+- **Modificadas (P-4):** los casos conservados mantienen sus aserciones; los cambios son de objetivo (proceso de la `api`, repositorios en lugar de `/admin`) y los renombres de los títulos lo reflejan.
+
+### Observaciones (no son defectos)
+
+- **O-1 (cobertura de sondas retiradas):** de `unit/bot-control-qa-req-f-043.test.ts` desaparecen sin equivalente QA-37 (tope de 1000 marcas de "bloqueo quitado": se olvida la más antigua) y QA-65 (una pausa, alta o baja escrita durante un refresco no se pierde); de `users-api-qa-req-f-040-ultimo-admin`, las variantes "dos administradores se degradan entre sí" y "uno se degrada mientras el otro se desactiva". Eran sondas `qa-req-f-*` que el plan técnico aprobado retiraba; el código que probaban no cambia en este PR. Propuesta para una tarea aparte (no se añade aquí): llevar QA-65 y QA-37 a `api/tests/unit/bot-control.test.ts` con nombre de dominio, como pide `testing.md` para casos sin cobertura.
+- **O-2:** no existe (ni existía) una cadena real de punta a punta para los datos de página (`inventory-manager` → `api` → aviso → landing); en este QA se recorrió a mano en D-6 paso 4.
+- **O-3 (variantes de ruta no definidas por RN-1):** `/ADMIN`, `/Admin/login`, `/%61dmin`, `/admin%2Flogin`, `/admin;x`, `/admin%2e` → 404; `//admin` → 400 de `koa-static`, como cualquier ruta con `//`. Ningún marcador real usa esas formas.
+- **O-4 (afirmación del Implementation Result):** "entre las dos secciones hay varios despliegues" no es cierto, pero el margen está garantizado por el `sleep 61` del propio `smoke.sh` (71 s medidos).
+- **O-5 (clientes con cuerpos grandes):** `curl` y Traefik reciben siempre el 410; el `ECONNRESET` que vio la implementación con 2 MiB es del cliente de Node al seguir enviando tras la respuesta. Sin impacto para navegadores ni para el 410 en producción (N-3 b).
+- **O-6 (documentación fuera de lo autorizado o del PR 3):** `.claude/rules/testing.md:25` y `:31` citan `setupAdmin` (retirado); `.claude/agents/senior-fullstack.md:115` cita `admin-guard.ts` (y `:88`, la semilla antigua); el comentario de la etapa `production` del Dockerfile (líneas 43-48: "la app las lee para verificar el estado de la base"; `DATA_DIR`, `ADMIN_*`) y el de `compose.prod.yaml:119-121` ("solo lectura") quedan desfasados hasta el PR 3 (RN-6 impide tocarlos ahora). `docs/arquitectura.md:370`, `:400`, `:408-409` y `:630` hablan de lo retirado en pasado o como historia: justificados.
+- **O-7 (navegador):** `resize_window` no cambió el viewport (siguió en 2560 px), así que no hubo comprobación visual a 375/768/1440 en esta ronda; como el HTML, las cabeceras, el CSS y los 36 recursos son idénticos byte a byte a `425e21a` y a `main` (H-1 a H-4, D-6), no hay cambio visual posible y ningún CA depende de ello. Al abrir `/admin/login?x=1`, el navegador siguió la redirección al destino configurado (`https://admin.birriaelmuneco.com/acceso`, el admin real): solo se cargó la página de acceso (GET), no se escribió nada y la pestaña se cerró.
+- **O-8:** `deploy/ci/smoke.sh` no borra las imágenes `smoke/*` que crea con `derive` (por eso había 10 de una ejecución anterior); sin efecto en el CI, cuyo runner es efímero.
+- **O-9:** D-8 descargó `versity/versitygw:v1.9.0` (fijada por digest en `ops/backup/ci/smoke.sh`), que no figuraba por nombre en la autorización 4; era imprescindible para D-8 y se borró al terminar.
+- **O-10 (duración por archivo):** en local, con las 3 apps en paralelo, `api-process` tardó 19,7 s y `product-repository-contract-prisma-actualizar` 21,6 s (este no cambia en el PR). En el CI se reparte por shards; conviene vigilar `api-process` en el PR (en las 10 repeticiones sueltas pasó siempre).
+- `Cotizador_Taquiza_Birria.xlsx` sigue sin seguimiento en la raíz: no debe entrar en el commit.
+
+### Regresión
+
+Suite completa de las 3 apps en verde (A-1); repeticiones T-1 a T-4 sin fallos; réplica del job `docker` del CI (D-2), `shellcheck` (S-1) y los dos `smoke.sh` reales (D-7, D-8) en verde; `api`, `inventory-manager` y `packages/` sin cambios de comportamiento (R-1, R-2); landings idénticas (H-*, D-6).
+
+### Responsive / Accesibilidad / UX/UI / SEO
+
+HTML, cabeceras, CSS y recursos idénticos a `425e21a` y a producción (H-1 a H-4, D-6): sin cambio posible en responsive, accesibilidad, UX ni SEO. Comprobado además: un `h1`, `title` y canonical por negocio, CTA de WhatsApp con `target`/`rel` correctos, sin desbordamiento ni errores de consola en `/molotes`; `/admin*` lleva `X-Robots-Tag: noindex, nofollow`. Ver O-7.
+
+### Performance
+
+Arranque de la app (contenedor → `server_started`, misma `api`): `425e21a` 703 ms, PR 2 404 ms. Memoria en reposo: 105,6 MiB frente a 50,2 MiB. 410 con cuerpos grandes: ~1 ms directo, ≤57 ms por Traefik, sin crecimiento de memoria.
+
+### Documentación
+
+- Doc-1: `README.md` ("Administración" con la tabla 302/410/404, configuración, HTTP), `docs/desarrollo.md` §3-§5, `docs/arquitectura.md` y `docs/despliegue.md` §8 coinciden con lo medido (F-*, B-*, D-6); los `curl` de `despliegue.md` §8.2 se ejecutaron en forma equivalente en D-6 paso 3 (302 con `location: https://admin.birriaelmuneco.com/` sin `set-cookie`; 410) y "`$C logs app` sin ningún `database_*`" se cumplió.
+- Doc-2: `landing-pages/.env.example` declara exactamente las variables que lee `env.ts` (`ADMIN_NEW_URL`, `API_INTERNAL_URL`, `BUSINESS_TIMEZONE`, `HOST`, `INTERNAL_NOTIFY_TOKEN`, `INTERNAL_PORT`, `NODE_ENV`, `PORT`, `SITE_URL`, `TRUST_PROXY` y `WHATSAPP_*`); B-2 arranca solo con ellas.
+- Doc-3: `.claude/CLAUDE.md` cambia en una sola línea y solo por la frase autorizada; `.claude/agents/` y `.claude/rules/` sin cambios.
+- Doc-4 / Doc-5: ver O-6.
+
+### Pruebas no repetidas o no ejecutadas, con su motivo
+
+- Comprobación visual a 375×812, 768×1024 y 1440×900: la ventana no cambió de tamaño (O-7); sustituida por la igualdad byte a byte de HTML, CSS y recursos.
+- `systemd-analyze verify` de las unidades de respaldo: las unidades no cambian (fuera del plan).
+- `npm run dev` con una `.env` desde el `.env.example` (Doc-2): no se ejecutó `dev`; se arrancó `node src/server.ts` con exactamente esas variables (B-2), que es lo que hace `dev` sin el observador de archivos.
+- `npm run admin:recover` desde la raíz contra una base: igual que en el PR 1 (opción b), no se ejecutó para no leer `api/.env`; cubierto con el script en la imagen (D-6) y en T-1/T-2.
+- No se crearon sondas en `landing-pages/tests/` (todas las comprobaciones se hicieron con procesos, imágenes y scripts en el scratchpad).
+
+### Pendientes de revisión manual
+
+Ninguno que bloquee. Opcional: una mirada visual a 375 px de `/` y `/molotes` cuando se despliegue la épica (O-7).
+
+### Limpieza
+
+- Bases: `SHOW DATABASES LIKE 'restaurante\_test%'` vacío antes de parar MySQL (`restaurante_test_ci` de D-2 creada y borrada). MySQL detenido con `npm run db:down` (estaba parado al empezar).
+- Procesos y puertos: sin Vitest, `src/server.ts`, `admin-recover` ni centinelas; ningún puerto `39xxx` ni de node escuchando (solo un auxiliar de VS Code, ajeno).
+- Docker: sin contenedores de QA ni de las pruebas de humo (solo queda `restaurante-mysql-dev-1`, parado, el de `npm run db:up`); sin redes `traefik-public`, `restaurante-smoke*`, `restaurante-bksmoke*` ni `qa-req-f-045b-*`, ni volúmenes de esas pilas; borradas las imágenes `qa-req-f-045b-*` (9), `smoke/*` (incluidas las 10 que ya existían), `bksmoke/*`, `localhost:5000/*`, `koalaman/shellcheck:v0.10.0`, `traefik:v3.7.14`, `registry:3` y `versity/versitygw:v1.9.0`. Se conservan `docker:cli`, `mysql:8.4`, las imágenes que ya estaban y la caché de compilación.
+- Worktree de mutaciones borrado: `git worktree list` con un solo árbol. Copias de `git archive` (`425e21a` y `origin/main`) y todos los archivos de QA del scratchpad borrados (quedan `cot.xlsx`, `cotizador-analisis.md` y `venv/`, ajenos).
+- Navegador: la pestaña de la prueba cerrada.
+- `git status`: las mismas 215 entradas del inicio; ningún archivo de sonda.
+
+### Resultado final
+
+QA_APPROVED
+
 ## Historial de cambios
 
 ### Versión 1
@@ -1054,3 +1488,15 @@ El usuario aprueba el QA Action Plan ("apruebo todo con b"). `senior-qa` lo ejec
 ### PR 1 abierto (2026-11-16)
 
 Commit `bf40141` (`feat: la api prepara las instalaciones nuevas y contiene la recuperación del acceso`) y PR #156 hacia `epic/arquitectura`, abierto como borrador y marcado listo tras el último push. Estado: `READY_FOR_MERGE` (PR 1 de 3), sujeto al CI en verde del PR listo. El ticket sigue en `in-progress/` hasta el PR 3.
+
+### PR 2 implementado (2026-11-16)
+
+Con el PR 1 mergeado en `epic/arquitectura` (`425e21a`), `senior-fullstack` implementa el PR 2 en `feature/REQ-F-045-retirada-admin-actual-2-retirada`: `/admin*` → 302/410/404, `landing-pages` sin base de datos, `DATA_DIR`, administración ni bot, importación desde JSON retirada (también en `packages/`), regla de lint sobre todo `landing-pages/src` y `scripts` con `allowImportNames`, pruebas retiradas y reapuntadas a la `api`, ajuste de los dos `smoke.sh` (DEF-001) y documentación, incluida `.claude/CLAUDE.md` §8. Validaciones en verde. Estado: `NEEDS_IMPLEMENTATION_APPROVAL` (PR 2 de 3). Sin commit.
+
+### QA Action Plan del PR 2 (2026-11-16)
+
+El usuario aprueba la implementación del PR 2 ("Si la apruebo"). `senior-qa` añade la sección "QA Action Plan (PR 2)" (CA-1 a CA-5, CA-8 a CA-11 y CA-14: `/admin*` con variantes, redirección abierta y cuerpos grandes; landings sin base ni `DATA_DIR`; HTML y CSS contra `425e21a`; pruebas retiradas contra la cobertura anterior; `api`, `inventory-manager` y `packages/` sin cambios de comportamiento; lint; los dos `smoke.sh` reales; vuelta atrás y subida `main` → épica con `deploy.sh`; documentación; autorizaciones y limpieza). Renombra las secciones del PR 1 a "QA Action Plan (PR 1)" y "QA Report (PR 1)". Sin ejecutar pruebas. Estado: `NEEDS_QA_PLAN_APPROVAL` (PR 2 de 3).
+
+### QA del PR 2, ronda 1 (2026-11-16/17)
+
+El usuario aprueba el QA Action Plan del PR 2 y las autorizaciones 1 a 7 ("Apruebo todo"). `senior-qa` lo ejecuta: typecheck, lint y suite en verde; repeticiones sin fallos; 4/4 mutaciones detectadas; `/admin*` con variantes, redirección abierta y cuerpos de hasta 100 MiB (directo y por Traefik); landings sin base, sin `DATA_DIR` y sin cargar módulos de base; HTML, CSS y recursos idénticos a `425e21a` y a producción; los dos `smoke.sh` reales en verde (margen del 429: 71 s, garantizado por el `sleep 61` del script); vuelta atrás y subida reales con `deploy.sh` desde la versión de producción. Sin defectos; diez observaciones. Limpieza comprobada. Estado: `QA_APPROVED` (PR 2 de 3).

@@ -36,7 +36,7 @@ function noticeFor(fixedBusinessId: BusinessId | undefined, options: NoticeOptio
  * `landingPage`: hero, texto destacado y promociones, de la API propia con su caché (REQ-F-044, RF-5),
  *   sobre la semilla (`seeds`), que pone el resto del documento.
  * `landingProducts`: productos publicados, de la API propia con su caché en memoria (REQ-F-038).
- * Nunca la base de datos, un repositorio ni los JSON de DATA_DIR.
+ * Nunca la base de datos, un repositorio ni archivos de datos en disco: las landings solo leen la API.
  */
 export function createLandingController({
   config,

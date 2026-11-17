@@ -59,7 +59,7 @@ export function connects(host: string, port: number): Promise<boolean> {
 
 /**
  * Servidor TCP centinela: DATABASE_URL apunta a él para comprobar que la app no intenta conectar
- * a MySQL cuando la configuración es inválida (RF-1).
+ * a MySQL (RF-1; desde REQ-F-045, nunca: las landings no usan base).
  */
 export async function sentinel(): Promise<{ url: string; connections: () => number }> {
   let count = 0;
@@ -75,9 +75,7 @@ export async function sentinel(): Promise<{ url: string; connections: () => numb
 }
 
 export async function boot(env: Record<string, string | undefined>, options: StartOptions = {}) {
-  const temp = await makeTempDir();
-  cleanups.push(() => temp.cleanup());
-  const server = await startServer({ DATA_DIR: temp.dir, ...env }, 20_000, options);
+  const server = await startServer(env, 20_000, options);
   cleanups.push(() => server.stop());
   return server;
 }

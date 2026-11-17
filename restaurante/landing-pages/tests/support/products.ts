@@ -8,7 +8,6 @@ import {
   type ProductStore,
 } from '@restaurante/core/catalog';
 
-import type { MenuRepository } from '../../src/repositories/menu-repository.ts';
 import { seedData } from '../helpers.ts';
 
 /** Datos y repositorios de productos para las pruebas (REQ-F-008). */
@@ -78,14 +77,4 @@ export async function makeProductRepository<S extends ProductStore = MemoryProdu
   const repository = createProductRepository({ store: productStore, imageExists, ...options });
   await repository.init(sources);
   return { repository, store: productStore };
-}
-
-/** Fuentes de importación tal como las resolvió un repositorio de menús al arrancar (como server.ts). */
-export async function sourcesFrom(menuRepository: Pick<MenuRepository, 'getStartupSource'>): Promise<ReturnType<typeof seedSources>> {
-  return { molotes: await menuRepository.getStartupSource('molotes'), birria: await menuRepository.getStartupSource('birria') };
-}
-
-/** Productos en memoria importados desde lo que publicó `menuRepository` al arrancar. */
-export async function makeProductsFor(menuRepository: Pick<MenuRepository, 'getStartupSource'>) {
-  return (await makeProductRepository({ sources: await sourcesFrom(menuRepository) })).repository;
 }

@@ -90,7 +90,7 @@ export interface ProductRepository {
   /**
    * Importación única (D-8) y carga de la caché. Sin fuentes solo carga la caché, sin importar nada
    * (una instalación existente). Con fuentes importa los negocios sin marca: la `api` con la semilla en
-   * una instalación nueva (REQ-F-045) y, hasta su retirada, landing-pages con los JSON de DATA_DIR.
+   * una instalación nueva (REQ-F-045).
    */
   init(sources?: { [Id in BusinessId]: ImportSource<Id> }): Promise<void>;
   /**
@@ -352,8 +352,8 @@ export function createProductRepository({ store, imageExists, now = () => new Da
   }
 
   /**
-   * Importación de un negocio. Dos arranques contra una base recién creada (api y landing-pages en
-   * desarrollo) pueden importar a la vez: el que pierde choca con las claves únicas o con un
+   * Importación de un negocio. Dos arranques de la api contra una base recién creada pueden importar a
+   * la vez: el que pierde choca con las claves únicas o con un
    * interbloqueo y su transacción se revierte entera. Entonces se vuelve a leer la marca: si aparece, la
    * importación la hizo el otro proceso (con la misma semilla) y se continúa; si no, el error es real
    * (REQ-F-045). Cualquier otro error se relanza sin esperar.

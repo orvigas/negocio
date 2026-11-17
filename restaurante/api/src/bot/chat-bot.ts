@@ -10,7 +10,7 @@
  * providers/select.ts las importa; el resto de la app depende de esta interfaz.
  */
 
-// Los proveedores están en core/bot-control: también los lee la página "Bot" de /admin (REQ-F-042).
+// Los proveedores están en core/bot-control (REQ-F-042): también los lee la administración del bot.
 import type { BotProvider } from '@restaurante/core/bot-control';
 
 export { BOT_PROVIDERS, type BotProvider } from '@restaurante/core/bot-control';

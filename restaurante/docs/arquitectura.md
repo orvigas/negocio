@@ -353,9 +353,16 @@ El ticket 2 del paso 4 (REQ-F-040) llegó con el PR #114 (merge `3715486`) y se 
 | 4 | **Llevar `/admin`** (productos, usuarios y control del bot) a `/api/v1/admin` y al nuevo `inventory-manager`. El `/admin` actual se retira cuando el nuevo tenga lo mismo | Sí: nueva interfaz de administración |
 | 5 | **Dominios nuevos, un ticket por módulo:** inventario → ventas (incluidos los pedidos del bot) → CRM | Sí |
 
-### Dónde queda el código actual
+### Dónde quedó el código (punto de partida del plan)
 
-| Hoy | Destino |
+Tabla histórica: describe el `src/` de la app única antes del paso 2 (REQ-F-037), ya en
+`landing-pages/` desde el paso 1, y adónde se llevó cada parte. No es el estado actual: lo que se
+movió a `packages/`, a `api/` o a `inventory-manager/` ya no está en `landing-pages/` (y el `/admin`
+de las landings se retiró en REQ-F-045); lo que se quedó en `landing-pages/` (`src/views/`,
+`src/content/`, `src/styles/`, `public/` y `src/config/env.ts`) sigue ahí. La estructura vigente
+está en el §4.
+
+| Antes del paso 2 | Destino |
 | --- | --- |
 | `src/services/product-schema.ts`, `visible-menu.ts`, `menu-schema.ts`, `price.ts`, `slug.ts` | `packages/core/catalog/` |
 | `src/services/business-schedule.ts` | `packages/core/schedule/` |

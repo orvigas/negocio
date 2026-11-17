@@ -30,9 +30,10 @@ import { uniqueSlug } from './slug.ts';
 
 
 /**
- * Repositorio de productos (REQ-F-008, RF-9). En core desde REQ-F-039: es el caso de uso que comparten
- * `api` (la única que escribe, con `ADMIN_NEW_URL` en landing-pages) y `landing-pages` (caché del bot
- * y vistas de solo lectura de /admin).
+ * Repositorio de productos (REQ-F-008, RF-9). En core desde REQ-F-039; desde REQ-F-045 solo lo usa la
+ * `api`: lo escribe su administración (`/api/v1/admin`, que usa el admin nuevo) y su caché la usan
+ * el bot (`getPublished`) y la administración (`isCacheFresh`). La API pública no la usa: lee el
+ * store en cada petición.
  *
  * Una sola implementación de las reglas (validación, slug, límites, versión, posiciones y
  * registro) sobre un `ProductStore` con dos implementaciones: Prisma/MySQL
@@ -191,7 +192,7 @@ export function productsFromMenuData(business: BusinessId, data: MenuDataByBusin
     deletedAt: null,
   });
   if (business === BUSINESS.MOLOTES) {
-    // Documento de Molotes (validado por el repositorio de menús).
+    // Documento de Molotes, ya validado (la semilla, con validateMenuDocument en la instalación de la api).
     const molotes = data as MenuDataByBusiness['molotes'];
     return [
       ...molotes.menu.items.map((item, index) => ({

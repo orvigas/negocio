@@ -47,11 +47,11 @@ En cada fase actualiza la sección `## Estado` del ticket y agrega una línea al
 - `GET /` muestra la landing activa según el día en `BUSINESS_TIMEZONE` (por defecto `America/Mexico_City`). `GET /molotes` y `GET /birria` muestran siempre su landing: úsalas para validar visualmente ambas en cualquier día.
 - Ambas landings tienen un CTA de pedido por WhatsApp configurado mediante variables `WHATSAPP_*` (ver `restaurante/landing-pages/.env.example`).
 - Frontend obligatorio: HTML5 semántico, **Tailwind CSS v4**, BEM y Vanilla JS con hooks `data-*`.
-- El diseño fuente está en `_stich_source_/`; el contenido de cada negocio, en `restaurante/landing-pages/src/content/`.
+- El diseño fuente está en `_stich_source_/`; el contenido estático de cada negocio, en `restaurante/landing-pages/src/content/`. Los datos editables (productos y datos de página) están en MySQL y se sirven por la `api`, con semillas en `restaurante/packages/core/catalog/seeds/`.
 
 ### Herramientas de prueba existentes (desde `restaurante/`)
 
-- `npm test`: Vitest + Supertest (HTTP) + jsdom (módulos de `public/js`). Las pruebas están en `tests/unit/` y `tests/integration/`.
+- `npm test`: Vitest en las tres apps (`landing-pages`, `api` e `inventory-manager`), con pruebas en `tests/unit/` y `tests/integration/` de cada una. Las pruebas HTTP usan `listenLocal`: Supertest en `landing-pages`, `fetch` en `api` e `inventory-manager`. Los módulos de `public/js` se prueban con jsdom.
 - Fecha simulada: fake timers de Vitest (`vi.setSystemTime`) y `BUSINESS_TIMEZONE`.
 - `npm run build:css`: requerido antes de cualquier prueba visual.
 - `npm run lint`: ESLint (`eslint.config.ts`) con typescript-eslint e información de tipos sobre `src/`, `tests/`, `scripts/` y configuraciones, y reglas de JavaScript para navegador en `public/js`. Debe terminar con 0, sin errores ni avisos, y no modifica archivos: cuenta como evidencia. No ejecutes `npm run lint:fix` durante QA (modifica archivos).

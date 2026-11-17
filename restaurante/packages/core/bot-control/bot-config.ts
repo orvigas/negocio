@@ -3,9 +3,8 @@ import { DEFAULT_BOT_LIMITS, MS, type BotLimits } from './limits.ts';
 
 /**
  * Lectura y validación de la configuración común del bot (REQ-F-025; REQ-F-012): proveedor,
- * personal, claves de la lista negra y umbrales. En core desde REQ-F-042 (H-4, RF-6) porque la usan
- * el bot (en api, con el resto de su configuración) y la página "Bot" de /admin (en landing-pages,
- * solo esta parte; D-4), con los mismos mensajes. Funciones puras sobre las variables de entorno: reúnen los problemas en
+ * personal, claves de la lista negra y umbrales. En core desde REQ-F-042 (H-4, RF-6); desde
+ * REQ-F-045 solo la usa la `api` (el bot y su administración). Funciones puras sobre las variables de entorno: reúnen los problemas en
  * `issues` (fallo rápido en el arranque de cada app) y nunca incluyen los valores recibidos.
  */
 

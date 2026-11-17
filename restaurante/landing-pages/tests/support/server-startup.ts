@@ -1,14 +1,14 @@
-import { chmod } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import { expect } from 'vitest';
 
 import { ADMIN_ENV } from './admin.ts';
-import { appDatabase, makeScratchDatabase, makeTempDir } from './database.ts';
+import { appDatabase, makeScratchDatabase } from './database.ts';
 import { startServer } from './process.ts';
 
 /**
- * Arranque real con la base de datos (REQ-F-014) en server-startup.test.ts y
- * server-startup-base.test.ts. REQ-F-041: preparación compartida por los archivos en que se partió
+ * Arranque real de la api con la base de datos (REQ-F-014; desde REQ-F-045, la única app con base) en
+ * server-startup.test.ts y server-startup-base.test.ts. REQ-F-041: preparación compartida por los archivos en que se partió
  * server-startup.test.ts, sin cambios.
  */
 
@@ -18,23 +18,16 @@ export async function runCleanups(): Promise<void> {
   while (cleanups.length > 0) await cleanups.pop()?.();
 }
 
-export async function dataDir() {
-  const temp = await makeTempDir();
-  cleanups.push(async () => {
-    await chmod(temp.dir, 0o700).catch(() => {});
-    await temp.cleanup();
-  });
-  return temp.dir;
-}
-
 export async function scratch(migrated: boolean) {
   const database = await makeScratchDatabase({ migrated });
   cleanups.push(database.cleanup);
   return database.name;
 }
 
-export async function boot(env: Record<string, string>) {
-  const server = await startServer({ DATA_DIR: await dataDir(), ...ADMIN_ENV, ...env });
+/** Proceso real de la api (REQ-F-045: prepara la instalación), sin aviso interno y con el primer administrador. */
+export const API_ENTRY = join('..', 'api', 'src', 'server.ts');
+export async function bootApi(env: Record<string, string>) {
+  const server = await startServer({ ...ADMIN_ENV, INTERNAL_NOTIFY_TOKEN: undefined, ...env }, 30_000, { args: [API_ENTRY] });
   cleanups.push(async () => void (await server.stop()));
   return server;
 }
@@ -46,8 +39,8 @@ export function logLines(stdout: string) {
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
-export async function expectControlledFailure(databaseUrlValue: string, expected: Record<string, unknown>) {
-  const server = await boot({ DATABASE_URL: databaseUrlValue });
+export async function expectControlledFailure(databaseUrlValue: string, expected: Record<string, unknown>, start: typeof bootApi = bootApi) {
+  const server = await start({ DATABASE_URL: databaseUrlValue });
   expect(server.started).toBe(false);
   expect(await server.exited).toBe(1);
   const { stdout, stderr } = server.output();

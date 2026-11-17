@@ -1,4 +1,4 @@
-import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual, type ScryptOptions } from 'node:crypto';
+import { randomBytes, scrypt as scryptCallback, timingSafeEqual, type ScryptOptions } from 'node:crypto';
 import { promisify } from 'node:util';
 
 /**
@@ -69,12 +69,6 @@ export async function hashPassword(
   const salt = randomBytes(saltLength);
   const hash = await scrypt(password.normalize('NFC'), salt, keyLength, scryptOptions({ N, r, p }));
   return ['scrypt', N, r, p, salt.toString('base64url'), hash.toString('base64url')].join('$');
-}
-
-/** Compara dos textos en tiempo constante (sobre sus resúmenes, que tienen la misma longitud). */
-export function safeEqualStrings(a: unknown, b: unknown): boolean {
-  const digest = (value: unknown) => createHash('sha256').update(String(value), 'utf8').digest();
-  return timingSafeEqual(digest(a), digest(b));
 }
 
 /** Comprueba una contraseña contra un hash guardado, en tiempo constante. Un hash inválido nunca coincide. */

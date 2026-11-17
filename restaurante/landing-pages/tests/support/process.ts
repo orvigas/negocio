@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
+import { join } from 'node:path';
 
 import { PROJECT_DIR } from '../../src/config/env.ts';
 import { VALID_ENV } from '../helpers.ts';
@@ -111,10 +112,13 @@ function collidedPortVariable({ stdout, stderr }: { stdout: string; stderr: stri
   return server === undefined ? 'PORT' : `${server.toUpperCase()}_PORT`;
 }
 
+/** Final de la ruta de la entrada de la api (`../api/src/server.ts`). */
+const API_SERVER_SUFFIX = join('api', 'src', 'server.ts');
+
 /**
- * Arranca `node src/server.ts` (u otros `args`) y espera a `server_started` (o a que termine). Sin
- * DATABASE_URL en `env`, usa una base de pruebas migrada y vacía del trabajador (REQ-F-014), que se
- * libera cuando el proceso termina. Un valor undefined en `env` quita esa variable (REQ-F-015).
+ * Arranca `node src/server.ts` (u otros `args`) y espera a `server_started` (o a que termine). Para la
+ * api sin DATABASE_URL en `env`, usa una base de pruebas migrada y vacía del trabajador (REQ-F-014), que
+ * se libera cuando el proceso termina. Un valor undefined en `env` quita esa variable (REQ-F-015).
  * El proceso va en su propio grupo y `stop()` detiene el grupo entero (p. ej. `node --watch` y su hijo).
  *
  * Un puerto se elige y se cierra antes de que el hijo lo abra, y otro proceso (otro trabajador, una
@@ -135,7 +139,9 @@ async function startServerOnce(env: Record<string, string | undefined>, timeoutM
   // WEBHOOK_PORT; landing-pages lo ignora): reservados a la vez, así que son distintos entre sí y de
   // los de otros procesos de la prueba (freePorts devuelve exactamente tres).
   const [port, internalPort, webhookPort] = (await freePorts(3)) as [number, number, number];
-  const database = env.DATABASE_URL === undefined && !('DATABASE_URL' in env) ? await makeDatabase() : null;
+  // Solo la api usa la base (REQ-F-045): las landings y el admin nuevo arrancan sin ella.
+  const usesDatabase = args.some((arg) => arg.endsWith(API_SERVER_SUFFIX));
+  const database = usesDatabase && env.DATABASE_URL === undefined && !('DATABASE_URL' in env) ? await makeDatabase() : null;
   const child = spawn(process.execPath, args, {
     cwd: PROJECT_DIR,
     env: baseEnv(definedOnly({ ...VALID_ENV, PORT: String(port), INTERNAL_PORT: String(internalPort), WEBHOOK_PORT: String(webhookPort), ...(database ? { DATABASE_URL: appDatabaseUrl(database.name) } : {}), ...env })),

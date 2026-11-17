@@ -13,11 +13,6 @@ import type { Prisma } from './generated/prisma/client.ts';
 
 type Client = Database | Prisma.TransactionClient;
 
-/** Filas por INSERT al importar `changes.jsonl` (REQ-F-044, PR 3). */
-export const IMPORT_BATCH_SIZE = 500;
-/** Límite de la transacción por defecto (el de Prisma). */
-const DEFAULT_TIMEOUT_MS = 5_000;
-
 const isImportSource = (value: string): value is PageImportMark['source'] => value === 'current' || value === 'previous' || value === 'seed';
 
 const toStored = (row: { revision: number; updatedAt: string | null; updatedBy: string | null; updatedById: number | null; data: string }): StoredPage => ({
@@ -61,15 +56,6 @@ const txOn = (tx: Prisma.TransactionClient): PageStoreTx => ({
     await tx.pageVersion.create({ data: { business, slot: 'current', ...toStored(current) } });
   },
 
-  async addImportedChanges(entries) {
-    for (let start = 0; start < entries.length; start += IMPORT_BATCH_SIZE) {
-      const batch = entries.slice(start, start + IMPORT_BATCH_SIZE);
-      await tx.pageChange.createMany({
-        data: batch.map(({ at, business, author, authorId, action, changes }) => ({ at, business, author, authorId, action, changes: JSON.stringify(changes), imported: true })),
-      });
-    }
-  },
-
   async markImported({ business, importedAt, source, sourceVersion, historyCount, skippedLines }) {
     // Clave primaria por negocio: una segunda marca falla y deshace la transacción.
     await tx.pageImport.create({ data: { business, importedAt, source, sourceVersion, historyCount, skippedLines } });
@@ -90,7 +76,7 @@ export function createPrismaPageStore({ prisma }: { prisma: Database }): PageSto
 
   return Object.freeze<PageStore>({
     read: (business) => run(() => read(prisma, business)),
-    transaction: (task, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) => run(() => prisma.$transaction((tx) => task(txOn(tx)), { timeout: timeoutMs })),
+    transaction: (task) => run(() => prisma.$transaction((tx) => task(txOn(tx)))),
     readImports: () =>
       run(async () => {
         const rows = await prisma.pageImport.findMany();

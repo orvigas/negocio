@@ -3,9 +3,8 @@ import type { BotControl } from '@restaurante/core/bot-control';
 /**
  * Temporizadores del control del bot en la api (REQ-F-042), el único proceso que los ejecuta:
  *
- * - **Mantenimiento** (RF-11, D-T5 de REQ-F-025): caducidades, retención y reintentos cada hora. La
- *   página "Bot" del /admin actual (landing-pages) ya no lo ejecuta: así cada caducidad se audita una
- *   sola vez (CA-13).
+ * - **Mantenimiento** (RF-11, D-T5 de REQ-F-025): caducidades, retención y reintentos cada hora. Ningún
+ *   otro proceso lo ejecuta: así cada caducidad se audita una sola vez (CA-13).
  * - **Refresco periódico** (RF-9, H-2): la pausa y los bloqueos los cambia /admin desde otro proceso.
  *   El refresco perezoso del control solo se dispara al llegar un mensaje y lo evalúa con la copia
  *   anterior; con este temporizador la copia nunca tiene más de `refreshMs` y el primer mensaje

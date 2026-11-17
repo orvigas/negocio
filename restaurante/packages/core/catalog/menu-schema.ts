@@ -5,9 +5,8 @@ import { isValidPriceCents } from './price.ts';
  * Esquema de los datos editables por negocio (REQ-F-001, RF-2 y RF-3).
  *
  * Un único esquema declarativo sirve para:
- *  - validar el JSON guardado (arranque, restauraciones): `validateMenuData`;
- *  - leer el formulario de administración: src/services/admin-form.ts;
- *  - pintar el formulario: src/views/admin/.
+ *  - validar los documentos de menú (la semilla y los datos de página): `validateMenuData`;
+ *  - describir los campos de la página que edita el admin nuevo (page-form.ts).
  *
  * La estructura (cantidad y orden de productos, chips y variantes; `id`, `slug` y
  * `detailsType`) no es editable: se compara siempre contra un documento de referencia.
@@ -124,7 +123,7 @@ export interface MenuDataByBusiness {
 }
 export type MenuData = MenuDataByBusiness[BusinessId];
 
-/** Sobre de un documento guardado (DATA_DIR) o de una semilla. */
+/** Sobre de un documento de menú: la semilla versionada (y los JSON que se importaron hasta REQ-F-045). */
 export interface MenuDocument<Id extends BusinessId = BusinessId> {
   schemaVersion: number;
   business: Id;

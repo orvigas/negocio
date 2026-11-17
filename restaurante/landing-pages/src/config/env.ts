@@ -1,17 +1,16 @@
 import { isIP } from 'node:net';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { BUSINESS_IDS, MAX_MESSAGE_LENGTH, PHONE_PATTERN, buildWhatsAppLink, isHttpsUrl, type BusinessId } from '@restaurante/core/shared';
-import { normalizeUsername, parsePasswordHash, usernameError } from '@restaurante/core/identity';
-import { parseDatabaseUrl, type DatabaseConfig } from '@restaurante/db/database-config';
-
-import { parseBotKeys, parseBotLimits, parseBotPanel, type BotKeys, type BotLimits, type BotPanelConfig } from '@restaurante/core/bot-control';
 
 /**
  * Carga y valida la configuración a partir de variables de entorno.
  * Falla rápido: reúne todos los problemas y lanza un único ConfigError.
  * Los mensajes nunca incluyen los valores recibidos (pueden ser sensibles).
+ *
+ * Las landings no usan base de datos, carpeta de datos, administración ni bot (REQ-F-045, RF-2): las
+ * variables de esas partes se ignoran sin validarse.
  */
 
 export const NODE_ENVS = Object.freeze(['development', 'production', 'test'] as const);
@@ -27,12 +26,6 @@ export interface WhatsAppConfig {
   readonly href: string;
 }
 
-/**
- * Credencial del primer administrador (REQ-F-007, D-4): solo se usa si la base de datos no tiene
- * usuarios. null si no se definió.
- */
-export type AdminBootstrapConfig = Readonly<{ user: string; passwordHash: string }> | null;
-
 export interface Config {
   readonly nodeEnv: NodeEnv;
   readonly isProduction: boolean;
@@ -44,18 +37,10 @@ export interface Config {
   /** API_INTERNAL_URL (REQ-F-038): base de la API propia, de la que las landings leen los productos. */
   readonly apiInternalUrl: string;
   readonly whatsapp: Readonly<Record<BusinessId, WhatsAppConfig>>;
-  readonly dataDir: string;
-  readonly database: DatabaseConfig;
-  /**
-   * DATABASE_ALLOW_NEWER_SCHEMA (REQ-F-016, D-1): tolera migraciones aplicadas que este código no
-   * conoce. Solo la pone el script de despliegue al volver a la versión anterior; nunca va en `.env`.
-   */
-  readonly allowNewerSchema: boolean;
   readonly trustProxy: boolean;
   /**
-   * ADMIN_NEW_URL (REQ-F-039, RF-15): URL del admin nuevo (inventory-manager). Con ella, los productos,
-   * los usuarios, "Mi cuenta" y el control del bot del /admin actual quedan en solo lectura y enlazan
-   * ahí; sin ella, /admin funciona como antes.
+   * ADMIN_NEW_URL (REQ-F-039, RF-15): URL del admin nuevo (inventory-manager). Con ella, GET y HEAD de
+   * /admin* redirigen a su raíz y el resto de métodos responde 410 (REQ-F-045, RF-1); sin ella, 404.
    */
   readonly adminNewUrl: string | undefined;
   /**
@@ -63,15 +48,6 @@ export interface Config {
    * Obligatorio en producción; null sin token fuera de ella: no se abre el puerto (recarga de 60 s).
    */
   readonly internalNotify: { readonly port: number; readonly token: string } | null;
-  readonly adminBootstrap: AdminBootstrapConfig;
-  /**
-   * Bot de WhatsApp para la página "Bot" de /admin (REQ-F-042, RF-6 y D-4): el bot vive en api; aquí
-   * solo su proveedor y el personal (lista blanca). null si el bot no está configurado.
-   */
-  readonly botPanel: BotPanelConfig | null;
-  /** Umbrales de la protección del bot (REQ-F-025, RF-5). */
-  readonly botLimits: BotLimits;
-  readonly botKeys: BotKeys | null;
 }
 
 // Se amplía el tipo de la lista para poder buscar un string cualquiera.
@@ -83,8 +59,6 @@ const isCompleteWhatsApp = (
 
 /** Raíz del workspace de la app (restaurante/landing-pages/; en la imagen, /app/landing-pages). */
 export const PROJECT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-/** Carpeta de datos por defecto fuera de producción (está en .gitignore). */
-export const DEFAULT_DATA_DIR = join(PROJECT_DIR, 'data');
 // NODE_ENV no tiene valor por defecto (REQ-F-015, RF-3): sin él la app no arranca.
 export const DEFAULTS = Object.freeze({
   HOST: '127.0.0.1',
@@ -249,60 +223,6 @@ function parseInternalNotify(env: Env, nodeEnv: string | undefined, appPort: num
   return valid ? { port, token } : undefined;
 }
 
-const isInside = (child: string, parent: string): boolean => {
-  const rel = relative(parent, child);
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
-};
-
-/**
- * Carpeta de los datos editables (REQ-F-001, DT-4). Obligatoria y absoluta en producción;
- * nunca dentro de src/ ni de public/ (no debe servirse ni mezclarse con el código).
- */
-function parseDataDir(raw: string | undefined, nodeEnv: string | undefined, issues: string[]): string | undefined {
-  if (raw === undefined) {
-    if (nodeEnv === 'production') {
-      issues.push('DATA_DIR es obligatoria en producción (ruta absoluta de la carpeta de datos editables)');
-      return undefined;
-    }
-    return DEFAULT_DATA_DIR;
-  }
-  if (nodeEnv === 'production' && !isAbsolute(raw)) {
-    issues.push('DATA_DIR debe ser una ruta absoluta en producción');
-    return undefined;
-  }
-  const dataDir = resolve(PROJECT_DIR, raw);
-  if (['src', 'public'].some((dir) => isInside(dataDir, join(PROJECT_DIR, dir)))) {
-    issues.push('DATA_DIR no puede estar dentro de src/ ni de public/');
-    return undefined;
-  }
-  return dataDir;
-}
-
-/**
- * Credencial del primer administrador (REQ-F-001 DT-7 y REQ-F-007 DT-11): sin ninguna de las dos
- * variables vale null; con una sola, con un usuario inválido o con un hash mal formado, la
- * configuración es inválida (aunque ya haya usuarios y se vaya a ignorar).
- */
-function parseAdminBootstrap(env: Env, issues: string[]): AdminBootstrapConfig | undefined {
-  const rawUser = readVar(env, 'ADMIN_USER');
-  const user = rawUser === undefined ? undefined : normalizeUsername(rawUser);
-  const passwordHash = readVar(env, 'ADMIN_PASSWORD_HASH');
-  if (user === undefined && passwordHash === undefined) return null;
-
-  const before = issues.length;
-  if (user === undefined || passwordHash === undefined) {
-    issues.push('Define ADMIN_USER y ADMIN_PASSWORD_HASH juntas (o ninguna para deshabilitar la administración)');
-  }
-  if (user !== undefined && usernameError(user) !== null) {
-    issues.push('ADMIN_USER no es un usuario válido (1 a 60 caracteres, sin caracteres de control)');
-  }
-  if (passwordHash !== undefined && parsePasswordHash(passwordHash) === null) {
-    issues.push('ADMIN_PASSWORD_HASH no tiene un formato válido (genéralo con `npm run admin:hash-password`)');
-  }
-  if (issues.length > before || user === undefined || passwordHash === undefined) return undefined;
-  return Object.freeze({ user, passwordHash });
-}
-
 function parseBoolean(raw: string | undefined, name: string, defaultValue: boolean, issues: string[]): boolean | undefined {
   if (raw === undefined) return defaultValue;
   if (raw === 'true') return true;
@@ -335,18 +255,6 @@ function parseWhatsApp(env: Env, businessId: BusinessId, issues: string[]): What
   return Object.freeze({ url, phone, message, href: buildWhatsAppLink({ url, phone, message }) });
 }
 
-/**
- * Solo la conexión a la base de datos (REQ-F-014, RF-11): la usa el comando de recuperación, que
- * no necesita el resto de la configuración (WhatsApp, etc.).
- * @throws {ConfigError}
- */
-export function loadDatabaseConfig(env: Env = process.env): DatabaseConfig {
-  const issues: string[] = [];
-  const database = parseDatabaseUrl(readVar(env, 'DATABASE_URL'), 'DATABASE_URL', issues);
-  if (issues.length > 0 || database === undefined) throw new ConfigError(issues);
-  return database;
-}
-
 /** @throws {ConfigError} */
 export function loadConfig(env: Env = process.env): Config {
   const issues: string[] = [];
@@ -376,23 +284,9 @@ export function loadConfig(env: Env = process.env): Config {
     if (parsed !== undefined) whatsapp[businessId] = parsed;
   }
 
-  const dataDir = parseDataDir(readVar(env, 'DATA_DIR'), nodeEnv, issues);
-  const database = parseDatabaseUrl(readVar(env, 'DATABASE_URL'), 'DATABASE_URL', issues);
-  const adminBootstrap = parseAdminBootstrap(env, issues);
-  const allowNewerSchema = parseBoolean(readVar(env, 'DATABASE_ALLOW_NEWER_SCHEMA'), 'DATABASE_ALLOW_NEWER_SCHEMA', false, issues);
   const trustProxy = parseBoolean(readVar(env, 'TRUST_PROXY'), 'TRUST_PROXY', false, issues);
   const adminNewUrl = parseAdminNewUrl(readVar(env, 'ADMIN_NEW_URL'), nodeEnv, issues);
   const internalNotify = parseInternalNotify(env, nodeEnv, port, issues);
-  const botPanel = parseBotPanel(env, nodeEnv, issues);
-  const botLimits = parseBotLimits(env, issues);
-  // La clave solo se exige con el resto del bot ya válido: así cada error del bot se ve una vez.
-  const botKeys = parseBotKeys(env, botPanel !== null && botPanel !== undefined, issues);
-  // D-6 (REQ-F-009): con el bot, los CTA de las dos landings abren el chat del mismo número (el del bot).
-  const molotesPhone = whatsapp.molotes?.phone;
-  const birriaPhone = whatsapp.birria?.phone;
-  if (botPanel && molotesPhone !== undefined && birriaPhone !== undefined && molotesPhone !== birriaPhone) {
-    issues.push('Con el bot de WhatsApp, WHATSAPP_MOLOTES y WHATSAPP_BIRRIA deben ser el mismo número (el del bot)');
-  }
 
   // Cada valor undefined ya dejó su problema en `issues`; las comprobaciones extra solo estrechan tipos.
   if (
@@ -402,16 +296,9 @@ export function loadConfig(env: Env = process.env): Config {
     host === undefined ||
     port === undefined ||
     apiInternalUrl === undefined ||
-    dataDir === undefined ||
-    database === undefined ||
-    allowNewerSchema === undefined ||
-    adminBootstrap === undefined ||
     trustProxy === undefined ||
     adminNewUrl === undefined ||
     internalNotify === undefined ||
-    botPanel === undefined ||
-    botLimits === undefined ||
-    botKeys === undefined ||
     !isCompleteWhatsApp(whatsapp)
   ) {
     throw new ConfigError(issues);
@@ -426,15 +313,8 @@ export function loadConfig(env: Env = process.env): Config {
     siteUrl,
     apiInternalUrl,
     whatsapp: Object.freeze(whatsapp),
-    dataDir,
-    database,
-    allowNewerSchema,
     trustProxy,
     adminNewUrl: adminNewUrl ?? undefined,
     internalNotify: internalNotify ? Object.freeze(internalNotify) : null,
-    adminBootstrap,
-    botPanel,
-    botLimits,
-    botKeys,
   });
 }

@@ -24,8 +24,7 @@ import { createUserRoutes, type UserRoutes } from './user-routes.ts';
 
 /**
  * Composición de la administración de la API (REQ-F-039): sesiones y límite de intentos en memoria
- * (una sola instancia, como el /admin actual, pero con su propio almacén: "Sesión aparte en cada
- * admin"), autenticador de core, repositorio de productos de core y aviso interno. Desde REQ-F-040,
+ * (una sola instancia), autenticador de core, repositorio de productos de core y aviso interno. Desde REQ-F-040,
  * también los usuarios (solo administradores) y la cuenta propia, con el repositorio de usuarios.
  * Desde REQ-F-043, el control del bot (solo administradores), con la misma instancia que usa el bot.
  * Desde REQ-F-046, el cotizador de taquizas (solo administradores), con el catálogo de `quotes`.

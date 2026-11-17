@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseBotKeys, parseBotLimits, type BotKeys, type BotLimits } from '@restaurante/core/bot-control';
+import { normalizeUsername, parsePasswordHash, usernameError } from '@restaurante/core/identity';
 import { BUSINESS_IDS, PHONE_PATTERN, type BusinessId } from '@restaurante/core/shared';
 import { parseDatabaseUrl, type DatabaseConfig } from '@restaurante/db/database-config';
 
@@ -32,6 +33,9 @@ export const API_DEFAULTS = Object.freeze({
 
 /** Longitud mínima de la credencial del aviso interno (REQ-F-039, RF-13). */
 export const MIN_NOTIFY_TOKEN_LENGTH = 32;
+
+/** Primer administrador (ADMIN_USER y ADMIN_PASSWORD_HASH), o null sin ninguna de las dos. */
+export type AdminBootstrapConfig = Readonly<{ user: string; passwordHash: string }> | null;
 
 export interface ApiConfig {
   readonly nodeEnv: NodeEnv;
@@ -64,6 +68,11 @@ export interface ApiConfig {
   readonly botLimits: BotLimits;
   /** Claves de la lista negra (REQ-F-025, D-T1); null sin bot. */
   readonly botKeys: BotKeys | null;
+  /**
+   * Primer administrador de una instalación sin usuarios (REQ-F-007, D-4; en la api desde REQ-F-045).
+   * Contiene el hash de la contraseña: nunca se registra.
+   */
+  readonly adminBootstrap: AdminBootstrapConfig;
 }
 
 export class ApiConfigError extends Error {
@@ -108,7 +117,7 @@ const isNotifyToken = (value: string): boolean => value.length >= MIN_NOTIFY_TOK
 
 /**
  * Números de WHATSAPP_MOLOTES y WHATSAPP_BIRRIA (los del CTA de las landings): el bot solo los usa
- * para D-6 y como emisor con Twilio (D-8). Mismo texto que la validación de landing-pages. Sus
+ * para D-6 y como emisor con Twilio (D-8). Mismo formato que la validación del CTA en landing-pages. Sus
  * variantes _URL y _MESSAGE son solo de las landings.
  */
 function parseBotPhones(env: Env, issues: string[]): Partial<Record<BusinessId, string>> {
@@ -121,6 +130,42 @@ function parseBotPhones(env: Env, issues: string[]): Partial<Record<BusinessId, 
     else issues.push(`${name} debe tener solo dígitos en formato internacional (8 a 15), sin "+" ni espacios`);
   }
   return phones;
+}
+
+/**
+ * ADMIN_USER y ADMIN_PASSWORD_HASH (REQ-F-007, D-4 y D-13): las dos o ninguna. Se validan aunque ya
+ * haya usuarios y se vayan a ignorar. Los mensajes nunca repiten los valores.
+ */
+function parseAdminBootstrap(env: Env, issues: string[]): AdminBootstrapConfig | undefined {
+  const rawUser = readVar(env, 'ADMIN_USER');
+  const user = rawUser === undefined ? undefined : normalizeUsername(rawUser);
+  const passwordHash = readVar(env, 'ADMIN_PASSWORD_HASH');
+  if (user === undefined && passwordHash === undefined) return null;
+
+  const before = issues.length;
+  if (user === undefined || passwordHash === undefined) {
+    issues.push('Define ADMIN_USER y ADMIN_PASSWORD_HASH juntas (o ninguna: el primer administrador se crea entonces con `npm run admin:recover`)');
+  }
+  if (user !== undefined && usernameError(user) !== null) {
+    issues.push('ADMIN_USER no es un usuario válido (1 a 60 caracteres, sin caracteres de control)');
+  }
+  if (passwordHash !== undefined && parsePasswordHash(passwordHash) === null) {
+    issues.push('ADMIN_PASSWORD_HASH no tiene un formato válido (genéralo con `npm run admin:hash-password`)');
+  }
+  if (issues.length > before || user === undefined || passwordHash === undefined) return undefined;
+  return Object.freeze({ user, passwordHash });
+}
+
+/**
+ * Solo la conexión a la base de datos (REQ-F-014, RF-11): la usa el comando de recuperación
+ * (scripts/admin-recover.ts), que no necesita el resto de la configuración.
+ * @throws {ApiConfigError}
+ */
+export function loadDatabaseConfig(env: Env = process.env): DatabaseConfig {
+  const issues: string[] = [];
+  const database = parseDatabaseUrl(readVar(env, 'DATABASE_URL'), 'DATABASE_URL', issues);
+  if (issues.length > 0 || database === undefined) throw new ApiConfigError(issues);
+  return database;
 }
 
 /** @throws {ApiConfigError} */
@@ -174,8 +219,11 @@ export function loadApiConfig(env: Env = process.env): ApiConfig {
     issues.push('Con el bot de WhatsApp, WHATSAPP_MOLOTES y WHATSAPP_BIRRIA deben ser el mismo número (el del bot)');
   }
 
+  const adminBootstrap = parseAdminBootstrap(env, issues);
+
   if (
     issues.length > 0 ||
+    adminBootstrap === undefined ||
     database === undefined ||
     nodeEnv === undefined ||
     !isNodeEnv(nodeEnv) ||
@@ -198,5 +246,6 @@ export function loadApiConfig(env: Env = process.env): ApiConfig {
     whatsappBot,
     botLimits,
     botKeys,
+    adminBootstrap,
   });
 }

@@ -9,9 +9,9 @@ import { BRANCH_LOCATION, type BusinessId, type Logger } from '@restaurante/core
 import { createApp } from '../../src/app.ts';
 import type { Config } from '../../src/config/env.ts';
 import { commonContent, getBusinessContent } from '../../src/content/index.ts';
-import { makeConfig, makeRepository, type CorruptibleData } from '../helpers.ts';
+import { makeConfig, type CorruptibleData } from '../helpers.ts';
 import { listenLocal } from '../support/http.ts';
-import { makeProductRepository, makeProductsFor, seedSources } from '../support/products.ts';
+import { makeProductRepository, seedSources } from '../support/products.ts';
 import { fixedLandingPage, landingProductsFrom } from '../support/landing-products.ts';
 
 const FRIDAY_NOON_MX = new Date('2026-10-09T18:00:00Z');
@@ -21,15 +21,14 @@ function makeLogger() {
   return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 }
 
-const repository = await makeRepository();
-const products = await makeProductsFor(repository);
+const { repository: products } = await makeProductRepository();
 
 async function agent({
   now = FRIDAY_NOON_MX,
   config = makeConfig(),
   logger = makeLogger(),
 }: { now?: Date | (() => Date); config?: Config; logger?: Logger } = {}) {
-  const app = createApp({ config, products, landingProducts: landingProductsFrom(products), landingPage: fixedLandingPage(), logger, now: typeof now === 'function' ? now : () => now });
+  const app = createApp({ config, landingProducts: landingProductsFrom(products), landingPage: fixedLandingPage(), logger, now: typeof now === 'function' ? now : () => now });
   return (await listenLocal(app)).request();
 }
 
@@ -155,7 +154,7 @@ describe('GET / (siempre Birria, con el aviso del día; REQ-F-028)', () => {
   });
 
   it.each(['production', 'test'] as const)('CA-13: con NODE_ENV=%s, ?dia no tiene efecto', async (nodeEnv) => {
-    const config = makeConfig(nodeEnv === 'production' ? { NODE_ENV: 'production', DATA_DIR: '/var/lib/restaurante' } : { NODE_ENV: 'test' });
+    const config = makeConfig(nodeEnv === 'production' ? { NODE_ENV: 'production' } : { NODE_ENV: 'test' });
     const client = await agent({ now: SATURDAY_NOON_MX, config });
     expect(homeNoticeOf((await client.get('/?dia=lunes')).text)).toBeNull();
     const weekday = await agent({ now: TUESDAY_NOON_MX, config });
@@ -363,7 +362,7 @@ describe('GET /molotes: aviso de descanso y de fin de semana (REQ-F-034)', () =>
   });
 
   it.each(['production', 'test'] as const)('CA-7: con NODE_ENV=%s, ?dia no tiene efecto en /molotes', async (nodeEnv) => {
-    const config = makeConfig(nodeEnv === 'production' ? { NODE_ENV: 'production', DATA_DIR: '/var/lib/restaurante' } : { NODE_ENV: 'test' });
+    const config = makeConfig(nodeEnv === 'production' ? { NODE_ENV: 'production' } : { NODE_ENV: 'test' });
     const tuesday = await agent({ now: TUESDAY_NOON_MX, config });
     expect(homeNoticeOf((await tuesday.get('/molotes?dia=sabado')).text)).toBeNull();
     expect(homeNoticeOf((await tuesday.get('/molotes?dia=lunes')).text)).toBeNull();
@@ -926,7 +925,7 @@ describe('errores', () => {
     const now = () => {
       throw new Error('detalle interno secreto');
     };
-    const res = await (await agent({ now, logger, config: makeConfig({ NODE_ENV: 'production', DATA_DIR: '/var/lib/restaurante' }) })).get('/');
+    const res = await (await agent({ now, logger, config: makeConfig({ NODE_ENV: 'production' }) })).get('/');
 
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ error: { code: 'INTERNAL_ERROR', message: 'Internal Server Error' } });
@@ -947,13 +946,59 @@ describe('errores', () => {
   });
 });
 
+describe('/admin retirado de las landings (REQ-F-045, RF-1)', () => {
+  const ADMIN_NEW_URL = 'https://admin.example.test';
+  const ADMIN_PATHS = ['/admin', '/admin/login?x=1', '/admin/bot', '/admin/api/molotes/productos'];
+  const moved = () => agent({ config: makeConfig({ ADMIN_NEW_URL }) });
+
+  it.each(['GET', 'HEAD'] as const)('CA-1: %s de /admin* con ADMIN_NEW_URL -> 302 a la raíz del admin nuevo, sin cookies', async (method) => {
+    const client = await moved();
+    for (const path of ADMIN_PATHS) {
+      const res = await (method === 'GET' ? client.get(path) : client.head(path)).set('Cookie', 'admin_sid=antigua');
+      expect(res.status, path).toBe(302);
+      expect(res.headers.location, path).toBe(`${ADMIN_NEW_URL}/`);
+      expect(res.headers['set-cookie'], path).toBeUndefined();
+      expect(res.headers['cache-control'], path).toBe('no-store');
+    }
+  });
+
+  it.each(['POST', 'PUT', 'PATCH', 'DELETE'] as const)('CA-2: %s de /admin* -> 410 sin leer el cuerpo ni poner cookies', async (method) => {
+    const client = await moved();
+    // Un cuerpo de formulario que nadie lee: la respuesta no depende de él. Cabe en los búferes del
+    // socket, para que el servidor no corte la conexión mientras el cliente aún lo envía.
+    const body = `x=${'y'.repeat(32 * 1024)}`;
+    for (const path of ADMIN_PATHS) {
+      const res = await client[method.toLowerCase() as 'post' | 'put' | 'patch' | 'delete'](path).type('form').send(body);
+      expect(res.status, path).toBe(410);
+      expect(res.body, path).toEqual({ error: { code: 'ADMIN_MOVED', message: 'La administración se mudó al admin nuevo.' } });
+      expect(res.headers['set-cookie'], path).toBeUndefined();
+    }
+  });
+
+  it('CA-3: sin ADMIN_NEW_URL, /admin* responde 404 con el formato común', async () => {
+    const client = await agent();
+    for (const path of ADMIN_PATHS) {
+      const res = await client.get(path);
+      expect(res.status, path).toBe(404);
+      expect(res.body, path).toEqual({ error: { code: 'NOT_FOUND', message: 'Not Found' } });
+    }
+    expect((await client.post('/admin/login').send('x=1')).status).toBe(404);
+  });
+
+  it('una ruta que solo empieza por "admin" no es /admin: 404', async () => {
+    const res = await (await moved()).get('/administracion');
+    expect(res.status).toBe(404);
+    expect(res.headers.location).toBeUndefined();
+  });
+});
+
 describe('landings con productos guardados (REQ-F-001 y REQ-F-008)', () => {
   /** Productos importados desde datos cambiados: equivale a productos guardados con esos valores. */
   async function agentWith(mutate: { businessId: BusinessId; change: (data: CorruptibleData) => unknown }) {
     const sources = seedSources();
     mutate.change(sources[mutate.businessId].data);
     const { repository: productRepo } = await makeProductRepository({ sources });
-    const app = createApp({ config: makeConfig(), products: productRepo, landingProducts: landingProductsFrom(productRepo), landingPage: fixedLandingPage(), now: () => FRIDAY_NOON_MX });
+    const app = createApp({ config: makeConfig(), landingProducts: landingProductsFrom(productRepo), landingPage: fixedLandingPage(), now: () => FRIDAY_NOON_MX });
     return (await listenLocal(app)).request();
   }
 

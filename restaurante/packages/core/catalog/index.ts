@@ -15,5 +15,6 @@ export * from './product-repository.ts';
 export * from './product-schema.ts';
 export * from './product-store.ts';
 export * from './published.ts';
+export * from './seeds.ts';
 export * from './slug.ts';
 export * from './visible-menu.ts';

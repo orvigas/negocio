@@ -33,9 +33,6 @@ export async function makeTempDir(prefix = 'restaurante-test-'): Promise<{ dir: 
   return { dir, cleanup: () => rm(dir, { recursive: true, force: true }) };
 }
 
-/** true si el proceso es root (los permisos de archivo no le afectan; p. ej. en Docker). */
-export const runningAsRoot = (): boolean => process.getuid?.() === 0;
-
 const configs = () => testDatabaseConfigs();
 const runId = (): string => inject('testDatabaseRun');
 const workerId = (): string => process.env.VITEST_POOL_ID ?? process.env.VITEST_WORKER_ID ?? '0';

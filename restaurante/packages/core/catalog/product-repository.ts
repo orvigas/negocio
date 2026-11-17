@@ -1,4 +1,4 @@
-import { BUSINESS, BUSINESS_IDS, errorProp, silentLogger, type BusinessId, type Logger } from '../shared/index.ts';
+import { BUSINESS, BUSINESS_IDS, confirmedByOther, errorProp, isWriteConflict, silentLogger, type BusinessId, type Logger } from '../shared/index.ts';
 import { diffMenuData, type FieldChange } from './menu-diff.ts';
 import type { MenuDataByBusiness } from './menu-schema.ts';
 import {
@@ -88,8 +88,9 @@ export interface ReorderItem {
 
 export interface ProductRepository {
   /**
-   * Importación única (D-8) y carga de la caché. Sin fuentes solo carga la caché, sin importar
-   * nada (la API: la importación es solo de landing-pages, O-1 de REQ-F-037).
+   * Importación única (D-8) y carga de la caché. Sin fuentes solo carga la caché, sin importar nada
+   * (una instalación existente). Con fuentes importa los negocios sin marca: la `api` con la semilla en
+   * una instalación nueva (REQ-F-045).
    */
   init(sources?: { [Id in BusinessId]: ImportSource<Id> }): Promise<void>;
   /**
@@ -350,7 +351,24 @@ export function createProductRepository({ store, imageExists, now = () => new Da
     }
   }
 
+  /**
+   * Importación de un negocio. Dos arranques de la api contra una base recién creada pueden importar a
+   * la vez: el que pierde choca con las claves únicas o con un
+   * interbloqueo y su transacción se revierte entera. Entonces se vuelve a leer la marca: si aparece, la
+   * importación la hizo el otro proceso (con la misma semilla) y se continúa; si no, el error es real
+   * (REQ-F-045). Cualquier otro error se relanza sin esperar.
+   */
   async function importBusiness(business: BusinessId, source: ImportSource): Promise<void> {
+    try {
+      await importOnce(business, source);
+    } catch (err) {
+      const conflict = err instanceof SlugTakenError || isWriteConflict(err);
+      if (!conflict || !(await confirmedByOther(() => store.transaction((tx) => tx.isImported(business))))) throw err;
+      logger.warn('products_import_skipped', { business, reason: 'concurrent' });
+    }
+  }
+
+  async function importOnce(business: BusinessId, source: ImportSource): Promise<void> {
     const at = now();
     const imported = await store.transaction(async (tx) => {
       if (await tx.isImported(business)) return null;

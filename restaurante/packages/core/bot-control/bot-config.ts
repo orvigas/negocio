@@ -111,28 +111,6 @@ export function parseBotStaff(env: BotEnv, issues: string[]): Readonly<Record<Bu
 }
 
 /**
- * Lo que necesita la página "Bot" del /admin actual mientras el bot vive en api (REQ-F-042, RF-6 y
- * D-4): si el bot está configurado, su proveedor y el personal (que no se puede bloquear). Mismas
- * reglas y textos que la configuración completa del bot, sin exigir ni leer sus secretos (CA-12).
- * null sin bot; undefined si hay problemas (ya en `issues`).
- */
-export interface BotPanelConfig {
-  readonly provider: BotProvider;
-  readonly staff: Readonly<Record<BusinessId, string>>;
-}
-
-export function parseBotPanel(env: BotEnv, nodeEnv: string | undefined, issues: string[]): BotPanelConfig | null | undefined {
-  const before = issues.length;
-  checkBotBasics(env, issues);
-  const provider = parseBotProvider(env, nodeEnv, issues);
-  if (!isBotConfigured(env)) return issues.length > before ? undefined : null;
-  if (readVar(env, BOT_VARS.provider) === undefined) issues.push(`${BOT_VARS.provider} es obligatoria si se configura el bot de WhatsApp (meta o twilio)`);
-  const staff = parseBotStaff(env, issues);
-  if (issues.length > before || provider === undefined || staff === undefined) return undefined;
-  return Object.freeze({ provider, staff });
-}
-
-/**
  * Claves del identificador seudonimizado de la lista negra (REQ-F-025, D-T1). Secretas: nunca se
  * registran ni se guardan en la base de datos. null si no se definió (sin bot).
  */

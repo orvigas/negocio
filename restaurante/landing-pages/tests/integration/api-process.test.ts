@@ -8,7 +8,7 @@ import { createPrismaClient } from '@restaurante/db/client';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
 
 import { ADMIN_ENV } from '../support/admin.ts';
-import { appDatabaseUrl, makeDatabase, makeScratchDatabase, makeTempDir } from '../support/database.ts';
+import { appDatabaseUrl, makeDatabase, makeScratchDatabase } from '../support/database.ts';
 import { freePort, startServer } from '../support/process.ts';
 import { ANA, seedSources, VALID_INPUTS } from '../support/products.ts';
 import { startTcpProxy } from '../support/tcp-proxy.ts';
@@ -20,9 +20,9 @@ import { databaseUrl, testDatabaseConfigs } from '../support/test-database-confi
  *
  * - CA-2: el cuerpo valida el contrato y coincide con los productos de la base; 503 con la base caída.
  * - CA-3: sin caché en la API.
- * - CA-10 (O-1): la API y landing-pages arrancan a la vez contra una base recién migrada; la
- *   importación se hace una sola vez y la API nunca importa (desde REQ-F-039 escribe productos por
- *   /api/v1/admin, pero no importa semillas).
+ * - CA-10 (O-1; REQ-F-045): la API y landing-pages arrancan a la vez con una base recién migrada. Solo
+ *   la api la usa: prepara la instalación (productos, página y primer administrador, una sola vez) y la
+ *   landing, sin base de datos, la muestra por la API.
  */
 
 const API_ENTRY = join('..', 'api', 'src', 'server.ts');
@@ -108,18 +108,16 @@ describe('API con MySQL real (CA-2 y CA-3)', () => {
   });
 });
 
-describe('CA-10 (O-1): arranque simultáneo de api y landing-pages', () => {
-  it('los dos arrancan contra una base recién migrada, la importación se hace una vez y la landing usa la API', async () => {
+describe('CA-10 (O-1; REQ-F-045): arranque simultáneo de api y landing-pages', () => {
+  it('con una base recién migrada, la api prepara la instalación una vez y la landing, sin base, la muestra por la API', async () => {
     const database = await makeScratchDatabase({ migrated: true });
     cleanups.push(database.cleanup);
-    const dataDir = await makeTempDir();
-    cleanups.push(dataDir.cleanup);
     const apiPort = await freePort();
     const DATABASE_URL = appDatabaseUrl(database.name);
 
     const [api, landing] = await Promise.all([
-      startServer({ DATABASE_URL, ...API_ENV, PORT: String(apiPort) }, 60_000, { args: [API_ENTRY] }),
-      startServer({ DATABASE_URL, DATA_DIR: dataDir.dir, ...ADMIN_ENV, API_INTERNAL_URL: `http://127.0.0.1:${apiPort}` }, 60_000),
+      startServer({ DATABASE_URL, ...API_ENV, ...ADMIN_ENV, PORT: String(apiPort) }, 60_000, { args: [API_ENTRY] }),
+      startServer({ API_INTERNAL_URL: `http://127.0.0.1:${apiPort}` }, 60_000),
     ]);
     cleanups.push(async () => void (await api.stop()), async () => void (await landing.stop()));
     expect(api.started, api.output().stderr).toBe(true);
@@ -136,9 +134,11 @@ describe('CA-10 (O-1): arranque simultáneo de api y landing-pages', () => {
     const prisma = createPrismaClient(database.config);
     cleanups.push(() => prisma.$disconnect());
     expect(await prisma.productImport.count()).toBe(2);
+    expect(await prisma.pageImport.count()).toBe(2);
+    expect(await prisma.user.count()).toBe(1);
     const output = api.output().stdout + landing.output().stdout + api.output().stderr + landing.output().stderr;
-    expect(output).not.toContain('products_init_failed');
-    expect(output).not.toContain('database_init_failed');
-    expect(logLines(api.output().stdout).some((line) => line.msg === 'products_imported')).toBe(false);
+    expect(output).not.toMatch(/_init_failed|page_seed_failed|admin_bootstrap_failed/);
+    // La landing no usa la base ni prepara nada.
+    expect(landing.output().stdout).not.toMatch(/database_|products_imported|page_seeded|page_import|admin_bootstrap/);
   });
 });

@@ -16,9 +16,8 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
     `traefik-public`. Se construye desde el workspace `restaurante/landing-pages/` del monorepo
     (REQ-F-036), que incluye los paquetes `restaurante/packages/core` y `packages/db` (REQ-F-037),
     con el contexto de build en `restaurante/`. Dentro de la imagen, la app está en
-    `/app/landing-pages`, que es su directorio de trabajo: los comandos relativos de esta guía
-    (`node scripts/admin-recover.ts`) valen para las imágenes de antes y de después del monorepo,
-    así que la vuelta atrás no cambia.
+    `/app/landing-pages`, que es su directorio de trabajo. Desde REQ-F-045, los comandos de consola
+    (`node scripts/admin-recover.ts`) están en la imagen `api` (directorio de trabajo `/app/api`).
   - `api` (REQ-F-038, REQ-F-039 y REQ-F-042): la imagen `api`, la API propia y el bot de WhatsApp.
     - `GET /api/v1/public/{molotes|birria}/productos`: de aquí las landings de `app` leen los
       productos (`API_INTERNAL_URL=http://api:3001`).
@@ -37,7 +36,8 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
     - Llega a MySQL y a `app` por sus nombres de contenedor (`restaurante-mysql-1` y
       `restaurante-app-1`), no por los de servicio: en `traefik-public`, un alias `app` o `mysql` de
       otro proyecto respondería por ellos. Lo fija el compose; el `.env` no cambia.
-    - Usa el mismo usuario solo DML que la app; nunca migra ni importa semillas. Si se cae, las
+    - Usa el mismo usuario solo DML que la app; nunca migra. Solo en una instalación nueva (base
+      vacía) siembra los productos y la página de la semilla (REQ-F-045). Si se cae, las
       landings siguen respondiendo con su última copia buena (o la semilla, si `app` arrancó sin ella).
   - `inventory-manager` (REQ-F-039): la imagen `inventory-manager`, el admin nuevo (Koa con SSR) en
     `https://admin.birriaelmuneco.com`.
@@ -442,7 +442,9 @@ En el primer arranque:
 - MySQL crea la base y los usuarios: `restaurante_app` (solo DML), `restaurante_migrator` (DDL)
   y `restaurante_backup` (solo lectura).
 - `migrate` crea las tablas.
-- La app copia las semillas, importa los productos y crea el primer administrador.
+- La `api`, que arranca antes que la app, siembra los productos y la página de la semilla
+  (REQ-F-045). La app copia las semillas en su volumen, encuentra las marcas sin reimportar y crea
+  el primer administrador con `ADMIN_USER`/`ADMIN_PASSWORD_HASH` (el compose aún se las pasa a ella).
 
 Si la app no queda sana en el primer despliegue, no hay versión anterior: el workflow queda en
 rojo y la app se queda como esté ([Diagnóstico](#10-diagnóstico)).
@@ -480,9 +482,11 @@ tail state/releases.log                           # historial: commit, digests y
 ls -lt backups/                                    # volcados
 ```
 
-- **Recuperar el acceso a `/admin`:**
-  `$C exec app node scripts/admin-recover.ts --usuario <nombre>`
-  ([Recuperar el acceso](../README.md#recuperar-el-acceso)).
+- **Recuperar el acceso al admin nuevo** (en la `api` desde REQ-F-045):
+  `$C exec api node scripts/admin-recover.ts --usuario <nombre>`
+  ([Recuperar el acceso](../README.md#recuperar-el-acceso)). Si la `api` en marcha es una imagen
+  anterior a REQ-F-045 (tras una vuelta atrás), el comando sigue en la `app`:
+  `$C exec app node scripts/admin-recover.ts --usuario <nombre>`.
 - **Reiniciar la app:** `$C restart app`. Para reiniciar el bot, `$C restart api`: conserva el router
   del webhook.
 - **Recrear la app** (`$C up -d app`): usa los digests de `state/release.env`. Tras una vuelta
@@ -663,13 +667,22 @@ valores por defecto (ver `README.md`, "Topes de gasto, lista negra e interruptor
 
 1. Actions → `deploy` en verde, con el resumen **Desplegado**: el commit (SHA corto enlazado y SHA
    completo) y los digests.
-2. `https://birriaelmuneco.com/`, `/molotes` y `/birria` responden 200. `/admin` muestra el
-   acceso, no un 503. `https://admin.birriaelmuneco.com/acceso` muestra el acceso del admin nuevo.
+2. `https://birriaelmuneco.com/`, `/molotes` y `/birria` responden 200.
+   `https://admin.birriaelmuneco.com/acceso` muestra el acceso del admin nuevo. Desde REQ-F-045,
+   `/admin` de las landings lleva ahí y no deja escribir:
+
+   ```sh
+   curl -s -o /dev/null -D - https://birriaelmuneco.com/admin/login | grep -iE '^(HTTP|location|set-cookie)'
+   # HTTP/2 302 y location: https://admin.birriaelmuneco.com/ (sin set-cookie)
+   curl -s -o /dev/null -w '%{http_code}\n' -X POST -d x=1 https://birriaelmuneco.com/admin/login
+   # 410
+   ```
+
+   `$C logs app` tiene `server_started` sin ningún `database_*`: la app ya no usa la base.
 3. En el log de `api`: `server_started` y, con el bot, `bot_provider_selected` con `meta`. Vigila
    `bot_staff_delivery_failed` y `bot_webhook_signature_invalid`.
 4. **Control del bot (REQ-F-043), como administrador:**
    - `https://admin.birriaelmuneco.com/bot` muestra el estado, los contadores y la lista negra.
-   - `https://birriaelmuneco.com/admin/bot` no tiene formularios y enlaza a esa pantalla.
 5. **Despliegue del corte de la página (REQ-F-044), una sola vez:**
    - **Antes de desplegar**, en el VPS: el tamaño de `changes.jsonl` y que existan los
      `current.json` de los dos negocios en `app-data` (sin mirar su contenido):
@@ -688,9 +701,8 @@ valores por defecto (ver `README.md`, "Topes de gasto, lista negra e interruptor
      ```
 
    - `/`, `/molotes` y `/birria` muestran el mismo hero, destacado y promoción que antes.
-   - `https://birriaelmuneco.com/admin/molotes` muestra la página sin formulario y enlaza a
-     `https://admin.birriaelmuneco.com/molotes/pagina`, que permite editarla. Un cambio de prueba
-     se ve en la landing y se deshace con "Restaurar versión anterior".
+   - `https://admin.birriaelmuneco.com/molotes/pagina` permite editarla. Un cambio de prueba se ve
+     en la landing y se deshace con "Restaurar versión anterior".
 6. **Primer despliegue de REQ-F-043, una sola vez (fila histórica del personal):** el botón de
    "alcanzaron un tope hoy" estuvo activo hasta REQ-F-042 y un número del personal pudo quedar
    bloqueado, porque la lista negra no exime al personal. Compara la lista negra de la pantalla "Bot"
@@ -711,7 +723,7 @@ Tras el primer despliegue con el bot en `api` y tras cualquier vuelta atrás. `<
 | Un mensaje real | Escribe al número del bot: responde, y `$C logs api` lo refleja |
 | Otras rutas de `api` no expuestas | `curl -si https://birriaelmuneco.com/api/v1/admin/sesion` y `.../api/v1/public/birria/productos` → 404 con `Content-Security-Policy`: las responde `app`, no `api`. Para el log de `api`, usa una ruta inventada, como `/api/v1/admin/sonda-ca3`: no debe aparecer (la ruta de sesión sí la llama `inventory-manager`) |
 | Ruta exacta | `.../webhooks/whatsapp/` y `.../webhooks/` → 404 |
-| El sitio sigue igual | `/`, `/molotes` y `/birria` → 200; `/admin` muestra el acceso |
+| El sitio sigue igual | `/`, `/molotes` y `/birria` → 200; `/admin` → 302 al admin nuevo (REQ-F-045) |
 | Vuelta atrás (solo tras volver a una versión de antes de REQ-F-042) | La verificación con el token correcto responde `123` y sí lleva CSP: la atiende `app` |
 | Memoria (§10 de la [arquitectura](arquitectura.md#10-riesgos)) | `free -m` y `sudo docker stats --no-stream`; compara con el 31,5 % y el umbral del 80 % |
 

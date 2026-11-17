@@ -27,7 +27,7 @@ El día se calcula en la zona horaria del negocio (`BUSINESS_TIMEZONE`),
 no en la del servidor ni en la del dispositivo. Cada landing tiene un CTA de pedido por WhatsApp configurable. El contenido estático
 vive en `src/content/`; los productos, el showcase del hero, el texto destacado y las promociones
 se guardan en MySQL, se editan en el admin nuevo (`inventory-manager`) y las landings los reciben
-de la `api` (ver [Menús](#menús) y [Administración de menús](#administración-de-menús)).
+de la `api` (ver [Menús](#menús) y [Administración](#administración)).
 
 Un solo **bot de WhatsApp** (opcional, conectado a la WhatsApp Cloud API de Meta) atiende a
 los clientes de los dos negocios con la misma regla de días, muestra el menú del día, arma el
@@ -40,8 +40,8 @@ estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md)
 
 | Workspace | Contenido |
 | --- | --- |
-| `landing-pages/` | La app Koa descrita en este README (las landings, `/admin` y `/admin/api`). Las landings leen los productos de `api/` (REQ-F-038) |
-| `api/` | API propia (REQ-F-038, REQ-F-039, REQ-F-040 y REQ-F-044): `GET /api/v1/public/{molotes,birria}/productos` y `/pagina` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos y, con `ADMIN_NEW_URL`, la única vía web para gestionar usuarios y controlar el bot. Solo en la red interna; ver [API propia](#api-propia-api). También ejecuta el [bot de WhatsApp](#bot-de-whatsapp) (REQ-F-042), con su webhook en un puerto propio, lo único de `api` que se alcanza desde internet |
+| `landing-pages/` | La app Koa descrita en este README: las landings, que leen los productos y la página de `api/` (REQ-F-038 y REQ-F-044), sin base de datos. Su `/admin` se retiró en REQ-F-045: lleva al admin nuevo |
+| `api/` | API propia (REQ-F-038, REQ-F-039, REQ-F-040 y REQ-F-044): `GET /api/v1/public/{molotes,birria}/productos` y `/pagina` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos y la página, y la única vía para gestionar usuarios y controlar el bot. Solo en la red interna; ver [API propia](#api-propia-api). También ejecuta el [bot de WhatsApp](#bot-de-whatsapp) (REQ-F-042), con su webhook en un puerto propio, lo único de `api` que se alcanza desde internet |
 | `inventory-manager/` | Admin nuevo (REQ-F-039, REQ-F-040 y REQ-F-043): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos, los usuarios, "Mi cuenta", el control del bot y la página, y ofrece el cotizador de taquizas (REQ-F-046), con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
 | `packages/web/` (`@restaurante/web`) | Utilidades HTTP y SSR sin dominio que comparten las apps Koa (REQ-F-039): plantillas, lectura de formularios y JSON, mismo origen y logger JSON |
 | `packages/core/` (`@restaurante/core`) | Dominio en TypeScript puro, sin Koa ni Prisma: módulos `catalog`, `schedule`, `identity`, `bot-control`, `cotizador` (REQ-F-046) y `shared`. Cada módulo se importa solo por su `index.ts` (`@restaurante/core/catalog`) |
@@ -50,11 +50,12 @@ estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md)
 
 | En la raíz (`restaurante/`) | En `landing-pages/` |
 | --- | --- |
-| `package.json` (workspaces, `allowScripts`, los scripts y las herramientas comunes: TypeScript y ESLint), `package-lock.json` (único), `tsconfig.base.json` (opciones estrictas que extienden todos los workspaces), `tsconfig.json` y `eslint.config.ts` (lint de todo el monorepo), `.nvmrc`, `compose.yaml` y `docker/` (MySQL local), `.dockerignore`, `deploy/`, `ops/`, `security/`, `docs/` y este README | `src/`, `public/`, `tests/`, `scripts/`, `tsconfig.json`, `vitest.config.ts`, `.env.example` (y el `.env` local), `data/` (`DATA_DIR` por defecto) y el `Dockerfile` |
+| `package.json` (workspaces, `allowScripts`, los scripts y las herramientas comunes: TypeScript y ESLint), `package-lock.json` (único), `tsconfig.base.json` (opciones estrictas que extienden todos los workspaces), `tsconfig.json` y `eslint.config.ts` (lint de todo el monorepo), `.nvmrc`, `compose.yaml` y `docker/` (MySQL local), `.dockerignore`, `deploy/`, `ops/`, `security/`, `docs/` y este README | `src/`, `public/`, `tests/`, `scripts/`, `tsconfig.json`, `vitest.config.ts`, `.env.example` (y el `.env` local) y el `Dockerfile` |
 
 - **Comandos:** todos los `npm run ...` de este README se ejecutan desde `restaurante/`. Cada
-  script de la raíz delega en su workspace (`npm run <script> -w landing-pages --`, o
-  `-w @restaurante/db` para `db:generate`, `db:migrate` y `db:migrate:dev`), así que los
+  script de la raíz delega en su workspace (`npm run <script> -w landing-pages --`, `-w api` para
+  `admin:recover` y `admin:hash-password`, o `-w @restaurante/db` para `db:generate`, `db:migrate` y
+  `db:migrate:dev`), así que los
   argumentos se pasan igual que antes (`npm run admin:recover -- --usuario <nombre>`).
   `typecheck` y `lint` cubren todos los workspaces desde la raíz. `npm ci` (o `npm install`) se
   ejecuta siempre en la raíz: instala las dependencias en `restaurante/node_modules` y enlaza los
@@ -62,13 +63,14 @@ estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md)
 - **Regla de dependencias:** `core` no importa nada del proyecto (solo `node:*`), `db` solo
   importa `core`, `contracts` y `web` no importan nada del proyecto (solo Zod y Koa), `api` importa
   `core`, `db`, `contracts` y `web`, nunca una app, e `inventory-manager` solo importa `contracts`
-  y `web` (también en sus `import()` dinámicos; REQ-F-039). El código de las landings (`controllers/landing.ts`,
-  `views/landings/` y `services/landing-products.ts`) no puede importar `db`, Prisma, `mariadb`,
+  y `web` (también en sus `import()` dinámicos; REQ-F-039). El código de `landing-pages` (`src/` y
+  `scripts/`) no puede importar `db`, Prisma, `mariadb`,
   `core/identity`, `core/bot-control`, la persistencia de `core/catalog` ni el repositorio de
   productos: los productos le llegan del cliente de `contracts` (REQ-F-038). En todo
-  `landing-pages`, los paquetes se importan por su nombre, nunca por ruta relativa. `/admin` puede
-  seguir importando `core` y `db` hasta el ticket 6 del paso 4 (regla de transición); el bot ya no
-  está en `landing-pages` y su código no puede volver (REQ-F-042). `npm run lint` lo impone (ver [Arquitectura §4](docs/arquitectura.md#4-estructura-monorepo-con-npm-workspaces)).
+  `landing-pages`, los paquetes se importan por su nombre, nunca por ruta relativa. Desde REQ-F-045
+  la regla cubre todo `landing-pages/src` y `scripts`: la administración no puede volver (de
+  `core/catalog` solo se permiten las funciones puras de una lista cerrada), y el bot tampoco
+  (REQ-F-042). `npm run lint` lo impone (ver [Arquitectura §4](docs/arquitectura.md#4-estructura-monorepo-con-npm-workspaces)).
 - **Rutas:** salvo que se indique otra cosa, las rutas de archivos de la app que cita este README
   (`src/...`, `public/...`, `tests/...`, `scripts/...`, `.env`, `data/`) son relativas a
   `landing-pages/`, y las de `core/...` y `db/...` a `packages/`. `prisma/...` y
@@ -89,7 +91,7 @@ estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md)
 
 Paso a paso, con enlaces a las secciones de este README:
 
-- [Entorno de desarrollo](docs/desarrollo.md): instalación, MySQL local, `.env`, `DATA_DIR`,
+- [Entorno de desarrollo](docs/desarrollo.md): instalación, MySQL local, `.env`,
   arranque, calidad (typecheck, lint y pruebas), `bot:chat` y el bot real con el sandbox de Twilio.
 - [Despliegue a producción en la VM](docs/despliegue.md): `.env` de producción con Meta, `DATA_DIR`
   en el disco persistente, migraciones, webhook de Meta, comprobaciones, actualización, rollback y
@@ -117,27 +119,28 @@ Desde `restaurante/` (la raíz de los workspaces):
 nvm use
 npm install            # en la raíz: instala todos los workspaces
 npm run db:generate    # genera el cliente de Prisma (packages/db/src/generated/prisma; no se versiona)
-cp landing-pages/.env.example landing-pages/.env   # completa al menos WHATSAPP_MOLOTES(_URL) y WHATSAPP_BIRRIA(_URL); trae DATABASE_URL local
+cp landing-pages/.env.example landing-pages/.env   # completa al menos WHATSAPP_MOLOTES(_URL) y WHATSAPP_BIRRIA(_URL)
 cp packages/db/.env.example packages/db/.env       # MIGRATION_DATABASE_URL y SHADOW_DATABASE_URL (CLI de Prisma)
 cp api/.env.example api/.env                       # API propia (REQ-F-038): PORT=3001 y el DATABASE_URL local
 npm run db:up          # MySQL 8.4 local (Docker), solo en 127.0.0.1:3307
 npm run db:migrate     # aplica las migraciones (MIGRATION_DATABASE_URL de packages/db/.env)
 npm run admin:hash-password   # opcional: genera ADMIN_PASSWORD_HASH para crear el primer administrador
 npm run build:css
-npm run dev            # api (127.0.0.1:3001) y landing-pages (http://127.0.0.1:3000; administración: /admin)
+npm run dev            # api (127.0.0.1:3001) y landing-pages (http://127.0.0.1:3000); el admin nuevo, aparte (docs/desarrollo.md)
 ```
 
 `npm run dev` levanta los dos procesos, la API (`npm run dev:api`) y las landings
 (`npm run dev:landing`); también se pueden levantar por separado. Las landings leen los productos
 y los datos de página de `API_INTERNAL_URL` (en `landing-pages/.env`, `http://127.0.0.1:3001`). Si
-la API no está en marcha, las landings sirven la semilla de `content/seeds.ts` y lo registran
+la API no está en marcha, las landings sirven la semilla (`packages/core/catalog/seeds/`) y lo registran
 (`landing_products_fallback` y `landing_page_fallback`); en cuanto la API responde, muestran sus
 datos sin reiniciar.
 
-En la primera ejecución se crea la carpeta de datos (`DATA_DIR`, por defecto `landing-pages/data/`) con
-una copia de la semilla de cada negocio, y los productos y los datos de página se importan una sola
-vez a la base de datos MySQL (REQ-F-008 y REQ-F-044). La app no migra: verifica al arrancar que la base esté lista. Ver
-[Base de datos](#base-de-datos).
+En la primera ejecución, con la base vacía y migrada, la `api` prepara la instalación una sola vez
+(REQ-F-045): los productos y los datos de página de la semilla de cada negocio
+(`packages/core/catalog/seeds/`) y el primer administrador si `api/.env` trae `ADMIN_USER` y
+`ADMIN_PASSWORD_HASH`. No migra: verifica al arrancar que la base esté lista. `landing-pages` no usa
+la base ni ninguna carpeta de datos. Ver [Base de datos](#base-de-datos).
 
 `npm install` solo ejecuta los scripts de instalación aprobados en `allowScripts` del
 `package.json` de la raíz (`prisma` y `@prisma/engines`; `@parcel/watcher` y `fsevents`
@@ -153,10 +156,10 @@ apruebe con `npm install-scripts approve <paquete>`.
 | `npm run dev`        | La API y las landings a la vez, con recarga (`node --watch`; reinicia al editar cualquier `.ts` importado). Siempre con `NODE_ENV=development` (`scripts/dev-server.ts` de cada workspace), diga lo que diga el `.env` |
 | `npm run dev:api` / `npm run dev:landing` | Solo la API (`api/`, lee `api/.env`) o solo `landing-pages` (lee `landing-pages/.env`), con recarga |
 | `npm run start:api`  | Inicia la API sin recarga (carga `api/.env` si existe; `NODE_ENV` debe venir del `.env` o del entorno) |
-| `npm run build:css`  | Compila el CSS de ambas landings y de la administración (`build:css:molotes`, `build:css:birria`, `build:css:admin`) |
+| `npm run build:css`  | Compila el CSS de ambas landings (`build:css:molotes`, `build:css:birria`) y el del admin nuevo |
 | `npm run watch:css`  | Compilación de CSS en modo observación                      |
-| `npm run admin:hash-password` | Pide la contraseña de administración (sin mostrarla) e imprime el valor de `ADMIN_PASSWORD_HASH` |
-| `npm run admin:recover -- --usuario <nombre>` | Recupera el acceso de administración por consola (ver [Recuperar el acceso](#recuperar-el-acceso)) |
+| `npm run admin:hash-password` | Pide la contraseña de administración (sin mostrarla) e imprime el valor de `ADMIN_PASSWORD_HASH`; delega en el workspace `api` |
+| `npm run admin:recover -- --usuario <nombre>` | Recupera el acceso de administración por consola con el `DATABASE_URL` de `api/.env`; delega en el workspace `api` (ver [Recuperar el acceso](#recuperar-el-acceso)) |
 | `npm run bot:chat [-- --ahora AAAA-MM-DDTHH:MM]` | Conversación con el bot de WhatsApp en la terminal contra el simulador de la Cloud API, sin Meta; delega en el workspace `api` (ver [Probar el bot en local](#probar-el-bot-en-local)) |
 | `npm run db:generate` | Genera el cliente de Prisma en `packages/db/src/generated/prisma` (necesario antes de `typecheck`, `lint`, `test` y `dev`) |
 | `npm run db:up` / `npm run db:down` | Levanta / detiene el MySQL 8.4 local de `compose.yaml` (solo en `127.0.0.1:3307`; datos en el volumen `mysql-dev-data`) |
@@ -176,12 +179,12 @@ falla. Las excepciones globales están comentadas en `eslint.config.ts`.
 ### Pruebas HTTP: servidor en 127.0.0.1
 
 Las pruebas que hacen peticiones HTTP a la app crean su servidor con `listenLocal(app)` de
-`tests/support/http.ts` (o con `setupAdmin` de `tests/support/admin.ts`, que la usa):
+`tests/support/http.ts`:
 
 ```ts
-const server = await listenLocal(createApp({ config, repository }));
+const server = await listenLocal(createApp({ config, landingProducts, landingPage }));
 await server.request().get('/molotes'); // petición suelta
-const browser = server.browser();       // cliente con cookies (sesión y CSRF de /admin)
+const browser = server.browser();       // cliente con cookies
 ```
 
 - El servidor escucha solo en `127.0.0.1`, con un puerto libre que asigna el sistema, y el
@@ -215,7 +218,7 @@ producción. Antes de `npm test`: `npm run db:up` (el MySQL local de `compose.ya
   el resultado es el de vaciarlas todas, REQ-F-041): dos ejecuciones en paralelo no se pisan. Si una prueba
   altera el esquema (DROP, ALTER, triggers), la base se vuelve a crear (se compara con la base de
   referencia `restaurante_test_<id>_ref`). Al terminar se borran.
-- Usa `makeDatabase()`, `setupAdmin()` o `makeScratchDatabase()` de `tests/support/` (y
+- Usa `makeDatabase()`, `startApiAdmin()` o `makeScratchDatabase()` de `tests/support/` (y
   `adminSql()` para el DDL de una prueba); nunca conexiones propias ni `DATABASE_URL`.
 - Esperas de bloqueo: el MySQL de `compose.yaml` (solo desarrollo, pruebas y CI) corta una
   espera de bloqueo a los 5 s (`--innodb-lock-wait-timeout=5`; en producción, 10 s). Para
@@ -236,7 +239,8 @@ con `-f landing-pages/Dockerfile`. Dentro de la imagen se conserva la forma del 
 `/app/package.json` y `/app/package-lock.json`, las dependencias en `/app/node_modules`, los
 paquetes en `/app/packages` (REQ-F-037; npm los enlaza en `/app/node_modules/@restaurante`) y la
 app en `/app/landing-pages`, que es el directorio de trabajo (los comandos relativos, como
-`node src/server.ts` o `node scripts/admin-recover.ts`, no cambian). Node ejecuta los `.ts` de los
+`node src/server.ts`, no cambian; en la imagen `api`, el directorio de trabajo es `/app/api` y ahí
+está `node scripts/admin-recover.ts`). Node ejecuta los `.ts` de los
 paquetes por su ruta real (`/app/packages/...`, fuera de `node_modules`), así que el type stripping
 funciona igual que con los de la app.
 
@@ -254,7 +258,7 @@ explícito en tres sitios a la vez: `.nvmrc`, `engines.node` de los dos `package
 | `test`       | `build` + diseño fuente; comando por defecto `npm test` desde `/app` (las suites de `api/` y `landing-pages/`) |
 | `migrate`    | Dependencias de producción + CLI de Prisma, `prisma/` y `prisma.config.ts` (de `packages/db`, copiados al directorio de trabajo `/app/landing-pages` como siempre); usuario `node`; ejecuta `prisma migrate deploy` con `MIGRATION_DATABASE_URL` y termina |
 | `production` | Dependencias de producción (sin `typescript` ni `@types/*`), `src/` (`.ts`) y `public/` con el CSS compilado, `packages/core`, `packages/contracts` y, de `packages/db`, `src/` (con el cliente generado) y las migraciones; usuario `node`; arranca con `node src/server.ts` |
-| `api`        | API propia (REQ-F-038): dependencias de producción, `api/src`, `packages/core`, `packages/contracts` y, de `packages/db`, `src/` y las migraciones; directorio de trabajo `/app/api`, `PORT=3001`, usuario `node`, `HEALTHCHECK` contra su propio endpoint; arranca con `node src/server.ts` |
+| `api`        | API propia (REQ-F-038): dependencias de producción, `api/src`, los comandos de consola (`scripts/admin-recover.ts` y `scripts/hash-password.ts`; REQ-F-045), `packages/core` (con las semillas), `packages/contracts` y, de `packages/db`, `src/` y las migraciones; directorio de trabajo `/app/api`, `PORT=3001`, usuario `node`, `HEALTHCHECK` contra su propio endpoint; arranca con `node src/server.ts` |
 
 El `.dockerignore` (en `restaurante/`, la raíz del contexto) deja fuera `node_modules/`, `.env*`
 (salvo `.env.example`), `data/`, el CSS generado localmente, logs, cobertura, `.git`, `deploy/`,
@@ -295,11 +299,9 @@ docker build -f landing-pages/Dockerfile --target production -t restaurante:prod
 docker build -f landing-pages/Dockerfile --target migrate -t restaurante:migrate .
 # Migraciones (usuario con DDL), antes de arrancar la app:
 docker run --rm -e MIGRATION_DATABASE_URL='mysql://migrador:...@mysql:3306/restaurante' restaurante:migrate
-docker volume create restaurante-data
 docker run -d --name restaurante -p 3000:3000 \
   -e WHATSAPP_MOLOTES=5215512345678 -e WHATSAPP_BIRRIA=5215512345678 \
-  -e DATABASE_URL='mysql://app:...@mysql:3306/restaurante' \
-  -e DATA_DIR=/var/lib/restaurante -v restaurante-data:/var/lib/restaurante \
+  -e API_INTERNAL_URL=http://api:3001 -e INTERNAL_NOTIFY_TOKEN='...' \
   restaurante:prod
 ```
 
@@ -307,27 +309,22 @@ El compose de producción (red interna con MySQL, Traefik, usuarios de la base, 
 atrás) está en `deploy/` y se describe en [docs/despliegue.md](docs/despliegue.md).
 
 - La configuración se inyecta **al ejecutar** (`-e` o `--env-file .env`), nunca en el build. Se
-  valida igual que sin Docker: si falta una variable obligatoria (`WHATSAPP_*`, `DATABASE_URL`, `DATA_DIR`, `API_INTERNAL_URL`), el
+  valida igual que sin Docker: si falta una variable obligatoria (`WHATSAPP_*`, `API_INTERNAL_URL` y, en producción, `INTERNAL_NOTIFY_TOKEN`), el
   contenedor termina con código 1 y lista los problemas sin mostrar valores.
 - `NODE_ENV=production`, `HOST=0.0.0.0` (todas las interfaces del contenedor, para que funcionen
   el puerto publicado y el `HEALTHCHECK`) y `PORT=3000` vienen definidos en la imagen; `-e HOST=…`
   los sustituye. La app corre con el usuario
   `node` (UID 1000) y el código es de solo lectura para él.
-- `DATA_DIR` debe ser una ruta absoluta montada como volumen; `/var/lib/restaurante` ya existe
-  en la imagen con dueño `node`, así que un volumen con nombre montado ahí funciona sin más. Con
-  un bind mount del host, la carpeta debe ser escribible por el UID 1000. En el primer arranque
-  se copia la semilla (log `menu_data_seeded`).
+- La app no usa base de datos ni carpeta de datos (REQ-F-045): las variables de esas partes que le
+  pase el compose (`DATABASE_URL`, `DATA_DIR`, `ADMIN_*`, `WHATSAPP_BOT_*`) se ignoran sin validarse.
 - `HEALTHCHECK`: cada 30 s pide `GET /` con el `wget` de la imagen
   (`docker inspect -f '{{.State.Health.Status}}' restaurante` -> `healthy`). Cada comprobación
   aparece como una línea `request` en el log.
 - El contenedor arranca con `node src/server.ts`: Node 24 ejecuta el TypeScript directamente,
   sin compilar y sin TypeScript instalado en la imagen.
-- `docker stop` envía `SIGTERM` y la app cierra el servidor y la base de datos ordenadamente.
-- Al arrancar, la app **verifica** la base de `DATABASE_URL` (no migra; ver
-  [Base de datos](#base-de-datos)); si no está lista, el contenedor termina con código 1 y el log
-  `database_init_failed`. La imagen no incluye el CLI de Prisma ni SQLite: lleva el cliente
-  generado, las migraciones (`/app/packages/db/prisma/migrations`, solo para comprobar su estado) y los comandos
-  de consola (`scripts/`). Pesa unos 250 MB.
+- `docker stop` envía `SIGTERM` y la app cierra el servidor ordenadamente.
+- La imagen no incluye el CLI de Prisma ni SQLite. Aún lleva `packages/db` (adelgazarla queda fuera
+  de REQ-F-045). Pesa unos 250 MB.
 - La imagen `migrate` (target `migrate`) solo ejecuta `prisma migrate deploy` con
   `MIGRATION_DATABASE_URL` (usuario con DDL) y termina: 0 si todo se aplicó, 1 si no.
 - La imagen `api` (target `api`, REQ-F-038) y la imagen `inventory-manager` (target
@@ -338,10 +335,9 @@ atrás) está en `deploy/` y se describe en [docs/despliegue.md](docs/despliegue
     favicon.
   - Se construye con
     `docker build -f landing-pages/Dockerfile --target inventory-manager -t restaurante:inventory-manager .`.
-- Recuperar el acceso dentro del contenedor:
-  `docker exec -it restaurante node scripts/admin-recover.ts --usuario <nombre>`.
-- `/admin` exige HTTPS en producción (ver [Seguridad](#seguridad-1)): en el VPS lo da Traefik y
-  `deploy/compose.prod.yaml` fija `TRUST_PROXY=true`.
+- Recuperar el acceso dentro del contenedor de la `api` (REQ-F-045):
+  `docker exec -it <contenedor-api> node scripts/admin-recover.ts --usuario <nombre>`.
+- `/admin` ya no es de esta app (REQ-F-045): ver [Administración](#administración).
 
 ### API propia (`api/`)
 
@@ -351,8 +347,8 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
   - acceso (`POST|GET|DELETE /sesion`) con la sesión en la API, que el admin reenvía como
     `Authorization: Bearer`;
   - productos de cada negocio (listar, ver, descriptor del formulario, crear con `Idempotency-Key`,
-    editar con `version`, eliminar, recuperar, mover y reordenar), con las mismas reglas que
-    `/admin/api`;
+    editar con `version`, eliminar, recuperar, mover y reordenar), con las reglas de
+    `core/catalog` (ver [Menús](#menús));
   - usuarios (REQ-F-040), solo para administradores (403 `FORBIDDEN_ROLE` a un editor, antes de mirar
     el id): `GET|POST /usuarios`, `GET|PUT /usuarios/<id>`, `POST /usuarios/<id>/desactivar` y
     `…/reactivar`, y `PUT /usuarios/<id>/contrasena`, con las reglas de REQ-F-007 (siempre un
@@ -398,17 +394,24 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
   `PAGE_UNAVAILABLE` si aún no hay datos importados o la fila no es válida.
 - Variables (`api/.env.example`): `NODE_ENV` (obligatoria), `HOST` (127.0.0.1 por defecto),
   `PORT` (3001 por defecto), `DATABASE_URL` (el usuario solo DML de la app) y
-  `DATABASE_ALLOW_NEWER_SCHEMA` (solo la vuelta atrás de `deploy.sh`). Al arrancar verifica la
-  base igual que la app (`database_init_failed` y código 1 si no está lista); nunca migra, nunca
-  importa semillas ni escribe: la importación sigue siendo de `landing-pages`.
+  `DATABASE_ALLOW_NEWER_SCHEMA` (solo la vuelta atrás de `deploy.sh`), y `ADMIN_USER` y
+  `ADMIN_PASSWORD_HASH` (primer administrador, las dos o ninguna). Al arrancar verifica la base igual
+  que la app (`database_init_failed` y código 1 si no está lista) y nunca migra.
+- Instalación nueva (REQ-F-045): con la base vacía y migrada (`product_import` sin filas), siembra una
+  sola vez la página (`page_seeded`) y los productos (`products_imported`, fuente `seed`) de la
+  semilla de `packages/core/catalog/seeds/`, y crea el primer administrador
+  (`admin_bootstrap_created`). En una instalación existente no siembra nada ni crea usuarios. Si un
+  paso falla, termina con 1 y un mensaje sin detalles (`page_seed_failed`, `products_init_failed` o
+  `admin_bootstrap_failed`). Si otro arranque prepara la misma base a la vez, el que pierde registra
+  `page_seed_skipped` o `products_import_skipped` con `reason: "concurrent"` y sigue.
 - En producción va en su propio contenedor (`api`), solo en las redes internas `db` y `admin`: sin
   puertos publicados ni router de Traefik. `landing-pages` la alcanza en
   `API_INTERNAL_URL=http://api:3001`, igual que `inventory-manager` por la red `admin`.
 - **Landings:** leen los productos y, desde REQ-F-044, los datos de página de la API con una caché
   en memoria común (`src/services/landing-cache.ts`, con `landing-products.ts` y `landing-page.ts`;
-  los logs de la página son `landing_page_*`). Una escritura de productos de `/admin` (HTML o
-  `/admin/api`) invalida la caché de ese negocio y la siguiente visita espera los datos nuevos
-  (como mucho 1,5 s); sin escrituras, se refrescan en segundo plano cada 60 s. Si la API no
+  los logs de la página son `landing_page_*`). Una escritura de productos o de página en el admin
+  nuevo invalida, con el aviso interno de la API, la caché de ese negocio y la siguiente visita espera
+  los datos nuevos (como mucho 1,5 s); sin escrituras, se refrescan en segundo plano cada 60 s. Si la API no
   responde, tarda más del límite o devuelve algo que no cumple el contrato, se sirve la última
   copia buena (sin límite de tiempo) o, si nunca la hubo, la semilla de `content/seeds.ts`, y se
   registra `landing_products_fallback` (como mucho uno por minuto durante una caída) y, al volver,
@@ -444,12 +447,12 @@ El admin nuevo de REQ-F-039, REQ-F-040 y REQ-F-043 (paso 4 de [Arquitectura](doc
   [Cotizador de taquizas](#cotizador-de-taquizas). Todo funciona sin JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el
   doble envío y reordena sin recargar.
 - **Cambio de la propia contraseña:** la API devuelve una sesión nueva y el admin reescribe su cookie;
-  las demás sesiones del usuario (también las del `/admin` actual) se cierran. Si un administrador
+  las demás sesiones del usuario se cierran. Si un administrador
   se degrada, se desactiva o se restablece la contraseña a sí mismo, vuelve al acceso con un aviso.
 - **Sesión:** la de la API. El admin guarda su id en la cookie `__Host-admin_sid` (en producción;
   `admin_sid` en local), `HttpOnly`, `Secure`, `SameSite=Strict`, sin `Domain`, y la reenvía como
-  Bearer. Caduca tras 2 h sin actividad o si la cuenta cambia. Las cuentas son las de `/admin`; la
-  sesión es aparte.
+  Bearer. Caduca tras 2 h sin actividad o si la cuenta cambia. Las cuentas son las de la base
+  (tabla `user`; ver [Usuarios](#usuarios)).
 - **Errores:** 422 con el error junto a cada campo y un resumen enlazado; 409 con lo escrito, quién y
   cuándo cambió el producto, y la opción de cargar la versión vigente o guardar encima; 503 con un
   aviso sin perder lo escrito.
@@ -461,15 +464,8 @@ El admin nuevo de REQ-F-039, REQ-F-040 y REQ-F-043 (paso 4 de [Arquitectura](doc
   se edita. `npm run build:css` genera `inventory-manager/public/css/main.css` (no se versiona).
 - **Producción:** contenedor `inventory-manager` en las redes `traefik-public` y `admin`, con su
   router de Traefik (límite de 60 peticiones por minuto con ráfaga de 60) ([Despliegue](docs/despliegue.md)).
-- **Convivencia:** con `ADMIN_NEW_URL` en `landing-pages`, la edición de productos del `/admin`
-  actual queda en solo lectura: sin controles, con un aviso y un enlace al admin nuevo; sus POST
-  responden 410 y `/admin/api` responde 410 `PRODUCTS_MOVED`. Desde REQ-F-040, también usuarios y
-  «Mi cuenta»: la lista de usuarios se consulta sin controles, las pantallas de formulario y
-  cualquier POST responden 410 con el aviso y el enlace a la pantalla equivalente del admin nuevo, y
-  nada se escribe. Desde REQ-F-043, también el bot: `/admin/bot` muestra estado, uso y lista sin
-  formularios, con el aviso y el enlace a `/bot` del admin nuevo, y sus POST responden 410 sin
-  escribir. El menú sigue en `/admin`; el primer administrador (`ADMIN_USER`) y
-  `npm run admin:recover` siguen funcionando.
+- **`/admin` de las landings** (REQ-F-045): se retiró. GET y HEAD de `/admin` y `/admin/*` llevan a
+  la raíz del admin nuevo (`ADMIN_NEW_URL`); ver [Administración](#administración).
 
 ## CI
 
@@ -853,16 +849,16 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `WHATSAPP_BIRRIA_URL`      | Esta o el número        | Igual que arriba, para Birria                                      |
 | `WHATSAPP_BIRRIA`          | Esta o la URL           | Igual que arriba, para Birria                                      |
 | `WHATSAPP_BIRRIA_MESSAGE`  | No                      | Igual que arriba, para Birria                                      |
-| `DATABASE_URL`             | Sí                      | Conexión a MySQL de la app: `mysql://usuario:contraseña@host[:puerto]/base`, sin parámetros; usuario solo DML. Los caracteres especiales van codificados (`@` -> `%40`, `:` -> `%3A`, `/` -> `%2F`, `%` -> `%25`). Secreta: nunca aparece en logs ni errores. Ver [Base de datos](#base-de-datos) |
 | `API_INTERNAL_URL`         | Sí                      | Base de la API propia de la que las landings leen los productos (REQ-F-038): `http`/`https`, sin usuario, contraseña, parámetros ni fragmento. En local `http://127.0.0.1:3001`; en producción la fija el compose (`http://api:3001`). Ver [API propia](#api-propia-api) |
-| `MIGRATION_DATABASE_URL`   | Solo para migrar        | Conexión con DDL para `npm run db:migrate`, `db:migrate:dev` y la imagen `migrate`. La app no la lee: en local va en `packages/db/.env` (plantilla `packages/db/.env.example`), que carga el CLI de Prisma |
-| `SHADOW_DATABASE_URL`      | Solo `db:migrate:dev`   | Base sombra de Prisma para crear migraciones (desarrollo y CI). En local, en `packages/db/.env` |
-| `DATA_DIR`                 | Solo en producción (ruta absoluta) | Carpeta de los JSON de página y `changes.jsonl`, que solo lee la importación única al arrancar (REQ-F-044; por defecto `data/` del proyecto fuera de producción). No puede estar dentro de `src/` ni de `public/` |
-| `ADMIN_USER`               | No                      | Usuario del **primer administrador** (1-60 caracteres). Solo se usa si la base de datos no tiene usuarios; después se ignora (aviso `admin_bootstrap_ignored` en el log, sin valores). Sin usuarios ni estas variables, `/admin` responde 503 "no disponible"; con solo una de las dos o un hash inválido, la app no arranca |
-| `ADMIN_PASSWORD_HASH`      | No                      | Hash scrypt de la contraseña del primer administrador (`npm run admin:hash-password`). Nunca la contraseña en claro |
-| `TRUST_PROXY`              | No (`false`)            | `true` detrás de un proxy con TLS (Traefik en producción): Koa usa `X-Forwarded-Proto` (HTTPS) y la última IP de `X-Forwarded-For` (límite de intentos y log) |
-| `DATABASE_ALLOW_NEWER_SCHEMA` | No (`false`)         | Solo la pone `deploy/deploy.sh` al volver a la versión anterior: la app arranca aunque la base tenga migraciones que no conoce (REQ-F-016). Nunca en `.env` |
-| `WHATSAPP_BOT_PROVIDER`, `WHATSAPP_BOT_STAFF_*`, `WHATSAPP_BOT_BLOCKLIST_KEY(_PREVIOUS)`, `BOT_*` | Todas o ninguna | Solo lo que necesita la página "Bot" de `/admin` (REQ-F-042, D-4). El bot y el resto de sus variables están en `api`: ver [Variables del bot](#variables-del-bot) |
+| `TRUST_PROXY`              | No (`false`)            | `true` detrás de un proxy con TLS (Traefik en producción): Koa usa `X-Forwarded-Proto` (HTTPS) y la última IP de `X-Forwarded-For` (log) |
+| `ADMIN_NEW_URL`            | No                      | URL del admin nuevo (`https` en producción, sin credenciales, query ni fragmento). Con ella, GET y HEAD de `/admin*` responden 302 a su raíz y el resto de métodos 410; sin ella, 404 (REQ-F-045) |
+| `INTERNAL_NOTIFY_TOKEN`, `INTERNAL_PORT` | El token, en producción | Aviso interno de la API (REQ-F-039): credencial de 32 caracteres visibles como mínimo y puerto interno (3002 por defecto, distinto de `PORT`). Ver [API propia](#api-propia-api) |
+
+Las variables de la base de datos, de los datos (`DATABASE_URL`, `DATABASE_ALLOW_NEWER_SCHEMA`,
+`DATA_DIR`), del primer administrador (`ADMIN_USER`, `ADMIN_PASSWORD_HASH`) y del bot
+(`WHATSAPP_BOT_*`, `BOT_*`) son de la `api` (`api/.env.example`): `landing-pages` las ignora sin
+validarlas (REQ-F-045). `MIGRATION_DATABASE_URL` y `SHADOW_DATABASE_URL` las lee el CLI de Prisma
+(`packages/db/.env`).
 
 ## HTTP
 
@@ -874,8 +870,7 @@ inválido, el proceso termina con código 1 y lista los problemas (sin mostrar l
 | `GET /favicon.ico`, `GET /apple-touch-icon.png`, `GET /apple-touch-icon-precomposed.png` | Icono de Birria, el de `/` (ver [Iconos](#iconos-favicons-y-pantalla-de-inicio)) |
 | `GET /molotes.webmanifest`, `GET /birria.webmanifest` | Web App Manifest de cada negocio                                  |
 | `GET /<archivo>` | Estáticos de `public/` (sin índices ni archivos ocultos)                                   |
-| `/admin/...`     | Administración de menús y productos (ver [Administración de menús](#administración-de-menús))  |
-| `/admin/api/...` | API JSON de productos, con sesión (ver [API de productos](#api-de-productos))                |
+| `/admin`, `/admin/...` | Retirado (REQ-F-045): GET y HEAD -> 302 a la raíz de `ADMIN_NEW_URL`; otros métodos -> 410 `ADMIN_MOVED`; sin `ADMIN_NEW_URL`, 404 (ver [Administración](#administración)) |
 
 Las tres rutas HTML usan el mismo controlador (`src/controllers/landing.ts`): con un
 `businessId` fijo renderiza ese negocio y sin él (`/`) renderiza Birria con el aviso del día;
@@ -894,8 +889,7 @@ textos de `/` están en `homeNotices` (`src/content/birria/index.ts`) y los de `
 la ruta sale de `BUSINESS_PATHS`. En desarrollo (`NODE_ENV=development`), `?dia=lunes`, `martes`,
 `miercoles`, `jueves`, `viernes`, `sabado` o `domingo` fuerza el día del aviso en `/` y en
 `/molotes`. En `test` y `production` el parámetro se ignora.
-Cualquier otra ruta responde 404 y los métodos distintos de GET/HEAD, 405 (salvo los POST de
-la administración). `/webhooks/whatsapp` ya no es de esta app: la atiende `api` en su propio puerto
+Cualquier otra ruta responde 404 y los métodos distintos de GET/HEAD, 405. `/webhooks/whatsapp` ya no es de esta app: la atiende `api` en su propio puerto
 (ver [Bot de WhatsApp](#bot-de-whatsapp)) y aquí responde 404.
 
 Los errores responden JSON con formato común:
@@ -917,9 +911,8 @@ El webhook se sirve en un puerto propio de `api` (`WEBHOOK_PORT`, 3004), una app
 esa ruta. En producción Traefik publica únicamente esa ruta exacta,
 `https://birriaelmuneco.com/webhooks/whatsapp`, la misma URL de siempre: Meta no cambia. Desde
 internet no se alcanza ninguna otra ruta de `api`. Sin bot configurado, responde 503 `BOT_DISABLED`.
-En esta sección, las rutas `src/` y `tests/` del bot son relativas a `api/`; la página "Bot" de
-`/admin` sigue en `landing-pages` en solo lectura; el control del bot está en el
-[admin nuevo](#admin-nuevo-inventory-manager) (REQ-F-043).
+En esta sección, las rutas `src/` y `tests/` del bot son relativas a `api/`; el control del bot está
+en el [admin nuevo](#admin-nuevo-inventory-manager) (REQ-F-043).
 
 **Proveedores (REQ-F-012).** El bot funciona con uno de dos proveedores, elegido con
 `WHATSAPP_BOT_PROVIDER` (un solo proveedor activo por arranque):
@@ -1021,7 +1014,7 @@ arrancar queda `bot_provider_selected` con el proveedor en el log.
 - **Logs del intérprete:** cada mensaje interpretado deja `bot_order_interpreted` con el
   `conversationId`, el negocio y solo contadores (`recognized`, `ambiguous`, `unrecognized`,
   `rejected`, `unavailable`, `otherBusiness`), nunca el texto del cliente ni los detalles.
-- **Estado en memoria** (una sola instancia, como las sesiones de `/admin`): si la app se
+- **Estado en memoria** (una sola instancia, como las sesiones de la administración): si la app se
   reinicia, la conversación en curso se pierde y el bot empieza de nuevo.
 - **Celulares de México con Meta:** la Cloud API entrega el `wa_id` como `521` + 10 dígitos,
   pero solo acepta enviar a `52` + 10 (si no, error 131030). Al enviar (respuestas y aviso al
@@ -1054,7 +1047,7 @@ no usa IA ni servicios externos y se puede sustituir por otro que cumpla la inte
   sus variantes, sin distinguir mayúsculas, acentos, singular o plural ni género ("chico" =
   "Chica"), con tolerancia a errores de ortografía (1 letra en palabras de 4 a 7 letras, 2 en
   palabras de 8 o más; si dos productos empatan, el bot pregunta). Un producto nuevo o renombrado
-  en `/admin` se reconoce sin tocar nada.
+  en el admin se reconoce sin tocar nada.
 - **Vocabulario común** (`botVocabulary` en `src/bot/content/common/bot.ts`): cantidades en palabra
   ("una", "media docena"), relleno que se ignora ("hola", "quiero", "por favor"), intención de
   pedir, palabras de entrega, de forma de pago (`payment`, por método), de confirmación, para terminar, para quitar y para agregar. Las
@@ -1070,7 +1063,7 @@ no usa IA ni servicios externos y se puede sustituir por otro que cumpla la inte
     producto y quedan como detalle; con `variant`, fijan esa variante).
 
 **Añadir un sinónimo:** agrégalo, en minúsculas y sin acentos, en el slug del producto (el slug
-aparece en `/admin/api` o en la base de datos y no cambia nunca). Por ejemplo, para que
+aparece en la API de administración o en la base de datos y no cambia nunca). Por ejemplo, para que
 "quesadilla" se entienda como el Queso Oaxaca:
 
 ```ts
@@ -1105,7 +1098,7 @@ se paga (tarjeta virtual con límite bajo y alertas de facturación). La app añ
 Controles de cada mensaje entrante, en este orden (uno descartado no cuenta en los siguientes):
 
 1. **Interruptor** (pantalla "Bot" del admin nuevo): pausado, el bot no envía nada y descarta lo que
-   llega; el webhook sigue respondiendo 200 y las landings y `/admin` siguen igual.
+   llega; el webhook sigue respondiendo 200 y las landings y el admin siguen igual.
 2. **Lista negra:** un número bloqueado no recibe respuesta ni cuenta en los topes.
 3. **Enfriamiento:** 5 textos idénticos en 10 minutos (los que no son texto cuentan como el mismo)
    dan 30 minutos sin respuesta; un segundo enfriamiento el mismo día bloquea el número 24 h,
@@ -1144,11 +1137,6 @@ Los días y meses se cuentan en `BUSINESS_TIMEZONE`.
   en `bot_audit`. La pantalla habla con la misma instancia de `BotControl` que el bot, así que un
   cambio se aplica en el siguiente mensaje, sin reiniciar nada. Quitar un bloqueo, manual o
   automático, devuelve el cupo diario del número. El mantenimiento corre solo en `api`.
-- **Página "Bot" de `/admin`** (solo administradores): con `ADMIN_NEW_URL`, en solo lectura y con un
-  enlace a la pantalla anterior (ver [Admin nuevo](#admin-nuevo-inventory-manager)). Sin esa variable,
-  en local, sigue con su interruptor y su lista negra, y un cambio llega al bot como mucho
-  `BOT_CONTROL_REFRESH_SECONDS` después (10 s). La lista de topes no se muestra aquí: vive en la
-  memoria de `api` y se ve en el admin nuevo.
 - **Rotar la clave:** pon la nueva en `WHATSAPP_BOT_BLOCKLIST_KEY` y la anterior en
   `WHATSAPP_BOT_BLOCKLIST_KEY_PREVIOUS`. Cada número bloqueado pasa a la clave nueva cuando vuelve
   a escribir; la página "Bot" muestra cuántos siguen con la anterior. Quita la anterior cuando
@@ -1164,11 +1152,12 @@ El bot queda habilitado si defines al menos una variable de datos del bot (todas
 salvo `WHATSAPP_BOT_PROVIDER`, que no lo habilita por sí sola; un valor vacío cuenta como no
 definido). Sin ninguna, el bot queda deshabilitado (el webhook responde 503 y las landings siguen
 igual). Habilitado, el proveedor y sus obligatorias deben estar y ser válidas o la `api` no arranca
-(lista los problemas sin mostrar valores). Todas van en `api/.env`; `landing-pages/.env` solo lleva
-el proveedor, el personal, la clave de la lista negra y los topes, con los mismos valores
-(página "Bot" de `/admin`). En producción hay un solo `.env` y el compose se los pasa a las dos apps. Las variables que solo usa el otro proveedor se
+(lista los problemas sin mostrar valores). Todas van en `api/.env` (desde REQ-F-045, `landing-pages`
+no lee ninguna). En producción hay un solo `.env`. Las variables que solo usa el otro proveedor se
 ignoran. Con el bot, `WHATSAPP_MOLOTES` y `WHATSAPP_BIRRIA` deben ser el número del bot (el
-mismo): el botón de cada landing abre ese chat con su propio mensaje inicial.
+mismo): el botón de cada landing abre ese chat con su propio mensaje inicial. La `api` lo comprueba
+al arrancar con sus propios `WHATSAPP_MOLOTES` y `WHATSAPP_BIRRIA` (D-6 de REQ-F-009); desde
+REQ-F-045 `landing-pages` ya no (no conoce el bot): en producción las dos leen el mismo `.env`.
 
 Los dos proveedores comparten los nombres de los datos de la cuenta. `WHATSAPP_BOT_PHONE_NUMBER_ID`
 se renombró a **`WHATSAPP_BOT_ACCOUNT_ID`**, sin compatibilidad: si la anterior sigue definida, la
@@ -1368,7 +1357,7 @@ los 4 últimos dígitos). Nunca se registran el texto de los mensajes, el nombre
 las notas, el código de referencia, los tokens, el Account SID ni el mensaje de error del
 proveedor (solo su código).
 La línea `request` de cada petición HTTP lleva la IP del cliente y el esquema (REQ-F-016, para
-diagnosticar abusos y el límite de `/admin`); nunca la query. En el VPS los logs de Docker rotan a
+diagnosticar abusos); nunca la query. En el VPS los logs de Docker rotan a
 10 MB x 5 archivos por contenedor, lo que limita cuánto tiempo se conserva la IP.
 El nombre y la dirección se piden con un aviso de privacidad y se borran de memoria al cerrar la
 conversación. Se recomienda publicar el Aviso de Privacidad del negocio (LFPDPPP).
@@ -1525,8 +1514,8 @@ Los datos editables de cada landing están en dos sitios (REQ-F-008):
 
 | Qué | Dónde | Semilla versionada |
 | --- | ----- | ------------------ |
-| **Productos**: platillos y bebidas de Molotes, platillos de Birria (con sus variantes o chips) | Base de datos MySQL (tablas `product`, `product_variant`, `product_chip`) | Las listas de `src/content/<negocio>/seed.json` (solo para la importación inicial) |
-| **Página**: showcase del hero, texto destacado del menú ("8 Sabores de Barrio") y promoción | Base de datos MySQL (tablas `page_version`, `page_change` y `page_import`; REQ-F-044) | `src/content/<negocio>/seed.json` (importación inicial y respaldo de las landings sin API) |
+| **Productos**: platillos y bebidas de Molotes, platillos de Birria (con sus variantes o chips) | Base de datos MySQL (tablas `product`, `product_variant`, `product_chip`) | Las listas de `packages/core/catalog/seeds/<negocio>.json` (solo para una instalación nueva) |
+| **Página**: showcase del hero, texto destacado del menú ("8 Sabores de Barrio") y promoción | Base de datos MySQL (tablas `page_version`, `page_change` y `page_import`; REQ-F-044) | `packages/core/catalog/seeds/<negocio>.json` (instalación nueva y respaldo de las landings sin API) |
 
 - **Modelo común de producto** (`core/catalog/product-schema.ts`): negocio, categoría
   (`platillo` o `bebida`; Birria solo tiene platillos), slug, nombre, descripción, etiqueta
@@ -1552,118 +1541,44 @@ Los datos editables de cada landing están en dos sitios (REQ-F-008):
   productos, conserva su encabezado y muestra un aviso con el CTA de WhatsApp.
 - En Birria, `slug` forma los id del DOM (`card-`, `title-`, `price-`, `desc-`, `variants-`)
   que usa el selector de variantes (`public/js/modules/variant-selector.js`).
-- La landing pinta la semilla de `src/content/` con los datos de página y los productos que recibe
+- La landing pinta la semilla (`packages/core/catalog/seeds/`, reexportada en `src/content/seeds.ts`) con los datos de página y los productos que recibe
   de la `api` (`/api/v1/public/<negocio>/pagina` y `/productos`), con una caché en memoria de 60 s,
   la última copia buena y, sin ninguna, la semilla (`src/services/landing-cache.ts`). Las landings
-  nunca consultan la base de datos ni los JSON de `DATA_DIR`; un cambio guardado se ve en la
-  siguiente petición tras el aviso de la `api` (o en 60 s como mucho).
-- **Importación única:** en el primer arranque con una base sin productos, cada negocio importa
-  sus productos (orden, disponibilidad, variantes y chips) desde `current.json` si es válido; si
-  no, desde `previous.json`; si tampoco, desde la semilla. Los `id` de Molotes pasan a ser slugs
-  y los slugs de Birria se conservan. Queda en el log (`products_imported`, con la fuente) y en
-  el registro de productos con el autor `sistema`. No se repite nunca (tabla `product_import`),
-  aunque después se vacíe el negocio.
-- **Importación única de la página (REQ-F-044):** al arrancar, la `app` lleva a MySQL los datos de
-  página de cada negocio sin marca en `page_import`: vigente y anterior desde `current.json` y
-  `previous.json` (con su revisión, fecha y autor) y el historial de `changes.jsonl`. Si
-  `current.json` no sirve, usa `previous.json`; si tampoco, la semilla, pero solo en una instalación
-  nueva: en una con productos ya importados se niega (`page_import_failed`,
-  `PAGE_IMPORT_SEED_REFUSED`) y la `app` termina con 1. Es todo o nada para los dos negocios, no
-  modifica los archivos y no se repite. Si un JSON cambia después, solo registra
-  `page_json_diverged`. Detalle en [docs/despliegue.md §6](docs/despliegue.md#6-volver-a-una-versión-anterior-a-mano).
+  nunca consultan la base de datos; un cambio guardado se ve en la siguiente petición tras el aviso
+  de la `api` (o en 60 s como mucho).
+- **Instalación nueva (REQ-F-045):** con la base vacía y migrada (sin filas en `product_import`), la
+  `api` siembra una sola vez la página y los productos de cada negocio desde la semilla. Queda en el
+  log (`page_seeded` y `products_imported` con la fuente `seed`) y en el registro de productos con el
+  autor `sistema`. No se repite nunca (tablas `product_import` y `page_import`), aunque después se
+  vacíe el negocio. En una instalación existente nunca publica la semilla.
+- **MySQL es la única fuente de la página (REQ-F-045, RN-4):** la importación única desde los JSON de
+  `DATA_DIR` (REQ-F-044) se retiró. Restaurar un respaldo anterior al 2026-11-16 deja la base sin
+  filas de página: la pantalla «Página» del admin nuevo queda "no disponible" y las landings muestran
+  la semilla hasta que se corrija a mano.
 
-## Administración de menús
+## Administración
 
-`/admin/molotes` y `/admin/birria` permiten gestionar los productos (crear, editar, eliminar,
-recuperar y ordenar) y editar los datos de página (en MySQL desde REQ-F-044), con formularios HTML
-(sin JavaScript). Con `ADMIN_NEW_URL`, todo eso queda en solo lectura y se edita en el admin nuevo. No hay diseño en `_stich_source_/` para estas páginas: la
-interfaz es sencilla, con su propia hoja (`public/css/admin/main.css`).
+La administración (productos, página, usuarios, «Mi cuenta», control del bot y cotizador) vive en el
+[admin nuevo](#admin-nuevo-inventory-manager) (`inventory-manager`, `https://admin.birriaelmuneco.com`),
+que solo habla con la [API propia](#api-propia-api) (`/api/v1/admin`). Desde REQ-F-045 las landings
+no tienen administración: `/admin` y `/admin/*` (también `/admin/api`) responden así
+(`src/middleware/admin-moved.ts`):
+
+| Petición | Respuesta |
+| -------- | --------- |
+| `GET` o `HEAD`, con `ADMIN_NEW_URL` | 302 a la raíz del admin nuevo (`<ADMIN_NEW_URL>/`), sin la ruta ni la query de la petición, con `Cache-Control: no-store` |
+| Cualquier otro método, con `ADMIN_NEW_URL` | 410 `{ "error": { "code": "ADMIN_MOVED", … } }`, sin leer el cuerpo |
+| Sin `ADMIN_NEW_URL` (en local) | 404 con el formato común |
+
+Ninguna de estas respuestas pone ni lee cookies. La redirección es temporal (302) para que una vuelta
+atrás no quede tapada por la caché del navegador.
 
 Cada persona entra con su **cuenta personal** (REQ-F-007), guardada en la base de datos:
 
 | Rol | Puede |
 | --- | ----- |
-| Administrador | Editar los dos negocios (productos y página, también por la API) y gestionar usuarios |
-| Editor | Editar solo sus negocios asignados (al menos uno), también por la API. En otro negocio (incluso para leer sus productos), o en la gestión de usuarios, recibe 403 y no se escribe nada |
-
-| Ruta | Acción |
-| ---- | ------ |
-| `GET /admin` | Inicio: solo enlaza a lo que el usuario tiene permitido |
-| `GET` / `POST /admin/login` | Acceso con usuario (sin distinguir mayúsculas) y contraseña |
-| `POST /admin/logout` | Cierre de sesión |
-| `GET` / `POST /admin/<negocio>` | Lista de productos y formulario de página (hero, destacado y promoción) con su guardado (POST-redirect-GET) |
-| `GET /admin/<negocio>/productos/nuevo?categoria=…` | Producto nuevo (en Birria, primero se elige el tipo de detalle) |
-| `POST /admin/<negocio>/productos` | Crear producto |
-| `GET` / `POST /admin/<negocio>/productos/<id>` | Editar producto (incluye "Guardar mis cambios de todos modos" tras un conflicto) |
-| `GET` / `POST /admin/<negocio>/productos/<id>/eliminar` | Confirmar y eliminar |
-| `POST /admin/<negocio>/productos/<id>/subir` y `…/bajar` | Mover una posición |
-| `GET /admin/<negocio>/productos/eliminados`, `POST …/<id>/recuperar` | Productos eliminados y recuperar |
-| `GET` / `POST /admin/<negocio>/restaurar-anterior` | Confirmación y restauración de la versión anterior (con la versión confirmada: si la página cambió antes, 409 sin cambios) |
-| `POST /admin/<negocio>/restaurar-semilla` | Siempre 409 "no permitido": en MySQL no hay estado "dañado" (REQ-F-044, D-10) |
-| `GET /admin/usuarios` | Lista de usuarios (solo administradores) |
-| `GET /admin/usuarios/nuevo`, `POST /admin/usuarios` | Crear usuario |
-| `GET` / `POST /admin/usuarios/<id>` | Editar usuario, nombre visible, rol y negocios |
-| `POST /admin/usuarios/<id>/desactivar` y `…/reactivar` | Desactivar o reactivar (los usuarios no se eliminan) |
-| `GET` / `POST /admin/usuarios/<id>/contrasena` | Restablecer la contraseña de otro usuario |
-| `GET` / `POST /admin/cuenta` | Mi cuenta: cambiar la propia contraseña (pide la actual) |
-
-Con `ADMIN_NEW_URL` (REQ-F-040), las rutas de usuarios y de "Mi cuenta" quedan en solo lectura: la
-lista sin controles y el resto, GET o POST, con 410 y el enlace a la pantalla equivalente del admin
-nuevo. Desde REQ-F-044, también la página: `/admin/<negocio>` muestra los valores vigentes de MySQL
-sin formulario, con un aviso y el enlace a `<ADMIN_NEW_URL>/<negocio>/pagina`, y sus POST de guardar
-y restaurar pasan sesión, permiso, cuerpo y CSRF y responden 410 sin escribir (log
-`admin_page_moved`). Sin `ADMIN_NEW_URL` (en local), `/admin` escribe la página en MySQL.
-
-### Productos en la administración
-
-- Variantes y chips se editan en 6 filas fijas: las filas vacías se ignoran, "Posición" las
-  ordena y "Quitar esta fila" elimina una.
-- Cada producto tiene una versión. Si otra persona lo cambió mientras lo editabas, no se guarda
-  nada y se muestra quién y cuándo, con "Guardar mis cambios de todos modos" o "Descartar y cargar
-  la versión actual" (al eliminar: "Eliminar de todos modos"). Editar productos distintos a la
-  vez no genera conflicto.
-- "Último cambio" muestra el más reciente entre productos y datos de página.
-
-### API de productos
-
-API JSON bajo `/admin/api`, **sin lectura pública**: todas las rutas exigen la sesión de la
-administración y el permiso sobre el negocio. Las escrituras exigen además el token CSRF en la
-cabecera `X-CSRF-Token` (y, en producción, HTTPS).
-
-| Método y ruta | Qué hace |
-| ------------- | -------- |
-| `GET /admin/api/sesion` | Usuario de la sesión, negocios permitidos y `csrfToken` |
-| `GET /admin/api/<negocio>/productos` | Lista de activos por categoría y orden (`?eliminados=1` incluye los eliminados; `?categoria=platillo\|bebida`) |
-| `POST /admin/api/<negocio>/productos` | Crear (201 y `Location`): `category`, `detailsType` (Birria) y los campos de la combinación |
-| `GET /admin/api/<negocio>/productos/<id>` | Ver |
-| `PUT /admin/api/<negocio>/productos/<id>` | Reemplazar todos los campos editables, con `version` y `available` |
-| `DELETE /admin/api/<negocio>/productos/<id>?version=<n>` | Eliminar (lógico) |
-| `POST /admin/api/<negocio>/productos/<id>/recuperar` | Recuperar: `{ "version": n }` |
-| `PUT /admin/api/<negocio>/productos/orden` | Reordenar una categoría: `{ "category": "platillo", "items": [{ "id", "version" }, …] }` con exactamente los activos de esa categoría |
-
-- **Precios:** se envían en pesos (`45`, `45.5` o `"45.50"`) en `price`, `orderPrice` y
-  `variants[].price`; las respuestas traen el precio en pesos (`"45.50"`) y en centavos
-  (`priceCents`, `orderPriceCents`, `variants[].priceCents`).
-- **Autor:** siempre el usuario de la sesión. Un campo `author` (o cualquier campo desconocido,
-  de otra combinación o de solo lectura) se rechaza con 422.
-- **Comprobaciones y códigos**, en este orden: sesión (401 `UNAUTHENTICATED`) → permiso sobre el
-  negocio (403 `FORBIDDEN_BUSINESS`) → en escrituras, origen y token (403 `CSRF_INVALID`) →
-  producto del negocio (404 `PRODUCT_NOT_FOUND`, también si es de otro negocio) → cuerpo (413,
-  415 si no es `application/json`, 400 `INVALID_JSON`) → validación (422 `VALIDATION_FAILED`, con
-  `fields`: `{ "ruta": "mensaje" }`) → versión (409 `VERSION_CONFLICT`, con `current`: versión,
-  `updatedAt` y `updatedBy`). La administración deshabilitada, HTTP en producción o la base de
-  datos caída responden 503.
-
-Ejemplo con `curl` (el acceso es el mismo formulario de la administración):
-
-```sh
-curl -c cookies.txt -X POST https://<sitio>/admin/login -d 'username=<usuario>' --data-urlencode 'password=<contraseña>'
-TOKEN=$(curl -s -b cookies.txt https://<sitio>/admin/api/sesion | jq -r .csrfToken)
-curl -s -b cookies.txt https://<sitio>/admin/api/molotes/productos
-curl -s -b cookies.txt -X POST https://<sitio>/admin/api/molotes/productos \
-  -H 'Content-Type: application/json' -H "X-CSRF-Token: $TOKEN" \
-  -d '{"category":"bebida","name":"Café de Olla","description":"Con canela.","icon":"coffee","tone":"amber","price":"30"}'
-```
+| Administrador | Editar los dos negocios (productos y página), gestionar usuarios, controlar el bot y usar el cotizador |
+| Editor | Editar solo sus negocios asignados (al menos uno). En otro negocio (incluso para leer sus productos), o en la gestión de usuarios, recibe 403 y no se escribe nada |
 
 ### Usuarios
 
@@ -1671,9 +1586,10 @@ curl -s -b cookies.txt -X POST https://<sitio>/admin/api/molotes/productos \
   visible (1-60; es el autor de los cambios), rol, negocios del editor, activo o no y fechas de
   creación, actualización y último acceso. Contraseñas de 12 a 256 caracteres, guardadas como
   hash scrypt.
-- **Primer administrador:** en el primer arranque sin usuarios se crea con `ADMIN_USER` y
-  `ADMIN_PASSWORD_HASH` (la cuenta de siempre sigue funcionando). Después esas variables se
-  ignoran y los usuarios se gestionan desde `/admin/usuarios`.
+- **Primer administrador:** en el primer arranque de la `api` sin usuarios se crea con `ADMIN_USER` y
+  `ADMIN_PASSWORD_HASH` (variables de la `api`; REQ-F-045). Después esas variables se ignoran (aviso
+  `admin_bootstrap_ignored`, sin valores) y los usuarios se gestionan en «Usuarios» del admin nuevo.
+  Sin usuarios ni esas variables, el admin nuevo no deja entrar hasta usar `admin:recover`.
 - **Siempre hay al menos un administrador activo:** no se puede desactivar ni pasar a editor al
   último, tampoco a uno mismo.
 - **Sesiones:** desactivar a un usuario, cambiarle el rol o los negocios, o restablecer su
@@ -1688,12 +1604,15 @@ curl -s -b cookies.txt -X POST https://<sitio>/admin/api/molotes/productos \
 ### Recuperar el acceso
 
 No hay recuperación por correo. Un administrador restablece la contraseña de otro usuario desde
-`/admin/usuarios`. Si se pierde la del último administrador:
+"Usuarios" del admin nuevo. Si se pierde la del último administrador, el comando vive en la `api`
+(REQ-F-045):
 
 ```sh
-npm run admin:recover -- --usuario <nombre>                                  # sin Docker
-docker exec -it restaurante node scripts/admin-recover.ts --usuario <nombre>  # en el contenedor
+npm run admin:recover -- --usuario <nombre>                                         # sin Docker (api/.env)
+docker exec -it <contenedor-api> node scripts/admin-recover.ts --usuario <nombre>  # en el contenedor de la api
 ```
+
+En el VPS: `$C exec api node scripts/admin-recover.ts --usuario <nombre>` (`docs/despliegue.md` §5).
 
 Pide la contraseña nueva dos veces sin mostrarla (al menos 12 caracteres) y trabaja sobre la base
 de `DATABASE_URL`. No migra: antes verifica la base (hasta 10 s de espera) y, si no está lista
@@ -1701,74 +1620,23 @@ de `DATABASE_URL`. No migra: antes verifica la base (hasta 10 s de espera) y, si
 código, sin detalles técnicos. Si el usuario no existe, crea un
 administrador; si existe, lo reactiva, lo deja como administrador y le cambia la contraseña.
 Funciona con el servidor parado o en marcha: en ese caso sus sesiones abiertas se cierran. Queda
-en la auditoría como `console_recovery`. Si la base de datos no tenía usuarios, `/admin` se
-habilita sin reiniciar.
-
-### Seguridad
-
-- Sesión en memoria con cookie `admin_sid` (`HttpOnly`, `SameSite=Strict`, `Path=/admin` y
-  `Secure` en producción). Caduca tras 2 horas sin actividad; un reinicio cierra las sesiones.
-- 5 intentos de acceso fallidos desde la misma IP la bloquean 15 minutos.
-- Todas las acciones son POST con token CSRF (control principal) y comprobación de
-  `Origin`/`Sec-Fetch-Site`: se rechazan los orígenes ajenos y `Sec-Fetch-Site` distinto de
-  `same-origin`; `Origin: null` solo se acepta si el navegador confirma `Sec-Fetch-Site: same-origin`.
-  Las páginas de `/admin` envían `Referrer-Policy: same-origin` (las landings mantienen
-  `no-referrer`) para que el navegador mande el `Origin` real en sus formularios.
-- Las respuestas de `/admin` llevan `Cache-Control: no-store` y `X-Robots-Tag: noindex, nofollow`;
-  las landings no enlazan a `/admin`.
-- En producción solo funciona por HTTPS. En el VPS lo da Traefik (REQ-F-016), que añade
-  `X-Forwarded-Proto` y `X-Forwarded-For`, y `deploy/compose.prod.yaml` fija `TRUST_PROXY=true`.
-  Con otro proxy, define `TRUST_PROXY=true` y reenvía esas cabeceras. Traefik además limita
-  `/admin` a 10 peticiones por minuto por IP (ráfaga de 20; luego 429).
-  Sin HTTPS (o sin `TRUST_PROXY` detrás del proxy), `/admin` responde 503 y el log registra
-  `admin_requires_https`.
-- Las credenciales, el hash, los tokens y el contenido de los menús no se escriben en los logs.
-- Si la base de datos falla con el servidor en marcha, `/admin` (también la página de acceso)
-  responde 503 con un aviso y el log registra `database_unavailable` solo con códigos; las
-  landings no se ven afectadas.
+en la auditoría como `console_recovery`. Si la base de datos no tenía usuarios, el admin nuevo deja
+entrar sin reiniciar nada.
 
 ### Archivos de datos (`DATA_DIR`)
 
-Desde REQ-F-044 los datos de página viven en MySQL y estos archivos **solo se leen**: los usa la
-importación única de la página y la de productos al arrancar. Ni las landings ni `/admin` los
-escriben, y **editarlos a mano ya no tiene efecto** (si cambian después de importar, el arranque
-registra `page_json_diverged`). Siguen en el volumen hasta el ticket 6 (retirada de `/admin`), que
-decide su destino. Lo que sigue describe su formato.
-
-```text
-DATA_DIR/
-├── molotes/
-│   ├── current.json            # versión vigente
-│   ├── previous.json           # versión anterior (una por negocio)
-│   ├── damaged-<fecha>.json    # archivo dañado aislado para revisarlo
-│   └── damaged.marker.json     # existe mientras los datos estén dañados y nadie elija una opción
-├── birria/ (igual)
-└── changes.jsonl               # registro de cambios de los datos de página: una línea JSON por guardado o restauración
-```
-
-- **Productos en los JSON:** desde REQ-F-008 los JSON conservan su formato, pero sus listas de
-  productos quedan "congeladas": ya no se usan ni se editan (los productos vigentes están en la
-  base de datos). Se mantienen para poder volver a una versión anterior de la app sin que los
-  archivos se traten como dañados. Por la misma razón, las listas de productos de
-  `src/content/<negocio>/seed.json` no deben cambiar.
-
-- **Primera ejecución:** si no existe `current.json` en una instalación nueva, se copia la semilla a
-  `current.json` y `previous.json` (log `menu_data_seeded`). En una instalación existente no se
-  escribe nada (`menu_data_missing`).
-- **Registro (`changes.jsonl`, datos de página, hasta REQ-F-044):** fecha ISO en la zona del negocio, autor (nombre visible del
-  usuario de la sesión, `author`, y su identificador, `authorId`; las entradas anteriores a
-  REQ-F-007 solo tienen el nombre escrito a mano), negocio, acción (`save`, `overwrite_after_conflict`,
-  `restore_previous`, `restore_seed`) y campos modificados con su valor anterior y el nuevo.
-  La importación lo lleva a `page_change` (`imported`); las líneas ilegibles se cuentan y se omiten.
-  Desde entonces, cada guardado o restauración de la página se registra en `page_change` en la
-  misma transacción, con el autor de la sesión.
-- **Respaldos:** `DATA_DIR` sigue en los respaldos (`ops/backup/`) hasta el ticket 6.
+Desde REQ-F-045 ninguna app lee ni escribe estos archivos (`current.json`, `previous.json` y
+`changes.jsonl` de cada negocio): los datos de página viven en MySQL desde REQ-F-044. El volumen
+`app-data` sigue en el VPS y en los respaldos hasta la limpieza de `deploy/` y `ops/` (PR 3 de
+REQ-F-045), para que la vuelta atrás a una versión anterior siga funcionando. Las listas de productos
+de `packages/core/catalog/seeds/<negocio>.json` siguen "congeladas" por la misma razón: no deben
+cambiar.
 
 ### Base de datos
 
 - **Motor:** MySQL 8.4 LTS (REQ-F-014) con Prisma 7 y el adaptador oficial
-  `@prisma/adapter-mariadb` (driver `mariadb`). Guarda los usuarios de `/admin`, sus negocios, su
-  auditoría, los productos y, desde REQ-F-044, los datos de página (`page_version`: vigente y
+  `@prisma/adapter-mariadb` (driver `mariadb`). Solo la usa la `api` (REQ-F-045). Guarda los usuarios
+  de la administración, sus negocios, su auditoría, los productos y, desde REQ-F-044, los datos de página (`page_version`: vigente y
   anterior por negocio; `page_change`: historial; `page_import`: la importación única).
 - **Español completo:** utf8mb4 con la colación `utf8mb4_es_0900_as_cs` (español moderno: la ñ va
   después de la n; distingue acentos y mayúsculas) en la base, las tablas y las columnas, y en la
@@ -1780,13 +1648,13 @@ DATA_DIR/
 - **Longitudes:** cada texto tiene en el esquema la longitud máxima que permite la validación de
   la app (`@db.VarChar(n)`, que cuenta caracteres igual que la app) o `@db.MediumText` (JSON de
   cambios). Con el modo estricto de MySQL, un texto más largo da error; nunca se recorta.
-- **Menor privilegio:** la app usa `DATABASE_URL` con un usuario solo DML (`SELECT`, `INSERT`,
+- **Menor privilegio:** la `api` usa `DATABASE_URL` con un usuario solo DML (`SELECT`, `INSERT`,
   `UPDATE`, `DELETE`) y **nunca migra**. Las migraciones las aplica un proceso aparte con un
   usuario con DDL (`MIGRATION_DATABASE_URL`): `npm run db:migrate` en local o la imagen `migrate`
   (`prisma migrate deploy`).
 - **Verificación al arrancar** (`db/src/verify.ts`): conexión (reintenta hasta 60 s si MySQL aún
   arranca), credenciales, modo estricto (`STRICT_TRANS_TABLES`), utf8mb4 y colación de la base,
-  las tablas y las columnas, y estado de las migraciones. Si algo falla, el servidor termina con
+  las tablas y las columnas, y estado de las migraciones. Si algo falla, la `api` termina con
   código 1 y el log `database_init_failed` con un código estable, sin SQL, URL, credenciales ni
   stack: `DATABASE_UNREACHABLE`, `DATABASE_AUTH_FAILED`, `DATABASE_ACCESS_DENIED`,
   `DATABASE_NOT_STRICT`, `DATABASE_CHARSET_INVALID` (con la tabla o columna), `MIGRATIONS_PENDING`,
@@ -1803,8 +1671,8 @@ DATA_DIR/
 - **Último administrador con concurrencia:** las escrituras de usuarios son transacciones
   `Serializable`; ante un interbloqueo se reintentan (hasta 3 intentos) y la operación rechazada
   recibe el aviso de siempre (409) o, si no se resuelve, 503 sin cambios.
-- **Fallo con el servidor en marcha:** `/admin` responde 503 (HTML), la API 503 JSON
-  `DATABASE_UNAVAILABLE`, las landings siguen en 200 desde la caché y el log registra
+- **Fallo con el servidor en marcha:** la API responde 503 JSON `DATABASE_UNAVAILABLE` (el admin
+  nuevo muestra un aviso), las landings siguen en 200 desde la caché y el log registra
   `database_unavailable` solo con códigos. Al volver MySQL, todo se recupera sin reiniciar.
 - **Productos:** tablas `product`, `product_variant`, `product_chip`, `product_import` (la
   importación única) y `product_change`: el registro de cambios de productos, escrito en la misma
@@ -1818,16 +1686,6 @@ DATA_DIR/
   `DATABASE_ALLOW_NEWER_SCHEMA=true`: por eso **cada migración debe ser compatible con el código
   anterior** (añadir antes de quitar). Respaldos cifrados fuera del VPS, restauración y prueba
   mensual (REQ-F-019; scripts en `ops/backup/`): [docs/despliegue.md](docs/despliegue.md#11-respaldos-fuera-del-vps).
-
-### JSON dañados en la importación
-
-Si al arrancar `current.json` no es JSON válido o no cumple el esquema, el archivo se conserva como
-`damaged-<fecha>.json` (log `menu_data_damaged`, sin contenido ni rutas) y la importación de la página
-usa `previous.json`. Sin `previous.json` válido, en una instalación existente la importación se
-niega y la `app` no arranca: restaura `DATA_DIR` desde un respaldo
-([docs/despliegue.md §6](docs/despliegue.md#6-volver-a-una-versión-anterior-a-mano)). Una vez
-importada, la página no tiene estado "dañado": una fila inválida en MySQL hace que la `api`
-responda `PAGE_UNAVAILABLE` (log `page_data_invalid`) y las landings sigan con su última copia.
 
 ## Estructura
 
@@ -1855,39 +1713,35 @@ restaurante/                  # Raíz de los npm workspaces (REQ-F-036, REQ-F-03
 │   │                         # prisma-product-store.ts, prisma-bot-control-store.ts y generated/prisma/ (cliente generado; ignorado por git)
 │   └── contracts/            # @restaurante/contracts: contratos de la API con Zod: products.ts (esquemas del endpoint público) y public-client.ts (cliente HTTP)
 ├── api/                      # Workspace de la API propia (REQ-F-038): solo lectura, red interna
-│   ├── src/                  # server.ts (arranque: config, verificación de la base, escucha), app.ts (endpoint y errores), config.ts
+│   ├── src/                  # server.ts (arranque: config, verificación de la base, instalación, escucha), app.ts (endpoint y errores), config.ts,
+│   │                         # install/ (instalación nueva y primer administrador; REQ-F-045)
 │   ├── scripts/dev-server.ts # Entrada de `npm run dev:api` (NODE_ENV=development)
+│   ├── scripts/hash-password.ts, admin-recover.ts y support/read-hidden.ts # `npm run admin:hash-password` y `npm run admin:recover` (REQ-F-045)
 │   ├── tests/                # Pruebas en proceso con el store en memoria (sin MySQL)
 │   └── .env.example          # NODE_ENV, HOST, PORT (3001) y DATABASE_URL
-├── landing-pages/            # Workspace de la app Koa: landings, /admin y /admin/api
+├── landing-pages/            # Workspace de la app Koa: las landings (sin base de datos; /admin redirige al admin nuevo)
 │   ├── src/
-│   │   ├── server.ts             # Entrada del proceso: valida config, verifica la base, primer administrador, prepara DATA_DIR, importación de página y de productos, escucha en PORT, cierre ordenado
-│   │   ├── app.ts                # createApp(): app Koa testeable (config, repositorio, logger y `now` inyectables)
+│   │   ├── server.ts             # Entrada del proceso: valida config, carga productos y página de la API, escucha en PORT y en INTERNAL_PORT, cierre ordenado
+│   │   ├── app.ts                # createApp(): app Koa testeable (config, productos y página de la API, logger y `now` inyectables)
+│   │   ├── internal-app.ts       # Aviso interno de la API (POST /internal/v1/productos-cambiados)
 │   │   ├── config/               # env.ts (carga/validación y tipo Config), business-paths.ts (ruta de cada landing)
-│   │   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests),
-│   │   │                         # admin.ts (acceso, inicio y menús), admin-products.ts (productos en HTML), admin-products-api.ts y
-│   │   │                         # admin-api-access.ts (API JSON), admin-business-view.ts, admin-users.ts, admin-account.ts, admin-access.ts
-│   │   ├── routes/               # Router (@koa/router): index.ts (landings), admin.ts (/admin), admin-api.ts (/admin/api)
-│   │   ├── middleware/           # Manejo centralizado de errores, log de requests, protección de /admin
-│   │   ├── repositories/         # Menús (contrato y reglas, archivos y memoria) y productos (reglas sobre el store de core/catalog)
-│   │   ├── services/             # whatsapp, admin-form, session-store, login-throttle, admin-bootstrap,
-│   │   │                         # product-form, bot-control, bot-usage, landing-products (productos de las landings desde la API; REQ-F-038),
-│   │   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), semillas seed.json e icons.ts
-│   │   ├── utils/                # datetime.ts (zona del negocio), form-body.ts, json-body.ts
+│   │   ├── controllers/          # landing.ts (landing del negocio activo), icons.ts (iconos de la raíz y manifests)
+│   │   ├── routes/               # Router (@koa/router): index.ts (landings e iconos)
+│   │   ├── middleware/           # Manejo centralizado de errores, log de requests y admin-moved.ts (/admin -> admin nuevo)
+│   │   ├── services/             # landing-cache, landing-products y landing-page (productos y página de la API; REQ-F-038 y REQ-F-044)
+│   │   ├── content/              # Contenido estático por negocio (common/, molotes/, birria/), icons.ts y seeds.ts (reexporta las semillas de core/catalog)
 │   │   ├── views/                # render.ts + plantillas HTML
 │   │   │   ├── layouts/base.html # <head> común (SEO, fuentes, CSS/JS por negocio) y skip link
 │   │   │   ├── pages/            # molotes.html, birria.html: header, secciones y footer del diseño
 │   │   │   ├── partials/         # icons/ (WhatsApp), seo-absolute, favicon-links, molotes/ y birria/ (tarjetas, aviso de sección vacía, etc.)
-│   │   │   ├── landings/         # Contenido -> datos de plantilla (index.ts, molotes.ts, birria.ts)
-│   │   │   └── admin/            # Plantillas y vistas de la administración (formulario generado desde el esquema)
+│   │   │   └── landings/         # Contenido -> datos de plantilla (index.ts, molotes.ts, birria.ts)
 │   │   └── styles/
 │   │       ├── shared/base.css   # Base común de ambos diseños
 │   │       ├── molotes/main.css  # Entrada Tailwind + tokens @theme de Moloteando
 │   │       ├── birria/main.css   # Entrada Tailwind + tokens @theme de Birria El Muñeco
-│   │       ├── admin/main.css    # Entrada Tailwind de la administración
 │   │       └── components/       # Bloques BEM propios (sin uso por ahora)
 │   ├── public/
-│   │   ├── css/{molotes,birria,admin}/main.css   # Generado por `npm run build:css` (ignorado por git)
+│   │   ├── css/{molotes,birria}/main.css   # Generado por `npm run build:css` (ignorado por git)
 │   │   ├── js/
 │   │   │   ├── modules/          # Módulos ES compartidos (promo-form, variant-selector)
 │   │   │   ├── molotes/main.js   # Entrada JS de Moloteando
@@ -1897,24 +1751,20 @@ restaurante/                  # Raíz de los npm workspaces (REQ-F-036, REQ-F-03
 │   │       ├── molotes/          # icons/: favicons e iconos de pantalla de inicio (generados)
 │   │       └── birria/           # icons/: ídem
 │   ├── scripts/
-│   │   ├── hash-password.ts      # `npm run admin:hash-password`
-│   │   ├── admin-recover.ts      # `npm run admin:recover`
 │   │   ├── audit-deps.ts         # `npm run audit:deps`: auditoría de dependencias por imagen (CI, job auditoria)
-│   │   ├── support/read-hidden.ts # Lectura de contraseñas sin eco (compartida)
 │   │   ├── support/audit-policy.ts # Política de la auditoría (umbral, excepciones, fail closed)
 │   │   └── generate-icons.py     # Genera public/img/<negocio>/icons/ (Python 3 + Pillow; solo desarrollo)
-│   ├── data/                     # DATA_DIR por defecto fuera de producción (ignorado por git)
 │   ├── tests/
-│   │   ├── helpers.ts            # Config válida, semillas y repositorio en memoria para pruebas
+│   │   ├── helpers.ts            # Config válida, semillas y logger que registra
 │   │   ├── setup/                # database-global.ts y database-guard.ts (MySQL de pruebas y salvaguarda)
-│   │   ├── support/admin.ts      # App con administración (base de datos de prueba), usuarios, inicio de sesión y formularios
+│   │   ├── support/admin.ts      # Credenciales de prueba, usuarios y la api real con su base de prueba (startApiAdmin)
 │   │   ├── support/products.ts   # Entradas válidas de producto y repositorios de productos para pruebas
 │   │   ├── support/database.ts   # Bases MySQL de prueba por trabajador (restaurante_test_*; nunca una base real) y database-admin.ts, test-database-config.ts (salvaguarda), tcp-proxy.ts
 │   │   ├── support/process.ts    # Procesos reales: arranque del servidor y comandos de consola
 │   │   ├── support/png.ts        # Lectura mínima de PNG/ICO (dimensiones, opacidad, color de fondo)
 │   │   ├── snapshots/            # HTML de referencia de las landings (regresión visual con la semilla)
-│   │   ├── unit/                 # config, esquema, precios, formulario, repositorio de archivos, sesión, landings, contenido vs. diseño, JS sobre el HTML real
-│   │   └── integration/          # Landings (fecha, SEO, CTA, datos editables, datos dañados), administración, estáticos, errores
+│   │   ├── unit/                 # config, esquemas, precios, sesión, landings, contenido vs. diseño, JS sobre el HTML real
+│   │   └── integration/          # Landings (fecha, SEO, CTA, productos y página de la API), /admin retirado, api y paquetes con MySQL, estáticos, errores
 │   ├── tsconfig.json             # Extiende tsconfig.base.json (+ DOM); solo verifica tipos (`npm run typecheck`; sin emitir archivos)
 │   ├── vitest.config.ts          # Configuración de Vitest
 │   ├── .env.example              # Variables documentadas; el `.env` local va junto a él (ignorado por git)
@@ -2027,8 +1877,7 @@ los PNG de alta resolución de `../_stich_source_/logo_<negocio>.png/screen.png`
 - **Metadatos:** `icons` en `src/content/<negocio>/index.ts` (versión, `themeColor` y nombres
   del manifest). Las rutas de los archivos y el manifest se arman en `src/content/icons.ts`.
 - **`<head>`:** cada landing declara el .ico, los PNG de 16 y 32, el apple-touch-icon, su
-  manifest y su `theme-color`; `/` usa los de Birria. Las páginas de `/admin`
-  muestran el favicon del negocio del día, sin manifest ni `theme-color`.
+  manifest y su `theme-color`; `/` usa los de Birria.
 - **Raíz:** `/favicon.ico`, `/apple-touch-icon.png` y `/apple-touch-icon-precomposed.png`
   sirven el icono de Birria, el mismo de `/` (REQ-F-028), con `Cache-Control: no-cache` y `ETag` (responden 304
   si no cambió). Los archivos se cargan en memoria al arrancar; si falta alguno, la app no arranca.

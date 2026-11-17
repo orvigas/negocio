@@ -1,9 +1,7 @@
-import { join } from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
-import { ConfigError, PROJECT_DIR, loadConfig, loadDatabaseConfig, type Env } from '../../src/config/env.ts';
-import { BOT_ENV, TWILIO_BOT_ENV, VALID_ENV } from '../helpers.ts';
+import { ConfigError, loadConfig, type Env } from '../../src/config/env.ts';
+import { VALID_ENV } from '../helpers.ts';
 
 function issuesFor(env: Env): string[] {
   try {
@@ -40,8 +38,8 @@ describe('NODE_ENV obligatorio (REQ-F-015)', () => {
     expect(issues.join('\n')).toContain('PORT debe ser');
   });
 
-  it('sin NODE_ENV no se derivan problemas de producción (DATA_DIR, Twilio)', () => {
-    const issues = issuesFor({ ...withoutNodeEnv(), WHATSAPP_BOT_PROVIDER: 'twilio', DATA_DIR: 'data' });
+  it('sin NODE_ENV no se derivan problemas de producción (aviso interno, ADMIN_NEW_URL)', () => {
+    const issues = issuesFor({ ...withoutNodeEnv(), INTERNAL_NOTIFY_TOKEN: undefined, ADMIN_NEW_URL: 'http://admin.example.com' });
     expect(issues).toEqual([expect.stringContaining('NODE_ENV es obligatorio')]);
   });
 
@@ -53,7 +51,7 @@ describe('NODE_ENV obligatorio (REQ-F-015)', () => {
 describe('HOST (REQ-F-015)', () => {
   it.each(['development', 'production', 'test'])('CA-6: sin HOST vale 127.0.0.1 con NODE_ENV=%s y cualquier TRUST_PROXY', (nodeEnv) => {
     for (const trustProxy of [undefined, 'true', 'false']) {
-      const config = loadConfig({ ...VALID_ENV, NODE_ENV: nodeEnv, DATA_DIR: '/var/lib/restaurante', TRUST_PROXY: trustProxy });
+      const config = loadConfig({ ...VALID_ENV, NODE_ENV: nodeEnv, TRUST_PROXY: trustProxy });
       expect(config.host).toBe('127.0.0.1');
     }
   });
@@ -101,7 +99,6 @@ describe('loadConfig', () => {
       NODE_ENV: 'development',
       WHATSAPP_MOLOTES: '5210000000001',
       WHATSAPP_BIRRIA: '5210000000002',
-      DATABASE_URL: VALID_ENV.DATABASE_URL,
       API_INTERNAL_URL: VALID_ENV.API_INTERNAL_URL,
     });
     expect(config).toMatchObject({ nodeEnv: 'development', host: '127.0.0.1', port: 3000, timezone: 'America/Mexico_City' });
@@ -145,8 +142,7 @@ describe('loadConfig', () => {
 
   it('exige URL o número para cada negocio y reporta todos los problemas juntos', () => {
     const issues = issuesFor({ NODE_ENV: 'test', PORT: 'x' });
-    expect(issues).toHaveLength(5);
-    expect(issues.join('\n')).toMatch(/DATABASE_URL es obligatoria/);
+    expect(issues).toHaveLength(4);
     expect(issues.join('\n')).toMatch(/API_INTERNAL_URL es obligatoria/);
     expect(issues.join('\n')).toMatch(/PORT/);
     expect(issues.join('\n')).toMatch(/WHATSAPP_MOLOTES_URL o WHATSAPP_MOLOTES/);
@@ -198,133 +194,34 @@ describe('loadConfig', () => {
   );
 });
 
-describe('loadConfig: administración y datos (REQ-F-001)', () => {
-  const HASH = 'scrypt$16384$8$1$c2FsLXNhbC1zYWwtc2FsLQ$aGFzaGhhc2hoYXNoaGFzaGhhc2hoYXNoaGFzaGhhc2g';
-
-  it('sin credenciales no hay primer administrador y la app arranca (CA-24; REQ-F-007 R-4)', () => {
-    const config = loadConfig(VALID_ENV);
-    expect(config.adminBootstrap).toBeNull();
-    expect(config.trustProxy).toBe(false);
-    // REQ-F-016 (D-1): solo la vuelta atrás del despliegue la activa.
-    expect(config.allowNewerSchema).toBe(false);
-    expect(loadConfig({ ...VALID_ENV, DATABASE_ALLOW_NEWER_SCHEMA: 'true' }).allowNewerSchema).toBe(true);
-    // Por defecto, la carpeta data/ del proyecto (sin depender del nombre de la carpeta clonada).
-    expect(config.dataDir).toBe(join(PROJECT_DIR, 'data'));
+describe('loadConfig: variables de la administración, la base y el bot (REQ-F-045, RF-2)', () => {
+  it('TRUST_PROXY es false por defecto y acepta true en producción', () => {
+    expect(loadConfig(VALID_ENV).trustProxy).toBe(false);
+    expect(loadConfig({ ...VALID_ENV, NODE_ENV: 'production', TRUST_PROXY: 'true' })).toMatchObject({ trustProxy: true, isProduction: true });
+    expect(issuesFor({ ...VALID_ENV, TRUST_PROXY: 'yes' }).join('\n')).toMatch(/TRUST_PROXY debe ser true o false/);
   });
 
-  it('con usuario y hash válidos queda la credencial del primer administrador (REQ-F-007 D-4)', () => {
-    const config = loadConfig({ ...VALID_ENV, ADMIN_USER: ' Dueño ', ADMIN_PASSWORD_HASH: HASH });
-    // El usuario se recorta (como en el acceso) y conserva mayúsculas.
-    expect(config.adminBootstrap).toEqual({ user: 'Dueño', passwordHash: HASH });
-  });
-
-  it.each([
-    [{ ADMIN_USER: 'dueno' }, /ADMIN_USER y ADMIN_PASSWORD_HASH juntas/],
-    [{ ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER y ADMIN_PASSWORD_HASH juntas/],
-    [{ ADMIN_USER: 'dueno', ADMIN_PASSWORD_HASH: 'contraseña-en-claro' }, /ADMIN_PASSWORD_HASH no tiene un formato válido/],
-    // Sal de más de 64 bytes (REQ-F-014, P-3): no cabría en la columna password_hash.
-    [{ ADMIN_USER: 'dueno', ADMIN_PASSWORD_HASH: `scrypt$16384$8$1$${'A'.repeat(88)}$aGFzaGhhc2hoYXNoaGFzaGhhc2hoYXNoaGFzaGhhc2g` }, /ADMIN_PASSWORD_HASH no tiene un formato válido/],
-    [{ ADMIN_USER: 'x'.repeat(61), ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER no es un usuario válido/],
-    [{ ADMIN_USER: 'due\u0007no', ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER no es un usuario válido/],
-    [{ TRUST_PROXY: 'yes' }, /TRUST_PROXY debe ser true o false/],
-    [{ DATABASE_ALLOW_NEWER_SCHEMA: '1' }, /DATABASE_ALLOW_NEWER_SCHEMA debe ser true o false/],
-    [{ NODE_ENV: 'production' }, /DATA_DIR es obligatoria en producción/],
-    [{ NODE_ENV: 'production', DATA_DIR: 'data' }, /DATA_DIR debe ser una ruta absoluta/],
-    [{ DATA_DIR: 'src/content' }, /DATA_DIR no puede estar dentro de src\/ ni de public\//],
-    [{ DATA_DIR: 'public' }, /DATA_DIR no puede estar dentro de src\/ ni de public\//],
-  ])('configuración inválida: %o', (overrides, message) => {
-    const issues = issuesFor({ ...VALID_ENV, ...overrides });
-    expect(issues.join('\n')).toMatch(message);
-  });
-
-  it('los mensajes de error nunca incluyen el hash ni el usuario', () => {
-    const issues = issuesFor({ ...VALID_ENV, ADMIN_USER: 'usuario-secreto', ADMIN_PASSWORD_HASH: 'hash-secreto' });
-    expect(issues.join('\n')).not.toMatch(/usuario-secreto|hash-secreto/);
-  });
-
-  it('acepta TRUST_PROXY=true y DATA_DIR absoluta en producción', () => {
-    const config = loadConfig({ ...VALID_ENV, NODE_ENV: 'production', DATA_DIR: '/var/lib/restaurante', TRUST_PROXY: 'true' });
-    expect(config).toMatchObject({ dataDir: '/var/lib/restaurante', trustProxy: true, isProduction: true });
-  });
-});
-
-describe('loadConfig: página "Bot" de /admin con el bot en la api (REQ-F-042, RF-6 y CA-12)', () => {
-  it('sin ninguna variable del bot no hay panel del bot (null)', () => {
-    expect(loadConfig(VALID_ENV).botPanel).toBeNull();
-    expect(loadConfig({ ...VALID_ENV, WHATSAPP_BOT_PROVIDER: 'meta' }).botPanel).toBeNull();
-  });
-
-  it('con el bot configurado lee solo el proveedor y el personal (D-4)', () => {
-    expect(loadConfig({ ...VALID_ENV, ...BOT_ENV }).botPanel).toEqual({ provider: 'meta', staff: { molotes: '5215511110001', birria: '5215522220002' } });
-    expect(loadConfig({ ...VALID_ENV, ...TWILIO_BOT_ENV }).botPanel?.provider).toBe('twilio');
-  });
-
-  it('CA-12: no exige ni valida los secretos que no usa (token, App Secret, verify token, plantilla)', () => {
-    const onlyPanel = { WHATSAPP_BOT_PROVIDER: 'meta', WHATSAPP_BOT_STAFF_MOLOTES: '5215511110001', WHATSAPP_BOT_STAFF_BIRRIA: '5215522220002', WHATSAPP_BOT_BLOCKLIST_KEY: BOT_ENV.WHATSAPP_BOT_BLOCKLIST_KEY };
-    expect(loadConfig({ ...VALID_ENV, WHATSAPP_MOLOTES: '5210000000009', WHATSAPP_BIRRIA: '5210000000009', ...onlyPanel }).botPanel?.provider).toBe('meta');
-    // P-2: el compose le sigue pasando todas las variables del bot; las que no usa no se validan.
-    expect(loadConfig({ ...VALID_ENV, ...BOT_ENV, WHATSAPP_BOT_ACCESS_TOKEN: 'con espacios', WHATSAPP_BOT_VERIFY_TOKEN: 'corto' }).botPanel).not.toBeNull();
-  });
-
-  it('con el bot exige el proveedor, el personal y la clave, con los mismos textos que la api', () => {
-    const issues = issuesFor({ ...VALID_ENV, WHATSAPP_BOT_APP_SECRET: BOT_ENV.WHATSAPP_BOT_APP_SECRET });
-    expect(issues).toEqual([
-      expect.stringMatching(/^WHATSAPP_BOT_PROVIDER es obligatoria/),
-      expect.stringMatching(/^WHATSAPP_BOT_STAFF_MOLOTES es obligatoria/),
-      expect.stringMatching(/^WHATSAPP_BOT_STAFF_BIRRIA es obligatoria/),
-    ]);
-    expect(issues.join()).not.toContain(BOT_ENV.WHATSAPP_BOT_APP_SECRET);
-    expect(issuesFor({ ...VALID_ENV, ...BOT_ENV, WHATSAPP_BOT_STAFF_BIRRIA: '123' })).toEqual([expect.stringMatching(/^WHATSAPP_BOT_STAFF_BIRRIA no es válida/)]);
-    expect(issuesFor({ ...VALID_ENV, ...BOT_ENV, WHATSAPP_BOT_BLOCKLIST_KEY: '' })).toEqual([expect.stringMatching(/^WHATSAPP_BOT_BLOCKLIST_KEY es obligatoria/)]);
-  });
-
-  it('Twilio sigue prohibido en producción y el proveedor se valida', () => {
-    expect(issuesFor({ ...VALID_ENV, ...TWILIO_BOT_ENV, NODE_ENV: 'production', INTERNAL_NOTIFY_TOKEN: 'x'.repeat(40) })).toContainEqual(expect.stringContaining('no se permite con NODE_ENV=production'));
-    expect(issuesFor({ ...VALID_ENV, ...BOT_ENV, WHATSAPP_BOT_PROVIDER: 'whatsapp' })).toContainEqual(expect.stringMatching(/^WHATSAPP_BOT_PROVIDER debe ser uno de/));
-  });
-
-  it('con el bot, los números de las dos landings deben ser el del bot (D-6, RN-2)', () => {
-    expect(issuesFor({ ...VALID_ENV, ...BOT_ENV, WHATSAPP_BIRRIA: '5210000000002' })).toEqual([expect.stringContaining('WHATSAPP_MOLOTES y WHATSAPP_BIRRIA deben ser el mismo número')]);
-  });
-});
-
-describe('DATABASE_URL (REQ-F-014, RF-5 y CA-8)', () => {
-  it('se valida y queda separada en sus partes (la contraseña decodificada)', () => {
-    const config = loadConfig({ ...VALID_ENV, DATABASE_URL: 'mysql://app_rw:p%40ss%3Aw%2Frd%25x@mysql:3306/restaurante' });
-    expect(config.database).toEqual({ host: 'mysql', port: 3306, user: 'app_rw', password: 'p@ss:w/rd%x', database: 'restaurante' });
-  });
-
-  it('el puerto es 3306 por defecto y admite IPv6', () => {
-    expect(loadDatabaseConfig({ DATABASE_URL: 'mysql://u:p@db.interno/restaurante' }).port).toBe(3306);
-    expect(loadDatabaseConfig({ DATABASE_URL: 'mysql://u:p@[::1]:3307/restaurante' })).toMatchObject({ host: '::1', port: 3307 });
-  });
-
-  it('es obligatoria', () => {
-    expect(issuesFor({ ...VALID_ENV, DATABASE_URL: '' })).toEqual([expect.stringContaining('DATABASE_URL es obligatoria')]);
-  });
-
-  it.each([
-    ['otro motor', 'postgres://u:clave-secreta@db/restaurante'],
-    ['sin host', 'mysql://u:clave-secreta@/restaurante'],
-    ['sin usuario', 'mysql://:clave-secreta@db/restaurante'],
-    ['sin base', 'mysql://u:clave-secreta@db'],
-    ['base con barra', 'mysql://u:clave-secreta@db/a/b'],
-    ['con parámetros', 'mysql://u:clave-secreta@db/restaurante?ssl=false'],
-    ['puerto fuera de rango', 'mysql://u:clave-secreta@db:70000/restaurante'],
-    ['codificación rota', 'mysql://u:clave-secreta%zz@db/restaurante'],
-    ['no es URL', 'clave-secreta'],
-  ])('%s -> error de configuración sin el valor', (_case, value) => {
-    const issues = issuesFor({ ...VALID_ENV, DATABASE_URL: value });
-    expect(issues).toEqual([expect.stringContaining('DATABASE_URL no es válida')]);
-    expect(issues.join('\n')).not.toContain('clave-secreta');
-    expect(() => loadDatabaseConfig({ DATABASE_URL: value })).toThrow(ConfigError);
+  it('las variables de la base, los datos, la administración y el bot se ignoran sin validarse, aunque sean inválidas', () => {
+    const retired = {
+      DATABASE_URL: 'postgres://u:clave-secreta@db/restaurante',
+      DATABASE_ALLOW_NEWER_SCHEMA: '1',
+      DATA_DIR: 'src/content',
+      ADMIN_USER: 'dueno',
+      ADMIN_PASSWORD_HASH: 'contraseña-en-claro',
+      WHATSAPP_BOT_PROVIDER: 'whatsapp',
+      WHATSAPP_BOT_APP_SECRET: 'appsecret',
+    };
+    for (const nodeEnv of ['test', 'production']) {
+      const config = loadConfig({ ...VALID_ENV, NODE_ENV: nodeEnv, ...retired });
+      expect(config).toEqual(loadConfig({ ...VALID_ENV, NODE_ENV: nodeEnv }));
+    }
   });
 });
 
 describe('loadConfig: admin nuevo y aviso interno (REQ-F-039, RF-13 y RF-15)', () => {
-  const PROD = { ...VALID_ENV, NODE_ENV: 'production', DATA_DIR: '/var/lib/restaurante' };
+  const PROD = { ...VALID_ENV, NODE_ENV: 'production' };
 
-  it('sin ADMIN_NEW_URL el /admin actual edita productos como antes (undefined)', () => {
+  it('sin ADMIN_NEW_URL no hay admin nuevo al que redirigir (undefined)', () => {
     expect(loadConfig(VALID_ENV).adminNewUrl).toBeUndefined();
   });
 

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   PAGE_IMPORT_SEED_REFUSED,
-  parseChangeLog,
   pickPageData,
   planPageImport,
   type MenuDocument,
@@ -12,8 +11,9 @@ import {
 import { seedDocuments } from '../helpers.ts';
 
 /**
- * Importación única de la página (REQ-F-044, PR 3): reglas de origen (RF-3, CA-4, CA-5, D-10 y CA-20)
- * y lectura de `changes.jsonl` (RF-8). Funciones puras de core/catalog/page-import.ts.
+ * Reglas de origen de los datos de página (REQ-F-044, PR 3: RF-3, CA-4, CA-5, D-10 y CA-20), que usa la
+ * siembra de una instalación nueva en la api (REQ-F-045, `seedPages`). Funciones puras de
+ * core/catalog/page-import.ts.
  */
 
 const seed = (): MenuDocument<'molotes'> => seedDocuments().molotes;
@@ -110,51 +110,5 @@ describe('planPageImport: semilla (CA-5, D-10 y CA-20)', () => {
   it('CA-20: current que no cabe y sin previous en una instalación existente también se niega (dañado)', () => {
     const tooLong = { ...CURRENT, revision: 2 ** 31 };
     expect(planPageImport('molotes', candidates({ current: tooLong, previous: null }), { existing: true })).toMatchObject({ ok: false, reason: 'damaged' });
-  });
-});
-
-describe('parseChangeLog (RF-8)', () => {
-  const line = (entry: Record<string, unknown>): string => JSON.stringify(entry);
-  const VALID = { at: '2026-10-01T10:00:00-06:00', author: 'Ana', authorId: 4, business: 'molotes', action: 'save', changes: [{ field: 'promo.title', before: 'A', after: 'B' }] };
-
-  it('reparte por negocio en el orden del archivo; sin authorId se importa solo con el nombre', () => {
-    const text = [
-      line(VALID),
-      line({ ...VALID, business: 'birria', action: 'restore_seed', changes: [] }),
-      line({ ...VALID, authorId: undefined, author: '  Beto  ', action: 'overwrite_after_conflict' }),
-      '',
-    ].join('\n');
-    const { entries, skipped } = parseChangeLog(text);
-    expect(skipped).toEqual([]);
-    expect(entries.molotes).toEqual([
-      { at: VALID.at, business: 'molotes', author: 'Ana', authorId: 4, action: 'save', changes: VALID.changes },
-      { at: VALID.at, business: 'molotes', author: 'Beto', authorId: null, action: 'overwrite_after_conflict', changes: VALID.changes },
-    ]);
-    expect(entries.birria).toEqual([{ at: VALID.at, business: 'birria', author: 'Ana', authorId: 4, action: 'restore_seed', changes: [] }]);
-  });
-
-  it('las líneas ilegibles se cuentan por su número y se omiten, sin detener la lectura', () => {
-    const text = [
-      line(VALID), // 1
-      '{ roto', // 2
-      line({ ...VALID, business: 'tacos' }), // 3
-      line({ ...VALID, action: 'borrar' }), // 4
-      line({ ...VALID, author: '   ' }), // 5
-      line({ ...VALID, author: 'x'.repeat(61) }), // 6
-      line({ ...VALID, at: 'ayer' }), // 7
-      line({ ...VALID, authorId: -3 }), // 8
-      line({ ...VALID, changes: 'nada' }), // 9
-      '[]', // 10
-      '', // 11 (vacía: se ignora)
-      line(VALID).slice(0, 20), // 12: línea final cortada
-    ].join('\n');
-    const { entries, skipped } = parseChangeLog(text);
-    expect(skipped).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 12]);
-    expect(entries.molotes).toHaveLength(1);
-    expect(entries.birria).toEqual([]);
-  });
-
-  it('sin archivo: historial vacío', () => {
-    expect(parseChangeLog(null)).toEqual({ entries: { molotes: [], birria: [] }, skipped: [] });
   });
 });

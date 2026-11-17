@@ -5,7 +5,7 @@
 public/css/*
 !public/css/.gitkeep
 
-# Datos editables de la administración en desarrollo (DATA_DIR por defecto; REQ-F-001)
+# Carpeta de datos de las versiones anteriores a REQ-F-045 (DATA_DIR por defecto; ya no se usa)
 data/
 
 # Restos locales de la antigua base SQLite (antes de REQ-F-014): nunca en el repositorio

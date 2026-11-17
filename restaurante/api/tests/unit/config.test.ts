@@ -33,6 +33,8 @@ describe('loadApiConfig', () => {
       whatsappBot: null,
       botLimits: DEFAULT_BOT_LIMITS,
       botKeys: null,
+      // REQ-F-045: sin ADMIN_USER ni ADMIN_PASSWORD_HASH no hay primer administrador.
+      adminBootstrap: null,
     });
   });
 
@@ -86,5 +88,37 @@ describe('loadApiConfig', () => {
     const { message } = error as ApiConfigError;
     expect(message).toContain(name);
     expect(message).not.toContain('s3cr3t0');
+  });
+});
+
+describe('loadApiConfig: primer administrador (REQ-F-007 D-4; en la api desde REQ-F-045)', () => {
+  const HASH = 'scrypt$16384$8$1$c2FsLXNhbC1zYWwtc2FsLQ$aGFzaGhhc2hoYXNoaGFzaGhhc2hoYXNoaGFzaGhhc2g';
+
+  it('con usuario y hash válidos queda la credencial del primer administrador', () => {
+    // El usuario se recorta (como en el acceso) y conserva mayúsculas.
+    expect(loadApiConfig({ ...VALID, ADMIN_USER: ' Dueño ', ADMIN_PASSWORD_HASH: HASH }).adminBootstrap).toEqual({ user: 'Dueño', passwordHash: HASH });
+  });
+
+  it.each([
+    [{ ADMIN_USER: 'dueno' }, /ADMIN_USER y ADMIN_PASSWORD_HASH juntas/],
+    [{ ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER y ADMIN_PASSWORD_HASH juntas/],
+    [{ ADMIN_USER: 'dueno', ADMIN_PASSWORD_HASH: 'contraseña-en-claro' }, /ADMIN_PASSWORD_HASH no tiene un formato válido/],
+    // Sal de más de 64 bytes (REQ-F-014, P-3): no cabría en la columna password_hash.
+    [{ ADMIN_USER: 'dueno', ADMIN_PASSWORD_HASH: `scrypt$16384$8$1$${'A'.repeat(88)}$aGFzaGhhc2hoYXNoaGFzaGhhc2hoYXNoaGFzaGhhc2g` }, /ADMIN_PASSWORD_HASH no tiene un formato válido/],
+    [{ ADMIN_USER: 'x'.repeat(61), ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER no es un usuario válido/],
+    [{ ADMIN_USER: 'due\u0007no', ADMIN_PASSWORD_HASH: HASH }, /ADMIN_USER no es un usuario válido/],
+  ])('configuración inválida: %o', (override, message) => {
+    expect(() => loadApiConfig({ ...VALID, ...override })).toThrow(message);
+  });
+
+  it('los mensajes de error nunca incluyen el hash ni el usuario', () => {
+    let error: unknown;
+    try {
+      loadApiConfig({ ...VALID, ADMIN_USER: 'usuario-secreto', ADMIN_PASSWORD_HASH: 'hash-secreto' });
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(ApiConfigError);
+    expect((error as ApiConfigError).message).not.toMatch(/usuario-secreto|hash-secreto/);
   });
 });

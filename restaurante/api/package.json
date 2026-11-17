@@ -13,6 +13,8 @@
     "dev": "node --watch --env-file-if-exists=.env scripts/dev-server.ts",
     "test": "vitest run",
     "bot:chat": "node scripts/bot-chat.ts",
+    "admin:hash-password": "node scripts/hash-password.ts",
+    "admin:recover": "node --env-file-if-exists=.env scripts/admin-recover.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

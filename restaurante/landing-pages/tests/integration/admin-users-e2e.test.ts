@@ -4,19 +4,19 @@ import { JSDOM } from 'jsdom';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { ADMIN_ENV, ADMIN_PASSWORD, ADMIN_USER } from '../support/admin.ts';
-import { makeDatabase, makeTempDir } from '../support/database.ts';
+import { makeDatabase } from '../support/database.ts';
 import { freePorts, startServer } from '../support/process.ts';
 import { databaseUrl } from '../support/test-database-config.ts';
 
 /**
  * Usuarios y "Mi cuenta" de extremo a extremo con los procesos reales (REQ-F-040, PR 2): landing-pages
- * (con ADMIN_NEW_URL, como en producción), la API e inventory-manager contra MySQL.
+ * (con ADMIN_NEW_URL, como en producción, y sin base de datos desde REQ-F-045), la API contra MySQL
+ * (prepara la instalación y crea el primer administrador) e inventory-manager.
  *
  * Un administrador crea, edita, desactiva, reactiva y restablece la contraseña de un editor en el admin
- * nuevo (formularios reales, sin JavaScript); el editor entra en los dos admins y sus sesiones caen en
- * los dos cuando deben (D-8). El editor cambia su contraseña en "Mi cuenta" del admin nuevo y sigue
- * con sesión allí (cookie nueva), mientras su sesión del /admin actual cae. El /admin actual queda en
- * solo lectura para usuarios y cuenta. La auditoría registra cada paso y ningún log lleva secretos.
+ * nuevo (formularios reales, sin JavaScript); las sesiones del editor caen cuando deben (D-8). El
+ * editor cambia su contraseña en "Mi cuenta" y sigue con sesión (cookie nueva). El /admin retirado de
+ * las landings lleva al admin nuevo. La auditoría registra cada paso y ningún log lleva secretos.
  */
 
 const API_ENTRY = join('..', 'api', 'src', 'server.ts');
@@ -33,18 +33,13 @@ afterEach(async () => {
 async function startStack() {
   const database = await makeDatabase();
   cleanups.push(database.cleanup);
-  const dataDir = await makeTempDir();
-  cleanups.push(dataDir.cleanup);
   // Distintos entre sí y de los de las landings (freePorts devuelve exactamente dos).
   const [apiPort, inventoryPort] = (await freePorts(2)) as [number, number];
   const adminUrl = `http://127.0.0.1:${inventoryPort}`;
-  const landing = await startServer(
-    { DATA_DIR: dataDir.dir, ...ADMIN_ENV, DATABASE_URL: databaseUrl(database.config), API_INTERNAL_URL: `http://127.0.0.1:${apiPort}`, ADMIN_NEW_URL: adminUrl },
-    60_000,
-  );
+  const landing = await startServer({ API_INTERNAL_URL: `http://127.0.0.1:${apiPort}`, ADMIN_NEW_URL: adminUrl }, 60_000);
   cleanups.push(() => landing.stop());
   expect(landing.started, landing.output().stderr).toBe(true);
-  const api = await startServer({ DATABASE_URL: databaseUrl(database.config), PORT: String(apiPort), INTERNAL_NOTIFY_TOKEN: undefined }, 60_000, { args: [API_ENTRY] });
+  const api = await startServer({ ...ADMIN_ENV, DATABASE_URL: databaseUrl(database.config), PORT: String(apiPort), INTERNAL_NOTIFY_TOKEN: undefined }, 60_000, { args: [API_ENTRY] });
   cleanups.push(() => api.stop());
   expect(api.started, api.output().stderr).toBe(true);
   const inventory = await startServer({ NODE_ENV: 'development', PORT: String(inventoryPort), API_INTERNAL_URL: `http://127.0.0.1:${apiPort}` }, 60_000, { args: [INVENTORY_ENTRY] });
@@ -107,45 +102,39 @@ describe('usuarios y "Mi cuenta" entre los dos admins (CA-3 a CA-5, CA-7, CA-8, 
     expect(created.headers.get('location')).toBe('/usuarios?ok=created');
     const nora = await stack.database.prisma.user.findUniqueOrThrow({ where: { usernameKey: 'nora' } });
 
-    /** Nora entra en los dos admins. */
+    /** Nora entra en el admin nuevo. */
     const signIn = async (password: string) => {
       const inventory = browser(stack.adminUrl);
-      const landing = browser(stack.landing.url);
       expect((await inventory.post('/acceso', { username: 'nora', password })).status).toBe(303);
-      expect((await landing.post('/admin/login', { username: 'nora', password })).status).toBe(303);
-      return { inventory, landing };
+      return { inventory };
     };
-    const expectSessions = async ({ inventory, landing }: { inventory: Browser; landing: Browser }, open: boolean) => {
+    const expectSessions = async ({ inventory }: { inventory: Browser }, open: boolean) => {
       expect((await inventory.get('/cuenta')).status).toBe(open ? 200 : 303);
-      expect((await landing.get('/admin')).status).toBe(open ? 200 : 303);
     };
-    const canEnter = async (password: string) => ({
-      inventory: (await browser(stack.adminUrl).post('/acceso', { username: 'nora', password })).status,
-      landing: (await browser(stack.landing.url).post('/admin/login', { username: 'nora', password })).status,
-    });
+    const canEnter = async (password: string) => (await browser(stack.adminUrl).post('/acceso', { username: 'nora', password })).status;
 
-    // Cambiar los negocios en el admin nuevo cierra las dos sesiones (D-8).
+    // Cambiar los negocios en el admin nuevo cierra sus sesiones (D-8).
     let sessions = await signIn(FIRST);
     await expectSessions(sessions, true);
     const edit = formFields(await (await owner.get(`/usuarios/${nora.id}/editar`)).text(), '#user-form');
     expect((await owner.post(`/usuarios/${nora.id}`, { ...edit, 'business-birria': 'on' })).headers.get('location')).toBe('/usuarios?ok=updated');
     await expectSessions(sessions, false);
 
-    // Desactivar: las dos caen y no puede entrar en ninguno; reactivar: vuelve a entrar.
+    // Desactivar: su sesión cae y no puede entrar; reactivar: vuelve a entrar.
     sessions = await signIn(FIRST);
     expect((await owner.post(`/usuarios/${nora.id}/desactivar`, { _csrf: csrf })).headers.get('location')).toBe('/usuarios?ok=deactivated');
     await expectSessions(sessions, false);
-    expect(await canEnter(FIRST)).toEqual({ inventory: 401, landing: 401 });
+    expect(await canEnter(FIRST)).toBe(401);
     expect((await owner.post(`/usuarios/${nora.id}/reactivar`, { _csrf: csrf })).headers.get('location')).toBe('/usuarios?ok=reactivated');
 
-    // Restablecer: las dos caen, la anterior deja de valer y la nueva sirve en los dos.
+    // Restablecer: su sesión cae, la anterior deja de valer y la nueva sirve.
     sessions = await signIn(FIRST);
     const reset = await owner.post(`/usuarios/${nora.id}/contrasena`, { _csrf: csrf, password: RESET, passwordConfirmation: RESET });
     expect(reset.headers.get('location')).toBe('/usuarios?ok=password_reset');
     await expectSessions(sessions, false);
-    expect(await canEnter(FIRST)).toEqual({ inventory: 401, landing: 401 });
+    expect(await canEnter(FIRST)).toBe(401);
 
-    // "Mi cuenta" del admin nuevo: sigue con sesión allí (cookie nueva) y su sesión del /admin actual cae.
+    // "Mi cuenta" del admin nuevo: sigue con sesión (cookie nueva) y la contraseña nueva sirve.
     sessions = await signIn(RESET);
     const before = [...sessions.inventory.cookies.values()][0];
     const account = formFields(await (await sessions.inventory.get('/cuenta')).text(), '#user-form');
@@ -153,16 +142,15 @@ describe('usuarios y "Mi cuenta" entre los dos admins (CA-3 a CA-5, CA-7, CA-8, 
     expect(changed.headers.get('location')).toBe('/cuenta?ok=password_change');
     expect([...sessions.inventory.cookies.values()][0]).not.toBe(before);
     expect((await sessions.inventory.get('/cuenta?ok=password_change')).status).toBe(200);
-    expect((await sessions.landing.get('/admin')).status).toBe(303);
-    expect((await browser(stack.landing.url).post('/admin/login', { username: 'nora', password: OWN })).status).toBe(303);
+    expect(await canEnter(OWN)).toBe(303);
 
-    // El /admin actual queda en solo lectura para usuarios y cuenta (ADMIN_NEW_URL).
-    const oldOwner = browser(stack.landing.url);
-    expect((await oldOwner.post('/admin/login', { username: ADMIN_USER, password: ADMIN_PASSWORD })).status).toBe(303);
-    const list = await (await oldOwner.get('/admin/usuarios')).text();
-    expect(list).toContain(`href="${stack.adminUrl}/usuarios"`);
-    expect(list).not.toContain('Crear usuario');
-    expect((await oldOwner.get('/admin/cuenta')).status).toBe(410);
+    // El /admin retirado de las landings lleva al admin nuevo (REQ-F-045, CA-1) y no deja escribir (CA-2).
+    const oldAdmin = browser(stack.landing.url);
+    const moved = await oldAdmin.get('/admin/usuarios');
+    expect(moved.status).toBe(302);
+    expect(moved.headers.get('location')).toBe(`${stack.adminUrl}/`);
+    expect((await oldAdmin.post('/admin/login', { username: ADMIN_USER, password: ADMIN_PASSWORD })).status).toBe(410);
+    expect(oldAdmin.cookies.size).toBe(0);
 
     // La auditoría registra cada paso, con el actor y sin hashes.
     const audit = await stack.database.prisma.userAudit.findMany({ where: { targetId: nora.id }, orderBy: { id: 'asc' } });
@@ -174,7 +162,7 @@ describe('usuarios y "Mi cuenta" entre los dos admins (CA-3 a CA-5, CA-7, CA-8, 
     // líneas llegan por la tubería de stdout del hijo y pueden hacerlo después de la respuesta HTTP.
     await expect.poll(() => stack.api.output().stdout, { timeout: 10_000 }).toContain('"msg":"admin_password_changed"');
     const all = [stack.landing, stack.api, stack.inventory].flatMap((proc) => [proc.output().stdout, proc.output().stderr]).join('\n');
-    for (const secret of [ADMIN_PASSWORD, FIRST, RESET, OWN, 'scrypt$', csrf, ...owner.cookies.values(), ...sessions.inventory.cookies.values(), ...oldOwner.cookies.values()]) {
+    for (const secret of [ADMIN_PASSWORD, FIRST, RESET, OWN, 'scrypt$', csrf, ...owner.cookies.values(), ...sessions.inventory.cookies.values()]) {
       expect(all).not.toContain(secret);
     }
   }, 180_000);

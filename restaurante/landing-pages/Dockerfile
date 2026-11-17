@@ -8,7 +8,7 @@
 # la raíz, /app/node_modules (dependencias elevadas), los paquetes en /app/packages (REQ-F-037:
 # core, contracts y db, enlazados por npm en /app/node_modules/@restaurante) y la app en
 # /app/landing-pages, que es el WORKDIR. Así, los comandos relativos (node src/server.ts,
-# node scripts/admin-recover.ts, prisma migrate deploy con su prisma.config.ts) son los mismos que
+# prisma migrate deploy con su prisma.config.ts) son los mismos que
 # antes del monorepo. Node ejecuta los .ts de los paquetes por su ruta real (/app/packages/...,
 # fuera de node_modules), así que el type stripping funciona igual que con los de la app.
 # Etapas:
@@ -32,16 +32,17 @@
 #                 schema, migraciones y prisma.config.ts vienen de packages/db, pero se copian al
 #                 WORKDIR con la misma estructura de siempre (REQ-F-037; deploy/ci/smoke.sh la usa).
 #   api        -> API propia (REQ-F-038): solo lectura, red interna. Dependencias de producción, código
-#                 de api/ y de los paquetes core, contracts y db (con el cliente generado y las
-#                 migraciones, que verify.ts lee), puerto 3001, usuario no root y HEALTHCHECK contra
-#                 su propio endpoint. Uso: docker build -f landing-pages/Dockerfile --target api .
+#                 de api/ y de los paquetes core (con las semillas), contracts y db (con el cliente
+#                 generado y las migraciones, que verify.ts lee), los comandos de consola
+#                 (node scripts/admin-recover.ts; REQ-F-045), puerto 3001, usuario no root y
+#                 HEALTHCHECK contra su propio endpoint. Uso: docker build -f landing-pages/Dockerfile --target api .
 #   inventory-manager -> admin nuevo (REQ-F-039): solo las dependencias de producción de ese
 #                 workspace (npm ci -w), su código, su CSS, los paquetes contracts y web, y los
 #                 iconos de las landings (favicon); puerto 3003, usuario no root y HEALTHCHECK
 #                 contra /salud (responde también sin TLS). Sin base de datos ni credenciales.
 #   production -> dependencias de producción, código (app y paquetes core, contracts y db), CSS, migraciones
 #                 (en /app/packages/db/prisma/migrations; la app las lee para verificar el estado
-#                 de la base, no las aplica) y scripts de consola; usuario no
+#                 de la base, no las aplica); usuario no
 #                 root. Node 24 ejecuta los .ts directamente (type stripping), sin compilar y sin
 #                 TypeScript ni el CLI de Prisma instalados.
 # La configuración (DATABASE_URL, WHATSAPP_*, DATA_DIR, ADMIN_*, ...) se inyecta al ejecutar, nunca aquí.
@@ -128,10 +129,6 @@ COPY --from=build /app/packages/contracts /app/packages/contracts
 COPY --from=build /app/packages/web /app/packages/web
 COPY --from=build /app/packages/db/src /app/packages/db/src
 COPY --from=build /app/packages/db/prisma/migrations /app/packages/db/prisma/migrations
-# Comandos de consola: admin:recover y admin:hash-password y su soporte. El simulador del bot de
-# WhatsApp (api/scripts/bot-chat.ts, REQ-F-042) es solo de desarrollo: no va en ninguna imagen.
-COPY --from=build /app/landing-pages/scripts/admin-recover.ts /app/landing-pages/scripts/hash-password.ts ./scripts/
-COPY --from=build /app/landing-pages/scripts/support ./scripts/support
 # Punto de montaje sugerido para DATA_DIR (JSON de página y changes.jsonl): un volumen con nombre
 # hereda dueño y permisos.
 RUN mkdir -p /var/lib/restaurante \
@@ -162,6 +159,11 @@ COPY inventory-manager/package.json /app/inventory-manager/
 COPY --parents packages/*/package.json /app/
 RUN cd /app && npm ci --omit=dev --omit=optional --strict-allow-scripts --no-audit --no-fund && npm cache clean --force
 COPY --from=build /app/api/src ./src
+# Comandos de consola (REQ-F-045; antes en la imagen production): admin:recover y admin:hash-password y
+# su soporte. El simulador del bot de WhatsApp (scripts/bot-chat.ts, REQ-F-042) y scripts/dev-server.ts
+# son solo de desarrollo: no van en ninguna imagen.
+COPY --from=build /app/api/scripts/admin-recover.ts /app/api/scripts/hash-password.ts ./scripts/
+COPY --from=build /app/api/scripts/support ./scripts/support
 COPY --from=build /app/packages/core /app/packages/core
 COPY --from=build /app/packages/contracts /app/packages/contracts
 COPY --from=build /app/packages/web /app/packages/web

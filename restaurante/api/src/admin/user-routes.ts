@@ -124,8 +124,8 @@ export function createUserRoutes({
   }
 
   /**
-   * Tras un cambio que invalida sus sesiones (D-8), se liberan también de la memoria de la API (las del
-   * /admin actual caen en su siguiente petición por `sessionVersion`).
+   * Tras un cambio que invalida sus sesiones (D-8, por `sessionVersion`), se liberan también de la
+   * memoria de la API.
    */
   function closeSessions(auth: AdminAuth, before: UserRecord, after: UserRecord): boolean {
     if (after.sessionVersion === before.sessionVersion) return false;

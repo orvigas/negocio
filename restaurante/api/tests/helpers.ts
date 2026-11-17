@@ -1,8 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-import type { MenuDataByBusiness, MenuDocument } from '@restaurante/core/catalog';
+import { loadSeedDocument, type MenuDataByBusiness, type MenuDocument } from '@restaurante/core/catalog';
 import type { BusinessId, LogFields, LogLevel, Logger } from '@restaurante/core/shared';
 
 import { loadApiConfig, type ApiConfig } from '../src/config.ts';
@@ -64,14 +60,12 @@ export function makeConfig(overrides: Env = {}): ApiConfig {
 }
 
 /**
- * Semillas de productos de las pruebas: copia de `landing-pages/src/content/<negocio>/seed.json`
- * (sus listas de productos están congeladas desde REQ-F-008 y ya no se editan). La api no puede leer
- * archivos de otra app, así que el catálogo de las pruebas y del simulador vive en tests/fixtures/seeds.
+ * Semillas de productos de las pruebas y del simulador: las de core/catalog (REQ-F-045), con sus listas
+ * de productos congeladas desde REQ-F-008.
  */
-const SEEDS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'seeds');
 const SEEDS = Object.freeze({
-  molotes: JSON.parse(readFileSync(join(SEEDS_DIR, 'molotes.json'), 'utf8')) as MenuDocument<'molotes'>,
-  birria: JSON.parse(readFileSync(join(SEEDS_DIR, 'birria.json'), 'utf8')) as MenuDocument<'birria'>,
+  molotes: loadSeedDocument('molotes') as MenuDocument<'molotes'>,
+  birria: loadSeedDocument('birria') as MenuDocument<'birria'>,
 });
 
 /** Copia de los datos de la semilla de un negocio. */

@@ -22,14 +22,6 @@ describe('REQ-F-015: NODE_ENV obligatorio al arrancar', () => {
     await expectConfigFailure({ NODE_ENV: value }, ['NODE_ENV', NODE_ENV_VALUES]);
   });
 
-  it('REQ-F-025 (CA-14): un umbral del bot inválido impide arrancar con un mensaje claro, sin el valor', async () => {
-    const output = await expectConfigFailure({ BOT_LIMIT_MESSAGES_PER_NUMBER_DAY: 'sesenta', BOT_BUDGET_MONTH_USD: '-20' }, [
-      'BOT_LIMIT_MESSAGES_PER_NUMBER_DAY no es válida: entero de 5 a 10000',
-      'BOT_BUDGET_MONTH_USD no es válida',
-    ]);
-    expect(output).not.toContain('sesenta');
-  });
-
   it('CA-2: sin NODE_ENV y con PORT=abc el mensaje lista los dos problemas', async () => {
     const database = await sentinel();
     const server = await boot({ NODE_ENV: undefined, PORT: 'abc', DATABASE_URL: database.url });
@@ -45,9 +37,13 @@ describe('REQ-F-015: NODE_ENV obligatorio al arrancar', () => {
     const withoutNodeEnv = await scriptArgs('start', 'PORT=3000\n');
     await expectConfigFailure({ NODE_ENV: undefined }, ['NODE_ENV', NODE_ENV_VALUES], { args: withoutNodeEnv });
 
+    // REQ-F-045 (RF-2): las variables de la base y de los datos que aún le pase el compose se ignoran:
+    // arranca sin conectar a MySQL.
     const production = await scriptArgs('start', 'NODE_ENV=production\n');
-    const { started } = await expectStarted({ NODE_ENV: undefined }, { args: production });
+    const database = await sentinel();
+    const { started } = await expectStarted({ NODE_ENV: undefined, DATABASE_URL: database.url, DATA_DIR: '/no-existe/restaurante' }, { args: production });
     expect(started).toMatchObject({ nodeEnv: 'production', host: '127.0.0.1' });
+    expect(database.connections()).toBe(0);
   }, 60_000);
 
   it('CA-4: npm run dev arranca con development aunque el .env no lo defina o diga production', async () => {

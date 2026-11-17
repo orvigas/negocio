@@ -5,13 +5,12 @@ import {
   canEditBusiness,
   isAdmin,
   resolveSession,
-  safeEqualStrings,
   type SessionInfo,
   type SessionStore,
   type UserRecord,
   type UserRepository,
 } from '@restaurante/core/identity';
-import { isBusinessId, type BusinessId, type Logger } from '@restaurante/core/shared';
+import { isBusinessId, safeEqualStrings, type BusinessId, type Logger } from '@restaurante/core/shared';
 
 import { ApiHttpError } from '../errors.ts';
 

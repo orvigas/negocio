@@ -18,12 +18,14 @@ import { startBotControlTimers } from './bot/control-timers.ts';
 import { createBotFromConfig, createBotWebhookApp } from './bot/webhook-app.ts';
 import { ApiConfigError, loadApiConfig } from './config.ts';
 import { createFileQuoteCatalogSource } from './cotizador/file-catalog-source.ts';
+import { InstallationError, prepareInstallation } from './install/index.ts';
 import { createLandingNotifier } from './notifier.ts';
 
 /**
  * Arranque de la API (REQ-F-038 y REQ-F-039). Verifica la conexión y el estado de las migraciones
- * (los mismos reintentos y códigos que landing-pages), pero nunca migra ni importa semillas (O-1: la
- * importación es solo de landing-pages). Desde REQ-F-039 escribe los productos (/api/v1/admin, con el
+ * (los mismos reintentos y códigos que landing-pages), pero nunca migra. Desde REQ-F-045 prepara una
+ * instalación nueva (base vacía y migrada): productos y página de la semilla y el primer administrador
+ * (install/index.ts); en una existente no siembra nada. Desde REQ-F-039 escribe los productos (/api/v1/admin, con el
  * usuario solo DML) y avisa de cada escritura a landing-pages por la red interna. Desde REQ-F-042
  * ejecuta el bot de WhatsApp: su webhook se sirve en WEBHOOK_PORT, el único puerto que publica Traefik
  * (solo /webhooks/whatsapp); PORT sigue siendo de la red interna.
@@ -56,12 +58,16 @@ try {
 
 const store = createPrismaProductStore({ prisma });
 const products = createProductRepository({ store, imageExists: createImageChecker(config.productImagesDir), logger });
+const pageStore = createPrismaPageStore({ prisma });
+const users = createUserRepository({ prisma });
+// Instalación (REQ-F-045, RF-4): nueva -> semilla y primer administrador; existente -> solo la caché de
+// productos (D-15: un fallo de la base impide arrancar). Log solo con códigos; nunca el hash.
 try {
-  // Sin fuentes: solo carga la caché, sin importar semillas (REQ-F-039).
-  await products.init();
+  await prepareInstallation({ users, products, pageStore, bootstrap: config.adminBootstrap, logger });
 } catch (err) {
-  logger.error('database_init_failed', { code: errorProp(err, 'code'), name: errorProp(err, 'name') });
-  process.stderr.write('No se pudieron leer los productos de la base de datos.\n');
+  if (!(err instanceof InstallationError)) throw err;
+  logger.error(err.event, err.fields);
+  process.stderr.write(`${err.message}\n`);
   await prisma.$disconnect();
   process.exit(1);
 }
@@ -95,13 +101,13 @@ const bot = createBotFromConfig({ config: config.whatsappBot, limits: config.bot
 const stopCatalogReload = startCatalogReload({ products });
 
 // Datos de página (REQ-F-044): de MySQL, sin caché. Sin filas (aún no importadas), "no disponible".
-const pages = createPageRepository({ store: createPrismaPageStore({ prisma }), timeZone: config.timezone, logger });
+const pages = createPageRepository({ store: pageStore, timeZone: config.timezone, logger });
 // Cotizador (REQ-F-046): el JSON se valida una vez aquí. Si no es válido, se registra
 // `quote_catalog_invalid` y solo el cotizador queda "no disponible" (503): nunca impide arrancar (P-2).
 const quotes = createFileQuoteCatalogSource({ logger });
 await quotes.init();
 const admin = createAdminRoutes({
-  users: createUserRepository({ prisma }),
+  users,
   products,
   pages,
   notifier,

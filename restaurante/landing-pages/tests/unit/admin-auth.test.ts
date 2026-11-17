@@ -5,9 +5,9 @@ import {
   createUserAuthenticator,
   hashPassword,
   parsePasswordHash,
-  safeEqualStrings,
   verifyPassword,
 } from '@restaurante/core/identity';
+import { safeEqualStrings } from '@restaurante/core/shared';
 
 import { ADMIN_PASSWORD, ADMIN_PASSWORD_HASH, ADMIN_USER } from '../support/admin.ts';
 

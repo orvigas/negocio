@@ -29,8 +29,8 @@ import { USER_BODY_LIMIT } from './user-routes.ts';
  *
  * Una contraseña actual incorrecta no cuenta para el límite de intentos de acceso y no tiene límite
  * propio (decisión "Paridad, sin límite (Recomendado)"). Al confirmarse se cierran todas las sesiones
- * del usuario en la API (también la actual) y se abre una nueva para el navegador actual; las del
- * /admin actual caen en su siguiente petición porque sube `sessionVersion`.
+ * del usuario en la API (también la actual) y se abre una nueva para el navegador actual (sube
+ * `sessionVersion`).
  */
 
 const ACCOUNT_FIELDS = Object.freeze(['currentPassword', 'password', 'passwordConfirmation']);

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { setupAdmin } from '../support/admin.ts';
-import { adminSql, makeScratchDatabase } from '../support/database.ts';
+import { ADMIN_ENV } from '../support/admin.ts';
+import { adminSql, makeDatabase, makeScratchDatabase } from '../support/database.ts';
 import { freePort } from '../support/process.ts';
 import { NEW_PASSWORD, recover, withDatabase, cleanups, runCleanups } from '../support/admin-recover.ts';
 
@@ -17,12 +17,14 @@ describe('npm run admin:recover', () => {
     ['argumento desconocido', ['--user', 'x'], `${NEW_PASSWORD}\n`, /Uso: npm run admin:recover/],
     ['contraseña corta', ['--usuario', 'dueno'], 'corta\n', /al menos 12 caracteres/],
   ])('%s -> código 1 sin cambios', async (_case, args, input, message) => {
-    const context = await setupAdmin();
-    const before = await context.prisma.user.findMany();
-    const result = await recover(withDatabase(context.database.name), args, input);
+    const database = await makeDatabase();
+    cleanups.push(database.cleanup);
+    await database.prisma.user.create({ data: { username: ADMIN_ENV.ADMIN_USER, usernameKey: ADMIN_ENV.ADMIN_USER, displayName: ADMIN_ENV.ADMIN_USER, role: 'admin', passwordHash: ADMIN_ENV.ADMIN_PASSWORD_HASH, updatedAt: new Date() } });
+    const before = await database.prisma.user.findMany();
+    const result = await recover(withDatabase(database.name), args, input);
     expect(result.code).toBe(1);
     expect(result.stderr).toMatch(message);
-    expect(await context.prisma.user.findMany()).toEqual(before);
+    expect(await database.prisma.user.findMany()).toEqual(before);
   });
 
   it('base sin migrar -> código 1 con un mensaje controlado y sin migrarla (CA-11, RN-4)', async () => {

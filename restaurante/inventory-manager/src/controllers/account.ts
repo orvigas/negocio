@@ -12,7 +12,7 @@ import { createControllerKit, type Ctx, type Session } from './common.ts';
  * contraseña escribiendo la actual y dos veces la nueva. Solo actúa sobre el usuario de la sesión: el
  * formulario tiene una lista cerrada de campos (un `role`, `businesses` o un id dan 400).
  *
- * Al confirmarse, la API cierra todas las sesiones del usuario (también las del /admin actual) y
+ * Al confirmarse, la API cierra todas las sesiones del usuario y
  * devuelve una sesión nueva para este navegador: su id reemplaza la cookie (mismo nombre y atributos) y
  * se vuelve a la página con POST/redirect/GET. Una contraseña actual incorrecta no cuenta para el
  * límite de intentos de acceso ("Paridad, sin límite (Recomendado)").

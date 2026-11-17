@@ -11,7 +11,7 @@ export const PAGE_ACTIONS = Object.freeze({
   SAVE: 'save',
   OVERWRITE_AFTER_CONFLICT: 'overwrite_after_conflict',
   RESTORE_PREVIOUS: 'restore_previous',
-  /** Solo en entradas importadas de `changes.jsonl` (RF-8): el admin nuevo no la ofrece (D-5). */
+  /** Solo en entradas que se importaron de `changes.jsonl` (RF-8 de REQ-F-044): el admin nuevo no la ofrece (D-5). */
   RESTORE_SEED: 'restore_seed',
 });
 export type PageAction = (typeof PAGE_ACTIONS)[keyof typeof PAGE_ACTIONS];
@@ -63,23 +63,16 @@ export interface PageStoreTx {
   replaceCurrent(business: BusinessId, next: StoredPage, expected: Pick<StoredPage, 'revision' | 'updatedAt'>): Promise<boolean>;
   putPrevious(business: BusinessId, previous: StoredPage): Promise<void>;
   addChange(entry: PageChangeEntry): Promise<void>;
-  /** Solo la importación: crea la versión vigente de un negocio sin datos. */
+  /** Solo la siembra de una instalación nueva: crea la versión vigente de un negocio sin datos. */
   putCurrent(business: BusinessId, current: StoredPage): Promise<void>;
-  /** Solo la importación: entradas de `changes.jsonl` (`imported`), por lotes. */
-  addImportedChanges(entries: PageChangeEntry[]): Promise<void>;
-  /** Solo la importación: deja la marca; falla si el negocio ya la tenía. */
+  /** Solo la siembra de una instalación nueva: deja la marca; falla si el negocio ya la tenía. */
   markImported(mark: PageImportMark): Promise<void>;
-}
-
-export interface PageTransactionOptions {
-  /** Límite de la transacción (la importación necesita más que una escritura). */
-  timeoutMs?: number;
 }
 
 export interface PageStore {
   read(business: BusinessId): Promise<StoredPages>;
   /** Ejecuta `task` de forma atómica: si lanza, no queda nada escrito. */
-  transaction<T>(task: (tx: PageStoreTx) => Promise<T>, options?: PageTransactionOptions): Promise<T>;
+  transaction<T>(task: (tx: PageStoreTx) => Promise<T>): Promise<T>;
   /** Marcas de importación existentes. */
   readImports(): Promise<PageImportMark[]>;
   /** `product_import` tiene filas: la instalación ya existía al empezar el arranque (D-10). */

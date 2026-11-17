@@ -667,13 +667,22 @@ valores por defecto (ver `README.md`, "Topes de gasto, lista negra e interruptor
 
 1. Actions → `deploy` en verde, con el resumen **Desplegado**: el commit (SHA corto enlazado y SHA
    completo) y los digests.
-2. `https://birriaelmuneco.com/`, `/molotes` y `/birria` responden 200. `/admin` muestra el
-   acceso, no un 503. `https://admin.birriaelmuneco.com/acceso` muestra el acceso del admin nuevo.
+2. `https://birriaelmuneco.com/`, `/molotes` y `/birria` responden 200.
+   `https://admin.birriaelmuneco.com/acceso` muestra el acceso del admin nuevo. Desde REQ-F-045,
+   `/admin` de las landings lleva ahí y no deja escribir:
+
+   ```sh
+   curl -s -o /dev/null -D - https://birriaelmuneco.com/admin/login | grep -iE '^(HTTP|location|set-cookie)'
+   # HTTP/2 302 y location: https://admin.birriaelmuneco.com/ (sin set-cookie)
+   curl -s -o /dev/null -w '%{http_code}\n' -X POST -d x=1 https://birriaelmuneco.com/admin/login
+   # 410
+   ```
+
+   `$C logs app` tiene `server_started` sin ningún `database_*`: la app ya no usa la base.
 3. En el log de `api`: `server_started` y, con el bot, `bot_provider_selected` con `meta`. Vigila
    `bot_staff_delivery_failed` y `bot_webhook_signature_invalid`.
 4. **Control del bot (REQ-F-043), como administrador:**
    - `https://admin.birriaelmuneco.com/bot` muestra el estado, los contadores y la lista negra.
-   - `https://birriaelmuneco.com/admin/bot` no tiene formularios y enlaza a esa pantalla.
 5. **Despliegue del corte de la página (REQ-F-044), una sola vez:**
    - **Antes de desplegar**, en el VPS: el tamaño de `changes.jsonl` y que existan los
      `current.json` de los dos negocios en `app-data` (sin mirar su contenido):
@@ -692,9 +701,8 @@ valores por defecto (ver `README.md`, "Topes de gasto, lista negra e interruptor
      ```
 
    - `/`, `/molotes` y `/birria` muestran el mismo hero, destacado y promoción que antes.
-   - `https://birriaelmuneco.com/admin/molotes` muestra la página sin formulario y enlaza a
-     `https://admin.birriaelmuneco.com/molotes/pagina`, que permite editarla. Un cambio de prueba
-     se ve en la landing y se deshace con "Restaurar versión anterior".
+   - `https://admin.birriaelmuneco.com/molotes/pagina` permite editarla. Un cambio de prueba se ve
+     en la landing y se deshace con "Restaurar versión anterior".
 6. **Primer despliegue de REQ-F-043, una sola vez (fila histórica del personal):** el botón de
    "alcanzaron un tope hoy" estuvo activo hasta REQ-F-042 y un número del personal pudo quedar
    bloqueado, porque la lista negra no exime al personal. Compara la lista negra de la pantalla "Bot"
@@ -715,7 +723,7 @@ Tras el primer despliegue con el bot en `api` y tras cualquier vuelta atrás. `<
 | Un mensaje real | Escribe al número del bot: responde, y `$C logs api` lo refleja |
 | Otras rutas de `api` no expuestas | `curl -si https://birriaelmuneco.com/api/v1/admin/sesion` y `.../api/v1/public/birria/productos` → 404 con `Content-Security-Policy`: las responde `app`, no `api`. Para el log de `api`, usa una ruta inventada, como `/api/v1/admin/sonda-ca3`: no debe aparecer (la ruta de sesión sí la llama `inventory-manager`) |
 | Ruta exacta | `.../webhooks/whatsapp/` y `.../webhooks/` → 404 |
-| El sitio sigue igual | `/`, `/molotes` y `/birria` → 200; `/admin` muestra el acceso |
+| El sitio sigue igual | `/`, `/molotes` y `/birria` → 200; `/admin` → 302 al admin nuevo (REQ-F-045) |
 | Vuelta atrás (solo tras volver a una versión de antes de REQ-F-042) | La verificación con el token correcto responde `123` y sí lleva CSP: la atiende `app` |
 | Memoria (§10 de la [arquitectura](arquitectura.md#10-riesgos)) | `free -m` y `sudo docker stats --no-stream`; compara con el 31,5 % y el umbral del 80 % |
 

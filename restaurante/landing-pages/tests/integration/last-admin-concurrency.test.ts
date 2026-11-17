@@ -5,7 +5,7 @@ import { DatabaseUnavailableError } from '@restaurante/core/shared';
 import { LastAdminError, type UserRepository } from '@restaurante/core/identity';
 import { MAX_ATTEMPTS, createUserRepository } from '@restaurante/db/user-repository';
 
-import { ADMIN_PASSWORD_HASH, ADMIN_USER, createUser, deactivateUser, setupAdmin, loginAs } from '../support/admin.ts';
+import { ADMIN_PASSWORD, ADMIN_PASSWORD_HASH, ADMIN_USER, createUser, startApiAdmin } from '../support/admin.ts';
 import { appDatabaseUrl, makeDatabase } from '../support/database.ts';
 import { runNode } from '../support/process.ts';
 
@@ -111,25 +111,25 @@ describe('último administrador con concurrencia (CA-5)', () => {
   });
 });
 
-describe('último administrador con concurrencia por HTTP (CA-5)', () => {
-  it('desactivación por HTTP en paralelo con `npm run admin:recover` real (5 veces): nunca cero administradores', async () => {
-    const context = await setupAdmin();
+describe('último administrador con concurrencia por HTTP (CA-5; REQ-F-045, CA-8)', () => {
+  it('desactivación por la API de administración en paralelo con `npm run admin:recover` real de la api (5 veces): nunca cero administradores', async () => {
+    const context = await startApiAdmin();
     const owner = (await context.users.findCredentials(ADMIN_USER))!.user;
     const helper = await createUser(context.users, { username: 'eva' });
 
     for (let round = 0; round < 5; round += 1) {
-      const session = await loginAs(context.browser(), ADMIN_USER, 'clave-de-prueba-SECRETA-123');
+      const session = await context.loginAs(ADMIN_USER, ADMIN_PASSWORD);
       const [res, recovered] = await Promise.all([
-        deactivateUser(session, owner.id),
+        context.deactivateUser(session, owner.id),
         runNode(['../api/scripts/admin-recover.ts', '--usuario', 'eva'], {
           env: { NODE_ENV: 'test', DATABASE_URL: appDatabaseUrl(context.database.name) },
           input: 'clave-recuperada-por-consola\n',
         }),
       ]);
       expect(recovered.code).toBe(0);
-      expect([303, 409]).toContain(res.status);
+      expect([200, 409]).toContain(res.status);
       const admins = await context.prisma.user.findMany({ where: { role: 'admin', active: true }, select: { username: true }, orderBy: { id: 'asc' } });
-      expect(admins.map((user) => user.username)).toEqual(res.status === 303 ? ['eva'] : [ADMIN_USER, 'eva']);
+      expect(admins.map((user) => user.username)).toEqual(res.status === 200 ? ['eva'] : [ADMIN_USER, 'eva']);
       await context.users.setActive(owner.id, true, SYSTEM);
       await context.users.update(helper.id, { username: 'eva', displayName: 'eva', role: 'editor', businesses: ['molotes'] }, SYSTEM);
     }

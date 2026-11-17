@@ -42,11 +42,11 @@ describe('CA-1: HTML idéntico al previo a REQ-F-038', () => {
   });
 
   it('las 21 respuestas coinciden byte a byte', async () => {
-    const { repository: products, store } = await makeProductRepository();
+    const { store } = await makeProductRepository();
     const api = await startProductsApiDouble({ store });
     const landingProducts = makeApiLandingProducts({ url: api.url });
     await landingProducts.warmUp();
-    const app = createApp({ config: makeConfig({ NODE_ENV: 'development' }), products, landingProducts, landingPage: fixedLandingPage(), now: () => new Date('2026-10-23T18:00:00Z') });
+    const app = createApp({ config: makeConfig({ NODE_ENV: 'development' }), landingProducts, landingPage: fixedLandingPage(), now: () => new Date('2026-10-23T18:00:00Z') });
     const client = (await listenLocal(app)).request();
 
     for (const entry of manifest.entries) {

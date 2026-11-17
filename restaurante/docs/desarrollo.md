@@ -10,9 +10,8 @@ Todos los comandos se ejecutan desde la carpeta `restaurante/` salvo que se indi
 workspace `landing-pages/`, donde está la app, o en `packages/db/` (Prisma: `db:generate`,
 `db:migrate`, `db:migrate:dev`). El dominio está en `packages/core/` (ver
 [Monorepo](../README.md#monorepo)). Las rutas de archivos de la app que cita esta guía (`src/`,
-`public/`, `.env`, `data/`, `.env.example`) son relativas a `landing-pages/`, y `prisma/` está en
-`packages/db/`. Si vienes de una copia anterior al monorepo, mueve tu `.env` y tu `data/` a
-`landing-pages/`. Si vienes de una anterior a REQ-F-037, copia `MIGRATION_DATABASE_URL` y
+`public/`, `.env`, `.env.example`) son relativas a `landing-pages/`, y `prisma/` está en
+`packages/db/`. Si vienes de una copia anterior al monorepo, mueve tu `.env` a `landing-pages/`. Si vienes de una anterior a REQ-F-037, copia `MIGRATION_DATABASE_URL` y
 `SHADOW_DATABASE_URL` a `packages/db/.env` (paso 3).
 
 ## 1. Requisitos
@@ -22,7 +21,7 @@ workspace `landing-pages/`, donde está la app, o en `packages/db/` (Prisma: `db
 | Node.js >= 24.22.1 | Ejecutar la app, las pruebas y los scripts | Versión en `.nvmrc` (`24.22.1`); con nvm: `nvm install && nvm use`. Es el piso de seguridad: las 24.x anteriores tienen los CVE del boletín de Node de octubre de 2026 (ver [Versión de Node y avisos atendidos](../README.md#versión-de-node-y-avisos-atendidos)) |
 | npm | Dependencias y scripts | El que trae Node 24 |
 | git | Clonar y trabajar en ramas | |
-| Docker con Compose v2 | **MySQL 8.4 local** (`npm run db:up`), pruebas en contenedor y build de las imágenes | Sin Docker necesitas un MySQL 8.4 propio con utf8mb4 y `utf8mb4_es_0900_as_cs` (ver el [paso 4](#4-mysql-local-y-carpeta-de-datos-data_dir)) |
+| Docker con Compose v2 | **MySQL 8.4 local** (`npm run db:up`), pruebas en contenedor y build de las imágenes | Sin Docker necesitas un MySQL 8.4 propio con utf8mb4 y `utf8mb4_es_0900_as_cs` (ver el [paso 4](#4-mysql-local)) |
 | `cloudflared` o `ngrok` | Opcional: solo para probar el bot real con Twilio | Ver el [paso 8](#8-bot-real-con-el-sandbox-de-twilio) |
 | Python 3 + Pillow | Opcional: solo para regenerar los iconos | Ver [Iconos](../README.md#iconos-favicons-y-pantalla-de-inicio) |
 
@@ -63,14 +62,14 @@ basta con, en `landing-pages/.env`:
 NODE_ENV=development
 WHATSAPP_MOLOTES=<número internacional, solo dígitos>
 WHATSAPP_BIRRIA=<número internacional, solo dígitos>
-DATABASE_URL=mysql://restaurante_app:app-dev@127.0.0.1:3307/restaurante
 API_INTERNAL_URL=http://127.0.0.1:3001
 ```
 
-`api/.env` (la API propia de REQ-F-038) ya viene lista en su `.env.example`: `NODE_ENV`, `HOST`,
-`PORT=3001` y el mismo `DATABASE_URL`. `API_INTERNAL_URL` es obligatoria en `landing-pages`: sin
-ella (o con un valor que no sea una URL `http(s)` sin credenciales, parámetros ni fragmento) la app
-no arranca.
+`landing-pages` no usa base de datos ni carpeta de datos (REQ-F-045): las landings leen los
+productos y la página de la API. `api/.env` (la API propia de REQ-F-038) ya viene lista en su
+`.env.example`: `NODE_ENV`, `HOST`, `PORT=3001` y `DATABASE_URL`. `API_INTERNAL_URL` es obligatoria
+en `landing-pages`: sin ella (o con un valor que no sea una URL `http(s)` sin credenciales,
+parámetros ni fragmento) la app no arranca.
 
 **Admin nuevo (REQ-F-039).** `inventory-manager/.env` también viene lista (`PORT=3003` y
 `API_INTERNAL_URL=http://127.0.0.1:3001`). El bot, en `api`, ve al instante los cambios de productos
@@ -86,10 +85,10 @@ INTERNAL_NOTIFY_TOKEN=<la misma credencial>
 ```
 
 Sin ellas todo funciona igual, pero la landing ve el cambio como mucho en 60 s. En
-producción las dos son obligatorias. Si además quieres probar el modo de solo lectura de productos,
-usuarios y "Mi cuenta" del `/admin` actual (REQ-F-039 y REQ-F-040), pon
-`ADMIN_NEW_URL=http://127.0.0.1:3003` en `landing-pages/.env`. "Usuarios" del admin nuevo solo
-aparece para un administrador (por ejemplo, el primero, el de `ADMIN_USER`).
+producción las dos son obligatorias. Con `ADMIN_NEW_URL=http://127.0.0.1:3003` en
+`landing-pages/.env`, `http://127.0.0.1:3000/admin` lleva al admin nuevo (sin ella, 404; REQ-F-045).
+"Usuarios" del admin nuevo solo aparece para un administrador (por ejemplo, el primero, el de
+`ADMIN_USER`).
 
 y, en `packages/db/.env` (solo las lee el CLI de Prisma; la app no las usa):
 
@@ -99,23 +98,23 @@ SHADOW_DATABASE_URL=mysql://restaurante_migrator:migrator-dev@127.0.0.1:3307/res
 ```
 
 - Las tres URL de la base ya vienen así en los `.env.example` y apuntan al MySQL local del paso 4
-  (credenciales de desarrollo, no secretas). `DATABASE_URL` es obligatoria: sin ella la app no
-  arranca. Si cambias la contraseña, codifica los caracteres especiales (`@` -> `%40`).
+  (credenciales de desarrollo, no secretas). `DATABASE_URL` (en `api/.env`) es obligatoria: sin ella
+  la `api` no arranca. Si cambias la contraseña, codifica los caracteres especiales (`@` -> `%40`).
 
 - Deja vacías las variables `WHATSAPP_BOT_*`: con todas vacías el bot queda deshabilitado y las
   landings funcionan igual (el webhook de `api` responde 503).
 - **Primer administrador** (opcional): genera el hash con
   `npm run admin:hash-password` (pide la contraseña sin mostrarla, mínimo 12 caracteres) y
-  rellena `ADMIN_USER` y `ADMIN_PASSWORD_HASH` en `api/.env` (desde REQ-F-045 lo crea la `api`; el
-  `/admin` actual también las lee de `landing-pages/.env` hasta su retirada). Escribe el hash
+  rellena `ADMIN_USER` y `ADMIN_PASSWORD_HASH` en `api/.env` (lo crea la `api`; REQ-F-045). Escribe el hash
   **entre comillas simples** (`ADMIN_PASSWORD_HASH='scrypt$...'`) para que Docker Compose no
   interprete los `$`. Solo se usa si la base de datos no tiene usuarios.
 - Si la app no arranca, termina con código 1 y lista los problemas de configuración (sin mostrar
   valores). Corrige `.env` y vuelve a arrancar.
 
-## 4. MySQL local y carpeta de datos (`DATA_DIR`)
+## 4. MySQL local
 
-La base de datos es MySQL 8.4 (usuarios de `/admin` y productos). `compose.yaml` trae uno local:
+La base de datos es MySQL 8.4 (usuarios, productos y página); solo la usa la `api`. `compose.yaml`
+trae uno local:
 
 ```sh
 npm run db:up        # levanta mysql-dev (Docker), solo en 127.0.0.1:3307, y espera a que esté listo
@@ -127,7 +126,7 @@ npm run db:down      # lo detiene (los datos quedan en el volumen mysql-dev-data
   utf8mb4 con `utf8mb4_es_0900_as_cs`, la base sombra `restaurante_shadow` y los usuarios
   `restaurante_app` (solo datos: el de la app), `restaurante_migrator` (DDL: migraciones) y los de
   las pruebas. Solo escucha en `127.0.0.1`: nunca es accesible desde otra máquina.
-- La app **no migra**: si falta una migración, no arranca (`database_init_failed` con
+- La `api` **no migra**: si falta una migración, no arranca (`database_init_failed` con
   `MIGRATIONS_PENDING`). Ejecuta `npm run db:migrate` después de cada `git pull` que traiga
   migraciones nuevas.
 - **Empezar de cero:** `docker compose down -v` borra el volumen (pierdes los usuarios y
@@ -136,34 +135,22 @@ npm run db:down      # lo detiene (los datos quedan en el volumen mysql-dev-data
   `collation-server=utf8mb4_es_0900_as_cs` y modo estricto, y los mismos usuarios que crea
   `docker/mysql/initdb/01-usuarios.sh`.
 
-`DATA_DIR` vacío usa la carpeta `landing-pages/data/` (ignorada por git). Ahí están los JSON de
-página de cada negocio y `changes.jsonl`, que desde REQ-F-044 **solo se leen** al arrancar: los datos
-de página viven en MySQL. Estructura y reglas en
-[Archivos de datos](../README.md#archivos-de-datos-data_dir) y
-[Base de datos](../README.md#base-de-datos).
-
-- En el primer arranque se crea sola: copia la semilla de cada negocio, y los productos y los datos
-  de página se importan a la base una sola vez (`page_import_done`, o `page_import_from_seed` si
-  vienen de la semilla). Con la base vacía, la `api` también prepara la instalación con la semilla
-  (`page_seeded` y `products_imported`; REQ-F-045): si gana la carrera, la landing registra
-  `page_import_skipped` o `products_import_skipped` con `reason: "concurrent"` y sigue.
-- Si ya tenías productos en tu base local y la carpeta está vacía, la importación de la página se
-  niega (`PAGE_IMPORT_SEED_REFUSED`) y la app no arranca: copia los JSON de otra carpeta, o empieza
-  con una base vacía ("Empezar de cero", arriba).
-- Editar los JSON a mano ya no cambia nada: la página se edita en el admin nuevo
-  (`http://127.0.0.1:3003/<negocio>/pagina`) o, sin `ADMIN_NEW_URL`, en `/admin/<negocio>`. Con la
-  API parada, las landings muestran la semilla de la página.
-- Para experimentar sin tocar tus datos, apunta `DATA_DIR` a otra ruta absoluta (fuera de `src/`
-  y de `public/`).
+- **Instalación nueva:** con la base vacía y migrada, la `api` siembra una sola vez los productos y
+  la página de la semilla (`packages/core/catalog/seeds/`; logs `page_seeded` y `products_imported`)
+  y crea el primer administrador si `api/.env` trae `ADMIN_USER` y `ADMIN_PASSWORD_HASH` (REQ-F-045).
+  La página se edita en el admin nuevo (`http://127.0.0.1:3003/<negocio>/pagina`). Con la API
+  parada, las landings muestran la semilla.
+- Si vienes de una versión anterior a REQ-F-045, la carpeta `landing-pages/data/` (los JSON de la
+  importación única de la página) ya no se usa: puedes borrarla.
 - **Nunca** apuntes `DATABASE_URL` ni `MIGRATION_DATABASE_URL` a una base de producción mientras
   desarrollas.
-- Las pruebas no usan `data/` ni la base `restaurante`: usan sus propias bases `restaurante_test_*`
+- Las pruebas no usan la base `restaurante`: usan sus propias bases `restaurante_test_*`
   ([paso 6](#6-comprobar-la-calidad-antes-de-terminar)).
 
 ## 5. Compilar el CSS y arrancar
 
 ```sh
-npm run build:css   # genera el CSS de landing-pages (molotes, birria y admin) e inventory-manager (no se versiona)
+npm run build:css   # genera el CSS de landing-pages (molotes y birria) e inventory-manager (no se versiona)
 npm run dev         # api (3001), landings (3000) y admin nuevo (3003), con recarga
 ```
 
@@ -172,19 +159,18 @@ REQ-F-038), `landing-pages` (`npm run dev:landing`) y el admin nuevo (`npm run d
 `http://127.0.0.1:3003`; REQ-F-039). Puedes levantarlos por separado
 en dos terminales. Las landings leen los productos de la API: si no está en marcha, muestran la
 semilla (`packages/core/catalog/seeds/`) y registran `landing_products_fallback`; al levantarla, pasan a sus
-datos sin reiniciar (`landing_products_recovered`). Un cambio de producto en `/admin` se ve al
-recargar la landing.
+datos sin reiniciar (`landing_products_recovered`). Un cambio de producto en el admin nuevo se ve
+al recargar la landing (con el aviso interno conectado, o en 60 s como mucho).
 
 | URL | Qué muestra |
 | --- | ----------- |
 | `http://127.0.0.1:3000/` | Birria, con el aviso del día según `BUSINESS_TIMEZONE` (lunes descanso, martes a viernes Molotes) |
 | `http://127.0.0.1:3000/?dia=lunes` | Fuerza el día del aviso (`lunes` … `domingo`, sin acentos); solo con `NODE_ENV=development`. El aviso sale una vez por sesión: ábrelo en una ventana privada nueva o borra `sessionStorage` para volver a verlo |
 | `http://127.0.0.1:3000/molotes` y `/birria` | Cada landing, siempre |
-| `http://127.0.0.1:3000/admin` | Administración (necesita el primer administrador del paso 3) |
-| `http://127.0.0.1:3003/` | Admin nuevo (REQ-F-039): productos, página, usuarios y bot de cada negocio, con las mismas cuentas de `/admin`. Necesita la API en marcha; sin ella, cada pantalla avisa con un 503 |
+| `http://127.0.0.1:3003/` | Admin nuevo (REQ-F-039): productos, página, usuarios y bot de cada negocio (necesita el primer administrador del paso 3). Necesita la API en marcha; sin ella, cada pantalla avisa con un 503 |
+| `http://127.0.0.1:3000/admin` | Con `ADMIN_NEW_URL`, lleva al admin nuevo; sin ella, 404 (REQ-F-045) |
 
-- `npm run dev` reinicia al editar cualquier `.ts` importado. Un reinicio cierra las sesiones de
-  `/admin`. Reiniciar la `api` cierra las sesiones del admin nuevo y borra las conversaciones del
+- `npm run dev` reinicia al editar cualquier `.ts` importado. Reiniciar la `api` cierra las sesiones del admin nuevo y borra las conversaciones del
   bot (están en memoria).
 - `npm run dev` arranca siempre con `NODE_ENV=development`, aunque el `.env` diga otra cosa.
   `npm start` no lo fija: lo toma del `.env` o del entorno, y sin él la app no arranca.
@@ -193,7 +179,7 @@ recargar la landing.
   `HOST` solo admite IP literales: `localhost` no es válido.
 - Si editas estilos o clases en plantillas, vuelve a ejecutar `npm run build:css` o deja
   `npm run watch:css` corriendo en otra terminal.
-- Los logs son JSON por línea en la terminal. Al arrancar verás `server_started` (y
+- Los logs son JSON por línea en la terminal. Al arrancar verás `server_started` (y, en la `api`,
   `database_waiting` si MySQL todavía estaba arrancando).
 - ¿Perdiste la contraseña del administrador local? `npm run admin:recover -- --usuario <nombre>`
   (comando de la `api` desde REQ-F-045: usa el `DATABASE_URL` de `api/.env`; ver
@@ -288,9 +274,8 @@ WHATSAPP_BOT_WEBHOOK_URL=https://<túnel>/webhooks/whatsapp
 WHATSAPP_BOT_BLOCKLIST_KEY=<openssl rand -base64 32>
 ```
 
-En `landing-pages/.env`, con los **mismos valores**, pon `WHATSAPP_MOLOTES`, `WHATSAPP_BIRRIA`,
-`WHATSAPP_BOT_PROVIDER`, `WHATSAPP_BOT_STAFF_MOLOTES`, `WHATSAPP_BOT_STAFF_BIRRIA` y
-`WHATSAPP_BOT_BLOCKLIST_KEY`: los usan los botones y la página "Bot" de `/admin`.
+En `landing-pages/.env`, pon `WHATSAPP_MOLOTES` y `WHATSAPP_BIRRIA` con los **mismos valores**:
+los usan los botones de pedido. Las landings no leen las `WHATSAPP_BOT_*` (REQ-F-045).
 
 - `WHATSAPP_MOLOTES` y `WHATSAPP_BIRRIA` deben ser **el mismo número** y `WHATSAPP_MOLOTES`
   debe estar como número (no solo como `_URL`): si no, la `api` no arranca. Con el sandbox ese

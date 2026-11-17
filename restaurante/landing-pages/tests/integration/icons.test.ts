@@ -10,10 +10,9 @@ import { DEFAULT_PUBLIC_DIR, createApp } from '../../src/app.ts';
 import type { Config } from '../../src/config/env.ts';
 import { iconFilePath, type IconKey } from '../../src/content/icons.ts';
 import { getBusinessContent } from '../../src/content/index.ts';
-import { makeConfig, makeRepository } from '../helpers.ts';
-import { login, makeClock, setupAdmin } from '../support/admin.ts';
+import { makeConfig } from '../helpers.ts';
 import { listenLocal } from '../support/http.ts';
-import { makeProductsFor } from '../support/products.ts';
+import { makeProductRepository } from '../support/products.ts';
 import { readIcoSizes, readPng } from '../support/png.ts';
 import { fixedLandingPage, landingProductsFrom } from '../support/landing-products.ts';
 
@@ -29,12 +28,11 @@ const MONDAY_FIRST_SECOND_MX = new Date('2026-10-12T06:00:00Z'); // lunes 00:00:
 const OTHER = { molotes: 'birria', birria: 'molotes' };
 const THEME = { molotes: '#03132b', birria: '#290808' };
 
-const repository = await makeRepository();
-const products = await makeProductsFor(repository);
+const { repository: products } = await makeProductRepository();
 
 async function agent({ now = FRIDAY_NOON_MX, config = makeConfig() }: { now?: Date | (() => Date); config?: Config } = {}) {
   const clock = typeof now === 'function' ? now : () => now;
-  return (await listenLocal(createApp({ config, products, landingProducts: landingProductsFrom(products), landingPage: fixedLandingPage(), now: clock }))).request();
+  return (await listenLocal(createApp({ config, landingProducts: landingProductsFrom(products), landingPage: fixedLandingPage(), now: clock }))).request();
 }
 
 const iconFile = (businessId: BusinessId, key: IconKey) => readFileSync(join(DEFAULT_PUBLIC_DIR, iconFilePath(businessId, key)));
@@ -172,13 +170,6 @@ describe('iconos de la raíz (CA-7, CA-8; REQ-F-028)', () => {
     expect(res.headers['content-type']).toMatch(/^image\/x-icon/);
   });
 
-  it('funciona con la administración deshabilitada (sin credenciales)', async () => {
-    const config = makeConfig();
-    expect(config.adminBootstrap).toBeNull();
-    const res = await (await agent({ config })).get('/favicon.ico');
-    expect(res.status).toBe(200);
-  });
-
   it('los manifests piden revalidación', async () => {
     const res = await (await agent()).get('/birria.webmanifest');
     expect(res.headers['cache-control']).toBe('no-cache');
@@ -186,51 +177,11 @@ describe('iconos de la raíz (CA-7, CA-8; REQ-F-028)', () => {
   });
 });
 
-describe('favicon en /admin (CA-9)', () => {
-  function adminHead(html: string) {
-    const head = headIcons(html);
-    expect(head.themeColor).toBeNull();
-    expect(head.links.some((link) => link.rel === 'manifest' || link.rel === 'apple-touch-icon')).toBe(false);
-    return head.links;
-  }
-  const faviconLinks = (businessId: BusinessId) => expectedHead(businessId).links.filter((link) => link.rel === 'icon');
-
-  it.each([
-    [FRIDAY_LAST_SECOND_MX, 'molotes'],
-    [SATURDAY_FIRST_SECOND_MX, 'birria'],
-    [SUNDAY_LAST_SECOND_MX, 'birria'],
-    [MONDAY_FIRST_SECOND_MX, 'molotes'],
-  ] as const)('%s: el login muestra el favicon de %s, sin manifest ni theme-color', async (start, businessId) => {
-    const { request: client } = await setupAdmin({ clock: makeClock(start) });
-    const res = await client().get('/admin/login');
-    expect(res.status).toBe(200);
-    expect(adminHead(res.text)).toEqual(faviconLinks(businessId));
-  });
-
-  it('las páginas de cada negocio muestran el favicon del día, no el del negocio editado', async () => {
-    const { browser } = await setupAdmin({ clock: makeClock(SATURDAY_NOON_MX) });
-    const client = browser();
-    await login(client);
-    for (const businessId of BUSINESS_IDS) {
-      const page = await client.get(`/admin/${businessId}`);
-      expect(page.status).toBe(200);
-      expect(adminHead(page.text)).toEqual(faviconLinks('birria'));
-      const confirm = await client.get(`/admin/${businessId}/restaurar-anterior`);
-      expect(confirm.status).toBe(200);
-      expect(adminHead(confirm.text)).toEqual(faviconLinks('birria'));
-    }
-  });
-});
-
-// QA (REQ-F-002, plan aprobado): A-1 y A-2.
 describe('QA: zona horaria configurable (A-1, CA-3, CA-7, CA-9, CLAUDE.md §11)', () => {
   // Viernes 10:00 en CDMX = sábado 01:00 en Tokio (UTC+9).
   const FRIDAY_MX_SATURDAY_TOKYO = new Date('2026-10-09T16:00:00Z');
 
-  it.each([
-    ['America/Mexico_City', 'molotes'],
-    ['Asia/Tokyo', 'birria'],
-  ] as const)('con BUSINESS_TIMEZONE=%s, /admin/login sigue el día de esa zona (%s); / y los iconos de la raíz son de Birria', async (timeZone, businessId) => {
+  it.each(['America/Mexico_City', 'Asia/Tokyo'])('con BUSINESS_TIMEZONE=%s, / y los iconos de la raíz son de Birria', async (timeZone) => {
     const config = makeConfig({ BUSINESS_TIMEZONE: timeZone });
     const client = await agent({ now: FRIDAY_MX_SATURDAY_TOKYO, config });
 
@@ -241,14 +192,6 @@ describe('QA: zona horaria configurable (A-1, CA-3, CA-7, CA-9, CLAUDE.md §11)'
     expect(Buffer.compare(ico.body, iconFile('birria', 'ico'))).toBe(0);
     const precomposed = await client.get('/apple-touch-icon-precomposed.png').buffer(true);
     expect(Buffer.compare(precomposed.body, iconFile('birria', 'appleTouch'))).toBe(0);
-
-    const { request: adminClient } = await setupAdmin({
-      env: { BUSINESS_TIMEZONE: timeZone },
-      clock: makeClock(FRIDAY_MX_SATURDAY_TOKYO),
-    });
-    const loginPage = await adminClient().get('/admin/login').expect(200);
-    const icons = headIcons(loginPage.text).links;
-    expect(icons).toEqual(expectedHead(businessId).links.filter((link) => link.rel === 'icon'));
   });
 });
 

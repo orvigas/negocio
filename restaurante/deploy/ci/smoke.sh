@@ -399,9 +399,11 @@ check 'el dominio de las landings no expone el aviso interno' test "$(curl -sk -
 check 'inventory-manager llega a la api por la red admin' bash -c "docker exec '$(inventory_id)' wget -q -O - http://api:3001/api/v1/public/birria/productos | grep -q '\"data\"'"
 check 'inventory-manager no ve MySQL' bash -c "! docker exec '$(inventory_id)' getent hosts mysql"
 check 'la api llega al aviso interno de la app y sin credencial recibe 401' bash -c "docker exec '$(api_id)' wget -q -O - --post-data '{\"business\":\"birria\"}' --header 'Content-Type: application/json' http://$PROJECT-app-1:3002/internal/v1/productos-cambiados 2>&1 | grep -q 401"
-# Sin usuarios en la base de la prueba, /admin responde 503 (administración no disponible): lo que se
-# comprueba es que el dominio de las landings sigue sirviendo su /admin, no el admin nuevo.
-check 'el /admin de las landings sigue en su dominio (503 sin usuarios, no 404)' bash -c "curl -sk --max-time 10 --resolve '$DOMAIN:443:$TRAEFIK_IP' 'https://$DOMAIN/admin/login' | grep -q ADMIN_UNAVAILABLE"
+# El /admin de las landings se retiró (REQ-F-045, RF-1): GET lleva a la raíz del admin nuevo (302, sin
+# cookies) y cualquier escritura recibe 410.
+check "el /admin de las landings lleva al admin nuevo (302 a https://$ADMIN_DOMAIN/)" test "$(redirect_of https "$DOMAIN" '/admin/login?x=1')" = "302 https://$ADMIN_DOMAIN/"
+check 'la redirección de /admin no pone cookies' bash -c "! curl -sk -D - -o /dev/null --max-time 10 --resolve '$DOMAIN:443:$TRAEFIK_IP' 'https://$DOMAIN/admin' | tr -d '\r' | grep -qi '^set-cookie:'"
+check 'un POST a /admin recibe 410' test "$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 -X POST -d x=1 --resolve "$DOMAIN:443:$TRAEFIK_IP" "https://$DOMAIN/admin/login")" = 410
 
 # --- Vecino de traefik-public con los nombres de los servicios (REQ-F-042, DEF-004) --------------
 say 'un vecino con los alias app y mysql no afecta a la api'
@@ -542,7 +544,8 @@ check 'y el sitio responde 200' bash -c "for _ in \$(seq 1 30); do [ \"\$(curl -
 say 'vuelta atrás tras una migración nueva (D-1)'
 check 'deploy con migración nueva y app rota -> 21' expect_exit 21 run_deploy 7 "$APP_BAD" "$MIG_NEWER" "$API_NEWER" "$INV1"
 check 'la app anterior arranca con la base más nueva' test "$(https_status "$DOMAIN" /)" = 200
-check 'y lo registra (database_newer_than_code_allowed)' bash -c "docker logs '$(app_id)' 2>&1 | grep -q database_newer_than_code_allowed"
+# Desde REQ-F-045 la app no usa la base: arranca sin verificarla (la api es la que la verifica).
+check 'sin tocar la base (ningún database_* en su log)' bash -c "! docker logs '$(app_id)' 2>&1 | grep -q '\"msg\":\"database_'"
 
 say 'resultado'
 if ((FAILURES > 0)); then

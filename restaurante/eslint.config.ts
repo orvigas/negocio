@@ -80,42 +80,39 @@ const OTHER_APPS_FROM_LANDING_PATTERNS = [
 ];
 const LANDING_APP_PATTERNS = [...RELATIVE_JS_IMPORT_PATTERNS, ...PACKAGE_INTERNAL_PATTERNS, ...OTHER_APPS_FROM_LANDING_PATTERNS];
 
-// Código de las landings (REQ-F-038, RF-8; decisión P-1 A; REQ-F-044, RF-5): obtiene los productos y
-// la página solo de la API (cliente de contracts). Nunca la base de datos, la identidad, el control del
-// bot, el repositorio de productos, el de página ni el de menús (los JSON de DATA_DIR); sí los módulos puros de core (shared, schedule y las funciones de catalog), hasta que
-// el aviso y los horarios sean endpoints (desviación registrada en restaurante/docs/arquitectura.md §4).
-const LANDING_CODE_FILES = [
-  'landing-pages/src/controllers/landing.ts',
-  'landing-pages/src/views/landings/**/*.ts',
-  'landing-pages/src/services/landing-products.ts',
-  'landing-pages/src/services/landing-page.ts',
-  'landing-pages/src/services/landing-cache.ts',
-];
-const LANDING_CODE_HINT = `El código de las landings solo obtiene los productos y la página del cliente de la API (@restaurante/contracts; REQ-F-038 y REQ-F-044). ${DEPENDENCY_HINT}`;
+// Código de landing-pages (REQ-F-038, RF-8; REQ-F-044, RF-5; REQ-F-045, RF-7): src/ y scripts/ obtienen
+// los productos y la página solo de la API (cliente de contracts). Nunca la base de datos, Prisma, la
+// identidad ni el control del bot: la administración vive en api e inventory-manager. De core/catalog,
+// solo las funciones puras que se listan (lista de permitidos: una exportación nueva queda prohibida
+// hasta que se añada aquí); de core, también shared y schedule, hasta que el aviso y los horarios sean
+// endpoints (desviación registrada en restaurante/docs/arquitectura.md §4). Las pruebas quedan fuera:
+// conservan la infraestructura de MySQL y las pruebas de los paquetes.
+const LANDING_CODE_FILES = ['landing-pages/src/**/*.ts', 'landing-pages/scripts/**/*.ts'];
+const LANDING_CODE_HINT = `landing-pages solo obtiene los productos y la página del cliente de la API (@restaurante/contracts; REQ-F-038, REQ-F-044 y REQ-F-045). ${DEPENDENCY_HINT}`;
+const LANDING_DB_PATTERN = String.raw`^@restaurante/db(?:/|$)|^(?:prisma|mariadb)(?:/|$)|^@prisma/`;
+const LANDING_ADMIN_PATTERN = String.raw`^@restaurante/core/(?:identity|bot-control)(?:/|$)`;
 const LANDING_CODE_PATTERNS = [
   ...LANDING_APP_PATTERNS,
-  { regex: '^@restaurante/db(?:/|$)', message: `Las landings no leen la base de datos. ${LANDING_CODE_HINT}` },
-  { regex: '^(?:(?:prisma|mariadb)(?:/|$)|@prisma/)', message: `Las landings no leen la base de datos. ${LANDING_CODE_HINT}` },
-  { regex: '^@restaurante/core/(?:identity|bot-control)(?:/|$)', message: `Las landings no usan la identidad ni el control del bot. ${LANDING_CODE_HINT}` },
-  { regex: String.raw`(?:^|/)repositories/[^/]*menu-repository(?:\.ts)?$`, message: `Las landings no leen los JSON de DATA_DIR: la página llega por la API (REQ-F-044). ${LANDING_CODE_HINT}` },
+  { regex: LANDING_DB_PATTERN, message: `Las landings no leen la base de datos. ${LANDING_CODE_HINT}` },
+  { regex: LANDING_ADMIN_PATTERN, message: `Las landings no usan la identidad ni el control del bot: la administración vive en api e inventory-manager. ${LANDING_CODE_HINT}` },
 ];
 const LANDING_CODE_PATHS = [
   {
     name: '@restaurante/core/catalog',
-    importNames: ['createMemoryProductStore', 'MemoryProductStore', 'ProductStore', 'ProductStoreTx', 'toPublished'],
-    message: `Persistencia de productos: fuera del código de las landings. ${LANDING_CODE_HINT}`,
-  },
-  {
-    // El repositorio de productos está en core/catalog desde REQ-F-039.
-    name: '@restaurante/core/catalog',
-    importNames: ['createProductRepository', 'ProductRepository', 'ProductRepositoryOptions', 'productsFromMenuData'],
-    message: `Las landings no leen el repositorio de productos. ${LANDING_CODE_HINT}`,
-  },
-  {
-    // Datos de página (REQ-F-044): repositorio y store en MySQL o en memoria, fuera de las landings.
-    name: '@restaurante/core/catalog',
-    importNames: ['createPageRepository', 'PageRepository', 'PageRepositoryOptions', 'PageStore', 'PageStoreTx', 'createMemoryPageStore', 'MemoryPageStore'],
-    message: `Las landings no leen el repositorio de página: la página llega por la API. ${LANDING_CODE_HINT}`,
+    allowImportNames: [
+      'buildVisibleMenu',
+      'formatPesos',
+      'loadSeedDocument',
+      'mergePageData',
+      'pickPageData',
+      'SEED_FILES',
+      'validateMenuDocument',
+      'MenuDataByBusiness',
+      'MenuDocument',
+      'VisibleBirriaItem',
+      'VisibleMenuByBusiness',
+    ],
+    message: `De core/catalog, las landings solo usan funciones puras; la persistencia (repositorios y stores) queda fuera. ${LANDING_CODE_HINT}`,
   },
 ];
 
@@ -151,6 +148,10 @@ const dynamicImport = (pattern: string, message: string) => ({ selector: `Import
 const LANDING_DYNAMIC_IMPORTS = [
   dynamicImport(String.raw`(^|\/)(api|inventory-manager)\/(src|tests|scripts)(\/|$)`, `Una app nunca importa otra app. ${BOT_IN_API_HINT} ${DEPENDENCY_HINT}`),
 ];
+const LANDING_CODE_DYNAMIC_IMPORTS = [
+  dynamicImport(LANDING_DB_PATTERN.replaceAll('/', String.raw`\/`), `Las landings no leen la base de datos. ${LANDING_CODE_HINT}`),
+  dynamicImport(LANDING_ADMIN_PATTERN.replaceAll('/', String.raw`\/`), `Las landings no usan la identidad ni el control del bot. ${LANDING_CODE_HINT}`),
+];
 const API_DYNAMIC_IMPORTS = [
   dynamicImport(String.raw`(^|\/)landing-pages(\/|$)`, `Una app nunca importa otra app. ${DEPENDENCY_HINT}`),
   dynamicImport(String.raw`(^|\/)inventory-manager(\/|$)`, `Una app nunca importa otra app. ${DEPENDENCY_HINT}`),
@@ -174,7 +175,7 @@ const PACKAGE_DYNAMIC_IMPORT = {
 // landing-pages/tests/support/http.ts, que escucha en 127.0.0.1. Con request(app.callback()) supertest abre su
 // propio servidor en :: (todas las interfaces) y conecta a 127.0.0.1; en macOS otro proceso local
 // puede tener ese puerto en 127.0.0.1 y recibir la petición.
-const TEST_HTTP_HINT = 'Usa listenLocal(app) de tests/support/http.ts (o setupAdmin), que escucha solo en 127.0.0.1 (REQ-F-011).';
+const TEST_HTTP_HINT = 'Usa listenLocal(app) de tests/support/http.ts, que escucha solo en 127.0.0.1 (REQ-F-011).';
 const TEST_HTTP_RESTRICTED_IMPORTS = [
   {
     name: 'supertest',
@@ -303,11 +304,13 @@ export default defineConfig([
       'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, PACKAGE_DYNAMIC_IMPORT],
     },
   },
-  // Código de las landings (REQ-F-038, RF-8): sin base de datos ni repositorio de productos.
+  // Código de landing-pages (REQ-F-038, RF-8; REQ-F-045, RF-7): sin base de datos, Prisma, identidad,
+  // control del bot ni persistencia de core/catalog, tampoco con import().
   {
     files: LANDING_CODE_FILES,
     rules: {
       'no-restricted-imports': ['error', { paths: LANDING_CODE_PATHS, patterns: LANDING_CODE_PATTERNS }],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...LANDING_DYNAMIC_IMPORTS, ...LANDING_CODE_DYNAMIC_IMPORTS],
     },
   },
   // api (REQ-F-038): nunca importa una app ni archivos internos de los paquetes.
@@ -348,11 +351,6 @@ export default defineConfig([
       'no-restricted-syntax': ['error', { selector: 'Program', message: BOT_IN_API_HINT }],
     },
   },
-  // REGLA DE TRANSICIÓN — TEMPORAL (REQ-F-037, limitada en REQ-F-038 y en REQ-F-042): /admin, que sigue
-  // en landing-pages hasta el ticket 6 del paso 4, puede importar core, db y contracts (desviación
-  // registrada en restaurante/docs/arquitectura.md §4). El código de las landings ya tiene su
-  // restricción (bloque de arriba); la de /admin se activa cuando pase a inventory-manager.
-
   // Frontend en JavaScript Vanilla (módulos ES del navegador), sin información de tipos.
   {
     files: ['landing-pages/public/js/**/*.js', 'inventory-manager/public/js/**/*.js'],

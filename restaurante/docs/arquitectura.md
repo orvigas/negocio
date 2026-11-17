@@ -2,7 +2,7 @@
 
 Estrategia para convertir `restaurante/` en una **API Koa** que alimenta a **dos frontends**: las
 landing pages de Molotes y Birria El Muñeco (como hoy) y un **inventory manager** (inventario,
-ventas, CRM y la administración que hoy vive en `/admin`). Es la referencia de los tickets de la
+ventas, CRM y la administración, que desde REQ-F-045 vive solo en `inventory-manager`). Es la referencia de los tickets de la
 épica de migración: cada ticket implementa un paso de la [sección 8](#8-plan-de-migración) y, si
 necesita desviarse de este documento, lo actualiza en el mismo PR.
 
@@ -20,11 +20,9 @@ son relativas a `restaurante/landing-pages/`.
 
 - **`landing-pages`**: las landings por SSR (`src/views/`, `src/content/`, `public/`), con el aviso
   del día decidido en el servidor (REQ-F-028 y REQ-F-034), que obtienen de la API los productos
-  (REQ-F-038) y los datos de página: hero, texto destacado y promociones (REQ-F-044). **En
-  transición** sigue conteniendo la administración en `/admin` (SSR con sesión y CSRF), donde
-  usuarios, productos, control del bot y página quedan en solo lectura con `ADMIN_NEW_URL`, la API
-  JSON de productos en `/admin/api` (REQ-F-008) y la importación única de la página desde
-  `DATA_DIR` al arrancar (REQ-F-044).
+  (REQ-F-038) y los datos de página: hero, texto destacado y promociones (REQ-F-044). Desde
+  REQ-F-045 no usa base de datos ni `DATA_DIR` y no tiene administración: `/admin*` responde 302 a
+  la raíz del admin nuevo (`ADMIN_NEW_URL`; 410 a cualquier otro método y 404 sin la variable).
 - **`api`** (REQ-F-038, REQ-F-039, REQ-F-042 y REQ-F-044): la API JSON propia, solo en la red
   interna. Publica los productos y los datos de página de cada negocio
   (`/api/v1/public/<negocio>/productos` y `/pagina`) y su administración (`/api/v1/admin/...`). Ejecuta además el **bot de WhatsApp** (`api/src/bot/`), que arma el pedido
@@ -171,28 +169,26 @@ packages/core/inventory/
   `core`) y `@restaurante/contracts` (Zod desde el paso 3, REQ-F-038). La app `api` (paso 3)
   importa `core`, `db` y `contracts`. Todos los `tsconfig.json` extienden `tsconfig.base.json`,
   en la raíz.
-- **Código de las landings** (paso 3, REQ-F-038; desviación registrada por la decisión P-1 del
-  usuario, "Prohibir lo que lee datos"): `landing-pages/src/controllers/landing.ts`,
-  `src/views/landings/` y `src/services/landing-products.ts` **no pueden importar** `db`, Prisma,
-  `mariadb`, `core/identity`, `core/bot-control`, la persistencia de `core/catalog`
-  (`createMemoryProductStore`, `ProductStore`, `ProductStoreTx`, `toPublished`) ni el repositorio
-  de productos: los productos solo les llegan del cliente de `contracts`. **Sí pueden importar**
-  los módulos puros de `core` (`shared`, `schedule` y las funciones de `catalog`, que no hacen E/S:
-  la comprobación de imágenes en disco vive en `web`), porque
+- **Código de `landing-pages`** (paso 3, REQ-F-038; desviación registrada por la decisión P-1 del
+  usuario, "Prohibir lo que lee datos"; desde REQ-F-045, todo `landing-pages/src` y `scripts`):
+  **no puede importar** `db`, Prisma, `mariadb`, `core/identity` ni `core/bot-control` (tampoco con
+  `import()`), y de `core/catalog` solo una **lista cerrada** de funciones puras y tipos
+  (`allowImportNames` en `eslint.config.ts`: `buildVisibleMenu`, `formatPesos`, `loadSeedDocument`,
+  `mergePageData`, `pickPageData`, `SEED_FILES`, `validateMenuDocument` y sus tipos), así que una
+  exportación nueva de persistencia queda prohibida por defecto. Los productos y la página solo le
+  llegan del cliente de `contracts`. **Sí puede importar** `core/shared` y `core/schedule`
+  (`safeEqualStrings`, del aviso interno, vive en `core/shared` desde REQ-F-045), porque
   el aviso del día y el hero, el destacado y las promociones siguen decidiéndose en las landings.
   La desviación respecto de la tabla (`landing-pages` solo importa `contracts`) dura hasta que los
   horarios y el aviso sean endpoints públicos (§6).
 - **O-2 (REQ-F-038):** en todo `landing-pages` (y en `api`), los paquetes solo se importan por su
   nombre: un import relativo a un archivo de `packages/` o a un archivo interno de un módulo de
   `core` falla en el lint.
-- **Regla de transición** (desviación registrada en el paso 2, REQ-F-037; limitada en el paso 3):
-  mientras `landing-pages` siga conteniendo `/admin`, **ese código** puede importar
-  `core`, `db` y `contracts`. En `eslint.config.ts` no tiene un bloque de restricción propio: solo
-  le aplica la regla general de `landing-pages` (los paquetes se importan por su nombre y, de
-  `core`, solo el `index.ts` de cada módulo; O-2), y un comentario "REGLA DE TRANSICIÓN —
-  TEMPORAL" marca la excepción. La restricción se activa en el ticket 6 del paso 4, cuando `/admin`
-  se retire. Para el bot ya está activa (REQ-F-042): el lint rechaza un archivo del bot en
-  `landing-pages` y cualquier import de otra app.
+- **Fin de la regla de transición (REQ-F-045):** la excepción que dejaba a `/admin` importar `core`
+  y `db` desde `landing-pages` (paso 2, REQ-F-037) se retiró con `/admin`. Para el bot sigue activa
+  la suya (REQ-F-042): el lint rechaza un archivo del bot en `landing-pages` y cualquier import de
+  otra app. Las pruebas de `landing-pages/tests` quedan fuera de la regla del código: conservan la
+  infraestructura de MySQL de pruebas, las pruebas de los paquetes y las que arrancan la `api`.
 
 ## 5. Contratos compartidos (`packages/contracts`)
 
@@ -213,7 +209,7 @@ packages/core/inventory/
 | Endpoints | `GET /api/v1/public/...`: productos (REQ-F-038) y datos de página (REQ-F-044). Públicos y de solo lectura; el aviso del día y los horarios siguen en `landing-pages` | `/api/v1/admin/...`: lectura y escritura, con autenticación y permisos por negocio |
 | Renderizado | **Sigue en SSR** con Koa: el SEO y la regla de que el servidor decide el aviso no cambian | Ver la [decisión B](#9-decisiones) |
 | Resiliencia | Caché corta con `stale-while-revalidate` y la última copia buena como respaldo: una caída de la API no tira las landings | Muestra el error de la API (503 o 409) y no pierde lo que se estaba editando |
-| Seguridad | **Sin credenciales de la base** (mínimo privilegio) | Sesión con cookie `SameSite=Strict` y token CSRF, como hoy en `/admin` |
+| Seguridad | **Sin credenciales de la base** (mínimo privilegio) | Sesión de la API (cookie `SameSite=Strict` en `inventory-manager`) y token CSRF |
 
 **Paso 3 aplicado (REQ-F-038):** las landings consumen solo `GET /api/v1/public/{negocio}/productos`
 (decisión "Solo productos": el aviso del día, los horarios y el hero, el destacado y las promociones
@@ -221,17 +217,18 @@ siguen en `landing-pages`; los tres últimos pasan a la API en REQ-F-044, abajo)
 
 - caché en memoria por negocio, fresca 60 s y refrescada en segundo plano al vencer
   (*stale-while-revalidate*);
-- cada escritura de productos de `/admin` (mismo proceso, `ProductRepository.onChange`) invalida
-  la caché de ese negocio y la siguiente visita espera los datos nuevos (como mucho 1,5 s): la
-  frescura sigue siendo "al instante";
+- cada escritura de productos invalida la caché de ese negocio (desde REQ-F-039, con el aviso
+  interno de la `api`; hasta REQ-F-045 también en proceso desde `/admin`) y la siguiente visita
+  espera los datos nuevos (como mucho 1,5 s): la frescura sigue siendo "al instante";
 - un vuelo por negocio (las visitas simultáneas comparten la petición) y, durante una caída, un
   reintento de fondo cada 5 s como mucho;
 - si la API falla (caída, más de 1,5 s, 5xx o un cuerpo que no cumple el contrato), la última copia
   buena sin límite de tiempo y, si no la hubo (arranque sin API), la semilla
   (`core/catalog/seeds/` desde REQ-F-045, reexportada en `content/seeds.ts`); ninguna landing
   responde 5xx por la API;
-- las landings no tienen credenciales de la base **en su código**, pero el contenedor
-  `landing-pages` las conserva hasta el paso 4 porque `/admin` sigue en él.
+- las landings no tienen credenciales de la base en su código ni las usan (REQ-F-045). El compose
+  aún se las pasa al contenedor `landing-pages` hasta la limpieza de `deploy/` (PR 3 de REQ-F-045),
+  para que la vuelta atrás automática a la versión anterior siga funcionando; la app las ignora.
 
 **Paso 4, ticket 1 aplicado (REQ-F-039):** `inventory-manager` renderiza en el servidor (decisión
 B) y es lo único con lo que habla el navegador. Llama a `/api/v1/admin` por la red interna `admin`
@@ -249,9 +246,8 @@ con el cliente de `contracts` (`createAdminApiClient`, que nunca lanza). Concret
   caducidad de 60 s de las landings. Desde REQ-F-042 el bot está en `api` y usa la misma caché de
   productos que `/api/v1/admin`: lo ve en proceso, sin aviso, y `meta.freshness` solo confirma si
   esa caché quedó al día. Su red de seguridad es una recarga cada 60 s.
-- **Un solo escritor:** con `ADMIN_NEW_URL`, el `/admin` actual muestra los productos en solo
-  lectura (410 y `PRODUCTS_MOVED` en sus escrituras), así que la API, con una réplica y su mutex, es
-  la única que escribe productos.
+- **Un solo escritor:** la API, con una réplica y su mutex, es la única que escribe productos (hasta
+  REQ-F-045 el `/admin` de las landings los mostraba en solo lectura con `ADMIN_NEW_URL`).
 
 **Paso 4, ticket 5 aplicado (REQ-F-044):** las landings consumen también
 `GET /api/v1/public/{negocio}/pagina` (hero, texto destacado y promociones), con las mismas reglas
@@ -263,13 +259,10 @@ página de la API encima (`mergePageData`) y los productos de la API: el HTML no
 - **Frescura:** el aviso interno `/internal/v1/productos-cambiados` significa "cambió este negocio".
   Invalida productos y página, y `landing` solo es `true` si los dos quedaron al día. La `api` lo
   envía tras cada escritura de productos o de página.
-- **Un solo escritor:** MySQL es la fuente de verdad de la página. Con `ADMIN_NEW_URL`, el `/admin`
-  actual la muestra en solo lectura, con los valores de MySQL, y sus POST de guardar y restaurar
-  responden 410 tras sesión, permiso, cuerpo y CSRF. Sin esa variable (en local), `/admin` escribe
-  en MySQL e invalida su caché en proceso.
-- **Importación única:** la hace la `app` al arrancar, antes de escuchar (ver el paso 4, ticket 5, en
-  la [sección 8](#8-plan-de-migración)). Los JSON de `DATA_DIR` ya no se editan ni los lee ninguna
-  landing.
+- **Un solo escritor:** MySQL es la fuente de verdad de la página y la `api` la única que la escribe.
+- **Importación única:** la hizo la `app` al arrancar entre REQ-F-044 y REQ-F-045 (ver el paso 4,
+  ticket 5, en la [sección 8](#8-plan-de-migración)). Desde REQ-F-045 se retiró: una instalación
+  nueva la prepara la `api` con la semilla, y los JSON de `DATA_DIR` no los lee ninguna app.
 
 **El bot de WhatsApp es un cliente más de `core`** (REQ-F-042). Vive dentro de `api` (`api/src/bot/`)
 y su webhook es otra entrada HTTP, en un puerto propio. Cuando exista `sales`, sus pedidos
@@ -278,11 +271,9 @@ confirmados se guardan como ventas en lugar de solo avisar al personal.
 **Quién escribe el control del bot (REQ-F-043).** La pausa, los bloqueos y los topes se manejan en la
 pantalla "Bot" de `inventory-manager`, con `/api/v1/admin/bot`. Ese endpoint usa la misma instancia
 de `BotControl` que el bot, en el proceso de `api`: los cambios le llegan sin esperar el refresco, y
-la lista "alcanzaron un tope hoy" es la de su memoria. Con `ADMIN_NEW_URL`, `/admin/bot` queda en
-solo lectura (410 en sus POST), así que `api` es la única que escribe. Sin esa variable, en local,
-`/admin/bot` sigue escribiendo: los dos procesos comparten el control por la base
-(`core/bot-control`), `api` lo refresca cada `BOT_CONTROL_REFRESH_SECONDS` (10 s) y solo `api` corre
-el mantenimiento. En ese caso, una baja hecha desde `/admin` no libera el cupo del número en `api`.
+la lista "alcanzaron un tope hoy" es la de su memoria. `api` es la única que escribe (la página
+"Bot" del `/admin` de las landings se retiró en REQ-F-045). `api` sigue refrescando el control desde
+la base cada `BOT_CONTROL_REFRESH_SECONDS` (10 s); retirar ese refresco es una propuesta aparte.
 
 ### Cotizador de taquizas (REQ-F-046)
 
@@ -393,9 +384,36 @@ Decisión del usuario: "Sí, 6 tickets en ese orden". Cada ticket es su propio P
 | 3 | **REQ-F-042**: mover el bot a `api` | Tres PR (#121, #124 y el de despliegue) hacia `epic/arquitectura`, detalle abajo. Publica una entrada de `api` para el webhook con un router de Traefik solo para esa ruta. **La URL se conserva** (`https://birriaelmuneco.com/webhooks/whatsapp`, decisión D-1 de REQ-F-042): no hay ningún cambio en Meta. Activa la regla de lint para el bot |
 | 4 | **REQ-F-043**: control del bot en el admin nuevo | Tres PR (#130, #131 y el de solo lectura y documentación) hacia `epic/arquitectura`, detalle abajo. Pausa, bloqueos y topes |
 | 5 | **REQ-F-044**: página en MySQL y edición en el admin nuevo | Tres PR hacia `epic/arquitectura` (#134, #139 y el del corte), detalle abajo. PR 1: tablas, `core`, `db`, contratos y endpoints de `api`, apagados por `PAGE_CUTOVER`. PR 2: pantalla "Página". PR 3, en un segundo despliegue: importación, landings por API, solo lectura en `/admin` y retirada de `PAGE_CUTOVER` |
-| 6 | Retirada del `/admin` actual | Mover la importación de semillas y el menú, quitar las credenciales de la base de `landing-pages`, quitar el router `restaurante-admin` y activar la regla de lint para `/admin` |
+| 6 | **REQ-F-045**: retirada del `/admin` actual | Tres PR hacia `epic/arquitectura`, detalle abajo. PR 1: instalación nueva y recuperación en la `api`. PR 2: retirada del código de `/admin` e importación desde JSON en `landing-pages` y regla de lint. PR 3 (tras confirmar producción estable): limpieza de `deploy/` y `ops/` (credenciales de la base y `app-data` de `landing-pages`, router `restaurante-admin`) |
 
 Los IDs de los tickets 5 y 6 se asignan al crearlos.
+
+### Paso 4, ticket 6, PR 2 aplicado (REQ-F-045)
+
+Con el PR 2, `landing-pages` queda solo con las landings: el paso 4 está completo en el código (la
+limpieza de `deploy/` y `ops/` es el PR 3).
+
+- **`/admin` retirado** (`src/middleware/admin-moved.ts`, antes de `koa-static`): GET y HEAD de
+  `/admin` y `/admin/*` responden 302 a `<ADMIN_NEW_URL>/` (destino fijo, sin la ruta ni la query: no
+  hay redirección abierta), con `Cache-Control: no-store`; cualquier otro método, 410 `ADMIN_MOVED`
+  sin leer el cuerpo; sin `ADMIN_NEW_URL`, 404. Nunca pone ni lee cookies. Se borran las rutas,
+  controladores, vistas, estilos (`build:css:admin`), servicios y repositorios de `/admin`
+  (incluida la API JSON `/admin/api` de REQ-F-008) y su creación del primer administrador.
+- **Sin base de datos ni `DATA_DIR`:** `server.ts` valida la configuración, crea el cliente de la API,
+  carga las cachés de productos y página, escucha y abre el aviso interno. `config/env.ts` ignora sin
+  validar `DATABASE_URL`, `DATABASE_ALLOW_NEWER_SCHEMA`, `DATA_DIR`, `ADMIN_*` y `WHATSAPP_BOT_*`
+  (el compose se las sigue pasando hasta el PR 3). Se retira de `landing-pages` la regla D-6 de
+  REQ-F-009 (los números de WhatsApp iguales al del bot), que dependía de la configuración del bot;
+  la `api` la sigue comprobando con sus propias variables.
+- **Importación desde JSON retirada (RN-4):** se borran `importPages`, el repositorio de menús por
+  archivo y en memoria, `parseChangeLog` y `addImportedChanges` (contrato, Prisma y memoria). MySQL
+  es la única fuente de la página; `PAGE_ACTIONS.RESTORE_SEED` se conserva porque hay filas
+  importadas que la usan.
+- **Lint:** la regla del código de `landing-pages` cubre `src/` y `scripts/` (ver §4) y se borra la
+  regla de transición.
+- **Pruebas:** las que arrancan la `api` desde `landing-pages/tests` (recuperación, concurrencia del
+  último administrador, arranque con una base inválida y primer arranque) sustituyen la sesión del
+  `/admin` retirado por la de `/api/v1/admin`.
 
 ### Paso 4, ticket 6, PR 1 aplicado (REQ-F-045)
 
@@ -413,7 +431,7 @@ fuera ni de `deploy/` u `ops/`:
   administrador con `ADMIN_USER`/`ADMIN_PASSWORD_HASH` (ahora variables de la `api`). En una
   instalación existente no siembra nada. Cada paso que falla termina con 1 y un mensaje sin
   detalles.
-- **Dos arranques a la vez** (la `api` y la importación de `landing-pages`, solo en desarrollo):
+- **Dos arranques a la vez** (hasta el PR 2, la `api` y la importación de `landing-pages`, solo en desarrollo; después, dos arranques de la `api`):
   `isWriteConflict` y `confirmedByOther` (`core/shared/concurrent-write.ts`). Ante un choque de
   claves o un interbloqueo, el que pierde vuelve a leer las marcas; si aparecen, registra
   `products_import_skipped`, `page_seed_skipped` o `page_import_skipped` con `reason: "concurrent"` y
@@ -645,7 +663,7 @@ y se registra aquí, con la fecha y lo que respondió el usuario. Las tres está
 | --- | --- |
 | 1 (REQ-F-036; en producción desde el 2026-10-29, #105) | La imagen y el contenedor actuales salen del workspace `landing-pages/`, con los mismos nombres (`ghcr.io/orvigas/restaurante`, `restaurante-migrate`, servicio `app` y routers `restaurante*`), el mismo dominio y las mismas rutas. Se mide la memoria del VPS ([sección 10](#10-riesgos)) |
 | 3 | Contenedor e imagen de `api` (**aplicado en REQ-F-038**; en producción desde el 2026-10-29, #105): solo en la red interna, sin router de Traefik (decisión "Solo red interna"); el subdominio `admin.<dominio>` queda para el paso 4. La revisión de memoria se basó en la estimación del 33,5 % ([sección 10](#10-riesgos)) |
-| 4 | Contenedor `inventory-manager`, `admin.<dominio>`, DNS (a cargo del usuario) y certificado (**aplicado en REQ-F-039** para los productos y en producción desde el 2026-10-29, #105; desviación D-3: la API sigue sin publicarse). El `/admin` actual se retira en el ticket 6 del paso 4 |
+| 4 | Contenedor `inventory-manager`, `admin.<dominio>`, DNS (a cargo del usuario) y certificado (**aplicado en REQ-F-039** para los productos y en producción desde el 2026-10-29, #105; desviación D-3: la API sigue sin publicarse). El `/admin` actual se retiró en el ticket 6 del paso 4 (REQ-F-045) |
 
 ### Decisión B: tomada
 
@@ -730,19 +748,21 @@ y se registra aquí, con la fecha y lo que respondió el usuario. Las tres está
   `app`: **la decisión A se mantiene**.
   - **Pendiente:** la medición real en el VPS tras desplegar la épica (`free -m` y
     `docker stats --no-stream`, solo lectura), para compararla con el 31,5 % y el umbral del 80 %.
-- **Dos administraciones a la vez** durante el paso 4: el `/admin` actual se mantiene hasta que el
-  nuevo tenga lo mismo y se retira en el ticket 6. Desde REQ-F-039 muestra los productos en solo
-  lectura y el admin nuevo los edita (un solo escritor). Desde REQ-F-040 y REQ-F-043, también usuarios,
-  cuenta y control del bot. Desde REQ-F-044, también la página (hero, destacado y promociones), que
-  vive en MySQL: el `/admin` actual ya no tiene nada propio que editar con `ADMIN_NEW_URL`.
+- **Dos administraciones a la vez** durante el paso 4 (cerrado en REQ-F-045): el `/admin` de las
+  landings quedó en solo lectura ticket a ticket y se retiró en el ticket 6; hoy solo redirige al
+  admin nuevo. Mientras el compose del PR 2 siga vigente, una vuelta atrás automática devuelve la app
+  anterior con su `/admin` en solo lectura, que encuentra las marcas de importación y no reimporta.
+- **Restaurar un respaldo anterior al 2026-11-16** (REQ-F-045, RN-4, riesgo aceptado): la base queda
+  sin filas de página y ya no hay importación desde los JSON. La pantalla «Página» del admin nuevo
+  queda "no disponible" y las landings muestran la semilla hasta que se corrija a mano.
 - **La página tras el corte** (REQ-F-044): con la API caída, un reinicio de `landing-pages` muestra
   la semilla (precio del hero de $195 en Birria y $145 en Molotes, quizá desactualizados) hasta que
   la API vuelva (aceptado, D-4). Una vuelta atrás tras el corte deja las ediciones de MySQL sin
   mostrar y las del JSON sin volver a MySQL (aceptado, D-3); el procedimiento está en
   [despliegue.md §6](despliegue.md#6-volver-a-una-versión-anterior-a-mano).
-- **Sin pausa web si cae `inventory-manager`** (REQ-F-043, D-2, riesgo aceptado): con `ADMIN_NEW_URL`,
-  `/admin/bot` no escribe, así que la pausa y los bloqueos dependen de `inventory-manager` y de `api`.
-  Las consultas de `/admin/bot` siguen disponibles. Si solo falla `inventory-manager`, el bot sigue
+- **Sin pausa web si cae `inventory-manager`** (REQ-F-043, D-2, riesgo aceptado): la pausa y los
+  bloqueos dependen de `inventory-manager` y de `api` (desde REQ-F-045 no hay `/admin/bot` ni para
+  consultar). Si solo falla `inventory-manager`, el bot sigue
   atendiendo; pausarlo exige recuperar ese contenedor o volver la app
   ([vuelta atrás a mano](despliegue.md#6-volver-a-una-versión-anterior-a-mano)).
 - **Estado en memoria de la `api`** (REQ-F-039): viven en el proceso las sesiones del admin nuevo,

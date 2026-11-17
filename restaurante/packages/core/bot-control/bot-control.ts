@@ -36,8 +36,8 @@ import { canonicalPhone, maskPhone, parsePhoneInput } from './phone.ts';
  * - **Contadores:** bot-usage.ts; sus deltas se persisten en una cola serie que acumula lo pendiente
  *   si la base falla y lo reintenta con la siguiente escritura, el mantenimiento o el apagado.
  * - **Dos papeles (REQ-F-042):** `mode: 'bot'` (por defecto) es el del proceso que ejecuta el bot (la
- *   api): sus contadores son la verdad y ejecuta el mantenimiento. `mode: 'panel'` es el de la página
- *   "Bot" del /admin actual (landing-pages), que no envía nada: cada `snapshot()` lee el uso del día y
+ *   api): sus contadores son la verdad y ejecuta el mantenimiento. `mode: 'panel'` era el de la página
+ *   "Bot" del /admin de landing-pages (retirado en REQ-F-045), un proceso que no envía nada: cada `snapshot()` lee el uso del día y
  *   del mes de la base (CA-6) y `maintenance()` solo refresca la copia, sin auditar caducidades ni
  *   purgar (RF-11: el mantenimiento corre en un solo proceso, CA-13).
  * - Nunca registra el número completo, el seudónimo ni las claves.

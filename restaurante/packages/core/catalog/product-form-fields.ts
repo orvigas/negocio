@@ -2,10 +2,9 @@ import type { LeafNode } from './menu-schema.ts';
 import { MAX_ROWS, fieldDefinitions, type FieldRule, type InputField, type ProductKind } from './product-schema.ts';
 
 /**
- * Campos del formulario de un producto (REQ-F-008, RF-6 y DT-12), movidos de
- * landing-pages/src/services/product-form.ts (REQ-F-039): los usa el /admin actual para pintar su
- * formulario y la API los sirve como descriptor (`/api/v1/admin/:negocio/productos/campos`) al admin
- * nuevo. Los nombres son planos ("price", "image.src", "variants.2.label"). Variantes y chips se
+ * Campos del formulario de un producto (REQ-F-008, RF-6 y DT-12), movidos del /admin de landing-pages
+ * (REQ-F-039; retirado en REQ-F-045): la API los sirve como descriptor
+ * (`/api/v1/admin/:negocio/productos/campos`) al admin nuevo. Los nombres son planos ("price", "image.src", "variants.2.label"). Variantes y chips se
  * muestran en 6 filas fijas: cada fila tiene sus campos, una "Posición" (1 a 6) y "Quitar".
  */
 

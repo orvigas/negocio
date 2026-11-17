@@ -7,14 +7,14 @@ import { hashPassword } from '@restaurante/core/identity';
 import { createUserRepository } from '@restaurante/db/user-repository';
 
 import { VALID_ENV } from '../helpers.ts';
-import { ADMIN_ENV, TEST_HASH_PARAMS } from '../support/admin.ts';
-import { makeDatabase, makeTempDir } from '../support/database.ts';
+import { TEST_HASH_PARAMS } from '../support/admin.ts';
+import { makeDatabase } from '../support/database.ts';
 import { freePorts, startServer } from '../support/process.ts';
 import { databaseUrl } from '../support/test-database-config.ts';
 
 /**
- * De extremo a extremo con los procesos reales (REQ-F-039, PR 3; CA-9 y CA-10): landing-pages, la API
- * e inventory-manager contra MySQL, con el aviso interno conectado como en producción
+ * De extremo a extremo con los procesos reales (REQ-F-039, PR 3; CA-9 y CA-10; REQ-F-045, CA-5):
+ * landing-pages (sin base de datos), la API e inventory-manager, con la API contra MySQL, con el aviso interno conectado como en producción
  * (LANDING_INTERNAL_URL -> INTERNAL_PORT de landing-pages, con la misma credencial).
  *
  * Un producto marcado como no disponible en el admin nuevo deja de verse en la siguiente visita a la
@@ -42,12 +42,11 @@ const logLines = (stdout: string) =>
 async function startStack() {
   const database = await makeDatabase();
   cleanups.push(database.cleanup);
-  const dataDir = await makeTempDir();
-  cleanups.push(dataDir.cleanup);
   // Distintos entre sí y de los de las landings (freePorts devuelve exactamente dos).
   const [apiPort, inventoryPort] = (await freePorts(2)) as [number, number];
-  // Las landings arrancan sin API (sirven la semilla) y la leen en cuanto responde.
-  const landing = await startServer({ DATA_DIR: dataDir.dir, ...ADMIN_ENV, DATABASE_URL: databaseUrl(database.config), API_INTERNAL_URL: `http://127.0.0.1:${apiPort}` }, 60_000);
+  // Las landings arrancan sin API (sirven la semilla) y la leen en cuanto responde. Sin base de datos
+  // ni carpeta de datos (REQ-F-045): la api prepara la instalación nueva.
+  const landing = await startServer({ API_INTERNAL_URL: `http://127.0.0.1:${apiPort}` }, 60_000);
   cleanups.push(() => landing.stop());
   expect(landing.started, landing.output().stderr).toBe(true);
   const api = await startServer(

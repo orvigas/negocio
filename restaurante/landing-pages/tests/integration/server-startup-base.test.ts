@@ -1,17 +1,14 @@
-import { chmod } from 'node:fs/promises';
-
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { ADMIN_ENV, ADMIN_PASSWORD, ADMIN_USER } from '../support/admin.ts';
-import { adminSql, appDatabaseUrl, runningAsRoot } from '../support/database.ts';
-import { startServer } from '../support/process.ts';
-import { cleanups, dataDir, scratch, bootApi, logLines, expectControlledFailure, runCleanups } from '../support/server-startup.ts';
+import { adminSql, appDatabaseUrl } from '../support/database.ts';
+import { scratch, bootApi, logLines, expectControlledFailure, runCleanups } from '../support/server-startup.ts';
 
 /**
  * Arranque real sobre MySQL (REQ-F-007 y REQ-F-014; RF-6, CA-7 y CA-9): si la base no está lista,
  * termina con código 1, un `database_init_failed` con un código estable y sin stack, SQL, URL ni
  * credenciales. Nunca migra (RN-4). Desde REQ-F-045 (CA-6 y CA-9) la instalación nueva la prepara la
- * api (`node ../api/src/server.ts`); el caso de DATA_DIR sigue siendo de landing-pages.
+ * api (`node ../api/src/server.ts`).
  *
  * REQ-F-041: parte de server-startup.test.ts (preparación en tests/support/server-startup.ts).
  */
@@ -36,19 +33,6 @@ describe('arranque con la base de datos no lista (RF-6, CA-7)', () => {
     expect(stderr).toContain('No se pudieron preparar los productos en la base de datos.');
     expect(stdout).toContain('"msg":"products_init_failed"');
     expect(stdout + stderr).not.toMatch(/\n\s+at |SELECT |prisma\.|product_chip/);
-  });
-
-  it.skipIf(runningAsRoot())('DATA_DIR sin permisos de escritura -> código 1 sin stack', async () => {
-    const dir = await dataDir();
-    await chmod(dir, 0o500);
-    const server = await startServer({ DATA_DIR: dir, ...ADMIN_ENV });
-    cleanups.push(async () => void (await server.stop()));
-    expect(server.started).toBe(false);
-    expect(await server.exited).toBe(1);
-    const { stdout, stderr } = server.output();
-    // Falla antes, al preparar los datos editables (REQ-F-001), con su propio mensaje controlado.
-    expect(stderr).toContain('No se pudo preparar la carpeta de datos');
-    expect(stdout + stderr).not.toMatch(/\n\s+at /);
   });
 });
 

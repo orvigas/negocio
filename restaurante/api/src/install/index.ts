@@ -17,8 +17,8 @@ import { bootstrapAdmin, type BootstrapResult } from './admin-bootstrap.ts';
  *    filas de página, la página responde "no disponible" (CA-7).
  * 4. Primer administrador con ADMIN_USER/ADMIN_PASSWORD_HASH, solo si no hay usuarios.
  *
- * Seguro en paralelo con otro arranque (landing-pages en desarrollo, mientras conviva su importación):
- * el que pierde la carrera encuentra las marcas y continúa (seedPages e importBusiness de core).
+ * Seguro en paralelo con otro arranque de la api sobre la misma base: el que pierde la carrera
+ * encuentra las marcas y continúa (seedPages e importBusiness de core).
  */
 
 /** Paso que falló: el evento del log y el mensaje sin detalles para stderr. */

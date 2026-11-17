@@ -14,7 +14,7 @@ import { fixedLandingPage, landingProductsFrom } from '../support/landing-produc
 async function serve(env: Record<string, string> = {}) {
   const logger = makeRecordingLogger();
   const products = (await makeProductRepository()).repository;
-  const server = await listenLocal(createApp({ config: makeConfig(env), products, landingProducts: landingProductsFrom(products), landingPage: fixedLandingPage(), logger }));
+  const server = await listenLocal(createApp({ config: makeConfig(env), landingProducts: landingProductsFrom(products), landingPage: fixedLandingPage(), logger }));
   const requestLines = () => logger.lines.filter((line) => line.msg === 'request');
   return { server, requestLines };
 }

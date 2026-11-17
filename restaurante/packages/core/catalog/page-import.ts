@@ -1,25 +1,18 @@
-import { BUSINESS_IDS, confirmedByOther, isBusinessId, isWriteConflict, silentLogger, type BusinessId, type Logger } from '../shared/index.ts';
-import type { FieldChange } from './menu-diff.ts';
+import { BUSINESS_IDS, confirmedByOther, isWriteConflict, silentLogger, type BusinessId, type Logger } from '../shared/index.ts';
 import { AUTHOR_MAX_LENGTH, pickPageData, textLength, type MenuDocument } from './menu-schema.ts';
-import { PAGE_ACTIONS, versionOf, type PageAction, type PageChangeEntry, type PageStore, type StoredPage } from './page-store.ts';
+import { versionOf, type PageStore, type StoredPage } from './page-store.ts';
 
 /**
- * Importación única de los datos de página desde los JSON (REQ-F-044, PR 3; RF-2, RF-3, RF-8 y D-10).
- * Solo decide y analiza: sin E/S. La lectura de `DATA_DIR` y la escritura en MySQL las hace quien la
- * llama (landing-pages/src/services/page-import.ts) en una sola transacción.
+ * Datos de página de una instalación nueva (REQ-F-044, RF-3 y D-10; REQ-F-045, RF-4). Las reglas de
+ * origen vienen de la importación única desde los JSON (REQ-F-044, PR 3), retirada en REQ-F-045 junto
+ * con los JSON: hoy la `api` solo siembra con la semilla (`seedPages`).
  *
- * Origen (RF-3): `current`; si no sirve, `previous`; si tampoco, la semilla.
- * - `current` válido: vigente = current y anterior = previous (si es válido).
- * - `previous` como vigente: anterior vacío.
- * - Semilla de primera ejecución (instalación nueva sin JSON): vigente y anterior (CA-5).
- * - Semilla por daño en una instalación nueva: anterior vacío.
+ * Origen: `current`; si no sirve, `previous`; si tampoco, la semilla.
+ * - Semilla de primera ejecución (instalación nueva): vigente y anterior (CA-5).
  * - Semilla en una instalación existente (`product_import` con filas): se niega (D-10, CA-20).
  *
  * Un documento que no cabe en las columnas (fecha de más de 64 caracteres, revisión fuera de INT,
- * texto mal formado) se trata como inválido: un JSON nunca aborta la importación (D-2).
- *
- * `seedPages` (REQ-F-045): la `api` prepara la página de una instalación nueva con la semilla, con las
- * mismas reglas que la primera ejecución sin JSON (vigente y anterior = semilla, marca `seed`).
+ * texto mal formado) se trata como inválido (D-2).
  */
 
 export const PAGE_IMPORT_SEED_REFUSED = 'PAGE_IMPORT_SEED_REFUSED';
@@ -28,8 +21,6 @@ export const PAGE_IMPORT_SEED_REFUSED = 'PAGE_IMPORT_SEED_REFUSED';
 const MAX_REVISION = 2_147_483_647;
 /** Largo de `page_version.updated_at` y `page_change.at`. */
 const MAX_DATE_LENGTH = 64;
-/** Acciones del historial (incluida `restore_seed`, que solo llega importada). */
-const KNOWN_ACTIONS: ReadonlySet<string> = new Set(Object.values(PAGE_ACTIONS));
 
 export type PageImportSource = 'current' | 'previous' | 'seed';
 /** Por qué no hay un `current` utilizable: faltan los archivos o están dañados. */
@@ -164,69 +155,4 @@ export async function seedPages({ store, seeds, logger = silentLogger, now = () 
   }
   for (const plan of plans) logger.info('page_seeded', { business: plan.business, source: plan.source });
   return plans.map((plan) => plan.business);
-}
-
-// --- Historial (`changes.jsonl`) -------------------------------------------------
-
-export interface ParsedChangeLog {
-  /** Entradas válidas de cada negocio, en el orden del archivo. */
-  entries: Record<BusinessId, PageChangeEntry[]>;
-  /** Números de línea (desde 1) ilegibles: se omiten y solo se cuentan (RF-8). */
-  skipped: number[];
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
-
-function parseChanges(value: unknown): FieldChange[] | null {
-  if (!Array.isArray(value)) return null;
-  const changes: FieldChange[] = [];
-  for (const item of value) {
-    if (!isRecord(item) || typeof item.field !== 'string' || item.field === '' || !wellFormed(item.field)) return null;
-    changes.push({ field: item.field, before: item.before ?? null, after: item.after ?? null });
-  }
-  return wellFormed(JSON.stringify(changes)) ? changes : null;
-}
-
-/** Una línea del registro, o null si es ilegible (nunca se registra su contenido). */
-export function parseChangeLine(line: string): PageChangeEntry | null {
-  let value: unknown;
-  try {
-    value = JSON.parse(line);
-  } catch {
-    return null;
-  }
-  if (!isRecord(value)) return null;
-  const { at, business, author, authorId, action, changes } = value;
-  if (!isBusinessId(business)) return null;
-  if (typeof action !== 'string' || !KNOWN_ACTIONS.has(action)) return null;
-  if (typeof author !== 'string') return null;
-  const name = author.trim();
-  if (name === '' || textLength(name) > AUTHOR_MAX_LENGTH || !wellFormed(name)) return null;
-  if (at !== null && at !== undefined && (typeof at !== 'string' || at.length > MAX_DATE_LENGTH || !wellFormed(at) || Number.isNaN(Date.parse(at)))) return null;
-  // Las entradas anteriores a REQ-F-007 no traen `authorId`: se importan solo con el nombre.
-  let id: number | null = null;
-  if (authorId !== undefined && authorId !== null) {
-    if (!Number.isSafeInteger(authorId) || (authorId as number) <= 0 || (authorId as number) > MAX_REVISION) return null;
-    id = authorId as number;
-  }
-  const parsed = parseChanges(changes);
-  if (!parsed) return null;
-  // Comprobado arriba: es una de las acciones conocidas.
-  return { at: typeof at === 'string' ? at : null, business, author: name, authorId: id, action: action as PageAction, changes: parsed };
-}
-
-/** Reparte `changes.jsonl` por negocio. Las líneas vacías se ignoran; una línea final cortada es ilegible. */
-export function parseChangeLog(text: string | null): ParsedChangeLog {
-  const entries = Object.fromEntries(BUSINESS_IDS.map((business) => [business, [] as PageChangeEntry[]])) as Record<BusinessId, PageChangeEntry[]>;
-  const skipped: number[] = [];
-  if (text === null) return { entries, skipped };
-  const lines = text.split('\n');
-  lines.forEach((raw, index) => {
-    const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
-    if (line.trim() === '') return;
-    const entry = parseChangeLine(line);
-    if (entry) entries[entry.business].push(entry);
-    else skipped.push(index + 1);
-  });
-  return { entries, skipped };
 }

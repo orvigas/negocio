@@ -27,16 +27,16 @@ No introduzcas complejidad arquitectónica sin una razón técnica clara. Este p
 
 ## Stack del proyecto
 
-La fuente de verdad es `restaurante/landing-pages/package.json` (dependencias de la app), junto con los de `restaurante/packages/{core,contracts,db}/package.json` (`db` declara Prisma y `mariadb`); `restaurante/package.json` es la raíz de los npm workspaces, con `allowScripts`, las herramientas comunes (TypeScript y ESLint) y los scripts que delegan en cada workspace. No agregues dependencias sin justificarlas según `.claude/rules/dependencias.md`.
+La fuente de verdad son los `package.json` de cada app (`restaurante/{landing-pages,api,inventory-manager}/package.json`), junto con los de `restaurante/packages/{core,contracts,db,web}/package.json` (`db` declara Prisma y `mariadb`); `restaurante/package.json` es la raíz de los npm workspaces, con `allowScripts`, las herramientas comunes (TypeScript y ESLint) y los scripts que delegan en cada workspace. No agregues dependencias sin justificarlas según `.claude/rules/dependencias.md`.
 
 ### Backend
 
 - Node.js 24 (LTS, ≥ 24.22.1) con **TypeScript estricto** en módulos ES (`"type": "module"`). Node ejecuta los `.ts` directamente (type stripping nativo): sin paso de compilación ni `dist/`. `tsc` solo verifica tipos (`npm run typecheck`). Convenciones en `.claude/rules/typescript.md` (solo sintaxis borrable, imports con extensión `.ts`, `any` solo con justificación).
 - Koa 3, `@koa/router`, `koa-static` (archivos de `public/`), `koa-helmet` (CSP y HSTS).
-- Variables de entorno con `node --env-file-if-exists=.env` (sin dotenv), validadas a mano en `src/config/env.ts`.
+- Variables de entorno con `node --env-file-if-exists=.env` (sin dotenv), validadas a mano en la configuración de cada app (`landing-pages/src/config/env.ts`, `api/src/config.ts`, `inventory-manager/src/config.ts`).
 - Recarga en desarrollo con `node --watch` (sin Nodemon).
-- Plantillas HTML con el renderizador propio `src/views/render.ts` (`{{ clave }}` escapa; `{{{ clave }}}` solo para la salida de otro render). Sin EJS ni Pug.
-- Base de datos: MySQL 8.4 LTS con Prisma 7 (`@prisma/client` + `@prisma/adapter-mariadb` + `mariadb`, versiones exactas; REQ-F-007 y REQ-F-014), en utf8mb4 con la colación `utf8mb4_es_0900_as_cs` en la base, las tablas y las columnas. Esquema en `packages/db/prisma/schema.prisma`, con cada texto en `@db.VarChar(n)` o `@db.MediumText` explícito. Migraciones en `packages/db/prisma/migrations/`: cada `CREATE TABLE` generado se revisa a mano para fijar `DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_es_0900_as_cs`, porque Prisma escribe `utf8mb4_unicode_ci` (`tests/unit/migrations-collation.test.ts` lo impide). El cliente se genera en `packages/db/src/generated/prisma` con `npm run db:generate` (no se versiona; ESLint lo ignora). La app nunca modifica el esquema. Las migraciones las aplica el proceso aparte `migrate` (`prisma migrate deploy` con `MIGRATION_DATABASE_URL` y un usuario con DDL; imagen `migrate` del Dockerfile, o `npm run db:migrate` en local). La app, con `DATABASE_URL` y un usuario solo DML, solo verifica al arrancar (`packages/db/src/verify.ts`: conexión con reintentos hasta 60 s, credenciales, utf8mb4 y colación, modo estricto y estado de `_prisma_migrations`). Si algo falla, termina con código 1 y `database_init_failed`. El CLI de Prisma solo existe en desarrollo, en el CI y en las etapas `build`, `test` y `migrate` de Docker.
+- Plantillas HTML con el renderizador propio `packages/web/render.ts` (`{{ clave }}` escapa; `{{{ clave }}}` solo para la salida de otro render). Sin EJS ni Pug.
+- Base de datos: MySQL 8.4 LTS con Prisma 7 (`@prisma/client` + `@prisma/adapter-mariadb` + `mariadb`, versiones exactas; REQ-F-007 y REQ-F-014), en utf8mb4 con la colación `utf8mb4_es_0900_as_cs` en la base, las tablas y las columnas. Esquema en `packages/db/prisma/schema.prisma`, con cada texto en `@db.VarChar(n)` o `@db.MediumText` explícito. Migraciones en `packages/db/prisma/migrations/`: cada `CREATE TABLE` generado se revisa a mano para fijar `DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_es_0900_as_cs`, porque Prisma escribe `utf8mb4_unicode_ci` (`landing-pages/tests/unit/migrations-collation.test.ts` lo impide). El cliente se genera en `packages/db/src/generated/prisma` con `npm run db:generate` (no se versiona; ESLint lo ignora). La app nunca modifica el esquema. Las migraciones las aplica el proceso aparte `migrate` (`prisma migrate deploy` con `MIGRATION_DATABASE_URL` y un usuario con DDL; imagen `migrate` del Dockerfile, o `npm run db:migrate` en local). La `api` (la única app que usa MySQL desde REQ-F-045), con `DATABASE_URL` y un usuario solo DML, solo verifica al arrancar (`packages/db/src/verify.ts`: conexión con reintentos hasta 60 s, credenciales, utf8mb4 y colación, modo estricto y estado de `_prisma_migrations`). Si algo falla, termina con código 1 y `database_init_failed`. El CLI de Prisma solo existe en desarrollo, en el CI y en las etapas `build`, `test` y `migrate` de Docker.
 - Scripts de instalación de dependencias: solo los aprobados en `allowScripts` del `package.json` de la raíz, `restaurante/package.json` (`npm ci --strict-allow-scripts` en CI y Docker). Una dependencia nueva con script de instalación exige revisarlo y aprobarlo o denegarlo.
 
 ### Frontend
@@ -67,28 +67,28 @@ Prohibidos salvo petición explícita: React, Vue, Angular, Svelte, jQuery, Alpi
 | `npm run bot:chat [-- --ahora AAAA-MM-DDTHH:MM] [--proveedor meta\|twilio]` | Conversación con el bot de WhatsApp en la terminal contra el simulador del proveedor (Meta por defecto; sin Meta, Twilio ni `DATA_DIR`). |
 | `npm test`          | Ejecuta toda la suite. Requiere el MySQL local (`npm run db:up`).                |
 | `npm run typecheck` | Verifica tipos con `tsc` (sin emitir archivos). Obligatorio antes de dar una tarea por terminada; también corre en la etapa `build` del Dockerfile. |
-| `npm run build:css` | Genera `public/css/{molotes,birria,admin}/main.css` (no se versiona; nunca editar a mano). |
+| `npm run build:css` | Genera `landing-pages/public/css/{molotes,birria}/main.css` e `inventory-manager/public/css/main.css` (no se versionan; nunca editar a mano). |
 | `npm run dev`       | Servidor con recarga.                                                            |
-| `npm run lint`      | ESLint (`eslint.config.ts` de la raíz) sobre `landing-pages/` (`src/`, `tests/`, `scripts/`, configuraciones y `public/js`) y `packages/`. Obligatorio antes de dar una tarea por terminada (debe terminar con 0, sin errores ni avisos). No modifica archivos. |
+| `npm run lint`      | ESLint (`eslint.config.ts` de la raíz) sobre todo el monorepo: `landing-pages/`, `api/`, `inventory-manager/` (`src/`, `tests/`, `scripts/`, configuraciones y `public/js`) y `packages/`. Obligatorio antes de dar una tarea por terminada (debe terminar con 0, sin errores ni avisos). No modifica archivos. |
 | `npm run lint:fix`  | Aplica las correcciones automáticas de ESLint. Revisa el diff resultante. Prettier y Stylelint solo se agregan con aprobación del usuario. |
 
 ### Persistencia y API
 
 El proyecto tiene dos superficies HTTP además de las landings:
 
-- **API JSON de productos** bajo `/admin/api` (REQ-F-008), con sesión.
+- **API JSON** de la `api` bajo `/api/v1` (REQ-F-038 y REQ-F-039): lectura pública de productos y datos de página (`/api/v1/public/...`) y administración con sesión (`/api/v1/admin/...`), solo en la red interna.
 - **Webhook del bot de WhatsApp** en `/webhooks/whatsapp` (REQ-F-009, REQ-F-012). Es el único endpoint público sin sesión: la autenticidad la verifica el `ChatBot` del proveedor activo (Meta: firma `X-Hub-Signature-256`, HMAC-SHA256 del cuerpo crudo con el App Secret, y verificación con el token de suscripción; Twilio: `X-Twilio-Signature`, HMAC-SHA1 de `WHATSAPP_BOT_WEBHOOK_URL` más los parámetros ordenados, con el Auth Token). Todo cambio en esa ruta mantiene la verificación de la firma antes de procesar nada, la respuesta 200 inmediata y el procesamiento en segundo plano, y la deduplicación por id de mensaje.
 
 El bot vive en `restaurante/api/src/bot/` en dos capas. El proveedor va detrás de la interfaz `ChatBot` (`chat-bot.ts`): `WhatsAppBot` (Cloud API de Meta, producción; `providers/meta/`) y `TwilioBot` (Twilio, solo desarrollo; `providers/twilio/`), elegidos con `WHATSAPP_BOT_PROVIDER` en un único módulo, `providers/select.ts`, el único que importa las implementaciones; producción nunca arranca con Twilio. La conversación es compartida y existe una sola vez: el orquestador `BotOrchestrator` (`orchestrator.ts`), `conversation.ts`, `messages.ts`, etc.; ningún módulo de la conversación importa de `providers/`. El texto libre del cliente lo interpreta un intérprete determinista propio detrás de la interfaz `OrderInterpreter` (`interpreter/`; REQ-F-013), inyectado en la conversación y sustituible sin tocarla; sin IA ni servicios externos. Su vocabulario (sinónimos por `slug`, variantes, detalles reconocidos y palabras comunes) vive en `api/src/bot/content/{common,molotes,birria}/bot.ts`, y un producto sin sinónimos se reconoce por su nombre. Los números de opción siguen funcionando en cada paso. El detalle por línea nunca va al log: solo contadores (`bot_order_interpreted`). Guarda el estado de la conversación solo en memoria (una instancia; se borra al cerrar o tras 2 h) y lee el catálogo de la caché de productos y el horario de `packages/core/schedule/business-hours.ts`. Envía mensajes con `fetch` nativo a bases fijas (`https://graph.facebook.com`, `https://api.twilio.com`). Sus textos viven en `api/src/bot/content/{common,molotes,birria}/bot.ts` y su configuración, en las variables `WHATSAPP_BOT_*` (cualquier variable de datos habilita el bot; `WHATSAPP_BOT_PROVIDER` es entonces obligatoria). En los logs, el número del cliente va enmascarado y nunca aparecen el texto de los mensajes, los datos del cliente, los tokens ni el Account SID. Las pruebas nunca llaman a Meta ni a Twilio: usan los dobles de `api/tests/support/cloud-api-double.ts` y `api/tests/support/twilio-api-double.ts` (`api/tests/setup/no-meta.ts` rechaza cualquier `fetch` a ambos), y `api/tests/integration/chat-bot-contract.test.ts` recorre los mismos casos con los dos proveedores.
 
 Persistencia:
 
-- El contenido estático vive en `src/content/` y la configuración en variables de entorno.
-- Los productos (platillos y bebidas, con sus variantes y chips) se guardan en MySQL (`product`, `product_variant`, `product_chip`; REQ-F-008) mediante `src/repositories/product-repository.ts`: concentra las reglas (`packages/core/catalog/product-schema.ts`: validación, slug no editable ni reutilizable, límites, versión por producto y posiciones) sobre un store Prisma (`packages/db/src/prisma-product-store.ts`) o en memoria (`packages/core/catalog/memory-product-store.ts`, para pruebas). Cada escritura guarda en la misma transacción su entrada en `product_change` (autor verificado). Al arrancar, cada negocio importa sus productos una sola vez (`product_import`) desde `current.json`, `previous.json` o la semilla. Las landings leen una caché en memoria (nunca la base de datos).
-- Hero, texto destacado y promociones se guardan como archivos JSON bajo `DATA_DIR`, mediante el repositorio de menús de `src/repositories/` (semillas versionadas en `src/content/<negocio>/seed.json`). Los JSON conservan el formato v1 con las listas de productos congeladas (ya no se usan ni se editan; no cambies esas listas en las semillas). Cada línea de `changes.jsonl` lleva el autor verificado (`author` = nombre visible, `authorId`).
-- La base de datos MySQL (Prisma; REQ-F-007 y REQ-F-014) guarda los usuarios de `/admin`, sus negocios asignados y la auditoría de su gestión (`user_audit`). Acceso solo mediante el repositorio de usuarios (contrato en `packages/core/identity/user-repository.ts`, implementación en `packages/db/src/user-repository.ts`), que impone en transacciones las reglas (siempre un administrador activo, con transacciones `Serializable` y reintento acotado ante interbloqueo, `sessionVersion`, auditoría sin contraseñas ni hashes) y convierte los errores inesperados en `DatabaseUnavailableError` (503 en `/admin`; nunca se registra el `message` de Prisma). Al arrancar: verificación de la base sin migrar nada (fallo rápido con código 1).
-- Autenticación de `/admin`: cuentas personales con roles **administrador** (todo, incluida la gestión de usuarios) y **editor** (solo sus negocios asignados). Contraseñas en scrypt. Sesión en memoria (una instancia) ligada al usuario y a su `sessionVersion`, CSRF, límite de intentos, HTTPS en producción. `ADMIN_USER`/`ADMIN_PASSWORD_HASH` solo crean el primer administrador si no hay usuarios; la recuperación es `npm run admin:recover`. Toda ruta nueva de `/admin` usa `src/controllers/admin-access.ts` (sesión → permiso → body → CSRF) y la autorización de `packages/core/identity/authorization.ts`.
-- API JSON de productos bajo `/admin/api` (`src/routes/admin-api.ts`): sin lectura pública; toda ruta exige sesión y permiso sobre el negocio, y las escrituras, el token CSRF en la cabecera `X-CSRF-Token` (se obtiene con `GET /admin/api/sesion`). Usa `src/controllers/admin-api-access.ts` (sesión 401 → permiso 403 → origen y CSRF 403) y responde errores JSON con el formato centralizado.
+- El contenido estático de las landings vive en `landing-pages/src/content/` y la configuración en variables de entorno.
+- Los productos (platillos y bebidas, con sus variantes y chips) se guardan en MySQL (`product`, `product_variant`, `product_chip`; REQ-F-008) mediante `packages/core/catalog/product-repository.ts`: concentra las reglas (`packages/core/catalog/product-schema.ts`: validación, slug no editable ni reutilizable, límites, versión por producto y posiciones) sobre un store Prisma (`packages/db/src/prisma-product-store.ts`) o en memoria (`packages/core/catalog/memory-product-store.ts`, para pruebas). Cada escritura guarda en la misma transacción su entrada en `product_change` (autor verificado). En una instalación nueva, la `api` publica al arrancar la página y los productos de la semilla (`api/src/install/index.ts`; marcas `page_import` y `product_import`); en una existente nunca vuelve a publicar la semilla. Las landings leen de la `api` (con su caché y, si no responde, la semilla), nunca la base de datos.
+- Hero, texto destacado y promociones (datos de página; REQ-F-044) se guardan en MySQL (`page_version`, `page_change`, `page_import`) mediante `packages/core/catalog/page-repository.ts` sobre un store Prisma (`packages/db/src/prisma-page-store.ts`) o en memoria (`packages/core/catalog/memory-page-store.ts`). Semillas versionadas en `packages/core/catalog/seeds/{molotes,birria}.json` (cargadas con `packages/core/catalog/seeds.ts`). Cada cambio guarda el autor verificado (`author` = nombre visible, `authorId`).
+- La base de datos MySQL (Prisma; REQ-F-007 y REQ-F-014) guarda los usuarios del admin, sus negocios asignados y la auditoría de su gestión (`user_audit`). Acceso solo mediante el repositorio de usuarios (contrato en `packages/core/identity/user-repository.ts`, implementación en `packages/db/src/user-repository.ts`), que impone en transacciones las reglas (siempre un administrador activo, con transacciones `Serializable` y reintento acotado ante interbloqueo, `sessionVersion`, auditoría sin contraseñas ni hashes) y convierte los errores inesperados en `DatabaseUnavailableError` (503 en la API; nunca se registra el `message` de Prisma). Al arrancar la `api`: verificación de la base sin migrar nada (fallo rápido con código 1).
+- Autenticación del admin (`inventory-manager`, que solo habla con la `api`; el `/admin` de `landing-pages` se retiró en REQ-F-045 y `landing-pages/src/middleware/admin-moved.ts` redirige al admin nuevo): cuentas personales con roles **administrador** (todo, incluida la gestión de usuarios) y **editor** (solo sus negocios asignados). Contraseñas en scrypt. Sesión en memoria (una instancia) ligada al usuario y a su `sessionVersion`, CSRF, límite de intentos, HTTPS en producción. `ADMIN_USER`/`ADMIN_PASSWORD_HASH` (variables de la `api`, `api/src/install/admin-bootstrap.ts`) solo crean el primer administrador si no hay usuarios; la recuperación es `npm run admin:recover` (`api/scripts/admin-recover.ts`). La sesión es de la `api`: `inventory-manager` reenvía su id como `Authorization: Bearer <id>`.
+- Administración bajo `/api/v1/admin` (`api/src/admin/router.ts`): toda ruta exige sesión y permiso (sobre el negocio o rol administrador), y las escrituras, el token CSRF en la cabecera `X-CSRF-Token` (se obtiene con `GET /api/v1/admin/sesion`). Toda ruta nueva usa `api/src/admin/access.ts` (sesión 401 → negocio 404 → permiso 403 → CSRF 403) y la autorización de `packages/core/identity/authorization.ts`, y responde errores JSON con el formato centralizado (`api/src/errors.ts`). Los contratos viven en `packages/contracts`.
 
 Si un requisito necesita persistencia nueva (tablas o modelos nuevos, otra base de datos), una API o autenticación distinta de la actual, no lo improvises: detente y plantéalo como decisión técnica (`NEEDS_TECHNICAL_CLARIFICATION`). Las tablas nuevas se agregan con migraciones de Prisma sobre la base existente.
 
@@ -103,34 +103,35 @@ restaurante/                 # Raíz de los npm workspaces (REQ-F-036 y REQ-F-03
 ├── tsconfig.base.json / tsconfig.json # Opciones comunes de TypeScript (las extienden todos los workspaces)
 ├── eslint.config.ts         # Lint (`npm run lint`) de todo el monorepo, con la regla de dependencias entre paquetes
 ├── packages/
-│   ├── core/                # Dominio en TS puro (sin Koa ni Prisma): shared/, catalog/, schedule/, identity/, bot-control/ (cada módulo por su index.ts)
+│   ├── core/                # Dominio en TS puro (sin Koa ni Prisma): shared/, catalog/ (con seeds/{molotes,birria}.json), schedule/, identity/, bot-control/, cotizador/ (cada módulo por su index.ts)
 │   ├── db/                  # prisma/ (schema y migraciones), prisma.config.ts, .env.example, src/ (client, verify, errors, repositorios Prisma, generated/prisma)
-│   └── contracts/           # Contratos de la API (esqueleto)
-├── landing-pages/           # Workspace de la app
+│   ├── contracts/           # Contratos de la API (esquemas y clientes HTTP)
+│   └── web/                 # Utilidades HTTP y SSR (render.ts, form-body.ts, json-body.ts, logger.ts, same-origin.ts)
+├── api/                     # API JSON interna (src/admin/, src/install/, src/cotizador/) y bot de WhatsApp (src/bot/)
+├── inventory-manager/       # Admin nuevo (SSR) que solo habla con la api
+├── landing-pages/           # Workspace de las landings
 │   ├── src/                     # Backend en TypeScript (.ts)
-│   │   ├── app.ts / server.ts   # App Koa (testeable) y arranque del servidor
+│   │   ├── app.ts / server.ts   # App Koa (testeable) y arranque del servidor (internal-app.ts: aviso interno de la api)
 │   │   ├── config/              # env.ts (validación de variables, tipo Config), business-paths.ts
-│   │   ├── content/             # Contenido por negocio (molotes/, birria/, common/), semillas seed.json, icons.ts, seeds.ts
-│   │   ├── controllers/         # landing.ts (elige negocio y renderiza), icons.ts, admin.ts, admin-users.ts, admin-account.ts, admin-access.ts
-│   │   ├── middleware/          # error-handler.ts, request-logger.ts, admin-guard.ts
-│   │   ├── repositories/        # Menús (contrato y reglas, archivos y memoria) y productos (product-repository.ts)
-│   │   ├── routes/              # Rutas (@koa/router): index.ts (landings, iconos), admin.ts (/admin)
-│   │   ├── services/            # admin-*, landing-products, product-form
-│   │   ├── styles/              # Fuentes Tailwind: shared/, molotes/, birria/, admin/, components/ (sin uso por ahora)
-│   │   ├── utils/               # datetime.ts, form-body.ts, json-body.ts
-│   │   └── views/               # render.ts + layouts/, pages/, partials/ (.html), landings/ (.ts), admin/ (.ts y .html)
+│   │   ├── content/             # Contenido por negocio (molotes/, birria/, common/), icons.ts, images.ts, seeds.ts
+│   │   ├── controllers/         # landing.ts (elige negocio y renderiza), icons.ts
+│   │   ├── middleware/          # error-handler.ts, request-logger.ts, admin-moved.ts (/admin -> admin nuevo)
+│   │   ├── routes/              # Rutas (@koa/router): index.ts (landings, iconos)
+│   │   ├── services/            # landing-cache, landing-page, landing-products (datos de la api con caché y semilla)
+│   │   ├── styles/              # Fuentes Tailwind: shared/, molotes/, birria/, components/ (sin uso por ahora)
+│   │   └── views/               # layouts/, pages/, partials/ (.html), landings/ (.ts)
 │   ├── public/                  # Frontend en Vanilla JS (sin TypeScript)
-│   │   ├── css/{molotes,birria,admin}/ # CSS generado por `npm run build:css` (no editar a mano)
+│   │   ├── css/{molotes,birria}/ # CSS generado por `npm run build:css` (no editar a mano)
 │   │   ├── js/modules/          # Módulos ES reutilizables
 │   │   ├── js/{molotes,birria}/ # Punto de entrada por landing
 │   │   └── img/{common,molotes,birria}/
-│   ├── scripts/                 # hash-password.ts, admin-recover.ts (`npm run admin:recover`), support/, generate-icons.py
+│   ├── scripts/                 # dev-server.ts, audit-deps.ts, support/, generate-icons.py
 │   ├── tests/                   # unit/, integration/, support/, snapshots/, helpers.ts
 │   ├── tsconfig.json            # Solo verificación de tipos (`npm run typecheck`)
 │   ├── vitest.config.ts
 │   ├── .env.example             # Variables documentadas (el .env real no se versiona)
 │   ├── Dockerfile           # Contexto de build: restaurante/
-│   └── package.json         # Dependencias de la app
+│   └── package.json         # Dependencias de las landings
 ├── compose.yaml / docker/   # MySQL local y servicio test
 ├── deploy/ ops/ security/ docs/
 └── .nvmrc / .dockerignore

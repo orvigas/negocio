@@ -40,12 +40,13 @@
 #                 workspace (npm ci -w), su código, su CSS, los paquetes contracts y web, y los
 #                 iconos de las landings (favicon); puerto 3003, usuario no root y HEALTHCHECK
 #                 contra /salud (responde también sin TLS). Sin base de datos ni credenciales.
-#   production -> dependencias de producción, código (app y paquetes core, contracts y db), CSS, migraciones
-#                 (en /app/packages/db/prisma/migrations; la app las lee para verificar el estado
-#                 de la base, no las aplica); usuario no
-#                 root. Node 24 ejecuta los .ts directamente (type stripping), sin compilar y sin
-#                 TypeScript ni el CLI de Prisma instalados.
-# La configuración (DATABASE_URL, WHATSAPP_*, DATA_DIR, ADMIN_*, ...) se inyecta al ejecutar, nunca aquí.
+#   production -> las landings: dependencias de producción, código (app y paquetes core, contracts, web
+#                 y db), CSS; usuario no root. Desde REQ-F-045 no usa MySQL ni DATA_DIR (packages/db y
+#                 las migraciones siguen en la imagen: adelgazarla queda fuera de ese ticket). Node 24
+#                 ejecuta los .ts directamente (type stripping), sin compilar y sin TypeScript ni el
+#                 CLI de Prisma instalados.
+# La configuración (WHATSAPP_*, API_INTERNAL_URL, INTERNAL_NOTIFY_TOKEN, DATABASE_URL de la api, ...) se
+# inyecta al ejecutar, nunca aquí.
 
 FROM node:24.22.2-alpine AS base
 WORKDIR /app/landing-pages
@@ -129,11 +130,6 @@ COPY --from=build /app/packages/contracts /app/packages/contracts
 COPY --from=build /app/packages/web /app/packages/web
 COPY --from=build /app/packages/db/src /app/packages/db/src
 COPY --from=build /app/packages/db/prisma/migrations /app/packages/db/prisma/migrations
-# Punto de montaje sugerido para DATA_DIR (JSON de página y changes.jsonl): un volumen con nombre
-# hereda dueño y permisos.
-RUN mkdir -p /var/lib/restaurante \
-    && chown node:node /var/lib/restaurante \
-    && chmod 700 /var/lib/restaurante
 USER node
 EXPOSE 3000
 # Comprueba que la app responde (wget de busybox; sin endpoints adicionales en la app).

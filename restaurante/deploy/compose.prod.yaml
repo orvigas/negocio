@@ -12,7 +12,7 @@
 # RESTAURANTE_API_WEBHOOK (enciende el router del webhook en la api) también la pone deploy.sh y queda
 # en release.env.
 #
-# La app recibe solo su lista explícita de variables (D-6): nunca la contraseña root de MySQL.
+# Cada servicio recibe solo su lista explícita de variables (D-6): nunca la contraseña root de MySQL.
 name: restaurante
 
 x-logging: &logging
@@ -22,11 +22,9 @@ x-logging: &logging
     max-size: 10m
     max-file: "5"
 
-# Variables del bot (REQ-F-042, RF-6): un solo .env y la misma lista para los dos servicios (RN-5).
-# - api ejecuta el bot y las usa todas.
-# - app solo usa el proveedor, el personal, la clave de la lista negra y los topes (D-4), pero recibe
-#   también el resto (P-2): la vuelta atrás automática arranca la app anterior con este mismo compose,
-#   y esa versión lleva el bot y no arranca sin ellas. Se le quitan en el ticket 6.
+# Variables del bot (REQ-F-042, RF-6): solo las recibe la api, que ejecuta el bot. Desde REQ-F-045 la
+# app ya no las recibe (no tiene /admin ni bot). WHATSAPP_MOLOTES y WHATSAPP_BIRRIA las reciben las dos:
+# la app, para el CTA de cada landing, y la api, para la regla D-6 y como emisor con Twilio.
 x-bot-env: &bot-env
   WHATSAPP_MOLOTES: ${WHATSAPP_MOLOTES:-}
   WHATSAPP_BIRRIA: ${WHATSAPP_BIRRIA:-}
@@ -107,37 +105,30 @@ services:
       HOST: 0.0.0.0
       PORT: "3000"
       TRUST_PROXY: "true"
-      DATA_DIR: /var/lib/restaurante
-      # Usuario solo DML. Contraseña en hexadecimal (openssl rand -hex 32): no necesita codificarse.
-      DATABASE_URL: mysql://restaurante_app:${RESTAURANTE_DB_APP_PASSWORD:?Falta RESTAURANTE_DB_APP_PASSWORD en .env}@mysql:3306/restaurante
-      # Solo la pone deploy.sh al volver a la versión anterior (D-1); nunca en .env.
-      DATABASE_ALLOW_NEWER_SCHEMA: ${DATABASE_ALLOW_NEWER_SCHEMA:-false}
+      # Desde REQ-F-045 la app no usa MySQL ni DATA_DIR: sin DATABASE_URL, DATA_DIR ni el volumen app-data.
       BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-America/Mexico_City}
       SITE_URL: ${SITE_URL:-}
-      # API propia por la red interna db (REQ-F-038): las landings leen de ella los productos.
+      # API propia por la red interna db (REQ-F-038): las landings leen de ella los productos y la página.
       API_INTERNAL_URL: http://api:3001
-      # Admin nuevo (REQ-F-039): con ADMIN_NEW_URL, los productos, los usuarios, "Mi cuenta" y el control
-      # del bot de /admin quedan en solo lectura y enlazan ahí. El aviso interno de la API llega al puerto 3002 (red db; Traefik solo
-      # enruta el 3000) con la credencial compartida.
+      # Admin nuevo (REQ-F-039): /admin de las landings responde 302 a su raíz (REQ-F-045). El aviso
+      # interno de la API llega al puerto 3002 (red db; Traefik solo enruta el 3000) con la credencial
+      # compartida.
       ADMIN_NEW_URL: https://${RESTAURANTE_ADMIN_DOMAIN:?Falta RESTAURANTE_ADMIN_DOMAIN en .env}
       INTERNAL_PORT: "3002"
       INTERNAL_NOTIFY_TOKEN: ${RESTAURANTE_INTERNAL_NOTIFY_TOKEN:?Falta RESTAURANTE_INTERNAL_NOTIFY_TOKEN en .env}
-      <<: *bot-env
+      # CTA de WhatsApp de cada landing.
+      WHATSAPP_MOLOTES: ${WHATSAPP_MOLOTES:-}
       WHATSAPP_MOLOTES_URL: ${WHATSAPP_MOLOTES_URL:-}
       WHATSAPP_MOLOTES_MESSAGE: ${WHATSAPP_MOLOTES_MESSAGE:-}
+      WHATSAPP_BIRRIA: ${WHATSAPP_BIRRIA:-}
       WHATSAPP_BIRRIA_URL: ${WHATSAPP_BIRRIA_URL:-}
       WHATSAPP_BIRRIA_MESSAGE: ${WHATSAPP_BIRRIA_MESSAGE:-}
-      ADMIN_USER: ${ADMIN_USER:-}
-      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
-    volumes:
-      - app-data:/var/lib/restaurante
     networks:
       - db
       - traefik
     depends_on:
       mysql:
         condition: service_healthy
-    # Una sola réplica: las sesiones y el límite de intentos de /admin viven en memoria.
     read_only: true
     tmpfs:
       - /tmp
@@ -147,8 +138,8 @@ services:
       - no-new-privileges:true
     stop_grace_period: 15s
     restart: unless-stopped
-    # Sobrescribe el HEALTHCHECK de la imagen: comprueba cada 2 s mientras arranca (la conexión a la
-    # base puede tardar hasta 60 s) y cada 30 s después. Traefik solo enruta a contenedores healthy.
+    # Sobrescribe el HEALTHCHECK de la imagen: comprueba cada 2 s mientras arranca y cada 30 s después.
+    # Traefik solo enruta a contenedores healthy.
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
       interval: 30s
@@ -168,17 +159,7 @@ services:
       - "traefik.http.routers.restaurante.tls=true"
       - "traefik.http.routers.restaurante.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
       - "traefik.http.routers.restaurante.service=restaurante"
-      # /admin con límite de peticiones por IP: 10 por minuto y ráfaga de 20 (CA-4).
-      - "traefik.http.routers.restaurante-admin.rule=Host(`${RESTAURANTE_DOMAIN}`) && (Path(`/admin`) || PathPrefix(`/admin/`))"
-      - "traefik.http.routers.restaurante-admin.priority=100"
-      - "traefik.http.routers.restaurante-admin.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-websecure}"
-      - "traefik.http.routers.restaurante-admin.tls=true"
-      - "traefik.http.routers.restaurante-admin.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
-      - "traefik.http.routers.restaurante-admin.middlewares=restaurante-admin-ratelimit"
-      - "traefik.http.routers.restaurante-admin.service=restaurante"
-      - "traefik.http.middlewares.restaurante-admin-ratelimit.ratelimit.average=10"
-      - "traefik.http.middlewares.restaurante-admin-ratelimit.ratelimit.period=1m"
-      - "traefik.http.middlewares.restaurante-admin-ratelimit.ratelimit.burst=20"
+      # Sin router propio para /admin desde REQ-F-045 (RN-7): solo responde 302 o 410, bajo el router raíz.
       # https://www -> 301 al dominio raíz (con su propio certificado).
       - "traefik.http.routers.restaurante-www.rule=Host(`www.${RESTAURANTE_DOMAIN}`)"
       - "traefik.http.routers.restaurante-www.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-websecure}"
@@ -223,6 +204,10 @@ services:
       # Aviso interno a la app tras cada escritura de productos (REQ-F-039, RF-13).
       LANDING_INTERNAL_URL: http://${COMPOSE_PROJECT_NAME:-restaurante}-app-1:3002
       INTERNAL_NOTIFY_TOKEN: ${RESTAURANTE_INTERNAL_NOTIFY_TOKEN:?Falta RESTAURANTE_INTERNAL_NOTIFY_TOKEN en .env}
+      # Primer administrador de una instalación nueva (REQ-F-045, RF-4): solo se usan si la base no tiene
+      # usuarios. Vacías, la api arranca igual y el acceso se recupera con admin-recover.
+      ADMIN_USER: ${ADMIN_USER:-}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
     networks:
       - db
       - admin
@@ -260,8 +245,8 @@ services:
       # El puerto del webhook, nunca el 3001.
       - "traefik.http.services.restaurante-webhook.loadbalancer.server.port=3004"
       # Solo la ruta exacta en el dominio raíz (D-1: Meta no cambia). Prioridad por encima del router
-      # raíz y de restaurante-admin (100). Sin límite de peticiones, como siempre: la protección es la
-      # del bot. Mientras la api no esté healthy, Traefik no publica este router.
+      # raíz. Sin límite de peticiones, como siempre: la protección es la del bot. Mientras la api no
+      # esté healthy, Traefik no publica este router.
       - "traefik.http.routers.restaurante-webhook.rule=Host(`${RESTAURANTE_DOMAIN:?Falta RESTAURANTE_DOMAIN en .env}`) && Path(`/webhooks/whatsapp`)"
       - "traefik.http.routers.restaurante-webhook.priority=200"
       - "traefik.http.routers.restaurante-webhook.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-websecure}"
@@ -354,4 +339,8 @@ networks:
 
 volumes:
   mysql-data:
+  # Ningún servicio lo monta desde REQ-F-045 (RN-5): el volumen restaurante_app-data conserva los JSON
+  # de página anteriores y nunca se borra. Sin montar, compose lo ignora (no lo crea ni lo borra, ni con
+  # down -v); se declara para dejar constancia. restore.sh restaura ahí un respaldo antiguo, y el
+  # compose de un commit anterior lo vuelve a montar si se vuelve a una versión de antes.
   app-data:

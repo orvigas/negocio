@@ -3,11 +3,11 @@
 # restaurante-backup.service (timer diario a las 03:00 de America/Mexico_City) como el usuario
 # deploy. Vive en /opt/restaurante/ops/backup/, fuera de deploy/: no altera su suma SHA-256.
 #
-# Secuencia: configuración -> ping de inicio -> pendientes -> candado de deploy.sh -> conteos,
-# mysqldump (usuario restaurante_backup) y tar de app-data -> fin del candado -> integridad ->
-# manifiesto -> paquete cifrado con age (solo claves públicas) -> subida a R2 en daily/ (y weekly/ el
-# domingo, monthly/ el día 1, fecha de México) sin sobrescribir -> retención local (7) -> .env ->
-# ping de éxito. Cualquier fallo: código distinto de 0 y ping de fallo. Nunca imprime secretos.
+# Secuencia: configuración -> ping de inicio -> pendientes -> candado de deploy.sh -> conteos y
+# mysqldump (usuario restaurante_backup) -> fin del candado -> integridad -> manifiesto (formato 2:
+# sin app-data desde REQ-F-045, RN-5; el volumen se conserva sin montar) -> paquete cifrado con age
+# (solo claves públicas) -> subida a R2 en daily/ (y weekly/ el domingo, monthly/ el día 1, fecha de
+# México) sin sobrescribir -> retención local (7) -> .env -> ping de éxito. Cualquier fallo: código distinto de 0 y ping de fallo. Nunca imprime secretos.
 #
 # Códigos: 2 configuración, 3 precondición, 4 candado, 5 volcado, 6 integridad, 7 cifrado,
 # 8 subida (la copia local se conserva y se reintenta en la próxima ejecución), 9 copia del .env.
@@ -147,14 +147,12 @@ COMMIT=$(sed -n 's/^RESTAURANTE_COMMIT=//p' "$RELEASE_FILE" | tail -n 1)
 
 MYSQL_CID=$(docker ps -q --filter "label=com.docker.compose.project=$PROJECT" --filter label=com.docker.compose.service=mysql --filter status=running)
 [[ "$MYSQL_CID" =~ ^[0-9a-f]+$ ]] || fail 3 'el contenedor de MySQL no está en marcha (o hay más de uno)'
-VOLUME="${PROJECT}_app-data"
-docker volume inspect "$VOLUME" >/dev/null 2>&1 || fail 3 "no existe el volumen $VOLUME"
 
 WORK=$(mktemp -d)
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 NAME="restaurante-$STAMP.tar.age"
 
-# --- Volcado y app-data con el candado de deploy.sh (no coinciden con un despliegue) ---------------
+# --- Volcado con el candado de deploy.sh (no coincide con un despliegue) --------------------------
 exec 9>>"$STATE_DIR/deploy.lock"
 if ! flock -n 9; then
   log 'esperando a que termine un despliegue en curso'
@@ -169,13 +167,6 @@ if ! in_mysql mysqldump --single-transaction --no-tablespaces --skip-lock-tables
 fi
 COUNTS_AFTER=$(db_counts) || fail 5 'no se pudieron leer los conteos de la base'
 
-# Lectura tal cual del volumen, con la imagen de la app (su usuario es el dueño de los archivos 600).
-# Las escrituras de la app son atómicas (temporal + rename): se excluyen los temporales.
-if ! docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
-  -v "$VOLUME:/data:ro" --entrypoint tar "$APP_IMAGE" -C /data --exclude '.*.tmp' -cf - . >"$WORK/app-data.tar"; then
-  fail 5 'falló la lectura del volumen app-data'
-fi
-
 flock -u 9
 exec 9>&-
 
@@ -185,10 +176,6 @@ gzip -dc -- "$WORK/dump.sql.gz" | tail -n 1 | grep -q '^-- Dump completed' || fa
 # Sin -q: grep lee todo y gzip no recibe SIGPIPE (pipefail).
 # shellcheck disable=SC2016 # Las comillas invertidas son literales del SQL.
 gzip -dc -- "$WORK/dump.sql.gz" | grep '^CREATE DATABASE .*`restaurante`' >/dev/null || fail 6 'el volcado no contiene la base restaurante'
-tar -tf "$WORK/app-data.tar" >"$WORK/app-data.list" 2>/dev/null || fail 6 'el archivo de app-data está corrupto'
-for dir in molotes birria; do
-  grep -Eq "^(\./)?$dir/$" "$WORK/app-data.list" || fail 6 "app-data no contiene $dir/"
-done
 
 read -r USERS PRODUCTS LAST_MIGRATION <<<"$COUNTS_BEFORE"
 COUNTS_STABLE=true
@@ -196,7 +183,7 @@ COUNTS_STABLE=true
 [[ "$USERS" =~ ^[0-9]+$ && "$PRODUCTS" =~ ^[0-9]+$ ]] || fail 6 'conteos de la base inválidos'
 
 {
-  printf 'format=1\n'
+  printf 'format=2\n'
   printf 'created_at=%s\n' "$STAMP"
   printf 'commit=%s\n' "$COMMIT"
   printf 'app_image=%s\n' "$APP_IMAGE"
@@ -206,13 +193,11 @@ COUNTS_STABLE=true
   printf 'last_migration=%s\n' "$LAST_MIGRATION"
   # false: hubo escrituras durante el volcado; los conteos del volcado pueden diferir un poco.
   printf 'counts_stable=%s\n' "$COUNTS_STABLE"
-  printf 'app_data_entries=%s\n' "$(wc -l <"$WORK/app-data.list" | tr -d ' ')"
   printf 'dump_sha256=%s\n' "$(sha256_of "$WORK/dump.sql.gz")"
-  printf 'app_data_sha256=%s\n' "$(sha256_of "$WORK/app-data.tar")"
 } >"$WORK/manifest.txt"
 
 # --- Cifrado (RF-3): solo claves públicas ----------------------------------------------------------
-tar -C "$WORK" -cf "$WORK/bundle.tar" manifest.txt dump.sql.gz app-data.tar || fail 7 'no se pudo empaquetar el respaldo'
+tar -C "$WORK" -cf "$WORK/bundle.tar" manifest.txt dump.sql.gz || fail 7 'no se pudo empaquetar el respaldo'
 age -R "$RECIPIENTS_FILE" -o "$OFFSITE_DIR/$NAME.partial" "$WORK/bundle.tar" || {
   rm -f -- "$OFFSITE_DIR/$NAME.partial"
   fail 7 'falló el cifrado con age'

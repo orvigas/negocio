@@ -9,8 +9,9 @@ import { image } from '../images.ts';
  *
  * Solo datos estáticos (textos, horarios, imágenes). La ubicación, el teléfono y el correo son
  * los de la única sucursal, comunes a ambas landings y al bot (../common/index.ts). Los datos
- * editables desde /admin/birria (platillos, showcase del hero y textos del club) viven en el
- * repositorio de menús; su semilla es ./seed.json. El marcado vive en
+ * editables (platillos, showcase del hero y textos del club) están en MySQL y los sirve la `api`
+ * (src/services/landing-*.ts, con caché); su semilla está en
+ * packages/core/catalog/seeds/birria.json. El marcado vive en
  * src/views/pages/birria.html y src/views/partials/birria/; los tonos visuales se
  * expresan con claves semánticas (`highlight`) que resuelve src/views/landings/birria.ts.
  */

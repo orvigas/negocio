@@ -4,7 +4,7 @@ import { CHECKBOX_VALUE, emptyProductFormValues, formErrors, parseProductForm, p
 
 /**
  * Formulario de producto <-> entrada de la API, guiado por el descriptor (packages/contracts,
- * REQ-F-039): misma forma que el /admin actual (filas fijas con posición y "Quitar").
+ * REQ-F-039): misma forma que el /admin retirado en REQ-F-045 (filas fijas con posición y "Quitar").
  */
 
 const POSITIONS = ['1', '2', '3'];

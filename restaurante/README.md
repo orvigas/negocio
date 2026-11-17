@@ -1685,8 +1685,9 @@ cambiar.
   valor anterior y el nuevo). No tiene pantalla: se consulta en la base de datos. Si se edita la
   base a mano con el servidor en marcha, reinícialo para que las landings lo vean.
 - **Despliegue en el VPS (REQ-F-016):** cada despliegue hace antes un volcado local (se conservan
-  7) y migra con la imagen `migrate`. Una base migrada no arranca con un código anterior
-  (`DATABASE_NEWER_THAN_CODE`) salvo en la vuelta atrás automática, que usa
+  7) y migra con la imagen `migrate`. La `api` (la única app que usa MySQL) verifica la base al
+  arrancar y no arranca sobre una base migrada con un código anterior (`DATABASE_NEWER_THAN_CODE`),
+  salvo en la vuelta atrás automática, en la que `deploy.sh` le pasa
   `DATABASE_ALLOW_NEWER_SCHEMA=true`: por eso **cada migración debe ser compatible con el código
   anterior** (añadir antes de quitar). Respaldos cifrados fuera del VPS, restauración y prueba
   mensual (REQ-F-019; scripts en `ops/backup/`): [docs/despliegue.md](docs/despliegue.md#11-respaldos-fuera-del-vps).
@@ -1799,7 +1800,7 @@ sola vez al crear la app.
 Cada negocio tiene su propia página (`pages/<negocio>.html`) porque los diseños difieren
 estructuralmente; comparten layout, icono/CTA de WhatsApp, enlace de ubicación y lógica.
 Los textos, horarios, contacto e imágenes de sección viven en `src/content/<negocio>/`; los
-datos editables (menú, precios, hero y promociones) llegan del repositorio de menús y se
+datos editables (menú, precios, hero y promociones) llegan de la `api` (MySQL; sin respuesta, la semilla) y se
 combinan con ese contenido en `src/views/landings/`. Los tonos de color son claves semánticas (`tone`,
 `highlight`) que los módulos de `src/views/landings/` traducen a utilidades de Tailwind.
 
@@ -1829,7 +1830,8 @@ Extraídos de `../_stich_source_/moloteando_aut_nticos_molotes_artesanales/code.
 - **Imágenes:** descargadas del diseño a `public/img/<negocio>/` (las compartidas en
   `public/img/common/`). Los logos y motivos PNG se convirtieron a WebP. Las rutas, `alt` y
   dimensiones de las imágenes de sección se declaran en `src/content/<negocio>/index.ts`
-  (`images`); las de cada platillo, en los datos editables (semilla `seed.json`), junto al platillo.
+  (`images`); las de cada platillo, junto al platillo en los datos editables (MySQL, servidos por
+  la `api`; semilla en `packages/core/catalog/seeds/<negocio>.json`).
 - **Fuentes:** Google Fonts (familias del diseño y Material Symbols), una hoja por landing
   declarada en `content.assets.fontsHref`.
 

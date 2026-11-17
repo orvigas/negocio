@@ -4,9 +4,8 @@ import type { Product, ProductCategory } from './product-schema.ts';
 
 /**
  * Productos publicados (REQ-F-008): de los productos guardados a las listas con la forma de
- * REQ-F-001 que pintan las landings. Movido sin cambios desde
- * landing-pages/src/repositories/product-repository.ts (REQ-F-038): lo usan el repositorio de
- * productos de landing-pages (caché del bot y de /admin) y la API pública (`api/`).
+ * REQ-F-001 que pintan las landings. En core desde REQ-F-038: lo usan el repositorio de productos
+ * (product-repository.ts; su caché la usan el bot y la administración) y la API pública (`api/`).
  */
 
 /** Listas con la forma de los datos de REQ-F-001 que pintan las landings. */

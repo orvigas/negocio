@@ -6,9 +6,10 @@ import { image } from '../images.ts';
  * Contenido de Moloteando (landing de martes a viernes; su horario de servicio está en packages/core/schedule/business-hours.ts).
  * Fuente: _stich_source_/moloteando_aut_nticos_molotes_artesanales/code.html
  *
- * Solo datos estáticos (textos, horarios, contacto, imágenes). Los datos editables desde
- * /admin/molotes (productos, bebidas, showcase del hero, texto destacado del menú y textos
- * de la promoción) viven en el repositorio de menús; su semilla es ./seed.json. El marcado vive en
+ * Solo datos estáticos (textos, horarios, contacto, imágenes). Los datos editables (productos,
+ * bebidas, showcase del hero, texto destacado del menú y textos de la promoción) están en MySQL y
+ * los sirve la `api` (src/services/landing-*.ts, con caché); su semilla está en
+ * packages/core/catalog/seeds/molotes.json. El marcado vive en
  * src/views/pages/molotes.html y src/views/partials/molotes/; los tonos visuales se
  * expresan con claves semánticas (`tone`) que resuelve src/views/landings/molotes.ts.
  */

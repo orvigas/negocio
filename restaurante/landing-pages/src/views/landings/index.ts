@@ -20,7 +20,7 @@ import { buildMolotesBody } from './molotes.ts';
  * (header, secciones y footer del diseño) dentro del layout compartido (SEO, assets).
  *
  * El contenido estático sale de src/content/; los datos editables (menú, precios, hero y
- * promociones) llegan del repositorio de menús en `menu` y aquí se filtran por
+ * promociones) llegan de la `api` (o de la semilla) en `menu` y aquí se filtran por
  * disponibilidad (RF-4) antes de pintarse.
  */
 

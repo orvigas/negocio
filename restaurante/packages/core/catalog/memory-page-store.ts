@@ -9,7 +9,7 @@ import type { PageChangeEntry, PageImportMark, PageStore, PageStoreTx, StoredPag
 interface MemoryPageState {
   pages: Map<BusinessId, StoredPages>;
   changes: PageChangeEntry[];
-  /** Entradas importadas de `changes.jsonl` (columna `imported`). */
+  /** Marcas de `page_import` (una por negocio). */
   imports: Map<BusinessId, PageImportMark>;
   /** Como `product_import` con filas (D-10). */
   productImports: boolean;
@@ -17,7 +17,7 @@ interface MemoryPageState {
 
 export interface MemoryPageStore extends PageStore {
   state: MemoryPageState;
-  /** Deja `pages` como versiones de un negocio (lo que hará la importación). */
+  /** Deja `pages` como versiones guardadas de un negocio (como tras la siembra). */
   seed(business: BusinessId, pages: StoredPages): void;
   /** Hace fallar las próximas `times` operaciones como una base caída. */
   failNext(times?: number): void;

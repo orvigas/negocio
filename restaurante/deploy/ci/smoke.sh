@@ -214,7 +214,7 @@ check 'la red admin es interna' test "$(jq '.networks.admin.internal' <<<"$CONFI
 check 'inventory-manager solo está en admin y traefik (no alcanza MySQL)' test "$(jq -c '.services["inventory-manager"].networks | keys' <<<"$CONFIG")" = '["admin","traefik"]'
 check 'inventory-manager no recibe credenciales de la base ni la del aviso' test "$(jq '.services["inventory-manager"].environment | (has("DATABASE_URL") or has("MYSQL_ROOT_PASSWORD") or has("INTERNAL_NOTIFY_TOKEN"))' <<<"$CONFIG")" = false
 check 'inventory-manager llega a la api por la red interna' test "$(jq -r '.services["inventory-manager"].environment.API_INTERNAL_URL' <<<"$CONFIG")" = 'http://api:3001'
-check 'la app enlaza al admin nuevo (modo de solo lectura de productos)' test "$(jq -r '.services.app.environment.ADMIN_NEW_URL' <<<"$CONFIG")" = "https://$ADMIN_DOMAIN"
+check 'la app enlaza al admin nuevo' test "$(jq -r '.services.app.environment.ADMIN_NEW_URL' <<<"$CONFIG")" = "https://$ADMIN_DOMAIN"
 # DEF-004 (REQ-F-042): la api está en traefik-public; sus nombres no pueden ser los de un vecino.
 check 'la api avisa a la app por su nombre de contenedor' test "$(jq -r '.services.api.environment.LANDING_INTERNAL_URL' <<<"$CONFIG")" = "http://$PROJECT-app-1:3002"
 check 'la api llega a MySQL por su nombre de contenedor' test "$(jq --arg host "@$PROJECT-mysql-1:3306/" '.services.api.environment.DATABASE_URL | contains($host)' <<<"$CONFIG")" = true

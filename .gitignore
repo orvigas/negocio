@@ -24,3 +24,6 @@ coverage/
 .idea/
 
 Imagenes/
+
+# Hoja de cálculo de trabajo del usuario (cotizador de taquizas): se queda en local, no se versiona.
+/Cotizador_Taquiza_Birria.xlsx

@@ -2,7 +2,33 @@
 
 ## Estado
 
-READY_FOR_MERGE (PR 3 de 3: `deploy.sh`, https://github.com/orvigas/negocio/pull/169). PR 1 (#165) y PR 2 (#167) mergeados en `main`. El ticket sigue en `in-progress/` hasta el merge del PR 3. Tras el merge: reinstalar `deploy/` en el VPS y volver a ejecutar el job `deploy` (RN-4, CA-7).
+DONE (2026-11-18)
+
+- PR 1: #165 (https://github.com/orvigas/negocio/pull/165), mergeado en `main` (`4991aa1`).
+- PR 2: #167 (https://github.com/orvigas/negocio/pull/167), mergeado en `main` (`d06f5d6`).
+- PR 3: #169 (https://github.com/orvigas/negocio/pull/169), mergeado en `main` (`3027a03`, 2026-11-18). El job `deploy` de esa ejecución terminó en `success` (https://github.com/orvigas/negocio/actions/runs/44327455549) con la suma de `deploy/` `591de8e7f259073f79ff34418c8b7a3a2680d465ef3bc7378c620221455cc7f0`: el `deploy/` del VPS ya es el del PR 3 (RN-4 y CA-7 cumplidos).
+
+## Seguimiento
+
+Resuelto en el cierre (rama `chore/cierra-req-f-047`, PR a `main`), sin cambios de comportamiento de producción ni de la suma de `deploy/` (sigue siendo `591de8e7…5cc7f0`):
+
+- **O-3.** `@restaurante/db` pasa de `dependencies` a `devDependencies` en `restaurante/landing-pages/package.json` (y en `package-lock.json`, solo esa entrada). No se quita: `landing-pages/src` y `scripts/` no lo importan (el lint lo prohíbe), pero sus pruebas sí (21 archivos de `tests/`, la infraestructura de MySQL y las pruebas de `db`), como `mariadb`, que ya era de desarrollo. La imagen `production` no cambia: `npm ci --omit=dev` de todo el workspace lo sigue enlazando porque `api` lo declara en `dependencies`.
+- **O-7.** La limpieza de `restaurante/deploy/ci/smoke.sh` usa `docker rm -fv`: borra también el volumen anónimo del registro (`/var/lib/registry`). `smoke.sh` no entra en la suma de `deploy/`.
+- **O-8.** `restaurante/docs/despliegue.md` §1.3 dice ahora que es la sección "Actualizar deploy/" a la que remite el código 4 de `deploy.sh`. No se toca `deploy.sh` (cambiaría la suma) ni el título de §1.3 (los enlaces `#13-instalar-deploy` siguen valiendo).
+- **Referencias a pruebas inexistentes en la documentación vigente.** `restaurante/docs/arquitectura.md` citaba `users-api-qa-req-f-040-ultimo-admin.test.ts` (sonda retirada en REQ-F-045) y `product-repository-contract.test.ts` (partido en `-memoria` y `-prisma-*`). Ahora cita `last-admin-concurrency-deactivation.test.ts`, `last-admin-concurrency-recovery.test.ts`, el bloque D-7 de `user-repository.test.ts` y el soporte `tests/support/product-repository-contract.ts` con sus archivos. No quedan otras en `restaurante/docs/`, los README, `.claude/CLAUDE.md`, `.claude/rules/` ni `.claude/agents/`.
+- **O-5.** Resuelta: el CI del PR #167 dio un máximo de 11,4 s por archivo, y el PR #168 (`fd557ab`) partió `api-process` y `last-admin-concurrency` para que cada archivo quepa en 20 s.
+- O-1 y O-4 se resolvieron en los PR 1 y 2. O-2 y O-6 eran informativas.
+
+No hecho (fuera de este ticket):
+
+- **DEF-002 de REQ-F-043** (`markReleased` expulsa la marca más antigua antes de comprobar si el hash ya estaba): defecto TRIVIAL conocido, sin corregir por decisión P1 A. Si se quiere corregir, en otro ticket.
+- **Prueba intermitente:** `landing-pages/tests/integration/server-startup-base.test.ts:86` ("primer arranque"). El segundo arranque de la api termina sin código de salida (`stop()` devuelve `null`: el proceso muere por una señal) en lugar de 0. Falló dos veces en el CI del PR de cierre (ejecución 44331507060, shard 1/2, intentos 1 y 2). En local, en Linux (`docker compose run test`, shard 1/2 con `--maxWorkers=4`), falló 1 vez de 9 con los `package.json` de la rama; las otras 8 pasaron, y también las 2 ejecuciones con los de `main`. Nunca falló en macOS ni con el archivo solo. El cambio de O-3 solo mueve `@restaurante/db` a `devDependencies`, y `npm ci` instala el mismo árbol: no hay un mecanismo que lo relacione con el fallo. No se pudo capturar la señal (5 ejecuciones instrumentadas en verde). El cierre no toca `src/` ni ese soporte. Hay que diagnosticarla en un ticket aparte, sin `retry` ni esperas fijas.
+
+Higiene del repositorio en el cierre (2026-11-18):
+
+- Borradas las ramas de feature ya mergeadas en `main`, locales y remotas, y el worktree remanente del PR 3.
+- La épica de arquitectura quedó dentro de `main`. Por decisión del usuario, la rama `epic/arquitectura` se eliminó el 2026-11-18, en local y en el remoto.
+- `Cotizador_Taquiza_Birria.xlsx` (archivo de trabajo del usuario) queda en el `.gitignore` de la raíz (`/Cotizador_Taquiza_Birria.xlsx`). No se versiona ni se borra.
 
 ## Aprobación
 
@@ -1632,3 +1658,7 @@ Sin defectos; observaciones O-7 y O-8, fuera de alcance. Limpieza comprobada. Es
 ### PR 3: commit y Pull Request (senior-fullstack, 2026-11-18)
 
 Usuario: "Si apruebo el commit y el PR". Commit `4298bb3` y PR #169 a `main` (https://github.com/orvigas/negocio/pull/169), con el aviso de RN-4. Estado: `READY_FOR_MERGE` (PR 3 de 3), con el CI comprobado tras marcarlo como listo.
+
+### Cierre (senior-fullstack, 2026-11-18)
+
+Usuario: "Arregla todo y mezcla a main, quiero el proyecto limpio para la siguiente epica". PR #169 mergeado en `main` (`3027a03`) y desplegado (`deploy` en `success`, suma `591de8e7…5cc7f0`). Ticket movido a `done/`. En la rama `chore/cierra-req-f-047` se resuelven O-3, O-7, O-8 y las referencias de `docs/arquitectura.md` a pruebas inexistentes (ver "Seguimiento"). Estado: `DONE`.

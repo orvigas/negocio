@@ -215,6 +215,9 @@ Instala los archivos del commit que se va a desplegar. Repite este paso **siempr
 compose. Si el `deploy/` instalado no coincide con el del commit, el despliegue falla sin tocar
 nada (código 4: "deploy/ instalado no coincide").
 
+Es la sección "Actualizar deploy/" a la que remite el mensaje de ese código 4 (`deploy.sh`, "reinstálalo
+(docs/despliegue.md, 'Actualizar deploy/')"): instalar y actualizar son el mismo procedimiento.
+
 Desde tu máquina, en la raíz del repositorio, con el commit de `main` deseado:
 
 ```sh

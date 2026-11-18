@@ -37,6 +37,10 @@ try {
   process.stderr.write(`No se pudo escuchar en la dirección y el puerto configurados (${String(code)}): revisa HOST y PORT.\n`);
   process.exit(1);
 }
+// Las señales se atienden antes de anunciar server_started: un SIGTERM que llegue justo después del
+// anuncio (un despliegue, `docker stop`, las pruebas) apaga limpio en vez de matar el proceso.
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
 logger.info('server_started', { service: 'inventory-manager', host: config.host, port: config.port, nodeEnv: config.nodeEnv, trustProxy: config.trustProxy });
 
 function shutdown(signal: NodeJS.Signals): void {
@@ -49,6 +53,3 @@ function shutdown(signal: NodeJS.Signals): void {
     process.exit(0);
   });
 }
-
-process.once('SIGTERM', () => shutdown('SIGTERM'));
-process.once('SIGINT', () => shutdown('SIGINT'));

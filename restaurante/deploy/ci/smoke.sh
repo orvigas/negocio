@@ -544,12 +544,14 @@ check 'el webhook lo responde la api' wait_for webhook_on_api
 DOC="$DEPLOY_SRC/../docs/despliegue.md"
 check 'todo comando documentado que recrea la api pasa RESTAURANTE_API_WEBHOOK' bash -c "test -f '$DOC' && ! grep -E '(up -d|up) --no-deps api' '$DOC' | grep -v RESTAURANTE_API_WEBHOOK | grep -q ."
 
-say 'api rota tras una migración nueva (DEF-001 de REQ-F-038)'
+say 'api rota tras una migración nueva (REQ-F-047)'
 BEFORE=$(app_id)
 check 'deploy con migración nueva y api rota -> 15' expect_exit 15 run_deploy 9 "$APP2" "$MIG_NEWER" "$API_BAD" "$INV1"
-# Desde REQ-F-045 la app no usa la base: el compose no le pasa DATABASE_ALLOW_NEWER_SCHEMA, así que
-# deploy.sh no tiene nada que cambiarle y la deja como estaba.
-check 'la app no se recreó (ya no depende de la base)' test "$(app_id)" = "$BEFORE"
+# Desde REQ-F-045 la app no usa la base: en 15 (y en 16) deploy.sh no la toca, haya o no migraciones
+# nuevas (REQ-F-047), y lo dice así en su salida.
+check 'la app no se tocó (mismo contenedor)' test "$(app_id)" = "$BEFORE"
+check 'el log no anuncia ninguna recreación' bash -c "! grep -q 'se recrea' '$WORK/deploy-9.log'"
+check 'el log dice que la app no se tocó' grep -q 'la app no se tocó' "$WORK/deploy-9.log"
 check 'con la misma imagen (v2)' test "$(app_image)" = "$REGISTRY/restaurante@$APP2"
 check 'y sin DATABASE_ALLOW_NEWER_SCHEMA' bash -c "! docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' '$(app_id)' | grep -q DATABASE_ALLOW_NEWER_SCHEMA"
 docker restart "$(app_id)" >/dev/null

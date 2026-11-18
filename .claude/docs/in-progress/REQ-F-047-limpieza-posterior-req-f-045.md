@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE (PR 2 de 3: pruebas y código de `core`, https://github.com/orvigas/negocio/pull/167). El ticket sigue en `in-progress/` hasta cerrar el PR 3.
+READY_FOR_MERGE (PR 3 de 3: `deploy.sh`, https://github.com/orvigas/negocio/pull/169). PR 1 (#165) y PR 2 (#167) mergeados en `main`. El ticket sigue en `in-progress/` hasta el merge del PR 3. Tras el merge: reinstalar `deploy/` en el VPS y volver a ejecutar el job `deploy` (RN-4, CA-7).
 
 ## Aprobación
 
@@ -759,6 +759,73 @@ Antes de añadirlas se comprobó que ninguna prueba cubría estos casos (revisi�
 - **Base:** `origin/main` no había avanzado desde `30d322c`. Suma de `deploy/` sin cambios (`34c2ee77…f30946eeb2`).
 - **CI y O-5:** se comprueban con `gh pr checks` tras marcar el PR como listo. El resultado del CI y la duración en el CI de `product-repository-contract-prisma-*` (O-5) constan en el PR y en el informe de la fase, y se añadirán al ticket en el primer commit del PR 3.
 
+### PR 3. `deploy.sh`
+
+#### Rama
+
+`feature/REQ-F-047-limpieza-posterior-req-f-045-3-deploy`, desde `origin/main` en `d06f5d6` (merge del PR #167). Sin commits todavía.
+
+#### Cambios realizados
+
+- **`restaurante/deploy/deploy.sh`:**
+  - `protect_running_app` pasa a `fail_before_app <resultado> <código> <mensaje>`: `record "$1"` y `fail "$2" "$3; la app no se tocó"`. Las dos llamadas (15 y 16) la usan.
+  - Retirados el comentario DEF-001, `MIGRATIONS_BEFORE`, `MIGRATIONS_AFTER` y `applied_migrations()` con su comentario (H-1): cada despliegue hace dos `exec` menos en MySQL. Desaparecen los resultados `api_failed_app_unhealthy` e `inventory_failed_app_unhealthy` de `releases.log` (nada los lee).
+  - Cabecera: en 15 y 16 la app nunca se toca, haya o no migraciones nuevas.
+  - Sin cambios (RN-3): el `export DATABASE_ALLOW_NEWER_SCHEMA=true` de la vuelta de la api (15) y de la vuelta atrás (21), el `unset` inicial, la vuelta atrás, el router del webhook, el orden api → inventory-manager → app y los demás códigos. Los dos 22 que quedan son `health_failed_api_not_restored` y `health_failed_rollback_failed` (RN-2).
+- **`restaurante/deploy/ci/resumen.sh` (15 y 16):** sin la frase de la recreación ni `DATABASE_ALLOW_NEWER_SCHEMA`; terminan en "…y la app no se tocó."
+- **`restaurante/deploy/ci/resumen-test.sh`:** en los casos 15 y 16, `no_contiene` de `recreada` y de `DATABASE_ALLOW_NEWER_SCHEMA` (H-2). Con el `resumen.sh` de `main`, las cuatro comprobaciones nuevas fallan; con el del PR, pasan.
+- **`restaurante/deploy/ci/smoke.sh`, escenario run 9:** título "(REQ-F-047)", comentario actualizado, comprobación renombrada a "la app no se tocó (mismo contenedor)" y dos nuevas sobre `$WORK/deploy-9.log`: no contiene `se recrea` y contiene `la app no se tocó` (P-T3 A: sin escenario nuevo).
+- **`restaurante/docs/despliegue.md`:** pasos 6 y 7 (en 15 y 16 la app nunca se toca, haya o no migraciones) y filas de los códigos 15 y 16 de la tabla de diagnóstico (sin el paréntesis de la recreación; la del 15 dice que ya no pasa a 22 por la salud de la app y que una app caída se diagnostica aparte, R-2). `:653` y `:720` sin cambios.
+- **`restaurante/README.md:613`:** sin cambios (P-T3 A). Ya dice que una `api` rota termina con 15 sin tocar la app, también con migraciones nuevas.
+
+#### Criterios de aceptación
+
+- **CA-2 (parte de despliegue):** `grep` de `se recrea`, `recreada`, `_app_unhealthy`, `protect_running_app`, `applied_migrations`, `MIGRATIONS_BEFORE` y "recrea la app" en `deploy/`, `docs/despliegue.md`, `README.md` y `ops/`. Solo quedan las comprobaciones negativas de `resumen-test.sh` y `smoke.sh` y "una `api` recreada a mano" (`despliegue.md`, fila del 502; no es la app). Cumple.
+- **CA-3:** api rota con migración nueva → 15, mismo contenedor y misma imagen, log sin "se recrea" y con "la app no se tocó" (`smoke.sh` real, run 9). El caso de inventory-manager con una migración nueva queda para el QA en una copia que no se commitea (P-T3 A). Cumple en lo que toca al desarrollo.
+- **CA-4:** `deploy.sh` ya no contiene `_app_unhealthy` y `fail_before_app` no tiene ningún camino al 22. Cumple.
+- **CA-5:** `smoke.sh` real en verde, incluidos 21 (también tras una migración nueva), "22, no 21" con la api anterior sin arrancar, el webhook y `DATABASE_ALLOW_NEWER_SCHEMA en .env -> 3`; `resumen-test.sh` y `shellcheck` en verde. Cumple.
+- **CA-6:** cumple (ver `resumen-test.sh`).
+- **CA-7:** `despliegue.md` actualizado. El aviso de RN-4 va en el PR (ver "Riesgos o pendientes"). La reinstalación de `deploy/` y la nueva ejecución del job quedan pendientes del usuario tras el merge.
+- **CA-11:** `typecheck`, `lint` y `test` en verde en local; el CI se comprobará en T4.
+
+#### Validaciones ejecutadas
+
+- `shellcheck deploy.sh mysql/initdb/01-usuarios.sh ci/smoke.sh ci/resumen.sh ci/resumen-test.sh` (`koalaman/shellcheck-alpine:stable`, ShellCheck 0.11.0, en Docker: no hay `shellcheck` en el host): 0, sin avisos.
+- `bash deploy/ci/resumen-test.sh`: "todas las comprobaciones pasaron".
+- `deploy/ci/smoke.sh` real, en un contenedor `docker:cli` con el socket de Docker, `--network host` y `SMOKE_WORKDIR` en el scratchpad, con las cuatro imágenes construidas desde la rama: **194 ok, "todas las comprobaciones pasaron"** (salida 0). Run 9: `-> 15`, mismo contenedor, sin "se recrea", con "la app no se tocó", misma imagen v2, sin la bandera, healthy tras reiniciar y 200. Log del run 9: `ERROR: la api nueva no quedó healthy o Traefik no le enruta el webhook; la app no se tocó`.
+- `npm ci --strict-allow-scripts`, `npm run db:generate`, `npm run build:css`: 0.
+- `npm run typecheck`: 0. `npm run lint`: 0.
+- `npm test` (MySQL local): 49 archivos / 1166 pruebas, 58 / 887 y 16 / 278, todo en verde.
+- **Suma de control de `deploy/`** (`sha256sum compose.prod.yaml deploy.sh mysql/initdb/01-usuarios.sh | sha256sum`): `591de8e7f259073f79ff34418c8b7a3a2680d465ef3bc7378c620221455cc7f0` (antes `34c2ee77…f30946eeb2`). Cambia como prevé RN-4.
+
+#### O-5 (CI del PR #167)
+
+Duración en el CI (`pruebas (1/2)` y `pruebas (2/2)` de la ejecución 44263597599): `product-repository-contract-prisma-crear` 11,4 s, `-importacion` 7,2 s y `-actualizar` 7,9 s. Ninguno pasa de 20 s (CA-13): las medidas de O-5 eran de reloj en local, con la suite completa en paralelo.
+
+#### Archivos afectados
+
+- `restaurante/deploy/deploy.sh`
+- `restaurante/deploy/ci/resumen.sh`
+- `restaurante/deploy/ci/resumen-test.sh`
+- `restaurante/deploy/ci/smoke.sh`
+- `restaurante/docs/despliegue.md`
+- este ticket
+
+#### Riesgos o pendientes
+
+- **Aviso RN-4 (debe ir en el PR):** cambiar `deploy.sh` cambia la suma de `deploy/`. Tras el merge del PR 3 a `main`, el job `deploy` falla con el código 4 hasta que el usuario reinstale `deploy/` en el VPS (`docs/despliegue.md` §1.3) y lo vuelva a ejecutar. Conviene hacer el merge cuando se pueda reinstalar enseguida (R-1).
+- **R-2:** un 15 o un 16 con la app ya enferma no avisa con un 22; consta en la tabla de diagnóstico.
+- **QA (P-T3 A):** el caso de inventory-manager roto con una migración nueva se ejecuta en una copia de `smoke.sh` que no se commitea.
+- **Limpieza:** comprobada. Contenedores, redes y volúmenes de `restaurante-smoke`/`smoke-*` los retiró el propio `smoke.sh` (`docker ps -a`, `docker volume ls`: ninguno); borradas las imágenes `req047-smoke:*`, `smoke/*` y `localhost:5000/orvigas/*`; sin `traefik` ni `registry` descargados. Sin bases `restaurante_test*` (comprobado con `SHOW DATABASES` antes de `npm run db:down`; MySQL de desarrollo detenido, como estaba). Sin procesos de Vitest ni de las apps. Scratchpad: borrados `smoke-work`, `smoke.log` y `test.log`. `git worktree list`: el principal y este worktree de la tarea.
+
+#### Pull Request del PR 3
+
+- **PR:** https://github.com/orvigas/negocio/pull/169, de `feature/REQ-F-047-limpieza-posterior-req-f-045-3-deploy` hacia `main`, abierto en borrador.
+- **Commits:** `4298bb3` (`fix: el despliegue deja la app intacta cuando falla la api o inventory-manager (REQ-F-047, PR 3)`) y el de este registro (`docs: registra el Pull Request de REQ-F-047 (PR 3)`).
+- **Base:** rebase sobre `origin/main` en `fd557ab` (merge del #168, que solo toca pruebas de `landing-pages`). Suma de `deploy/`: `591de8e7f259073f79ff34418c8b7a3a2680d465ef3bc7378c620221455cc7f0`.
+- **Aviso RN-4:** en el cuerpo del PR.
+- **CI:** se comprueba con `gh pr checks` tras marcar el PR como listo (sin más commits después); el resultado consta en el informe de la fase.
+
 ## QA Action Plan
 
 ### PR 1. Textos y referencias
@@ -959,6 +1026,60 @@ Salida de cada comando: resultado de cada mutación (qué prueba falla y con qu�
 - Ninguna diferencia observable entre `main` y la rama (CA-12, RN-6), salvo normalizaciones justificadas.
 - Sin defectos `BLOCKER` ni `CRITICAL`; los `MAJOR` se elevan al usuario.
 - Limpieza comprobada: worktrees `qa047-*` y sus `node_modules` borrados (`git worktree list` con una sola entrada y `git worktree prune`), bases `restaurante_test*` creadas por el QA borradas, procesos de `api`/`landing-pages`/`inventory-manager`/Vitest detenidos y puertos libres, MySQL de pruebas en su estado inicial, scripts temporales del scratchpad borrados, árbol principal idéntico al de antes del QA (salvo el ticket). No se usa navegador.
+
+### PR 3. `deploy.sh`
+
+Aprobado por el usuario (2026-11-18, cita textual: "Si", junto con las 5 autorizaciones: Docker, tres ejecuciones de smoke más D-2 y D-3, `npm run db:up`, limpieza y guardar el plan en el ticket).
+
+#### Objetivo
+
+Demostrar con evidencia que en 15 y 16 `deploy.sh` no toca la app, haya o no migraciones nuevas, y lo dice en el log, el mensaje y el resumen del CI; que ningún fallo de la api o de inventory-manager termina en 22; que nada más cambia (RN-3); que la documentación coincide con el comportamiento; y que la suma de `deploy/` es la anunciada (RN-4).
+
+#### Requisito bajo prueba
+
+RF-5 (RN-1 a RN-4), P-T3 A. CA-2 (despliegue), CA-3 a CA-7 y CA-11 (local).
+
+#### Criterios de aceptación (cada uno → pruebas)
+
+- CA-2 → F-6. CA-3 → F-4 (run 9) y F-5 A. CA-4 → F-1, F-5 y F-6. CA-5 → F-2, F-3 y F-4. CA-6 → F-3 y D-2. CA-7 → F-7 y F-8 (reinstalación en el VPS: pendiente del usuario). CA-11 → R-1 (el CI, en la fase del PR).
+
+#### Riesgos identificados
+
+- Tocar sin querer la vuelta atrás, la vuelta de la api con la bandera, el router o los códigos (RN-3).
+- Remanentes de la rama retirada.
+- H-3: el id del contenedor no distingue el cambio; solo el log. Hace falta un diferencial con el `deploy.sh` de `main`.
+- R-2: con la app ya caída, 15/16 no deben arrancarla ni recrearla.
+- RN-4: la suma cambia (código 4 tras el merge hasta reinstalar).
+
+#### Pruebas funcionales
+
+- **F-1.** `git diff -U0 main` frente a RN-3: fragmentos solo en la cabecera, `applied_migrations`, `MIGRATIONS_*`, `protect_running_app` → `fail_before_app` y sus dos llamadas; `compose.prod.yaml` sin cambios; mismos `fail <código>` salvo el 22 retirado; los 22 que quedan son `health_failed_api_not_restored` y `health_failed_rollback_failed`; `unset`, los dos `export`, `restore_inventory`, `probe_webhook` y `probe_traefik` intactos.
+- **F-2.** `shellcheck` en Docker (`koalaman/shellcheck-alpine:stable`) con los argumentos del CI, más `shellcheck -x` de `ops/backup`.
+- **F-3.** `bash deploy/ci/resumen-test.sh`.
+- **F-4.** `smoke.sh` real sin modificar, en `docker:cli` con el socket, `--network host` y `SMOKE_WORKDIR` en el scratchpad, con las cuatro imágenes construidas desde el worktree (`qa047/restaurante:*`).
+- **F-5.** Copia descartable de `smoke.sh` (scratchpad, con `deploy/` y `docs/` copiados) que añade: run 9 ampliado (api vuelta a la de `release.env`, healthy y con `DATABASE_ALLOW_NEWER_SCHEMA=true`; `releases.log` en `api_failed`); **A** (run 19: inventory-manager roto con la migración nueva `29990102…` → 16, app intacta, log sin recreación y con "la app no se tocó", api nueva healthy, inventory-manager v1 healthy, `inventory_failed`, sin `_app_unhealthy`, landings 200); **B** (run 20: app parada, api rota y migración nueva `29990103…` → 15, la app sigue parada con el mismo id, api anterior healthy con la bandera, `api_failed`).
+- **F-6.** Búsqueda de `_app_unhealthy`, `protect_running_app`, `applied_migrations`, `MIGRATIONS_BEFORE/AFTER`, `se recrea`, `recreada`, "recrea la app" y "solo lectura de productos" en `restaurante/` y `.github/` (sin `node_modules`).
+- **F-7.** `despliegue.md` (pasos 6 y 7, filas 15 y 16) frente a los logs reales; anclajes citados por `resumen.sh` y `deploy.sh`; `:653`, `:720` y `README.md:613`.
+- **F-8.** Suma de `deploy/` con la fórmula del CI y la de `main`.
+
+#### Pruebas negativas, mutaciones y diferenciales (no se commitean)
+
+- **D-1.** La copia de F-5 con el `deploy.sh` de `main`: deben fallar solo las comprobaciones de log (run 9, A y B) y "la app sigue parada" (B), con los mismos códigos 15/16.
+- **D-2.** `resumen-test.sh` con el `resumen.sh` de `main`: fallan exactamente las cuatro `no_contiene` nuevas.
+- **D-3.** Mutación de `resumen.sh` (15 con la bandera, 16 con "recreada"): cada `no_contiene` la detecta por separado.
+
+#### Pruebas de regresión
+
+- **R-1.** `npm run typecheck`, `npm run lint` y `npm test` (tres apps; MySQL de pruebas).
+- **R-2.** Todos los escenarios de `smoke.sh` en F-4.
+
+#### Evidencia requerida
+
+Recuentos `ok`/`FALLO` de cada smoke, extractos de `deploy-9/19/20.log` y `releases.log`, fallos esperados frente a obtenidos en D-1 a D-3, suma de control, búsquedas clasificadas y salidas de `typecheck`, `lint` y `npm test`.
+
+#### Criterios de aprobación
+
+CA-2 a CA-6 en PASS; F-4 y F-5 en verde; D-1 a D-3 fallan exactamente donde se espera; shellcheck, `resumen-test.sh`, `typecheck`, `lint` y `npm test` en 0; sin `BLOCKER`/`CRITICAL` ni `MAJOR` sin decisión. CA-7 (VPS) y el CI quedan pendientes sin bloquear. Limpieza comprobada: contenedores, redes y volúmenes de smoke, `traefik-public`, imágenes `qa047/*`, `smoke/*`, `localhost:5000/orvigas/*`, `traefik` y `registry` (no estaban antes), copias y logs del scratchpad, bases `restaurante_test*` y el MySQL de desarrollo como estaba.
 
 ## QA Report
 
@@ -1332,6 +1453,106 @@ Ninguno. El CI del PR (`calidad`, `docker`, `auditoria`, `pruebas` en `pass`) lo
 
 QA_APPROVED
 
+### PR 3. `deploy.sh` — Ronda 1
+
+Worktree `.claude/worktrees/agent-af8ef744c0e4c3d99`, rama `feature/REQ-F-047-limpieza-posterior-req-f-045-3-deploy` (HEAD `d06f5d6`, cambios sin commit). Todo en local; ni VPS ni producción.
+
+#### Pruebas ejecutadas
+
+- **F-1 (diff frente a RN-3):** `git diff -U0 main -- deploy/deploy.sh` da 7 fragmentos, todos en zonas permitidas: cabecera (`-14,2 +14,3`), `applied_migrations` (`-182,15`), `MIGRATIONS_BEFORE` (`-246`), `MIGRATIONS_AFTER` (`-252`), `protect_running_app` → `fail_before_app` (`-307,22 +291,6`) y las dos llamadas (`-362 +330`, `-375 +343`). Sin diferencias en `compose.prod.yaml`, `mysql/` ni `README.md`.
+  - Los `fail <código>` de `main` y de la rama coinciden, salvo dos cambios: `fail 22` pasa de 3 a 2 (sale el de `protect_running_app`) y `fail "$code"` ×2 pasa a `fail "$2"` ×1.
+  - En los `record`, sale `"${result}_app_unhealthy"`.
+  - Quedan los dos 22 previstos: `health_failed_api_not_restored` (386) y `health_failed_rollback_failed` (393).
+  - Siguen intactos `unset DATABASE_ALLOW_NEWER_SCHEMA` (129), los `export …=true` (323 en la vuelta de la api y 369 en la vuelta atrás), `probe_traefik`, `probe_webhook` y `restore_inventory`.
+  - `fail_before_app` es `record "$1"; fail "$2" "$3; la app no se tocó"`: no tiene ningún camino al 22.
+- **F-2 (shellcheck 0.11.0, `koalaman/shellcheck-alpine:stable`):** `shellcheck deploy.sh mysql/initdb/01-usuarios.sh ci/smoke.sh ci/resumen.sh ci/resumen-test.sh` → 0, sin avisos. `shellcheck -x` de `ops/backup` (lib, backup, env-backup, restore, verify-backup y ci/smoke) → 0.
+- **F-3:** `bash deploy/ci/resumen-test.sh` → 0, "todas las comprobaciones pasaron". En 15 y 16 pasan "la app no se tocó", "sin recreación" y "sin la bandera".
+- **F-4 (`smoke.sh` real sin modificar):** en `docker:cli` con el socket, `--network host` y `SMOKE_WORKDIR` en el scratchpad, con las cuatro imágenes construidas desde el worktree (`qa047/restaurante:{production,migrate,api,inventory-manager}`). Resultado: **194 ok, 0 FALLO, salida 0**, "todas las comprobaciones pasaron". Pasan:
+  - los rechazos 2, 4 y 3, incluido "`DATABASE_ALLOW_NEWER_SCHEMA` en .env → 3";
+  - 13; 21 en los runs 4, 12 y 7 (este, tras una migración nueva); "22, no 21" (run 17);
+  - 15 en los runs 8, 13 y 15; 16 en el run 10;
+  - el webhook, el router y los procedimientos documentados.
+  - Run 9: `deploy: ERROR: la api nueva no quedó healthy o Traefik no le enruta el webhook; la app no se tocó`, `-> 15`, mismo contenedor, sin "se recrea", con "la app no se tocó", imagen v2, sin la bandera, healthy tras reiniciar y 200.
+- **F-5 (copia descartable de `smoke.sh` con el `deploy.sh` de la rama; P-T3 A):** **228 ok (194 + 34 de QA), 0 FALLO, salida 0.**
+  - **Run 9 ampliado:** la api vuelve a la de `release.env`, queda healthy y tiene `DATABASE_ALLOW_NEWER_SCHEMA=true` en su entorno; `releases.log` termina en `api_failed`.
+  - **A (run 19: inventory-manager roto con la migración nueva `29990102000000_smoke_otra`):**
+    - antes no estaba aplicada y después sí;
+    - `-> 16`, con `deploy: ERROR: inventory-manager no quedó healthy; la api nueva sigue; la app no se tocó`;
+    - mismo contenedor de la app, imagen v2 y sin la bandera; log sin "se recrea" ni "recreada";
+    - la api nueva (`api-newest`) sigue y queda healthy; inventory-manager vuelve a v1 y queda healthy;
+    - `releases.log` termina en `inventory_failed`, sin ningún `_app_unhealthy`;
+    - `/`, `/molotes` y `/birria` responden 200.
+  - **B (run 20, caso límite R-2: app parada, api rota y migración nueva `29990103000000_smoke_tercera`):**
+    - `-> 15` (no 22), con "la app no se tocó" y sin recreación;
+    - la app conserva el mismo id y sigue parada (`State.Running=false`);
+    - la api vuelve a la de `release.env`, queda healthy y tiene la bandera; `releases.log` termina en `api_failed`;
+    - arrancada a mano, la app queda healthy y el sitio responde 200.
+- **F-6 (remanentes):** `grep -rnE '_app_unhealthy|protect_running_app|applied_migrations|MIGRATIONS_BEFORE|MIGRATIONS_AFTER|se recrea|recreada|recrea la app|solo lectura de productos'` en `restaurante/` y `.github/` (sin `node_modules`). Solo 4 apariciones, todas justificadas:
+  - `resumen-test.sh:117` y `:161` (`no_contiene … 'recreada'`) y `smoke.sh:553` (`! grep 'se recrea'`) son las comprobaciones negativas;
+  - `despliegue.md:912` ("una `api` recreada a mano", fila del 502) se refiere a la api, no a la app.
+- **F-7 (`despliegue.md` frente al comportamiento):**
+  - Los pasos 6 y 7 y las filas 15 y 16 coinciden con los mensajes reales de los runs 9, 19 y 20 y con el caso de la app parada, que sigue igual (la fila 15 dice "si ya estaba caída, sigue igual").
+  - Existe el anclaje `#10-diagnóstico` que usa `resumen.sh` (`## 10. Diagnóstico`, línea 887).
+  - `:653` y `:720` están sin cambios y son correctas (hecho 2). `README.md:613` sigue siendo coherente ("una `api` rota termina con 15 sin tocar la app, también si hubo migraciones nuevas").
+- **F-8 (suma de `deploy/` con la fórmula de `ci.yml:798`):** rama `591de8e7f259073f79ff34418c8b7a3a2680d465ef3bc7378c620221455cc7f0`, que coincide con la anunciada; `main` `34c2ee77b94cf4d59b744eb53c44aa9e8e8fa34fe0362d77cc4513f30946eeb2`. Cambia, como prevé RN-4, y el aviso consta en "Implementation Result › PR 3 › Riesgos o pendientes".
+- **D-1 (la copia de F-5 con el `deploy.sh` de `main`):** **221 ok, 7 FALLO**, exactamente los esperados:
+  - run 9: "el log no anuncia ninguna recreación" y "el log dice que la app no se tocó";
+  - A: las mismas dos;
+  - B: "la app sigue parada" (con `main` la app se recrea y se arranca) y las dos de log.
+  - Los códigos son los mismos que con la rama (15 en el run 9, 16 en A y 15 en B), y "la app no se tocó (mismo contenedor)" pasa también con `main`: confirma H-3.
+  - Log de `main`: `hubo migraciones nuevas: la app en marcha (…) se recrea con su misma imagen` y `…; la app sigue con su versión, recreada por las migraciones nuevas`.
+- **D-2 (`resumen-test.sh` con el `resumen.sh` de `main`):** salida 1, con exactamente 4 FALLO: "15: sin recreación", "15: sin la bandera", "inventory 16: sin recreación" e "inventory 16: sin la bandera".
+- **D-3 (mutación de `resumen.sh`: 15 con "(DATABASE_ALLOW_NEWER_SCHEMA)" y 16 con "recreada"):** salida 1, con exactamente "15: sin la bandera" e "inventory 16: sin recreación". Cada `no_contiene` detecta su caso por separado. La mutación de `deploy.sh` queda cubierta por D-1.
+- **R-1 (regresión):** `npm run typecheck` → 0. `npm run lint` → 0. `npm run build:css` → 0. `npm test` (MySQL de pruebas con `npm run db:up`) → 0: 49 archivos / 1166 pruebas, 58 / 887 y 16 / 278.
+
+#### Criterios de aceptación
+
+- **CA-2 (despliegue):** PASS (F-6).
+- **CA-3:** PASS. api rota con migración nueva → 15 (F-4 run 9). inventory-manager roto con migración nueva → 16 (F-5 A). En ambos: mismo contenedor y misma imagen, log sin "se recrea" y mensaje "la app no se tocó".
+- **CA-4:** PASS. Sin 22 en esos dos casos (también con la app parada, F-5 B) y sin `_app_unhealthy` en `deploy.sh` (F-1 y F-6).
+- **CA-5:** PASS. `smoke.sh` real en verde: 21, "22, no 21", webhook y `.env` con la bandera → 3. `resumen-test.sh` y `shellcheck` también en verde.
+- **CA-6:** PASS (F-3; D-2 y D-3 demuestran que las comprobaciones detectan la regresión).
+- **CA-7:** PASS en lo verificable en local: `despliegue.md` describe CA-3 y CA-4 (F-7) y el aviso de RN-4 consta para el PR. PENDIENTE DEL USUARIO: incluir el aviso en el PR, y tras el merge reinstalar `deploy/` en el VPS y volver a ejecutar el job `deploy` hasta que dé 0.
+- **CA-11:** PASS en local (R-1). El CI (`calidad`, `docker`, `auditoria` y `pruebas` en `pass`) se comprueba en la fase del PR.
+
+#### Defectos encontrados
+
+Ninguno.
+
+#### Observaciones (no son defectos de este PR; código sin cambios en el diff)
+
+- **O-7.** La limpieza de `smoke.sh` (`docker rm -f smoke-traefik smoke-registry …`, línea 62) no borra el volumen anónimo del registro (`/var/lib/registry`): queda un volumen por ejecución en una máquina persistente. En el CI el runner es efímero. Aquí se borraron a mano (3). Si se quiere corregir, irá en otro ticket (`docker rm -fv`).
+- **O-8.** El `fail 4` de `deploy.sh` (línea 97) remite a "docs/despliegue.md, 'Actualizar deploy/'", pero la sección se llama "1.3 Instalar `deploy/`". Es anterior a este PR y queda fuera de alcance.
+
+#### Regresión
+
+`npm test` completo en verde y los 194 casos de `smoke.sh` (rechazos, 13, 21, 22, 15 y 16 sin migración, webhook, router y procedimientos documentados) en verde.
+
+#### Responsive, accesibilidad, UX/UI, performance y SEO
+
+No aplican: el PR solo toca scripts de despliegue y documentación, sin HTML, CSS, JS de navegador ni respuestas HTTP de las apps. No se usó navegador.
+
+#### Pendientes de revisión manual
+
+- CA-7 tras el merge: reinstalar `deploy/` en el VPS (`docs/despliegue.md` §1.3) y volver a ejecutar el job `deploy` hasta obtener 0 (RN-4 y R-1).
+- El CI del PR en `pass`, no en `skipping`.
+
+#### Limpieza
+
+- **Docker:**
+  - borradas las imágenes `qa047/restaurante:*`, `smoke/*` y `localhost:5000/orvigas/*`, y `traefik@sha256:575fa15b…` y `registry@sha256:ddf75434…` (no estaban antes);
+  - borrados los 3 volúmenes anónimos del registro (O-7);
+  - `docker images`, las redes y los volúmenes son idénticos al inventario inicial; solo queda `restaurante-mysql-dev-1`, detenido como estaba;
+  - no se borraron `mysql@sha256:6ea90827…` ni `ghcr.io/orvigas/restaurante@sha256:8348a84f…`, porque no se pudo demostrar que los descargara este QA (no se descarga nada de GHCR).
+- **MySQL de pruebas:** sin bases `restaurante_test*` (comprobado con `SHOW DATABASES`) y detenido con `npm run db:down`.
+- **Procesos:** sin procesos de Vitest, smoke ni `docker events`.
+- **Scratchpad:** borradas las copias (`f5`, `d1`, `d2`, `d3`), los `SMOKE_WORKDIR`, los logs y el script lanzador; queda vacío.
+- **git:** `git worktree list` muestra el principal y este worktree, como al empezar. `git status` del worktree igual que al empezar, salvo este ticket.
+
+#### Resultado final
+
+QA_APPROVED
+
 ## Historial de cambios
 
 ### Versión 1
@@ -1388,3 +1609,26 @@ Plan aprobado por el usuario ("Apruebo el plan y las 4 autorizaciones"). T-0 a T
 Sin defectos; observaciones O-5 y O-6. Limpieza completa. Estado: `QA_APPROVED`.
 
 PR 2: commit `66d31f9` y PR #167 a `main` (https://github.com/orvigas/negocio/pull/167). Estado: `READY_FOR_MERGE` (PR 2 de 3).
+
+### PR 3 implementado (senior-fullstack, 2026-11-18)
+
+Usuario: "Si, sigue". `deploy.sh` sin la recreación de la app en 15 y 16 (`fail_before_app`), `resumen.sh`, `resumen-test.sh`, `smoke.sh` (run 9) y `despliegue.md`. `shellcheck`, `resumen-test.sh`, `smoke.sh` real (194 ok), `typecheck`, `lint` y `test` en verde. Nueva suma de `deploy/`: `591de8e7…5cc7f0`. O-5 resuelta en el CI del PR #167 (máximo 11,4 s). Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA Action Plan del PR 3 (senior-qa, 2026-11-18)
+
+Plan aprobado por el usuario ("Si"), junto con sus 5 autorizaciones. Se añade "QA Action Plan › PR 3. `deploy.sh`".
+
+### QA del PR 3, ronda 1 (senior-qa, 2026-11-18)
+
+Resultados:
+- `shellcheck`, `resumen-test.sh`, `typecheck`, `lint` y `npm test` en verde.
+- `smoke.sh` real: 194 ok.
+- Copia de P-T3 A: 228 ok, con inventory-manager roto tras una migración nueva → 16 y el caso límite con la app parada → 15.
+- Diferenciales que fallan exactamente donde se espera: D-1, 7 FALLO con el `deploy.sh` de `main`; D-2, 4 FALLO; D-3, 2 FALLO.
+- Suma `591de8e7…5cc7f0`.
+
+Sin defectos; observaciones O-7 y O-8, fuera de alcance. Limpieza comprobada. Estado: `QA_APPROVED`.
+
+### PR 3: commit y Pull Request (senior-fullstack, 2026-11-18)
+
+Usuario: "Si apruebo el commit y el PR". Commit `4298bb3` y PR #169 a `main` (https://github.com/orvigas/negocio/pull/169), con el aviso de RN-4. Estado: `READY_FOR_MERGE` (PR 3 de 3), con el CI comprobado tras marcarlo como listo.

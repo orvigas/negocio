@@ -134,10 +134,10 @@ case "$CODE" in
     fallido "La app no se tocó; la migración pudo quedar a medias: [restaurar la base]($DOC#9-restaurar-la-base-desde-un-volcado)."
     ;;
   15)
-    fallido "La api nueva no quedó sana: volvió a la anterior (si la había) y la app no se tocó, salvo que hubiera migraciones nuevas: entonces sigue con su versión, recreada con \`DATABASE_ALLOW_NEWER_SCHEMA=true\`. Causa y solución en [Diagnóstico]($DOC#10-diagnóstico)."
+    fallido "La api nueva no quedó sana: volvió a la anterior (si la había) y la app no se tocó. Causa y solución en [Diagnóstico]($DOC#10-diagnóstico)."
     ;;
   16)
-    fallido "El admin nuevo (inventory-manager) no quedó sano: volvió al anterior (o se detuvo si no lo había) y la app no se tocó, salvo que hubiera migraciones nuevas: entonces sigue con su versión, recreada con \`DATABASE_ALLOW_NEWER_SCHEMA=true\`. La api nueva sigue en marcha. Causa y solución en [Diagnóstico]($DOC#10-diagnóstico)."
+    fallido "El admin nuevo (inventory-manager) no quedó sano: volvió al anterior (o se detuvo si no lo había) y la app no se tocó. La api nueva sigue en marcha. Causa y solución en [Diagnóstico]($DOC#10-diagnóstico)."
     ;;
   20 | 22)
     fallido "Producción pudo quedar sin servicio. Sigue [Diagnóstico]($DOC#10-diagnóstico)."

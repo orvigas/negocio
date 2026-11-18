@@ -121,16 +121,13 @@ VPS (REQ-F-019). Los detalles de la app están en el [README](../README.md).
    5. **Migra.**
    6. Cambia la `api` al digest nuevo y espera `healthy` (REQ-F-038). Si no lo queda, vuelve a la
       `api` anterior (si la hay; si `state/release.env` no la registra, por ejemplo tras una
-      restauración, toma la del contenedor `api` en marcha) y termina con el código 15:
-      - si este despliegue **no** aplicó migraciones, la app no se toca;
-      - si **sí** las aplicó, `deploy.sh` recrea la app con su misma imagen (DEF-001 de
-        REQ-F-038). Desde REQ-F-045 la app no usa la base, así que esa recreación ya no es
-        necesaria y la app queda como estaba. Si no quedara sana, termina con 22.
+      restauración, toma la del contenedor `api` en marcha) y termina con el código 15. La app
+      no se toca nunca, haya o no migraciones nuevas: desde REQ-F-045 no usa la base (REQ-F-047).
    7. Cambia `inventory-manager` al digest nuevo y espera `healthy`, más una respuesta 200 de
       `https://admin.<dominio>/salud` a través de Traefik (por `RESTAURANTE_PROBE_ADDRESS`, sin
       depender del DNS). Va **antes** que la app porque la app nueva lleva `/admin` al admin nuevo. Si no queda sano, vuelve al `inventory-manager` anterior (o lo
-      detiene si no lo había), deja la app como estaba (con la misma protección de las migraciones
-      nuevas que el punto 6) y la `api` nueva, y termina con el **código 16**.
+      detiene si no lo había), deja la `api` nueva en marcha y termina con el **código 16**. Como en
+      el punto 6, la app no se toca nunca, haya o no migraciones nuevas.
    8. Cambia la app al digest nuevo y espera `healthy`, más una respuesta 200 a través de
       Traefik.
    9. Registra el resultado (las cuatro imágenes) en `state/release.env` y `state/releases.log`.
@@ -907,8 +904,8 @@ el log del paso `desplegar`.
 | Código 11 `MySQL no quedó healthy` | MySQL no arrancó (memoria, disco, volumen dañado) o el initdb falló en el primer arranque (contraseñas no hexadecimales) | `$C logs mysql`; la app no se tocó |
 | Código 12 (volcado) | MySQL caído, disco lleno o usuario `restaurante_backup` | `$C logs mysql`, `df -h` |
 | Código 13 (migración) | La migración falló; la app sigue con la versión anterior | Lee el error de Prisma en el log. Si quedó a medias, [restaura](#9-restaurar-la-base-desde-un-volcado) |
-| Código 15 (REQ-F-038) | La `api` nueva no quedó `healthy` o Traefik no le enruta `/webhooks/whatsapp` (REQ-F-042); se volvió a la anterior si la había. La app no se tocó (con migraciones nuevas, el log dice que se recrea con su misma imagen: sigue igual) | `$C logs api`: suele ser la base (`database_init_failed`), la imagen o, con el bot, su configuración (lista los problemas sin valores). Si la `api` estaba `healthy`, revisa el router `restaurante-webhook` en Traefik y que la `api` esté en `traefik-public`. Las landings siguen con su última copia buena y el webhook, donde estaba. Corrige y vuelve a desplegar |
-| Código 16 (REQ-F-039) | `inventory-manager` no quedó `healthy` o Traefik no lo enruta en `admin.<dominio>`; volvió al anterior (o se detuvo si no lo había). La app no se tocó (como en el código 15); la `api` nueva sigue. En el primer despliegue de REQ-F-042 quedan a la vez la `api` con el bot y la app anterior: el webhook va a la `api`, pero el mantenimiento del control puede correr en las dos hasta el siguiente despliegue y duplicar alguna auditoría de caducidad | `$C logs inventory-manager`: suele ser la configuración (`API_INTERNAL_URL`) o la imagen. Comprueba `RESTAURANTE_ADMIN_DOMAIN` y los routers `restaurante-inventory*` de Traefik. Hasta un despliegue correcto queda el `inventory-manager` anterior |
+| Código 15 (REQ-F-038) | La `api` nueva no quedó `healthy` o Traefik no le enruta `/webhooks/whatsapp` (REQ-F-042); se volvió a la anterior si la había. La app no se tocó, haya o no migraciones nuevas (REQ-F-047): este código nunca pasa a 22 por la salud de la app; si ya estaba caída, sigue igual y se diagnostica aparte (`$C ps app`) | `$C logs api`: suele ser la base (`database_init_failed`), la imagen o, con el bot, su configuración (lista los problemas sin valores). Si la `api` estaba `healthy`, revisa el router `restaurante-webhook` en Traefik y que la `api` esté en `traefik-public`. Las landings siguen con su última copia buena y el webhook, donde estaba. Corrige y vuelve a desplegar |
+| Código 16 (REQ-F-039) | `inventory-manager` no quedó `healthy` o Traefik no lo enruta en `admin.<dominio>`; volvió al anterior (o se detuvo si no lo había). La app no se tocó, haya o no migraciones nuevas (como en el código 15); la `api` nueva sigue. En el primer despliegue de REQ-F-042 quedan a la vez la `api` con el bot y la app anterior: el webhook va a la `api`, pero el mantenimiento del control puede correr en las dos hasta el siguiente despliegue y duplicar alguna auditoría de caducidad | `$C logs inventory-manager`: suele ser la configuración (`API_INTERNAL_URL`) o la imagen. Comprueba `RESTAURANTE_ADMIN_DOMAIN` y los routers `restaurante-inventory*` de Traefik. Hasta un despliegue correcto queda el `inventory-manager` anterior |
 | `products_notify_failed` / `products_notify_gave_up` en `api` | El aviso interno a `app` (puerto 3002) falla: `app` caída o credencial distinta | `$C ps app`; comprueba que `RESTAURANTE_INTERNAL_NOTIFY_TOKEN` sea la misma para las dos (la reciben del mismo `.env`). Mientras tanto, la landing ve el cambio como mucho en 60 s; el bot, al instante |
 | `POST /webhooks/whatsapp` responde 404 con CSP, o el bot no contesta | La ruta llegó a `app`: `api` caída o reiniciándose, o su router apagado | `$C ps api`; `docker inspect -f '{{index .Config.Labels "traefik.enable"}}' "$($C ps -q api)"` debe decir `true`. Si dice `false` con la imagen actual, recréala con [Arrancar la `api` a mano](#arrancar-la-api-a-mano). Meta reintenta lo que no recibió 200 |
 | El webhook responde 503 `BOT_DISABLED` | La `api` no ve variables del bot | Revisa las `WHATSAPP_BOT_*` del `.env` y recrea la `api` |

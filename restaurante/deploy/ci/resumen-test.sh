@@ -114,6 +114,8 @@ genera deploy SSH_OUTCOME=failure SSH_CODE=15 JOB_STATUS=failure
 contiene '15: encabezado' '### Fallido'
 contiene '15: código' 'código de salida de `deploy.sh`: 15'
 contiene '15: la app no se tocó' 'la app no se tocó'
+no_contiene '15: sin recreación' 'recreada'
+no_contiene '15: sin la bandera' 'DATABASE_ALLOW_NEWER_SCHEMA'
 
 caso 'fallido (4)'
 genera deploy SSH_OUTCOME=failure SSH_CODE=4 JOB_STATUS=failure
@@ -156,6 +158,8 @@ genera deploy SSH_OUTCOME=failure SSH_CODE=16 JOB_STATUS=failure
 contiene 'inventory 16: encabezado' '### Fallido'
 contiene 'inventory 16: admin nuevo' 'El admin nuevo (inventory-manager) no quedó sano'
 contiene 'inventory 16: la app no se tocó' 'la app no se tocó'
+no_contiene 'inventory 16: sin recreación' 'recreada'
+no_contiene 'inventory 16: sin la bandera' 'DATABASE_ALLOW_NEWER_SCHEMA'
 
 caso 'entradas no válidas'
 genera deploy SSH_OUTCOME=success JOB_STATUS=success APP_DIGEST='sha256:<script>' MIGRATE_DIGEST="$MIGRATE" API_DIGEST="$API" INVENTORY_DIGEST="$INVENTORY"

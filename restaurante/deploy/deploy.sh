@@ -11,8 +11,9 @@
 # con el digest nuevo (REQ-F-039; healthy + Traefik en el subdominio) -> app con el digest nuevo ->
 # salud (healthy + Traefik) -> registro. Si falla antes del cambio de la app, no la toca: si la api
 # nueva no queda healthy o Traefik no le enruta el webhook, vuelve a la api anterior y termina con 15;
-# si inventory-manager no queda healthy, vuelve al anterior (o lo detiene si no lo había), deja la app
-# como estaba y la api nueva en marcha y termina con 16. La app va la última: solo se cambia cuando la
+# si inventory-manager no queda healthy, vuelve al anterior (o lo detiene si no lo había), deja la api
+# nueva en marcha y termina con 16. En 15 y 16 la app nunca se toca, haya o no migraciones nuevas
+# (desde REQ-F-045 no usa MySQL; REQ-F-047). La app va la última: solo se cambia cuando la
 # api, de la que lee productos y datos de página, y el admin nuevo ya están sanos (desde REQ-F-045 la
 # app no tiene /admin ni usa MySQL). Si falla la salud de la app, vuelve a los digests anteriores de
 # app, api e inventory-manager (o lo detiene), la api con DATABASE_ALLOW_NEWER_SCHEMA=true (D-1), y
@@ -179,21 +180,6 @@ if [[ -z "$PREVIOUS_INVENTORY_IMAGE" ]]; then
   [[ "$PREVIOUS_INVENTORY_IMAGE" =~ @sha256:[0-9a-f]{64}$ ]] || PREVIOUS_INVENTORY_IMAGE=''
 fi
 
-# Migraciones terminadas en la base ("<n>:<última>"; vacío si la tabla aún no existe). Con el usuario
-# de respaldo (solo lectura), por un archivo de opciones temporal: la contraseña nunca va en argv.
-# shellcheck disable=SC2016 # Las variables se expanden dentro del contenedor.
-applied_migrations() {
-  compose_new exec -T mysql sh -c '
-    set -eu
-    umask 077
-    f=$(mktemp)
-    trap "rm -f \"$f\"" EXIT
-    printf "[client]\nuser=restaurante_backup\npassword=%s\n" "$RESTAURANTE_DB_BACKUP_PASSWORD" >"$f"
-    mysql --defaults-extra-file="$f" -N -B restaurante \
-      -e "SELECT CONCAT(COUNT(*), \":\", COALESCE(MAX(migration_name), \"\")) FROM _prisma_migrations WHERE finished_at IS NOT NULL"
-  ' 2>/dev/null || true
-}
-
 record() {
   printf '%s %s app=%s migrate=%s api=%s inventory=%s result=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SHA" "$APP_DIGEST" "$MIGRATE_DIGEST" "$API_DIGEST" "$INVENTORY_DIGEST" "$1" >>"$STATE_DIR/releases.log"
 }
@@ -243,13 +229,11 @@ find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.sql.gz' -printf '%T@ %p\n' | sor
 log "volcado: $(basename -- "$DUMP")"
 
 # --- 4. Migración --------------------------------------------------------------------------------
-MIGRATIONS_BEFORE=$(applied_migrations)
 if ! compose_new run --rm --no-deps migrate; then
   record migrate_failed
   fail 13 "falló la migración; la app no se tocó. Si quedó a medias, restaura $(basename -- "$DUMP") (docs/despliegue.md)"
 fi
 log 'migraciones aplicadas'
-MIGRATIONS_AFTER=$(applied_migrations)
 
 # --- 5, 6 y 7. API, inventory-manager y app con el digest nuevo y comprobación de salud ----------
 # -a: también un contenedor que se está reiniciando o que se paró.
@@ -304,28 +288,12 @@ probe_webhook() {
   return 1
 }
 
-# DEF-001 (REQ-F-038): si este despliegue aplicó migraciones y algo falla antes de cambiar la app, la
-# app en marcha se recrea con su misma imagen. Se hizo porque la app usaba MySQL y no habría vuelto a
-# arrancar sobre la base migrada (DATABASE_NEWER_THAN_CODE); desde REQ-F-045 la app no usa MySQL ni
-# recibe DATABASE_ALLOW_NEWER_SCHEMA, así que la recreación ya no es necesaria (se conserva hasta
-# decidir retirarla). Sin migraciones nuevas (o sin app en marcha), la app no se toca.
-# protect_running_app <imagen api vigente> <imagen inventory vigente> <resultado> <código> <mensaje>
-protect_running_app() {
-  local api_image=$1 inventory_image=$2 result=$3 code=$4 message=$5 running
-  running=$(running_image app)
-  if [[ -n "$running" && ( -z "$MIGRATIONS_AFTER" || "$MIGRATIONS_AFTER" != "$MIGRATIONS_BEFORE" ) ]]; then
-    log "hubo migraciones nuevas: la app en marcha ($running) se recrea con su misma imagen"
-    export DATABASE_ALLOW_NEWER_SCHEMA=true
-    compose "$running" "$MIGRATE_IMAGE" "$api_image" "$inventory_image" up -d --no-deps app
-    if ! wait_healthy app "$running" "$MIGRATE_IMAGE" "$api_image" "$inventory_image" || ! probe_traefik; then
-      record "${result}_app_unhealthy"
-      fail 22 "$message; la app recreada tampoco quedó healthy: restaura la base desde $(basename -- "$DUMP") (docs/despliegue.md)"
-    fi
-    record "$result"
-    fail "$code" "$message; la app sigue con su versión, recreada por las migraciones nuevas"
-  fi
-  record "$result"
-  fail "$code" "$message; la app no se tocó"
+# Fallo antes del cambio de la app (códigos 15 y 16): la app sigue como estaba, haya o no migraciones
+# nuevas (REQ-F-047; desde REQ-F-045 la app no usa MySQL).
+# fail_before_app <resultado> <código> <mensaje>
+fail_before_app() {
+  record "$1"
+  fail "$2" "$3; la app no se tocó"
 }
 
 # Versión de inventory-manager a la que se vuelve si algo falla: la anterior o, si no la había,
@@ -359,7 +327,7 @@ if ! wait_healthy api "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" "$INVENTORY_IMA
     log 'sin versión anterior de la api: se detiene la nueva'
     compose_new stop api >/dev/null 2>&1 || true
   fi
-  protect_running_app "${PREVIOUS_API_IMAGE:-$API_IMAGE}" "${PREVIOUS_INVENTORY_IMAGE:-$INVENTORY_IMAGE}" api_failed 15 'la api nueva no quedó healthy o Traefik no le enruta el webhook'
+  fail_before_app api_failed 15 'la api nueva no quedó healthy o Traefik no le enruta el webhook'
 fi
 log 'api healthy'
 
@@ -372,7 +340,7 @@ if ! wait_healthy inventory-manager "$APP_IMAGE" "$MIGRATE_IMAGE" "$API_IMAGE" "
   CURRENT_APP_IMAGE=$(running_image app)
   restore_inventory "${CURRENT_APP_IMAGE:-$APP_IMAGE}" "$API_IMAGE"
   # La api nueva queda (es compatible con la app anterior: los endpoints públicos no cambian).
-  protect_running_app "$API_IMAGE" "${PREVIOUS_INVENTORY_IMAGE:-$INVENTORY_IMAGE}" inventory_failed 16 'inventory-manager no quedó healthy; la api nueva sigue'
+  fail_before_app inventory_failed 16 'inventory-manager no quedó healthy; la api nueva sigue'
 fi
 log 'inventory-manager healthy'
 

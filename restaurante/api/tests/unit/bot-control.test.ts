@@ -183,6 +183,85 @@ describe('base de datos caída (RF-3.8, CA-13)', () => {
   });
 });
 
+describe('copia en memoria con un refresco en curso (D-T5, RF-3.8)', () => {
+  /**
+   * Store cuyas lecturas del refresco (`activeBlocks`, `automaticBlocksSince` y `getControl`) leen al
+   * llamarse, pero con la puerta cerrada no devuelven lo leído hasta que la prueba la abre: el refresco
+   * termina con el estado de antes de la escritura. `reading` se cumple cuando el refresco ya leyó.
+   */
+  function gatedSetup() {
+    const memory = createMemoryBotControlStore();
+    let gate: Promise<void> | null = null;
+    let open = () => {};
+    let markReading = () => {};
+    let reading = Promise.resolve();
+    const held = <T>(read: Promise<T>): Promise<T> => {
+      const waiting = gate;
+      if (!waiting) return read;
+      markReading();
+      return read.then(async (value) => {
+        await waiting;
+        return value;
+      });
+    };
+    const store: MemoryBotControlStore = {
+      ...memory,
+      activeBlocks: (at) => held(memory.activeBlocks(at)),
+      automaticBlocksSince: (since) => held(memory.automaticBlocksSince(since)),
+      getControl: () => held(memory.getControl()),
+    };
+    const close = () => {
+      reading = new Promise<void>((resolve) => {
+        markReading = resolve;
+      });
+      gate = new Promise<void>((resolve) => {
+        open = () => {
+          gate = null;
+          resolve();
+        };
+      });
+    };
+    return { ...setup({ store }), close, open: () => open(), reading: () => reading };
+  }
+
+  type Control = ReturnType<typeof setup>['control'];
+
+  it.each<[string, (control: Control) => Promise<unknown>, (control: Control) => boolean]>([
+    ['la pausa', (control) => control.setPaused(true, ADMIN, null), (control) => control.isPaused()],
+    ['un alta manual', (control) => control.blockManual(NUMBER, '7d', null, ADMIN), (control) => control.isBlocked(CANONICAL)],
+  ])('%s confirmada mientras un refresco lee no se pierde al terminar el refresco', async (_label, write, read) => {
+    const { control, close, open, reading } = gatedSetup();
+    await control.init();
+    close();
+    const pending = control.refresh();
+    await reading();
+    try {
+      await write(control);
+    } finally {
+      open();
+    }
+    await pending;
+    expect(read(control)).toBe(true);
+  });
+
+  it('una baja confirmada mientras un refresco lee no se pierde al terminar el refresco', async () => {
+    const { control, close, open, reading } = gatedSetup();
+    await control.init();
+    await control.blockManual(NUMBER, '7d', null, ADMIN);
+    const [block] = (await control.snapshot()).blocks;
+    close();
+    const pending = control.refresh();
+    await reading();
+    try {
+      expect(await control.unblock(block!.id, ADMIN)).toBe('1234');
+    } finally {
+      open();
+    }
+    await pending;
+    expect(control.isBlocked(CANONICAL)).toBe(false);
+  });
+});
+
 describe('interruptor y retención', () => {
   it('RF-9.1: cada cambio del interruptor queda en la auditoría y en el log', async () => {
     const { control, store, logger } = setup();

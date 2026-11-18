@@ -20,26 +20,23 @@ import { MS, USAGE_DAY_RETENTION_MONTHS, type BotLimits } from './limits.ts';
 import { canonicalPhone, maskPhone, parsePhoneInput } from './phone.ts';
 
 /**
- * Estado compartido de la protección del bot (REQ-F-025) entre el bot y la página "Bot" de /admin
- * (en core desde REQ-F-042, H-4: lo usan los dos procesos):
+ * Estado compartido de la protección del bot (REQ-F-025) entre el bot y su administración
+ * (`/api/v1/admin/bot`), los dos en la `api` (en core desde REQ-F-042, H-4):
  * lista negra seudonimizada, interruptor, contadores globales y "alcanzaron un tope hoy".
  *
  * - **Seudónimo (D-T1, RF-3.6):** HMAC-SHA256 del número canónico (CA-9) con una clave que no está
  *   en la base. Con una clave anterior (rotación), se busca también con ella y la entrada se vuelve
  *   a calcular con la actual cuando el número escribe (re-key perezoso).
  * - **Copia en memoria (D-T5, RF-3.8):** el bot consulta la lista y el interruptor sin ir a la base.
- *   Un cambio desde el panel actualiza la copia al confirmarse; los hechos fuera del proceso llegan
+ *   Un cambio desde la administración actualiza la copia al confirmarse; los hechos fuera del proceso llegan
  *   con un refresco perezoso (como mucho cada `refreshMs`). Si la base falla, se conserva la última
  *   copia conocida y se registra un error por caída (`bot_control_store_failed`).
  * - **Altas automáticas:** surten efecto al instante en memoria; si su escritura falla, se
  *   reintentan en el siguiente refresco (como mucho `MAX_PENDING_BLOCKS`).
  * - **Contadores:** bot-usage.ts; sus deltas se persisten en una cola serie que acumula lo pendiente
  *   si la base falla y lo reintenta con la siguiente escritura, el mantenimiento o el apagado.
- * - **Dos papeles (REQ-F-042):** `mode: 'bot'` (por defecto) es el del proceso que ejecuta el bot (la
- *   api): sus contadores son la verdad y ejecuta el mantenimiento. `mode: 'panel'` era el de la página
- *   "Bot" del /admin de landing-pages (retirado en REQ-F-045), un proceso que no envía nada: cada `snapshot()` lee el uso del día y
- *   del mes de la base (CA-6) y `maintenance()` solo refresca la copia, sin auditar caducidades ni
- *   purgar (RF-11: el mantenimiento corre en un solo proceso, CA-13).
+ * - **Un solo proceso (REQ-F-042; REQ-F-045):** la `api` ejecuta el bot: sus contadores son la verdad
+ *   y solo ella ejecuta el mantenimiento (RF-11, CA-13).
  * - Nunca registra el número completo, el seudónimo ni las claves.
  */
 
@@ -100,8 +97,6 @@ export interface BotControlOptions {
   staff: readonly string[];
   logger: Logger;
   now?: () => Date;
-  /** Papel del proceso (REQ-F-042): 'bot' (por defecto) o 'panel'. */
-  mode?: 'bot' | 'panel';
 }
 
 const hmacHex = (key: Buffer, value: string): string => createHmac('sha256', key).update(value).digest('hex');
@@ -119,7 +114,7 @@ const monthsBefore = (date: Date, months: number): Date => {
   return result;
 };
 
-export function createBotControl({ store, keys, limits, timeZone, staff, logger, now = () => new Date(), mode = 'bot' }: BotControlOptions) {
+export function createBotControl({ store, keys, limits, timeZone, staff, logger, now = () => new Date() }: BotControlOptions) {
   const staffNumbers = new Set(staff.map(canonicalPhone));
   const currentKey = keys ? { key: keys.current, id: keyIdOf(keys.current) } : null;
   const previousKey = keys?.previous ? { key: keys.previous, id: keyIdOf(keys.previous) } : null;
@@ -335,27 +330,6 @@ export function createBotControl({ store, keys, limits, timeZone, staff, logger,
     return 'blocked';
   }
 
-  /**
-   * Modo 'panel' (REQ-F-042, CA-6): el uso del día y del mes, tal como lo guardó el proceso del bot.
-   * Si la base falla, se conserva el último leído (y queda el aviso de base no disponible).
-   */
-  async function loadUsageFromStore(): Promise<void> {
-    const at = now();
-    const periods = usage.periods(at);
-    try {
-      usage.load(
-        await store.readUsage([
-          { periodType: 'day', period: periods.day },
-          { periodType: 'month', period: periods.month },
-        ]),
-        at,
-      );
-      storeOk();
-    } catch (err) {
-      storeFailed('read_usage', err);
-    }
-  }
-
   return {
     limits,
     usage,
@@ -448,10 +422,9 @@ export function createBotControl({ store, keys, limits, timeZone, staff, logger,
       reached.set(token, { token, masked: maskedFromLast4(canonical.slice(-4)), cap, at, hash, last4: canonical.slice(-4), day: reachedDay });
     },
 
-    /** Estado para el panel. Refresca antes la copia si está vieja (sin esperar si la base falla). */
+    /** Estado para la administración. Refresca antes la copia si está vieja (sin esperar si la base falla). */
     async snapshot(): Promise<BotControlSnapshot> {
       if (now().getTime() - lastRefresh >= limits.refreshMs) await (refreshing ?? refresh());
-      if (mode === 'panel') await loadUsageFromStore();
       const at = now();
       resetReachedIfNewDay(at);
       const active = blocks.filter((block) => isActiveBlock(block, at));
@@ -466,7 +439,7 @@ export function createBotControl({ store, keys, limits, timeZone, staff, logger,
       };
     },
 
-    /** Alta manual desde el panel (RF-3.2, RF-3.3; D-T4). */
+    /** Alta manual desde la administración (RF-3.2, RF-3.3; D-T4). */
     async blockManual(input: string, duration: ManualDuration, reason: string | null, actor: ControlActor & { kind: 'user' }): Promise<BlockOutcome> {
       if (!currentKey) return 'no_key';
       const canonical = parsePhoneInput(input);
@@ -546,11 +519,9 @@ export function createBotControl({ store, keys, limits, timeZone, staff, logger,
     },
 
     /**
-     * Mantenimiento (D-T5): caducidades, retención (RF-10, D-T9) y reintentos. Nunca lanza. En el
-     * modo 'panel' solo refresca la copia: el mantenimiento es del proceso del bot (RF-11).
+     * Mantenimiento (D-T5): caducidades, retención (RF-10, D-T9) y reintentos. Nunca lanza.
      */
     async maintenance(): Promise<void> {
-      if (mode === 'panel') return refresh();
       const at = now();
       try {
         const expired = await store.auditExpired(at);

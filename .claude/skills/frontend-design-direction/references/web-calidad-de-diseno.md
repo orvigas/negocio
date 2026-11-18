@@ -1,18 +1,5 @@
 # Estándares de calidad de diseño web
 
----
-
-paths:
-
-- "/restaurante/landing-pages/src/views"
-- "/restaurante/landing-pages/src/styles"
-- "/restaurante/landing-pages/public/js"
-- "/restaurante/inventory-manager/src/views"
-- "/restaurante/inventory-manager/src/styles"
-- "/restaurante/inventory-manager/public/js"
-
----
-
 <!-- Traducción al español de `rules/web/design-quality.md` de affaan-m/ECC (licencia MIT), con una sección final de adaptación a este proyecto. -->
 
 > Este archivo amplía `common/patterns.md` de ECC (no incluido en este proyecto) con pautas de calidad de diseño específicas de la web.

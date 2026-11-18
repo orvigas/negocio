@@ -28,6 +28,10 @@ Lo diseñado con Stitch se traduce al stack del proyecto, no se copia tal cual:
 - El código lo escribe `senior-fullstack` (`.claude/CLAUDE.md` §4); Stitch aporta el diseño, no la implementación.
 - No inventes colores, tipografías, espaciados ni comportamientos cuando exista una definición equivalente.
 
+## Calidad de diseño
+
+Al diseñar o rediseñar una interfaz sin definición equivalente en `./_stich_source_/`, carga la skill `frontend-design-direction` y aplica su referencia `references/web-calidad-de-diseno.md`: nada de UI con aspecto de plantilla genérica (patrones prohibidos) y al menos cuatro de sus cualidades obligatorias en cada superficie significativa. Lo definido en `./_stich_source_/` prevalece y no se «mejora» con estas pautas.
+
 ## Credencial
 
 - La clave se llama `STITCH_API_KEY` y vive **solo en la configuración local de Claude** (`.claude/settings.local.json`, bloque `env`, que git ignora). No va en `.env`, `.env.example`, `compose`, `.mcp.json` ni en ningún archivo del repositorio.

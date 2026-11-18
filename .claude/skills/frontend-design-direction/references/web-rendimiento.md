@@ -1,18 +1,5 @@
 # Reglas de rendimiento web
 
----
-
-paths:
-
-- "/restaurante/landing-pages/src/views"
-- "/restaurante/landing-pages/src/styles"
-- "/restaurante/landing-pages/public"
-- "/restaurante/inventory-manager/src/views"
-- "/restaurante/inventory-manager/src/styles"
-- "/restaurante/inventory-manager/public"
-
----
-
 <!-- Traducción al español de `rules/web/performance.md` de affaan-m/ECC (licencia MIT), con una sección final de adaptación a este proyecto. -->
 
 > Este archivo amplía `common/performance.md` de ECC (no incluido en este proyecto) con contenido de rendimiento específico de la web.

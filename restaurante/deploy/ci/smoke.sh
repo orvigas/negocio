@@ -59,7 +59,9 @@ cleanup() {
     docker logs --tail 40 smoke-traefik 2>&1 | sed 's/^/  traefik: /' || true
   fi
   compose --profile migrate down -v --remove-orphans >/dev/null 2>&1 || true
-  docker rm -f smoke-traefik smoke-registry smoke-vecino >/dev/null 2>&1 || true
+  # -v: borra también los volúmenes anónimos (el del registro, /var/lib/registry); sin él queda uno por
+  # ejecución en una máquina que no sea efímera.
+  docker rm -fv smoke-traefik smoke-registry smoke-vecino >/dev/null 2>&1 || true
   if [[ "$CREATED_NETWORK" == true ]]; then docker network rm traefik-public >/dev/null 2>&1 || true; fi
   if [[ -z "${SMOKE_WORKDIR:-}" ]]; then rm -rf -- "$WORK"; else rm -rf -- "$BASE"; fi
   exit "$status"

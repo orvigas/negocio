@@ -330,8 +330,9 @@ está en el [README](../README.md#cotizador-de-taquizas).
 - **Concurrencia optimista** con `version` (error 409), como los productos hoy, extendida a
   existencias, pedidos y clientes.
 - **Repositorio en memoria por cada interfaz** para las pruebas unitarias, con una prueba de contrato
-  compartida que corre contra la implementación en memoria y contra la de Prisma, como hoy
-  `product-repository-contract.test.ts`.
+  compartida que corre contra la implementación en memoria y contra la de Prisma, como hoy la de
+  productos (`landing-pages/tests/support/product-repository-contract.ts`, que ejecutan
+  `product-repository-contract-memoria.test.ts` y los `product-repository-contract-prisma-*.test.ts`).
 
 ## 8. Plan de migración
 
@@ -564,9 +565,11 @@ Decisiones del usuario: "Dos PR (Recomendado)" y "Como productos (Recomendado)" 
   - con `ADMIN_NEW_URL`, usuarios y "Mi cuenta" del `/admin` actual quedan en solo lectura: la lista
     sin controles; el resto, GET o POST, con 410 y el enlace a la pantalla equivalente;
   - la prueba de extremo a extremo con los tres procesos y MySQL.
-- La concurrencia de D-7 se prueba con el proceso real de la API sobre MySQL
-  (`landing-pages/tests/integration/users-api-qa-req-f-040-ultimo-admin.test.ts`) y en el repositorio
-  (`last-admin-concurrency-*.test.ts`).
+- La concurrencia de D-7 se probó con el proceso real de la API sobre MySQL (una sonda de QA, retirada
+  en REQ-F-045) y en el repositorio. Hoy la cubren, sobre MySQL,
+  `landing-pages/tests/integration/last-admin-concurrency-deactivation.test.ts` y
+  `last-admin-concurrency-recovery.test.ts` (soporte común en `tests/support/last-admin-concurrency.ts`)
+  y las dos degradaciones cruzadas del bloque D-7 de `user-repository.test.ts` (REQ-F-047).
 - No añade contenedores: la medición de memoria de §10 no cambia.
 
 ### Paso 4, ticket 1 aplicado (REQ-F-039)

@@ -110,6 +110,20 @@ describe('marca de bloqueo quitado (DT-1)', () => {
     expect(control.takeReleased(CUSTOMER)).toBe(false);
   });
 
+  it('guarda como mucho 1000 marcas: con 1001 bajas se olvida solo la más antigua', async () => {
+    const { control } = await setup();
+    const numbers = Array.from({ length: 1001 }, (_, index) => canonicalPhone(`52155${10_000_000 + index}`));
+    for (const number of numbers) {
+      expect(await control.blockManual(number, '7d', null, ADMIN)).toBe('blocked');
+      const [block] = (await control.snapshot()).blocks;
+      await control.unblock(block!.id, ADMIN);
+    }
+    expect(control.takeReleased(numbers[0]!)).toBe(false);
+    expect(control.takeReleased(numbers[1]!)).toBe(true);
+    expect(control.takeReleased(numbers[1000]!)).toBe(true);
+    expect(control.takeReleased(numbers[1000]!)).toBe(false);
+  });
+
   it('un id que no existe no marca nada', async () => {
     const { control } = await setup();
     expect(await control.unblock(99, ADMIN)).toBeNull();

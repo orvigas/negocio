@@ -106,6 +106,32 @@ describe('D-7: siempre queda un administrador activo', () => {
     ]);
     expect(await prisma.user.count({ where: { role: 'admin', active: true } })).toBe(1);
   });
+
+  it('los dos únicos administradores se degradan el uno al otro a la vez: solo una se aplica', async () => {
+    const a = await users.create(admin('a'), SYSTEM);
+    const b = await users.create(admin('b'), SYSTEM);
+    const results = await Promise.allSettled([
+      users.update(b.id, editor('b'), { kind: 'user', id: a.id }),
+      users.update(a.id, editor('a'), { kind: 'user', id: b.id }),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected').map((result) => result.reason)).toEqual([
+      expect.any(LastAdminError),
+    ]);
+    expect(await prisma.user.count({ where: { role: 'admin', active: true } })).toBe(1);
+    expect(await prisma.userAudit.count({ where: { action: 'update' } })).toBe(1);
+  });
+
+  it('degradar a un administrador y desactivar al otro a la vez: solo una se aplica', async () => {
+    const a = await users.create(admin('a'), SYSTEM);
+    const b = await users.create(admin('b'), SYSTEM);
+    const results = await Promise.allSettled([users.update(a.id, editor('a'), SYSTEM), users.setActive(b.id, false, SYSTEM)]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected').map((result) => result.reason)).toEqual([
+      expect.any(LastAdminError),
+    ]);
+    expect(await prisma.user.count({ where: { role: 'admin', active: true } })).toBe(1);
+  });
 });
 
 describe('D-8: sessionVersion', () => {

@@ -2,7 +2,7 @@
 
 ## Estado
 
-READY_FOR_MERGE (PR 1 de 3: textos y referencias, https://github.com/orvigas/negocio/pull/165). El ticket sigue en `in-progress/` hasta cerrar el PR 3.
+READY_FOR_MERGE (PR 2 de 3: pruebas y código de `core`, https://github.com/orvigas/negocio/pull/167). El ticket sigue en `in-progress/` hasta cerrar el PR 3.
 
 ## Aprobación
 
@@ -650,6 +650,115 @@ El ticket no estaba en git (no tenía seguimiento), así que se movió de `backl
 - **Pendiente para el PR 2:** O-4, `restaurante/api/src/bot/config.ts:15-16` ("la página "Bot" de /admin", partido entre dos líneas).
 - **Hallazgo para otro ticket:** O-3, `landing-pages/package.json` declara `@restaurante/db` en `dependencies` aunque `landing-pages/src` no lo importe (lo usan sus pruebas).
 
+- **CI del PR 1 (#165, ejecución 44158028233 sobre `967fb70`, con el PR listo):**
+  - `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)`, `verificacion`, `cambios` y GitGuardian: `pass`;
+  - `deploy`, `publish`, `vigente` y `validado`: omitidos, lo esperado en un PR.
+  - Mergeado en `main` como `4991aa1`.
+
+### PR 2. Pruebas y código de `core`
+
+#### Rama
+
+`feature/REQ-F-047-limpieza-posterior-req-f-045-2-core`, creada desde `origin/main` (`30d322c`, que incluye el PR 1 y el #166). Sin commit.
+
+#### Pruebas añadidas (primero, en verde sobre el código anterior)
+
+Antes de añadirlas se comprobó que ninguna prueba cubría estos casos (revisión técnica).
+
+- **QA-37:** `api/tests/unit/bot-control-reached.test.ts`, bloque "marca de bloqueo quitado (DT-1)" (P-T2): "guarda como mucho 1000 marcas: con 1001 bajas se olvida solo la más antigua".
+  - 1001 altas y bajas; `takeReleased` del primero es `false`, del segundo `true` y del último `true`, y una segunda vez `false`.
+  - No ejercita DEF-002 (P1 A). Tarda unos 40 ms.
+- **QA-65:** `api/tests/unit/bot-control.test.ts`, bloque nuevo "copia en memoria con un refresco en curso (D-T5, RF-3.8)", con tres casos: pausa, alta manual y baja.
+  - El store en memoria va envuelto: las lecturas del refresco leen al llamarse y retienen lo leído hasta que la prueba abre la puerta.
+  - La prueba espera a que el refresco haya leído (`reading()`) antes de escribir. Sin esa espera, la escritura llegaba al store antes que las lecturas y la prueba no detectaba nada.
+- **Degradación cruzada:** `landing-pages/tests/integration/user-repository.test.ts`, bloque D-7 (P5 A), una ejecución cada una, sin esperas fijas ni `retry`.
+  - "los dos únicos administradores se degradan el uno al otro a la vez: solo una se aplica", con una sola auditoría `update`;
+  - "degradar a un administrador y desactivar al otro a la vez: solo una se aplica".
+- Los nombres de las pruebas no llevan "QA-" ni el sufijo `qa-req-f-*`.
+
+#### Mutaciones temporales (no se commitean; revertidas con `git checkout`)
+
+- **M1:** sin `if (version !== localVersion) return;` en `load` → fallan los 3 casos de QA-65.
+- **M2:** sin el límite de `MAX_RELEASED` → falla QA-37.
+- **M3:** expulsar la marca más reciente en vez de la más antigua → falla QA-37.
+- **M4:** `update` sin `assertActiveAdmin` → falla la degradación cruzada 1.
+- **M5:** `setActive` sin `assertActiveAdmin` → las dos pruebas nuevas pasan. En la 2, el `setActive` nunca espera al otro y confirma primero, así que la recomprobación de `update` decide. Fallan las existentes CA-10 (`:83`) y "dos desactivaciones simultáneas" (`:99`), que ya cubren esa protección.
+- **M4 y M5 juntas** → fallan las dos pruebas nuevas.
+- **M6:** aislamiento `ReadCommitted` en vez de `Serializable` → en 10 de 10 ejecuciones falla la degradación cruzada 2 (y la existente de `:99`). La 1 no lo detecta en esas ejecuciones.
+- **M7:** la siembra guarda las listas congeladas → falla la prueba de `seedPages`.
+- **M8:** la versión anterior distinta de la vigente → falla la prueba de `seedPages`.
+- **Equivalencia:** la prueba nueva de `seedPages` pasa con el `page-import.ts` de `main`. La siembra no cambia (RN-6).
+
+#### Retiradas
+
+- **RF-7 (`packages/core/bot-control/bot-control.ts`):**
+  - salen la opción `mode`, `loadUsageFromStore`, la rama de `snapshot()` y la de `maintenance()`;
+  - la cabecera describe un solo proceso: el bot y su administración (`/api/v1/admin/bot`) en la `api`;
+  - "panel" pasa a "administración" en los comentarios de `snapshot` y `blockManual`.
+  - Producción nunca pasó `mode`, así que el comportamiento es el del modo `bot` de siempre.
+- **`api/tests/unit/bot-control-timers.test.ts`:**
+  - la instancia "panel" pasa a ser `writer`, una segunda instancia normal sobre el mismo store, y la cabecera ya no habla del "/admin actual";
+  - los tres casos de refresco periódico no cambian;
+  - el del mantenimiento pasa a "cada hora audita cada caducidad una sola vez": 1 tras 25 h y sigue en 1 tras dos pasadas más.
+- **RF-8 (`packages/core/catalog/page-import.ts`):**
+  - salen `choosePageSource`, `planPageImport`, `seedCandidates`, `storable`, `PAGE_IMPORT_SEED_REFUSED`, `PageImportCandidates`, `PageImportDecision`, `PageImportProblem`, `PageImportSource` y sus constantes e imports;
+  - `seedPages` usa la función interna `seedPlan`: vigente = anterior = `toStored(seed)`, `source: 'seed'` y `sourceVersion = versionOf(seed)`;
+  - la transacción, `allMarked`, `confirmedByOther`, `page_seeded` y `page_seed_skipped` no cambian;
+  - `PageImportPlan.source` es `PageImportMark['source']`, que sigue aceptando `'current' | 'previous' | 'seed'` (RN-7).
+- **`landing-pages/tests/unit/page-import.test.ts`:** sus 12 casos de las ramas retiradas se sustituyen por uno de `seedPages` sobre `createMemoryPageStore()`. Comprueba:
+  - que se siembran los dos negocios;
+  - vigente = anterior, con revisión 0;
+  - que los datos son `pickPageData(seed)`, sin las listas congeladas;
+  - la marca `seed` con `0@seed`;
+  - el log `page_seeded`.
+- **O-4:** `api/src/bot/config.ts:13-18` ya no cita "la página "Bot" de /admin".
+- **Búsqueda multilínea** (uniendo las líneas de comentario) de "página "Bot" de /admin", "/admin actual", "repositorio de menús", `seed.json`, `src/repositories`, "modo panel", "solo lectura de productos" y "recrea":
+  - solo quedan textos históricos (`arquitectura.md`, `seeds.ts`, `product-form-fields.ts`);
+  - frases correctas sobre el `/admin` retirado (`compose.prod.yaml`, `smoke.sh`, `landing-pages/.env.example` y `admin-moved.ts`);
+  - y lo del PR 3 (`deploy.sh`, `resumen.sh` y `despliegue.md`).
+
+#### Criterios de aceptación
+
+- **CA-8:** cumplido (mutaciones arriba). Para la protección de `setActive`, ver M5 y M6.
+- **CA-9:** cumplido. Ninguna referencia a `mode` ni a `'panel'` en `createBotControl` ni en sus pruebas; el refresco periódico y la auditoría única, en verde.
+- **CA-10:** cumplido. No queda ninguna rama `current`, `previous` ni `existing`. En verde `admin-bootstrap.test.ts`, `server-startup-base.test.ts` y la prueba nueva de `seedPages`, que comprueba que no se guardan las listas congeladas.
+- **CA-11:** cumplido en local. El CI se comprueba en T4.
+- **CA-12:** no cambia código de las rutas de las landings ni de las respuestas de la `api` o de `inventory-manager`. La comparación de antes y después la hace el QA.
+- **CA-13:** en local, los archivos tocados tardan como mucho unos 4 s (`user-repository.test.ts`).
+
+#### Validaciones ejecutadas
+
+- `npm run typecheck`: 0. `npm run lint`: 0.
+- `npm test` contra el MySQL local: 0.
+  - `api`: 1166 pruebas (+4).
+  - `landing-pages`: 887 (+2 de la degradación cruzada, +1 de `seedPages`, −12 de `planPageImport`).
+  - `inventory-manager`: 278.
+- Suma de `deploy/` sin cambios (`34c2ee77…f30946eeb2`).
+
+#### Archivos afectados
+
+- `restaurante/packages/core/bot-control/bot-control.ts` y `restaurante/packages/core/catalog/page-import.ts`;
+- `restaurante/api/src/bot/config.ts`;
+- `restaurante/api/tests/unit/bot-control.test.ts`, `bot-control-reached.test.ts` y `bot-control-timers.test.ts`;
+- `restaurante/landing-pages/tests/integration/user-repository.test.ts` y `restaurante/landing-pages/tests/unit/page-import.test.ts`.
+
+#### Riesgos o pendientes
+
+- **Cobertura de la degradación cruzada:** detectar la mutación del aislamiento depende del orden de bloqueo de MySQL. En 10 de 10 ejecuciones lo detectó la prueba 2. La protección con 50 repeticiones sigue en `last-admin-concurrency.test.ts`.
+- **Concurrencia de `seedPages`** (`page_seed_skipped`): sin prueba permanente (H-7). El QA la comprueba con una sonda.
+- **Limpieza:**
+  - MySQL local detenido y sin bases `restaurante_test*`;
+  - sin procesos de Vitest;
+  - scratchpad vacío (la copia temporal de `page-import.ts` se borró);
+  - un solo `git worktree`.
+
+#### Pull Request del PR 2
+
+- **PR:** https://github.com/orvigas/negocio/pull/167, de `feature/REQ-F-047-limpieza-posterior-req-f-045-2-core` hacia `main`.
+- **Commits:** `66d31f9` (`refactor: retira el modo panel y las ramas muertas de la importación de página (REQ-F-047, PR 2)`) y el de este registro (`docs: registra el Pull Request de REQ-F-047 (PR 2)`).
+- **Base:** `origin/main` no había avanzado desde `30d322c`. Suma de `deploy/` sin cambios (`34c2ee77…f30946eeb2`).
+- **CI y O-5:** se comprueban con `gh pr checks` tras marcar el PR como listo. El resultado del CI y la duración en el CI de `product-repository-contract-prisma-*` (O-5) constan en el PR y en el informe de la fase, y se añadirán al ticket en el primer commit del PR 3.
+
 ## QA Action Plan
 
 ### PR 1. Textos y referencias
@@ -727,6 +836,129 @@ Salida de cada comando (diff de `.claude/`, búsqueda de CA-2 con su clasificaci
 - Ninguna afirmación nueva falsa. Una imprecisión se clasifica por impacto (normalmente `MINOR` o `TRIVIAL` en un comentario; `MAJOR` si induce a una operación incorrecta en el README) y se decide según la tabla de resultados del agente.
 - Ningún cambio de código ejecutable; suma de `deploy/` sin cambios; `.claude/` dentro de la autorización.
 - Limpieza comprobada: bases `restaurante_test*`, procesos de Vitest, contenedor e imagen de `shellcheck`, MySQL de pruebas en su estado inicial, scripts temporales y `git worktree list`.
+
+### PR 2. Pruebas y código de `core`
+
+#### Objetivo
+
+Comprobar con evidencia que el PR 2 añade las cuatro pruebas de RF-6 (y que detectan lo que dicen proteger), retira el modo `'panel'` (RF-7) y las ramas muertas de `planPageImport` (RF-8) sin cambiar nada observable (RN-6, RN-7, CA-12), y que no hay regresión. Sin impacto visual: no aplican navegador, responsive, accesibilidad, UX/UI, WhatsApp, performance ni SEO; CA-12 se comprueba por comparación de HTML y cabeceras, no visualmente.
+
+#### Requisito bajo prueba
+
+RF-6 a RF-8, RN-5 a RN-7, CA-8 a CA-13 y O-4. Base: `main` = `30d322c`; rama `feature/REQ-F-047-limpieza-posterior-req-f-045-2-core` sin commit (8 archivos y el ticket). Decisiones vigentes: P1-A (DEF-002 de REQ-F-043 no es defecto de este PR), P5-A, P6-A, P-T2; en este PR no se toca `.claude/` salvo el ticket. NotebookLM: el servidor MCP `notebooklm` no expone herramientas en esta sesión; no se consultó.
+
+#### Criterios de aceptación (cada uno → pruebas)
+
+| CA / regla | Pruebas |
+| --- | --- |
+| CA-8 | T-1 a T-4 |
+| CA-9 | T-5, T-11 |
+| CA-10 | T-6, T-7, T-11 |
+| CA-11 (local; el CI lo comprueba senior-fullstack en T4) | T-11 |
+| CA-12 | T-8 |
+| CA-13 (local, como estimación del CI) | T-12 |
+| RN-5 (las pruebas pasan sobre el código anterior) | T-4 |
+| RN-6 (siembra y control del bot sin cambios) | T-6, T-7, T-9, T-11 |
+| RN-7 | T-6 |
+| RF-6 (condiciones comunes: nombres, sin esperas ni `retry`, sin duplicados) | T-10 |
+| Comentarios nuevos verdaderos (incluida O-4) | T-13 |
+| Alcance del diff | T-14 |
+
+#### Riesgos identificados
+
+- **QR-1.** La siembra cambia de forma sutil: `previous` antes era `current` solo con `problem === 'missing'`, que `seedCandidates` siempre daba; hay que confirmarlo con datos, no por lectura (filas de `page_version` y `page_import`, logs).
+- **QR-2.** Un consumidor fuera del grafo usaba lo retirado (`mode`, `choosePageSource`, `planPageImport`, `PAGE_IMPORT_SEED_REFUSED`, `PageImport*`), p. ej. `ops/`, `deploy/`, scripts o documentación operativa.
+- **QR-3.** Las pruebas nuevas no detectan su mutación (falsos verdes): en especial QA-65 depende de `reading()` y la degradación cruzada del orden de bloqueo de MySQL.
+- **QR-4.** Inestabilidad de las pruebas nuevas (R-4): degradación cruzada con interbloqueos o reintentos; QA-65 colgada si la puerta no se abre.
+- **QR-5.** Pérdida de cobertura de "una auditoría por caducidad" al quitar `panel.maintenance()` (R-5): la prueba reformulada debe fallar si el mantenimiento audita dos veces o no audita.
+- **QR-6.** M5 no la detectan las pruebas nuevas: hay que confirmar que otras pruebas la detectan, para decidir si es aceptable.
+- **QR-7.** Mutaciones o sondas que quedan en el árbol de trabajo. **Los cambios de la rama no están commiteados: `git checkout -- <archivo>` en el árbol principal borraría la implementación.** Por eso todas las mutaciones y sondas se hacen en copias temporales (T-0), nunca en el árbol principal.
+- **QR-8.** Que la prueba nueva de `seedPages` sea equivalente a la anterior solo por coincidencia con la implementación (reproducir la implementación interna).
+
+#### Preparación
+
+- **T-0. Entorno.**
+  - `git status`, `git worktree list`, `docker ps` y las bases `restaurante_test*` existentes antes de empezar (estado inicial para la limpieza).
+  - MySQL de pruebas con `npm run db:up` (y `npm run db:down` al terminar si estaba detenido).
+  - Dos worktrees temporales en el scratchpad de la sesión:
+    - `qa047-main`: `main` (`30d322c`) tal cual;
+    - `qa047-rama`: `30d322c` más el parche `git diff` de la rama (sin el ticket), comprobado con `git diff --stat` igual al de la rama.
+  - `npm ci` y `npm run db:generate` en cada uno (sus propios `node_modules`; no se enlazan los del árbol principal porque los paquetes `@restaurante/*` resolverían al árbol equivocado).
+  - Las variables `TEST_DATABASE_URL` / `TEST_ADMIN_DATABASE_URL` las de siempre (MySQL local, prefijo `restaurante_test`).
+  - El árbol principal no se modifica en ningún momento (solo el ticket).
+
+#### Pruebas funcionales
+
+- **T-1. CA-8, QA-37** (en `qa047-rama`, revirtiendo cada mutación con `git checkout` dentro del worktree):
+  - M2: sin el límite `MAX_RELEASED` → debe fallar "guarda como mucho 1000 marcas…";
+  - M3: expulsar la más reciente → debe fallar;
+  - control: sin mutación, pasa.
+- **T-2. CA-8, QA-65:**
+  - M1: sin `if (version !== localVersion) return;` en `load` → deben fallar los tres casos (pausa, alta, baja);
+  - sondas negativas del propio diseño de la prueba (QR-3): sin `await reading()` la prueba debe seguir pasando sobre el código bueno, y se registra si con M1 la detecta o no (justifica la espera);
+  - se comprueba que la puerta siempre se abre (`finally`) y que ningún caso supera el `testTimeout`.
+- **T-3. CA-8, degradación cruzada** (MySQL real):
+  - M4 (`update` sin `assertActiveAdmin`) → debe fallar la 1;
+  - M5 (`setActive` sin `assertActiveAdmin`) → se registra qué falla; se confirma que fallan las existentes CA-10 (`user-repository.test.ts:83`) y "dos desactivaciones simultáneas" (`:99`) y/o `last-admin-concurrency.test.ts`;
+  - M4+M5 → deben fallar las dos nuevas;
+  - M6 (`ReadCommitted` en vez de `Serializable`) en un bucle de **20 ejecuciones** del archivo: se cuenta cuántas veces falla cada prueba (nueva 1, nueva 2, `:99`) y si alguna ejecución pasa entera;
+  - M6 también con `last-admin-concurrency.test.ts` (1 ejecución, 50 repeticiones internas) para confirmar que esa protección sigue cubierta;
+  - **QR-6 (M5):** se considera aceptable si al menos una prueba existente falla siempre con M5; si no, es hallazgo.
+- **T-4. CA-8 y RN-5, siembra y equivalencia:**
+  - M7 (la siembra guarda también las listas congeladas) → debe fallar la prueba nueva de `seedPages`;
+  - M8 (versión anterior distinta de la vigente) → debe fallar;
+  - M7+M8 → debe fallar;
+  - las cuatro pruebas nuevas de RF-6 (QA-37, QA-65, las dos de degradación) y la nueva de `seedPages`, copiadas a `qa047-main`, pasan sobre el código de `main` (prueban comportamiento ya existente).
+- **T-5. CA-9 y QR-5:**
+  - `bot-control-timers.test.ts` en verde;
+  - mutación M9 (temporal): el mantenimiento audita dos veces la misma caducidad, o no la audita → la prueba "cada hora audita cada caducidad una sola vez" debe fallar en ambos casos;
+  - mutación M10: `refresh` del temporizador desactivado → deben fallar los casos de refresco periódico.
+- **T-6. RN-6, RN-7 y CA-10, siembra real:**
+  - `server-startup-base.test.ts`, `api-process.test.ts`, `admin-bootstrap.test.ts` y `page-import.test.ts` en `qa047-main` y en `qa047-rama`;
+  - sonda temporal (worktree, no se commitea): instalación nueva sobre una base `restaurante_test_qa047_*` con la `api` real de cada árbol; volcado de `page_version` y `page_import` (sin `imported_at`/fechas de alta) igual en los dos;
+  - RN-7: una marca histórica `current` y otra `previous` insertadas en `page_import` se siguen leyendo (`readImports`) y la `api` arranca sin sembrar.
+- **T-7. Idempotencia y H-7 (sonda sin commitear, MySQL real, en `qa047-rama`):**
+  - segundo `seedPages` tras el primero: devuelve `[]`, sin logs `page_seeded` y sin cambios en las filas;
+  - dos `seedPages` a la vez sobre la misma base, con una puerta en `readImports` para que ambos lean antes de escribir: uno siembra los dos negocios y el otro devuelve `[]` con `page_seed_skipped` ×2 (`reason: 'concurrent'`); 10 repeticiones; ninguna excepción; filas finales iguales a una siembra simple;
+  - con un error que no es de concurrencia, `seedPages` lanza (no se traga el error).
+
+#### Pruebas de regresión
+
+- **T-8. CA-12, comparación `main` ↔ rama.** Con cada worktree, procesos reales de `api`, `landing-pages` e `inventory-manager` (puertos libres, `127.0.0.1`), cada uno sobre su base `restaurante_test_qa047_{main,rama}` sembrada desde cero con la misma semilla y el mismo administrador de arranque:
+  - `landing-pages`: `/`, `/molotes` y `/birria` con la fecha del negocio fijada en lunes, martes y sábado (precarga de Node en el scratchpad que fija `Date` solo en ese proceso), más un 404 y un recurso estático; se comparan estado, cabeceras y cuerpo tras normalizar lo que varía por ejecución (fecha `Date`, nonces/ids si los hubiera);
+  - `api`: `/api/v1/public/...` (productos y página de ambos negocios), `/health` y `/api/v1/admin/bot` (GET autenticado; sin sesión, 401) y `/api/v1/admin/<negocio>/page`;
+  - `inventory-manager`: `/login`, y con sesión, productos, página, bot y usuarios de un negocio; se normalizan CSRF, cookies y fechas;
+  - resultado esperado: diff vacío tras la normalización (cada normalización se lista en el informe).
+- **T-9. Control del bot y webhook:** `bot-control*.test.ts`, `admin-bot-api.test.ts`, `admin-bot-effects.test.ts`, `bot-webhook-app.test.ts` y `whatsapp-webhook*.test.ts` en verde (dentro de T-11), y `bot-chat.test.ts` (el simulador crea el control sin `mode`).
+- **T-10. Calidad de las pruebas nuevas (`.claude/rules/testing.md`):**
+  - nombres de dominio, sin `QA-` ni `qa-req-f-*`;
+  - sin `setTimeout`/esperas fijas, `retry`, ni cambios de `testTimeout`/`hookTimeout` en el diff;
+  - cada comportamiento una vez: búsqueda de pruebas existentes de `takeReleased`, `localVersion`, `update`×`update`/`update`×`setActive` y de la siembra sin listas congeladas, para confirmar que no duplican otra;
+  - estabilidad: 20 ejecuciones seguidas de `bot-control.test.ts` y `bot-control-reached.test.ts`, y 20 de `user-repository.test.ts` sobre el código de la rama (en el worktree), sin ningún fallo.
+- **T-11. CA-9/CA-10 por búsqueda y suite completa (árbol principal, solo lectura):**
+  - búsqueda en `restaurante/` (sin `node_modules`) y en `.github/`, `ops/`, `deploy/` y `docs/` de `'panel'`, `mode:`/`mode =` en `bot-control`, `loadUsageFromStore`, `planPageImport`, `choosePageSource`, `seedCandidates`, `PAGE_IMPORT_SEED_REFUSED`, `storable`, `PageImportCandidates`, `PageImportDecision`, `PageImportProblem`, `PageImportSource`; cada coincidencia se clasifica (histórica justificada, p. ej. `despliegue.md:677`, o hallazgo);
+  - `npm run build:css`, `npm run typecheck`, `npm run lint` (0, sin avisos) y `npm test` completo; número de archivos y pruebas por app frente al Implementation Result (api 1166, landing-pages 887, inventory-manager 278).
+- **T-12. CA-13:** `npm test` con el reporter JSON de Vitest para registrar la duración de cada archivo; ninguno se acerca a 20 s (se señala cualquiera > 10 s en local). El CI real lo comprueba senior-fullstack con el PR.
+- **T-13. Comentarios nuevos contrastados con el código** (CodeGraph): cabecera y comentarios de `bot-control.ts` (un solo proceso, administración en `/api/v1/admin/bot`, mantenimiento solo en la `api`), cabecera, `PageImportPlan`, `toStored` y `seedPlan` de `page-import.ts`, `api/src/bot/config.ts:13-18` (O-4: las reglas están en `core/bot-control/bot-config.ts`) y la cabecera de `bot-control-timers.test.ts`.
+- **T-14. Alcance del diff:**
+  - `git status --short` y `git diff --stat`: solo los 8 archivos y el ticket; `Cotizador_Taquiza_Birria.xlsx` sin seguimiento; nada más de `.claude/`;
+  - suma de `deploy/` con el método de `DEPLOY_FILES` del CI: `34c2ee77b94cf4d59b744eb53c44aa9e8e8fa34fe0362d77cc4513f30946eeb2`, igual en `main` y en el árbol.
+
+#### Pruebas automatizadas
+
+- Existentes: la suite completa (T-11) y las listadas en T-5, T-6 y T-9.
+- Sondas y mutaciones temporales (no se commitean; solo en los worktrees del scratchpad): M1 a M10 y sus combinaciones, la comparación de T-8, las sondas de siembra de T-6 y T-7 y los bucles de T-3 y T-10.
+
+#### Evidencia requerida
+
+Salida de cada comando: resultado de cada mutación (qué prueba falla y con qué mensaje), recuentos de los bucles, volcados de filas comparados, diff normalizado de T-8 con la lista de normalizaciones, búsquedas de T-11 clasificadas, `typecheck`, `lint`, `npm test` con recuentos, duraciones por archivo, suma de `deploy/` y la ubicación en el código que respalda cada comentario de T-13.
+
+#### Criterios de aprobación
+
+- T-1 a T-14 en verde; cada mutación de CA-8 la detecta al menos una prueba nueva (M5: una existente, QR-6) y M6 se detecta en la mayoría de las 20 vueltas por la suite del archivo.
+- Ninguna diferencia observable entre `main` y la rama (CA-12, RN-6), salvo normalizaciones justificadas.
+- Sin defectos `BLOCKER` ni `CRITICAL`; los `MAJOR` se elevan al usuario.
+- Limpieza comprobada: worktrees `qa047-*` y sus `node_modules` borrados (`git worktree list` con una sola entrada y `git worktree prune`), bases `restaurante_test*` creadas por el QA borradas, procesos de `api`/`landing-pages`/`inventory-manager`/Vitest detenidos y puertos libres, MySQL de pruebas en su estado inicial, scripts temporales del scratchpad borrados, árbol principal idéntico al de antes del QA (salvo el ticket). No se usa navegador.
 
 ## QA Report
 
@@ -998,6 +1230,108 @@ No aplican.
 
 QA_APPROVED
 
+### PR 2. Pruebas y código de `core` — Ronda 1
+
+#### Pruebas ejecutadas
+
+El plan se aprobó con la cita "Apruebo el plan y las 4 autorizaciones". Las mutaciones y sondas se hicieron en dos worktrees temporales: `qa047-main` (`30d322c`) y `qa047-rama` (`30d322c` más el parche de la rama, revertido desde copias de seguridad, no con `git checkout`). El árbol principal no se tocó, salvo este ticket.
+
+- **T-0, entorno.** MySQL de pruebas levantado con `db:up` (al empezar estaba detenido) y sin bases `restaurante_test*`. `npm ci` y `db:generate` en cada worktree.
+- **T-1, QA-37.**
+  - M2 (sin límite): falla "guarda como mucho 1000 marcas…".
+  - M3 (expulsa la marca más reciente): falla la misma prueba.
+- **T-2, QA-65.**
+  - M1 (sin `if (version !== localVersion) return;`): fallan los 3 casos.
+  - Sonda sobre el diseño de la prueba: sin `await reading()`, los 16 casos pasan con el código bueno y también con M1. La espera es imprescindible, y la prueba la tiene.
+- **T-3, degradación cruzada.**
+  - M4: fallan la nueva 1 y CA-10 (`:83`).
+  - M5: las dos nuevas pasan; fallan CA-10 y "dos desactivaciones simultáneas" (`:99`) en `user-repository.test.ts` y la de 50 repeticiones de `last-admin-concurrency.test.ts`. La protección queda cubierta por pruebas existentes, así que es aceptable (QR-6).
+  - M4+M5: fallan las 4 de D-7.
+  - M6 (`ReadCommitted`), 20 vueltas: la nueva 2 y `:99` fallan 20 de 20; la nueva 1 no falla ninguna vez (como anticipaba H-5). `last-admin-concurrency` también falla.
+- **T-4, siembra y RN-5.**
+  - M7, M8 y M7+M8: falla la prueba de `seedPages`.
+  - Equivalencia: las 5 pruebas nuevas o adaptadas, copiadas a `main`, pasan sobre el código de `main` (api 31/31; landing-pages 17/17).
+- **T-5, CA-9 y R-5.**
+  - M9a (el mantenimiento no audita) y M9b (audita en cada pasada): falla "cada hora audita cada caducidad una sola vez".
+  - M10 (el temporizador no refresca): fallan los 2 casos de refresco periódico.
+- **T-6, RN-6 y RN-7.**
+  - `server-startup-base`, `api-process`, `page-import` y `admin-bootstrap` en verde en `main` y en la rama.
+  - Instalación nueva real con la `api` de cada árbol: las filas de `page_version` (4: vigente = anterior, revisión 0, sin listas congeladas) y de `page_import` (2: `seed`, `0@seed`), y los logs `page_seeded`, son idénticos.
+  - RN-7: marcas históricas `current` y `previous` insertadas en MySQL. `readImports` las devuelve con su origen y `seedPages` no siembra.
+- **T-7, siembra sobre MySQL.**
+  - Idempotencia: el segundo `seedPages` devuelve `[]`, sin `page_seeded`, y las filas no cambian.
+  - H-7: dos `seedPages` a la vez (puerta en `readImports`), 10 de 10 sin excepción. Uno siembra los 2 negocios, el otro devuelve `[]` con `page_seed_skipped` ×2 (`concurrent`); quedan 4 + 2 filas.
+  - Un error que no es de concurrencia se propaga.
+- **T-8, CA-12.** Procesos reales de las tres apps de cada árbol, con su base recién sembrada. Las landings se probaron en lunes, martes y sábado con una precarga que fija la fecha.
+  - Se compararon 59 respuestas entre `main` y la rama (estado, cabeceras y cuerpo):
+    - landing: `/`, `/molotes`, `/birria`, un 404, un CSS y `/admin`;
+    - `api`: productos y página públicos, 404, `/api/v1/admin/bot` con y sin sesión, usuarios, página, productos y cotizador;
+    - `inventory-manager`: acceso, inicio, bot, usuarios, cuenta, productos, página y cotizador.
+  - Resultado: **idénticas** tras normalizar solo puertos, fechas ISO de la ejecución, `Date`, `ETag`, `Last-Modified`, `Set-Cookie` y los tokens de sesión y CSRF.
+  - Los avisos coinciden con las reglas: lunes y martes en `/`, lunes y sábado en `/molotes` ("toca birria" el sábado), ninguno el martes en `/molotes`.
+- **T-9.** Control del bot, webhook y `bot-chat` en verde, dentro de la suite.
+- **T-10.**
+  - Nombres de dominio, sin `QA-` ni `qa-req-f-*`.
+  - El diff de pruebas no añade `setTimeout`, esperas fijas, `retry` ni cambios de `testTimeout`/`hookTimeout`.
+  - Sin duplicados: no había prueba de `takeReleased` con el límite, ni de escrituras durante un refresco, ni de `update`×`update` o `update`×`setActive`.
+  - Estabilidad, 20 vueltas: `bot-control*.test.ts` 0 fallos; `user-repository.test.ts` 0 fallos.
+- **T-11.**
+  - `build:css`, `typecheck`, `lint` y `npm test`: 0.
+  - Recuentos: api 49 archivos y 1166 pruebas; landing-pages 58 y 887; inventory-manager 16 y 278. Coinciden con el Implementation Result.
+  - Búsqueda de lo retirado: no queda en el código. Solo aparece en `docs/despliegue.md:677` (procedimiento de vuelta a una app anterior a REQ-F-045, ya en H-8) y `docs/arquitectura.md:483` (sección histórica fechada). Ningún `mode` en `bot-control.ts` ni en sus pruebas.
+- **T-12, CA-13 (local).** Archivos del PR: `user-repository.test.ts` 3,2 s y el resto menos de 1,2 s.
+- **T-13.** Los comentarios nuevos se contrastaron con el código y son ciertos:
+  - administración en `/api/v1/admin/bot` (`api/src/admin/router.ts:52`);
+  - el mantenimiento solo lo ejecuta la `api` (`server.ts:97` y `control-timers.ts:34`);
+  - la siembra la hace la `api` (`api/src/install/index.ts:98`);
+  - las marcas históricas se leen (`prisma-page-store.ts:16`);
+  - las reglas de proveedor, personal, claves y umbrales están en `bot-config.ts` (O-4).
+- **T-14.**
+  - `git diff --name-only HEAD`: los 8 archivos y el ticket. `Cotizador_Taquiza_Birria.xlsx` sigue sin seguimiento.
+  - Suma de `deploy/`: `34c2ee77b94cf4d59b744eb53c44aa9e8e8fa34fe0362d77cc4513f30946eeb2`, sin cambios.
+
+#### Criterios de aceptación
+
+- CA-8: PASS (T-1 a T-4; M5 la cubren pruebas existentes).
+- CA-9: PASS (T-5, T-11).
+- CA-10: PASS (T-6, T-11).
+- CA-11: PASS en local. El CI lo comprueba senior-fullstack con el PR.
+- CA-12: PASS (T-8).
+- CA-13: PASS en local para los archivos del PR (T-12). El CI se comprueba con el PR.
+- RN-5: PASS (T-4).
+- RN-6: PASS (T-6, T-7, T-9).
+- RN-7: PASS (T-6).
+
+#### Defectos encontrados
+
+Ninguno.
+
+#### Observaciones (no son defectos de este PR)
+
+- **O-5.** Con la suite completa en local, `landing-pages/tests/unit/product-repository-contract-prisma-actualizar.test.ts` (21,4 s) y `…-importacion.test.ts` (20,6 s) superan los 20 s. El PR no los toca y la medida es de reloj con trabajadores en paralelo. Conviene vigilarlo en el CI (CA-13 y `.claude/rules/testing.md`).
+- **O-6.** La degradación cruzada 1 no detecta M6 en ninguna de las 20 vueltas. La protección del aislamiento la detectan siempre la nueva 2, `:99` y `last-admin-concurrency.test.ts`.
+
+#### Regresión, responsive, accesibilidad, UX/UI, performance y SEO
+
+Sin cambios observables (T-8: HTML y cabeceras idénticos). Sin navegador: no hay impacto visual.
+
+#### Pendientes de revisión manual
+
+Ninguno. El CI del PR (`calidad`, `docker`, `auditoria`, `pruebas` en `pass`) lo comprueba senior-fullstack.
+
+#### Limpieza
+
+- Worktrees `qa047-main` y `qa047-rama` borrados, con sus `node_modules`, y `git worktree prune` ejecutado (`git worktree list`: solo el principal).
+- Sin bases `restaurante_test*`, comprobado antes de detener MySQL.
+- MySQL de pruebas detenido con `db:down`, como estaba al empezar.
+- Sin procesos de Vitest ni de las apps.
+- Scratchpad vacío.
+- Árbol principal sin cambios, salvo este ticket.
+
+#### Resultado final
+
+QA_APPROVED
+
 ## Historial de cambios
 
 ### Versión 1
@@ -1035,3 +1369,22 @@ PR 1, ronda 2 de QA (`QA_REJECTED` por DEF-003): corregido el comentario de `pro
 Ronda aprobada por el usuario ("la paruebo"). DEF-003 corregido; nueve comentarios contrastados de forma independiente; Q-1, Q-2, Q-3 (10 `.ts`), Q-7, Q-9 y la suma de `deploy/` en verde. Observación O-4 (`api/src/bot/config.ts:15-16`, fuera de alcance). Estado: `QA_APPROVED`.
 
 PR 1: commit `af4da63` y PR #165 a `main` (https://github.com/orvigas/negocio/pull/165). O-4 queda para el PR 2 y O-3 para otro ticket. Estado: `READY_FOR_MERGE` (PR 1 de 3).
+
+PR 2 implementado: cuatro pruebas nuevas, retirada del modo `panel` y de las ramas de `planPageImport`, y O-4. Se registra el CI del PR 1 (#165, mergeado como `4991aa1`). Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA Action Plan del PR 2 (senior-qa, 2026-11-17)
+
+Implementación del PR 2 aprobada por el usuario ("si apruebo"). Se añade "QA Action Plan › PR 2" (T-0 a T-14, mutaciones M1 a M10 en worktrees temporales). Estado: `NEEDS_QA_PLAN_APPROVAL`.
+
+QA del PR 2 sin ejecutar (senior-qa, 2026-11-18): la respuesta del usuario ("Olvida lo que te dije y continúa") no aprueba explícitamente el QA Action Plan ni las autorizaciones de entorno. Se pide una aprobación explícita. Estado: `NEEDS_QA_PLAN_APPROVAL`.
+
+### QA del PR 2, ronda 1 (senior-qa, 2026-11-18)
+
+Plan aprobado por el usuario ("Apruebo el plan y las 4 autorizaciones"). T-0 a T-14 en verde:
+- mutaciones M1 a M10 detectadas (M5 por pruebas existentes);
+- CA-12 sin diferencias en 59 respuestas;
+- siembra igual en `main` y en la rama, idempotente y con `page_seed_skipped` ante concurrencia.
+
+Sin defectos; observaciones O-5 y O-6. Limpieza completa. Estado: `QA_APPROVED`.
+
+PR 2: commit `66d31f9` y PR #167 a `main` (https://github.com/orvigas/negocio/pull/167). Estado: `READY_FOR_MERGE` (PR 2 de 3).

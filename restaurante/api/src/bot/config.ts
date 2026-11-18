@@ -12,9 +12,9 @@ import {
 
 /**
  * Configuración del bot de WhatsApp en la api (REQ-F-009 RF-2; REQ-F-012 RF-2; en api desde
- * REQ-F-042, RF-6): proveedor, credenciales, personal y plantilla. Las reglas comunes con la página
- * "Bot" de /admin (proveedor, personal, claves y umbrales) están en core/bot-control, con los mismos
- * textos. Los mensajes nunca incluyen los valores (contienen secretos).
+ * REQ-F-042, RF-6): proveedor, credenciales, personal y plantilla. Las reglas de proveedor, personal,
+ * claves y umbrales están en core/bot-control (bot-config.ts). Los mensajes nunca incluyen los
+ * valores (contienen secretos).
  */
 
 /** Versión de la Graph API por defecto (vigente en 2026-10; REQ-F-009). */

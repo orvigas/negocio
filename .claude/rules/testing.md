@@ -46,7 +46,7 @@ Probar un cambio y dejar una prueba permanente son dos decisiones distintas. Un 
 - es **funcional**: protege un comportamiento de la app (pedido, bot y su conversación, productos, página, permisos, sesión, CSRF, privacidad y avisos del día) o un defecto corregido de ese comportamiento, y ninguna prueba existente lo cubre;
 - el usuario la **pidió explícitamente**.
 
-Todo lo demás se ejecuta y se descarta, y no se commitea en ninguna rama que vaya a `main`, incluida `epic/arquitectura`: comprobaciones de un cambio concreto, sondas de QA, mutaciones, diferenciales, mediciones de duración y pruebas del soporte de pruebas. Su resultado queda como evidencia en el ticket o en el PR.
+Todo lo demás se ejecuta y se descarta, y no se commitea en ninguna rama que vaya a `main`: comprobaciones de un cambio concreto, sondas de QA, mutaciones, diferenciales, mediciones de duración y pruebas del soporte de pruebas. Su resultado queda como evidencia en el ticket o en el PR.
 
 Cada comportamiento se prueba una vez, en la prueba más barata que lo cubra (unitaria o en proceso), en un archivo existente si es posible. Antes de añadir una prueba permanente, comprueba que no exista ya. Si dudas, no la añadas y dilo en el PR. Modificar una prueba existente porque cambió un comportamiento no cuenta como prueba nueva.
 

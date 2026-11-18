@@ -22,7 +22,13 @@ Resuelto en el cierre (rama `chore/cierra-req-f-047`, PR a `main`), sin cambios 
 No hecho (fuera de este ticket):
 
 - **DEF-002 de REQ-F-043** (`markReleased` expulsa la marca más antigua antes de comprobar si el hash ya estaba): defecto TRIVIAL conocido, sin corregir por decisión P1 A. Si se quiere corregir, en otro ticket.
-- **Rama `epic/arquitectura`** (local y remota): se conserva; borrarla o reutilizarla para la siguiente épica lo decide el usuario.
+- **Prueba intermitente:** `landing-pages/tests/integration/server-startup-base.test.ts:86` ("primer arranque"). El segundo arranque de la api termina sin código de salida (`stop()` devuelve `null`: el proceso muere por una señal) en lugar de 0. Falló dos veces en el CI del PR de cierre (ejecución 44331507060, shard 1/2, intentos 1 y 2). En local, en Linux (`docker compose run test`, shard 1/2 con `--maxWorkers=4`), falló 1 vez de 9 con los `package.json` de la rama; las otras 8 pasaron, y también las 2 ejecuciones con los de `main`. Nunca falló en macOS ni con el archivo solo. El cambio de O-3 solo mueve `@restaurante/db` a `devDependencies`, y `npm ci` instala el mismo árbol: no hay un mecanismo que lo relacione con el fallo. No se pudo capturar la señal (5 ejecuciones instrumentadas en verde). El cierre no toca `src/` ni ese soporte. Hay que diagnosticarla en un ticket aparte, sin `retry` ni esperas fijas.
+
+Higiene del repositorio en el cierre (2026-11-18):
+
+- Borradas las ramas de feature ya mergeadas en `main`, locales y remotas, y el worktree remanente del PR 3.
+- La épica de arquitectura quedó dentro de `main`. Por decisión del usuario, la rama `epic/arquitectura` se eliminó el 2026-11-18, en local y en el remoto.
+- `Cotizador_Taquiza_Birria.xlsx` (archivo de trabajo del usuario) queda en el `.gitignore` de la raíz (`/Cotizador_Taquiza_Birria.xlsx`). No se versiona ni se borra.
 
 ## Aprobación
 

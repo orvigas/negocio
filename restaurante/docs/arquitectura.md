@@ -8,8 +8,8 @@ necesita desviarse de este documento, lo actualiza en el mismo PR.
 
 | | |
 | --- | --- |
-| Estado | **Aceptada** (estrategia general). Decisiones A (2026-10-24), B y C (2026-10-26) tomadas ([sección 9](#9-decisiones)). Aplicados los pasos 1 (REQ-F-036), 2 (REQ-F-037) y 3 (REQ-F-038) y los tickets 1 (REQ-F-039) y 2 (REQ-F-040) del paso 4, en producción desde el 2026-10-29 (PR #105, `c53f6f3`; REQ-F-040 con el PR #114, `3715486`). El ticket 3 (REQ-F-042) está en `epic/arquitectura`, pendiente de llegar a `main` |
-| Fecha | 2026-10-24 (última actualización: 2026-11-04) |
+| Estado | **Aceptada** (estrategia general). Decisiones A (2026-10-24), B y C (2026-10-26) tomadas ([sección 9](#9-decisiones)). Aplicados los pasos 1 (REQ-F-036), 2 (REQ-F-037) y 3 (REQ-F-038) y los tickets 1 (REQ-F-039) y 2 (REQ-F-040) del paso 4, en producción desde el 2026-10-29 (PR #105, `c53f6f3`; REQ-F-040 con el PR #114, `3715486`). La épica terminó: todos los pasos del plan, hasta el ticket 6 del paso 4 (REQ-F-045), están en `main` (último PR de `epic/arquitectura` hacia `main`: #161, `d358e9f`, 2026-11-17). La rama intermedia se borró el 2026-11-18 y los PR van a `main` |
+| Fecha | 2026-10-24 (última actualización: 2026-11-18) |
 | Alcance | Estructura del código, regla de dependencias, contratos, consumo de la API y orden de la migración. No cambia el stack de `.claude/CLAUDE.md` §2 |
 
 ## 1. Contexto
@@ -276,7 +276,7 @@ la base cada `BOT_CONTROL_REFRESH_SECONDS` (10 s); retirar ese refresco es una p
 
 ### Cotizador de taquizas (REQ-F-046)
 
-Funcionalidad ajena al plan de migración (va a `main`, no a `epic/arquitectura`), construida con
+Funcionalidad ajena al plan de migración (fue directa a `main`, no a `epic/arquitectura`), construida con
 las mismas capas:
 
 - `packages/core/cotizador/` (TS puro, sin E/S): valida el JSON del catálogo y los ajustes (ambos
@@ -338,9 +338,9 @@ está en el [README](../README.md#cotizador-de-taquizas).
 
 Se sigue el patrón *strangler fig*: lo nuevo crece alrededor de lo actual y lo reemplaza por partes.
 **Cada paso es un ticket y un PR desplegable**; las pruebas actuales son la red de seguridad.
-Los PR de los pasos van a la rama intermedia `epic/arquitectura`, que valida sin desplegar, y la
-épica llega a `main` con un solo PR cuando está madura (`.claude/rules/git.md` y la sección "Rama
-intermedia" del CI en `restaurante/README.md`).
+Los PR de los pasos fueron a la rama intermedia `epic/arquitectura`, que validaba sin desplegar, y
+la épica llegó a `main` con PR desde esa rama (#105, #114, #141, #148, #158 y #161). La rama se
+borró el 2026-11-18, con todo su contenido en `main`; hoy los PR van a `main`.
 
 **En producción:** los pasos 1 a 3 y el ticket 1 del paso 4 llegaron a `main` con el PR #105
 (`epic/arquitectura` → `main`, merge `c53f6f3`) y se desplegaron el 2026-10-29 ([Despliegue](despliegue.md)).

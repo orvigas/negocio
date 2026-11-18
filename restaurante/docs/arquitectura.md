@@ -566,7 +566,7 @@ Decisiones del usuario: "Dos PR (Recomendado)" y "Como productos (Recomendado)" 
   - la prueba de extremo a extremo con los tres procesos y MySQL.
 - La concurrencia de D-7 se prueba con el proceso real de la API sobre MySQL
   (`landing-pages/tests/integration/users-api-qa-req-f-040-ultimo-admin.test.ts`) y en el repositorio
-  (`last-admin-concurrency.test.ts`).
+  (`last-admin-concurrency-*.test.ts`).
 - No añade contenedores: la medición de memoria de §10 no cambia.
 
 ### Paso 4, ticket 1 aplicado (REQ-F-039)

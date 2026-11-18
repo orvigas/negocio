@@ -1,51 +1,26 @@
-import { join } from 'node:path';
-
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { apiErrorSchema, productsResponseSchemas } from '@restaurante/contracts';
 import { createProductRepository, toPublished } from '@restaurante/core/catalog';
-import { createPrismaClient } from '@restaurante/db/client';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
 
-import { ADMIN_ENV } from '../support/admin.ts';
-import { appDatabaseUrl, makeDatabase, makeScratchDatabase } from '../support/database.ts';
-import { freePort, startServer } from '../support/process.ts';
+import { cleanups, logLines, runCleanups, startApi } from '../support/api-process.ts';
+import { appDatabaseUrl, makeDatabase } from '../support/database.ts';
 import { ANA, seedSources, VALID_INPUTS } from '../support/products.ts';
 import { startTcpProxy } from '../support/tcp-proxy.ts';
 import { databaseUrl, testDatabaseConfigs } from '../support/test-database-config.ts';
 
 /**
- * El proceso real de la API (`node ../api/src/server.ts`) contra MySQL (REQ-F-038). Se arranca como
- * proceso hijo, sin importar código de `api/` (landing-pages nunca importa la API).
+ * El proceso real de la API (`node ../api/src/server.ts`) contra MySQL (REQ-F-038).
  *
  * - CA-2: el cuerpo valida el contrato y coincide con los productos de la base; 503 con la base caída.
  * - CA-3: sin caché en la API.
- * - CA-10 (O-1; REQ-F-045): la API y landing-pages arrancan a la vez con una base recién migrada. Solo
- *   la api la usa: prepara la instalación (productos, página y primer administrador, una sola vez) y la
- *   landing, sin base de datos, la muestra por la API.
+ *
+ * Parte de api-process.test.ts (preparación en tests/support/api-process.ts); el arranque simultáneo
+ * con landing-pages (CA-10) está en api-process-startup.test.ts.
  */
 
-const API_ENTRY = join('..', 'api', 'src', 'server.ts');
-
-const cleanups: (() => Promise<void>)[] = [];
-afterEach(async () => {
-  while (cleanups.length > 0) await cleanups.pop()?.();
-});
-
-/** La API sin aviso interno (REQ-F-039): VALID_ENV trae INTERNAL_NOTIFY_TOKEN, que va con LANDING_INTERNAL_URL. */
-const API_ENV = { INTERNAL_NOTIFY_TOKEN: undefined };
-
-async function startApi(env: Record<string, string>) {
-  const api = await startServer({ ...env, ...API_ENV }, 30_000, { args: [API_ENTRY] });
-  cleanups.push(async () => void (await api.stop()));
-  return api;
-}
-
-const logLines = (stdout: string) =>
-  stdout
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as Record<string, unknown>);
+afterEach(runCleanups);
 
 describe('API con MySQL real (CA-2 y CA-3)', () => {
   it('devuelve los productos publicados de la base, validados por el contrato, y sin caché', async () => {
@@ -105,40 +80,5 @@ describe('API con MySQL real (CA-2 y CA-3)', () => {
       if (status !== 200) await new Promise((resolve) => setTimeout(resolve, 250));
     }
     expect(status).toBe(200);
-  });
-});
-
-describe('CA-10 (O-1; REQ-F-045): arranque simultáneo de api y landing-pages', () => {
-  it('con una base recién migrada, la api prepara la instalación una vez y la landing, sin base, la muestra por la API', async () => {
-    const database = await makeScratchDatabase({ migrated: true });
-    cleanups.push(database.cleanup);
-    const apiPort = await freePort();
-    const DATABASE_URL = appDatabaseUrl(database.name);
-
-    const [api, landing] = await Promise.all([
-      startServer({ DATABASE_URL, ...API_ENV, ...ADMIN_ENV, PORT: String(apiPort) }, 60_000, { args: [API_ENTRY] }),
-      startServer({ API_INTERNAL_URL: `http://127.0.0.1:${apiPort}` }, 60_000),
-    ]);
-    cleanups.push(async () => void (await api.stop()), async () => void (await landing.stop()));
-    expect(api.started, api.output().stderr).toBe(true);
-    expect(landing.started, landing.output().stderr).toBe(true);
-
-    // La landing termina mostrando los datos de la API (al primer intento o tras un reintento).
-    const loaded = () => logLines(landing.output().stdout).some((line) => line.business === 'birria' && (line.msg === 'landing_products_loaded' || line.msg === 'landing_products_recovered'));
-    for (let attempt = 0; attempt < 30 && !loaded(); attempt += 1) {
-      expect((await fetch(`${landing.url}/birria`)).status).toBe(200);
-      if (!loaded()) await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    expect(loaded()).toBe(true);
-
-    const prisma = createPrismaClient(database.config);
-    cleanups.push(() => prisma.$disconnect());
-    expect(await prisma.productImport.count()).toBe(2);
-    expect(await prisma.pageImport.count()).toBe(2);
-    expect(await prisma.user.count()).toBe(1);
-    const output = api.output().stdout + landing.output().stdout + api.output().stderr + landing.output().stderr;
-    expect(output).not.toMatch(/_init_failed|page_seed_failed|admin_bootstrap_failed/);
-    // La landing no usa la base ni prepara nada.
-    expect(landing.output().stdout).not.toMatch(/database_|products_imported|page_seeded|page_import|admin_bootstrap/);
   });
 });

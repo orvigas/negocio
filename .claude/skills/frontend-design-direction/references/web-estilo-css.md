@@ -1,18 +1,5 @@
 # Estilo de código web
 
----
-
-paths:
-
-- "/restaurante/landing-pages/src/views"
-- "/restaurante/landing-pages/src/styles"
-- "/restaurante/landing-pages/public/js"
-- "/restaurante/inventory-manager/src/views"
-- "/restaurante/inventory-manager/src/styles"
-- "/restaurante/inventory-manager/public/js"
-
----
-
 <!-- Traducción al español de `rules/web/coding-style.md` de affaan-m/ECC (licencia MIT), con una sección final de adaptación a este proyecto. -->
 
 > Este archivo amplía `common/coding-style.md` de ECC (no incluido en este proyecto) con contenido frontend específico de la web.

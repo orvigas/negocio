@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED (PR 3 de 3: `deploy.sh`, rama `feature/REQ-F-047-limpieza-posterior-req-f-045-3-deploy`). PR 1 (#165) y PR 2 (#167) mergeados en `main`.
+READY_FOR_MERGE (PR 3 de 3: `deploy.sh`, https://github.com/orvigas/negocio/pull/169). PR 1 (#165) y PR 2 (#167) mergeados en `main`. El ticket sigue en `in-progress/` hasta el merge del PR 3. Tras el merge: reinstalar `deploy/` en el VPS y volver a ejecutar el job `deploy` (RN-4, CA-7).
 
 ## Aprobación
 
@@ -818,6 +818,14 @@ Duración en el CI (`pruebas (1/2)` y `pruebas (2/2)` de la ejecución 442635975
 - **QA (P-T3 A):** el caso de inventory-manager roto con una migración nueva se ejecuta en una copia de `smoke.sh` que no se commitea.
 - **Limpieza:** comprobada. Contenedores, redes y volúmenes de `restaurante-smoke`/`smoke-*` los retiró el propio `smoke.sh` (`docker ps -a`, `docker volume ls`: ninguno); borradas las imágenes `req047-smoke:*`, `smoke/*` y `localhost:5000/orvigas/*`; sin `traefik` ni `registry` descargados. Sin bases `restaurante_test*` (comprobado con `SHOW DATABASES` antes de `npm run db:down`; MySQL de desarrollo detenido, como estaba). Sin procesos de Vitest ni de las apps. Scratchpad: borrados `smoke-work`, `smoke.log` y `test.log`. `git worktree list`: el principal y este worktree de la tarea.
 
+#### Pull Request del PR 3
+
+- **PR:** https://github.com/orvigas/negocio/pull/169, de `feature/REQ-F-047-limpieza-posterior-req-f-045-3-deploy` hacia `main`, abierto en borrador.
+- **Commits:** `4298bb3` (`fix: el despliegue deja la app intacta cuando falla la api o inventory-manager (REQ-F-047, PR 3)`) y el de este registro (`docs: registra el Pull Request de REQ-F-047 (PR 3)`).
+- **Base:** rebase sobre `origin/main` en `fd557ab` (merge del #168, que solo toca pruebas de `landing-pages`). Suma de `deploy/`: `591de8e7f259073f79ff34418c8b7a3a2680d465ef3bc7378c620221455cc7f0`.
+- **Aviso RN-4:** en el cuerpo del PR.
+- **CI:** se comprueba con `gh pr checks` tras marcar el PR como listo (sin más commits después); el resultado consta en el informe de la fase.
+
 ## QA Action Plan
 
 ### PR 1. Textos y referencias
@@ -1620,3 +1628,7 @@ Resultados:
 - Suma `591de8e7…5cc7f0`.
 
 Sin defectos; observaciones O-7 y O-8, fuera de alcance. Limpieza comprobada. Estado: `QA_APPROVED`.
+
+### PR 3: commit y Pull Request (senior-fullstack, 2026-11-18)
+
+Usuario: "Si apruebo el commit y el PR". Commit `4298bb3` y PR #169 a `main` (https://github.com/orvigas/negocio/pull/169), con el aviso de RN-4. Estado: `READY_FOR_MERGE` (PR 3 de 3), con el CI comprobado tras marcarlo como listo.

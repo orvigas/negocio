@@ -2,12 +2,44 @@
 
 ## Estado
 
-READY_FOR_MERGE
+DONE (2026-11-18)
 
-- **Pull Request:** https://github.com/orvigas/negocio/pull/178, hacia `main`. Se abrió en borrador y se marca como listo después del último push.
+- **Pull Request:** #178 (https://github.com/orvigas/negocio/pull/178), mergeado en `main` (`cebafed`, 2026-11-18 23:29:54Z).
 - **Commit de la auditoría:** `03c773e`.
 - **CA-8 sobre el commit real:** `git diff --name-only main...HEAD` da exactamente 18 archivos: el informe, las 16 capturas y este ticket.
-- **CI y despliegue:** el CI del PR corre completo, porque las capturas cuentan como código. El merge a `main` redespliega producción (DT-1 A), así que conviene hacerlo en un momento de poco uso. El merge lo hace el usuario.
+- **Despliegue (DT-1 A):** la ejecución del CI de `main` sobre `cebafed` (https://github.com/orvigas/negocio/actions/runs/44421245636) terminó en `success`, con `publish`, `vigente` y `deploy` en `success`. Producción quedó sana: las landings responden 200, el admin redirige a `/acceso`, y `app`, `api` e `inventory-manager` están `healthy`.
+
+## Seguimiento
+
+Este ticket solo entrega el informe (`restaurante/docs/auditoria-interfaces.md`) y sus 16 capturas: no corrige ningún hallazgo. Los 21 hallazgos (AUD-001 a AUD-021) siguen abiertos y están todos asignados a algún derivado propuesto.
+
+Decisiones pendientes del usuario (§10 del informe):
+
+- **D2, contradicciones con el diseño fuente:**
+  - **C1, navegación móvil de las landings (AUD-005):** ¿se amplía `_stich_source_` con una navegación móvil diseñada con Stitch (menú plegable, barra de anclas bajo la cabecera) o se queda como está?
+  - **C2, contrastes del diseño fuente (AUD-001 a AUD-004):** ¿se corrigen, y con qué opción (texto oscuro o verde más oscuro en WhatsApp; capa o fondo más oscuro en el hero de Molotes; `DESIGN.md` o `code.html` en AUD-003)?
+  - **Admin (AUD-006, AUD-015 y AUD-021):** ¿se diseña el patrón móvil con Stitch (D4) y se aparta del "zero outer fuzzy halo" del `DESIGN.md` para que el foco de los campos se vea?
+  - **CTA flotante (AUD-007):** ¿basta con el espacio reservado o también se oculta mientras se ve el CTA del hero?
+  - **Hallazgos Baja del diseño fuente (AUD-011 a AUD-014, AUD-018 y AUD-019):** ¿cuáles se aprueban? AUD-018 exige autorizar cambios en `_stich_source_`.
+  - **Derivado C (AUD-016 y AUD-017):** ¿se crea?
+- **D3, partición final en tickets derivados.**
+
+Propuesta de tickets derivados (§11 del informe). **No se abre ninguno:** se abrirán cuando el usuario decida D2 y D3.
+
+| Ticket | Alcance | Hallazgos | Depende de |
+| --- | --- | --- | --- |
+| **A: admin** | Patrón móvil de la cabecera y de la navegación por negocio, nombre largo y foco visible en los campos | AUD-006, AUD-015 y AUD-021 | Diseño con Stitch aprobado (D4) |
+| **B1: landings sin tocar el diseño fuente** | Espacio para el CTA flotante, fondo fijo con el aviso abierto, texto del aviso de `/`, mapas sin trampa de tabulación, foco tras enviar el club y campo del club de Birria; además, llevar el foco a `main` al cerrar un aviso | AUD-007, AUD-008, AUD-009, AUD-010, AUD-019 y AUD-020 | Nada (puede empezar en cuanto el usuario lo pida) |
+| **B2: landings con diseño fuente** | Contrastes y navegación móvil, solo lo que el usuario apruebe | AUD-001 a AUD-005 y AUD-011 a AUD-014 | D2 (C1, C2 y los Baja); Stitch para la navegación móvil |
+| **C: colores a tokens (opcional)** | Pasar los hexadecimales sueltos de las plantillas a tokens del `@theme`, sin cambio visual | AUD-016 y AUD-017 | Decisión sobre el derivado C |
+| **D: referencias de `_stich_source_` (opcional)** | Volver a exportar las capturas de referencia del diseño fuente | AUD-018 | Autorización sobre `_stich_source_`; conviene antes de B2 |
+
+No hecho (fuera de este ticket):
+
+- **Dos estados sin probar (§8 del informe):** el estado "vacío" de las landings (exige borrar productos) y el estado "parcial" de la pantalla "Bot" del admin (exige tirar MySQL con la `api` en marcha). No se fabricó evidencia.
+- **Contraste del indicador de foco fuera del admin:** solo se midió el de los campos del admin (AUD-021). El del resto de indicadores (en las landings, el `outline: auto` del navegador) queda sin medir y declarado en "Límites" del informe.
+- **Otros límites del método (§2 del informe):** sin lector de pantalla real; zoom, táctil y orientación emulados; sin auditar 1.4.12 ni 2.5.3.
+- **Puerto del webhook de la `api`:** se abre aunque el bot esté desactivado y responde 503, como documenta `docs/desarrollo.md`. No es un hallazgo de interfaz; no requiere acción.
 
 ## Aprobación
 
@@ -1119,3 +1151,7 @@ Estado: `QA_APPROVED`.
 ### Commit y Pull Request (2026-11-18)
 
 El usuario pidió cerrar el ticket, cita textual: "Finaliza REQ-F-048". `senior-fullstack` borró la copia vieja del ticket que seguía sin versionar en `backlog/` del checkout principal. Después hizo el commit `03c773e` (informe, 16 capturas y ticket; CA-8 comprobado: 18 archivos) y abrió el PR #178 hacia `main`, en borrador. Estado: `READY_FOR_MERGE`. El resultado del CI se informa en el PR y a la sesión principal.
+
+### Cierre (2026-11-18)
+
+El usuario mergeó el PR #178 (https://github.com/orvigas/negocio/pull/178) en `main` (`cebafed`) y pidió cerrar el ticket, cita textual: "Finaliza REQ-F-048". El CI de `main` (ejecución 44421245636) terminó en `success`, con `publish`, `vigente` y `deploy` en `success`, y producción quedó sana. `senior-fullstack` movió el ticket a `done/` (rama `chore/cierra-req-f-048`, PR a `main`) y añadió el "Seguimiento" con las decisiones D2 y D3 pendientes, la propuesta de derivados A, B1, B2, C y D (sin abrir) y lo no hecho. Estado: `DONE`.

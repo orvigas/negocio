@@ -2,7 +2,12 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
+
+- **Pull Request:** https://github.com/orvigas/negocio/pull/178, hacia `main`. Se abrió en borrador y se marca como listo después del último push.
+- **Commit de la auditoría:** `03c773e`.
+- **CA-8 sobre el commit real:** `git diff --name-only main...HEAD` da exactamente 18 archivos: el informe, las 16 capturas y este ticket.
+- **CI y despliegue:** el CI del PR corre completo, porque las capturas cuentan como código. El merge a `main` redespliega producción (DT-1 A), así que conviene hacerlo en un momento de poco uso. El merge lo hace el usuario.
 
 ## Aprobación
 
@@ -1110,3 +1115,7 @@ El usuario pidió cerrar el ticket ("Finaliza REQ-F-048"). `senior-qa` revalidó
 - CA-1 a CA-9 en PASS (CA-8 sobre el árbol de trabajo).
 
 Estado: `QA_APPROVED`.
+
+### Commit y Pull Request (2026-11-18)
+
+El usuario pidió cerrar el ticket, cita textual: "Finaliza REQ-F-048". `senior-fullstack` borró la copia vieja del ticket que seguía sin versionar en `backlog/` del checkout principal. Después hizo el commit `03c773e` (informe, 16 capturas y ticket; CA-8 comprobado: 18 archivos) y abrió el PR #178 hacia `main`, en borrador. Estado: `READY_FOR_MERGE`. El resultado del CI se informa en el PR y a la sesión principal.

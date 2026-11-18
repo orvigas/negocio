@@ -138,6 +138,10 @@ try {
   await prisma.$disconnect();
   process.exit(1);
 }
+// Las señales se atienden antes de anunciar server_started: un SIGTERM que llegue justo después del
+// anuncio (un despliegue, `docker stop`, las pruebas) apaga limpio en vez de matar el proceso.
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
 logger.info('server_started', {
   service: 'api',
   host: config.host,
@@ -168,6 +172,3 @@ function shutdown(signal: NodeJS.Signals): void {
       });
   });
 }
-
-process.once('SIGTERM', () => shutdown('SIGTERM'));
-process.once('SIGINT', () => shutdown('SIGINT'));

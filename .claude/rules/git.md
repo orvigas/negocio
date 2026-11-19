@@ -15,8 +15,18 @@ No hagas commits automáticamente salvo que las instrucciones del proyecto lo pe
 
 ## Rama de destino de los Pull Requests
 
-- Todo PR va a `main` (`gh pr create --base main`).
+- Todo PR va a `main` (`gh pr create --base main`), salvo las excepciones de abajo.
 - Si una épica futura necesita una rama intermedia, la define el usuario en su ticket.
+
+### Rama intermedia de la épica de inventario (`epic/inventario`)
+
+Excepción a la regla general, decidida por el usuario en REQ-F-049 (D-4, PV-12 y DT-4):
+
+- Los PR de los tickets de la épica de inventario (REQ-F-049 a REQ-F-053) van a `epic/inventario` (`gh pr create --base epic/inventario`) hasta que T1 a T3 sean utilizables. La rama de trabajo de cada PR sale de la punta de `epic/inventario`.
+- El CI valida esos PR igual que uno hacia `main`, sin las pruebas de humo del despliegue y de los respaldos, y sin publicar ni desplegar. No se hace push directo a `epic/inventario`: todo entra por PR.
+- Tras cada cambio a `main`, se integra `main` en la épica con un PR de `main` hacia `epic/inventario` (`gh pr create --base epic/inventario --head main`), mergeado con merge commit (nunca squash). Si hay conflictos, se resuelven en una rama aparte que sale de la épica.
+- La épica llega a `main` con un PR de `epic/inventario` hacia `main` cuando T1 a T3 se puedan usar. Ese PR corre el CI completo.
+- Después de ese merge, T4 y T5 van directo a `main`, la rama se borra y se quita de `on.pull_request` en `.github/workflows/ci.yml`.
 
 ## Pull Requests en borrador
 

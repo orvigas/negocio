@@ -2,9 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
-PR 2 de T1 (rol Gerente, API del inventario y opción Gerente en usuarios) en la rama `feature/REQ-F-049-gerente-api`, sin commit ni PR. QA aprobado en la ronda 2 (ver "QA Report — PR 2"): todos los CA del alcance en PASS. DEF-002 corregido con un caso de MySQL y verificado (X3a detectada). El doble de usuarios queda para el PR 3 (decisión del usuario). Siguiente paso: commit y PR hacia `epic/inventario`.
+PR 2 de T1 (rol Gerente, API del inventario y opción Gerente en usuarios): commit `6d1e355` en `feature/REQ-F-049-gerente-api` y PR #182 (https://github.com/orvigas/negocio/pull/182) hacia `epic/inventario` (no se despliega). QA aprobado en la ronda 2 (ver "QA Report — PR 2"). DEF-002 corregido con un caso nuevo de MySQL en `user-repository.test.ts` y verificado (X3a detectada). Pasan al PR 3: el doble de usuarios de `inventory-manager` con el rol, la redirección del gerente y el procedimiento de DT-2 en `despliegue.md` §6. Siguiente paso: el usuario revisa y hace merge del PR #182.
 
 T1 se implementa en el PR 0 (`ci.yml` y `git.md`, hacia `main`) y después en tres PR hacia `epic/inventario` (DT-1). PR 0 mergeado (#180). PR 1 (modelo, migración, dominio y persistencia) mergeado en `epic/inventario` (#181, merge `84f0a9a`).
 
@@ -1881,6 +1881,7 @@ Preguntas abiertas imprescindibles (con recomendación):
 
 ### QA del PR 2 (Q1)
 
+- 2026-11-19, senior-fullstack (T4): commit `6d1e355` y PR #182 (https://github.com/orvigas/negocio/pull/182) hacia `epic/inventario`. DEF-002 corregido (caso nuevo, X3a detectada); el doble de usuarios con el rol y la redirección del gerente pasan al PR 3. Estado `READY_FOR_MERGE`.
 - 2026-11-19, senior-qa (Q2, ronda 2): DEF-002 corregido por senior-fullstack (decisión del usuario: "Si") con un caso nuevo en `user-repository.test.ts`, sin cambios de producción. X3a ahora se detecta; `typecheck`, `lint` y `npm test` en verde; `user-repository.test.ts` < 3.5 s en 3 ejecuciones; limpieza comprobada. Estado `QA_APPROVED`.
 - 2026-11-19, senior-fullstack (T3): DEF-002 corregido por decisión del usuario ("Si"): caso de MySQL que cambia solo el rol (gerente -> admin -> gerente, sin negocios) y comprueba que sube `session_version`; X3a detectada; typecheck y lint en 0, archivo en verde 3 veces. El doble de usuarios queda para el PR 3. Estado `NEEDS_IMPLEMENTATION_APPROVAL`.
 - 2026-11-19, senior-qa (Q2): plan aprobado por el usuario ("Si") con las autorizaciones y las cuatro recomendaciones. Ejecutado (ronda 1): CA-10, CA-11, CA-14, CA-15, CA-16 y DT-2 en PASS; migración sin reconstrucción (`TABLE_ID` 1967 → 1967, `INSTANT` aceptado); mutaciones X1–X7 detectadas salvo X3a (DEF-002, `MAJOR` de cobertura). Estado `NEEDS_USER_DECISION`.

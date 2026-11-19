@@ -1,7 +1,8 @@
-import type { AdminProduct, AdminUser, ProductFormField, PublicBusinessId } from '@restaurante/contracts';
+import { INVENTORY_ROLES, type AdminProduct, type AdminUser, type ProductFormField, type PublicBusinessId } from '@restaurante/contracts';
 import type { Renderer, SafeHtml } from '@restaurante/web';
 
 import { BOT_PATH, createBotViews } from './bot.ts';
+import { CATEGORIES_PATH, ITEMS_PATH, createInventoryViews } from './inventory.ts';
 import { createPageViews, pagePath } from './page.ts';
 import { QUOTE_BUSINESS, QUOTE_PATH, createQuoteViews } from './quote.ts';
 import { ACCOUNT_PATH, USERS_PATH, createUserViews } from './users.ts';
@@ -52,9 +53,11 @@ export interface NoticeOptions {
 
 /**
  * Sección de la cabecera (REQ-F-040 y REQ-F-043): usuarios, bot o "Mi cuenta"; "Página" (REQ-F-044) y
- * "Cotizador" (REQ-F-046) son de un negocio.
+ * "Cotizador" (REQ-F-046) son de un negocio. "Inventario" (REQ-F-049): artículos o categorías.
  */
-export type HeaderSection = 'users' | 'bot' | 'account' | 'page' | 'quote';
+export type HeaderSection = 'users' | 'bot' | 'account' | 'page' | 'quote' | 'inventory' | 'inventory-categories';
+
+const isInventorySection = (section: HeaderSection | undefined): boolean => section === 'inventory' || section === 'inventory-categories';
 
 export interface PageOptions {
   title: string;
@@ -99,11 +102,13 @@ export function createViews(renderer: Renderer) {
       userName: context.user.name,
       csrfToken: context.csrfToken,
       accountCurrent: ariaCurrent(section === 'account'),
-      businessNav: current ? businessNav(current, section, context.user.role === 'admin') : join([]),
+      businessNav: current ? businessNav(current, section, context.user.role === 'admin') : isInventorySection(section) ? inventoryNav(section) : join([]),
       links: join([
         ...context.user.businesses.map((business) =>
           render('partials/nav-link', { href: productsPath(business), label: BUSINESS_NAMES[business], current: ariaCurrent(business === current) }),
         ),
+        // "Inventario" para administradores y gerentes (REQ-F-049, RF-9); la API sigue siendo la autoridad.
+        ...(INVENTORY_ROLES.includes(context.user.role) ? [render('partials/nav-link', { href: ITEMS_PATH, label: 'Inventario', current: ariaCurrent(isInventorySection(section)) })] : []),
         // "Usuarios" y "Bot" solo para administradores (REQ-F-040 y REQ-F-043, RF-1).
         ...(context.user.role === 'admin'
           ? [
@@ -128,6 +133,15 @@ export function createViews(renderer: Renderer) {
         link(pagePath(business), 'Página', section === 'page'),
         ...(isAdmin && business === QUOTE_BUSINESS ? [link(QUOTE_PATH, 'Cotizador', section === 'quote')] : []),
       ]),
+    });
+  }
+
+  /** Secciones del inventario (REQ-F-049): artículos y categorías. */
+  function inventoryNav(section: HeaderSection | undefined): SafeHtml {
+    const link = (href: string, label: string, active: boolean) => render('partials/subnav-link', { href, label, current: active ? render('partials/aria-current', { value: 'true' }) : join([]) });
+    return render('partials/business-nav', {
+      businessName: 'Inventario',
+      links: join([link(ITEMS_PATH, 'Artículos', section === 'inventory'), link(CATEGORIES_PATH, 'Categorías', section === 'inventory-categories')]),
     });
   }
 
@@ -168,6 +182,7 @@ export function createViews(renderer: Renderer) {
     ...createBotViews({ render, join, attrs, page, notice, displayDate }),
     ...createPageViews({ render, join, page, notice, renderField, errorSummary, fieldId, displayDate, businessNames: BUSINESS_NAMES }),
     ...createQuoteViews({ render, join, attrs, page, notice, businessNames: BUSINESS_NAMES }),
+    ...createInventoryViews({ render, join, attrs, page, notice, errorSummary, fieldId, displayDate }),
 
     login({ next, problem }: { next: string; problem?: 'invalid' | 'locked' | 'expired' | 'unavailable' | 'closed' | undefined }): SafeHtml {
       const notices: Record<string, NoticeOptions> = {

@@ -2,7 +2,13 @@
 
 ## Estado
 
-READY_FOR_MERGE
+QA_APPROVED
+
+PR 3 de T1: commit en `feature/REQ-F-049-pantallas` y PR hacia `epic/inventario` en curso (no se despliega). DEF-003, DEF-004 y DEF-005: corregidos y verificados. `.claude/CLAUDE.md` §8 actualizado (edición autorizada). Con este PR, T1 queda completo: PR 0 #180, PR 1 #181, PR 2 #182 y PR 3. Lo siguiente es T2 (REQ-F-050, recetas), que se refina con el business-analyst; según la hoja de ruta, la épica de ventas va tras T3, y T4 y T5 después.
+
+QA del PR 3 aprobado en la ronda 2 (ver "QA Report — PR 3", "Ronda 2"): DEF-003, DEF-004 y DEF-005 corregidos y verificados (X4a y X4b ahora se detectan). Siguiente paso: senior-fullstack hace el commit (con la edición autorizada de `.claude/CLAUDE.md` §8) y el PR hacia `epic/inventario`.
+
+PR 3 de T1 (pantallas de inventario, redirección del gerente, semilla de desarrollo y documentación) implementado en `feature/REQ-F-049-pantallas`, desde `origin/epic/inventario` (`077dcf6`), sin commit (ver "Implementation Result — PR 3"). Implementación aprobada por el usuario ("Apruebo y autorizo", que también autoriza a senior-fullstack a editar `.claude/CLAUDE.md` §8 en el commit). QA ronda 1 (ver "QA Report — PR 3"): CA-1 a CA-17 en PASS. Pendiente la decisión del usuario sobre DEF-003 (`MAJOR` de cobertura: mutación X4a no detectada), DEF-004 (`MINOR` de cobertura) y DEF-005 (`MINOR` documental). PR 2 mergeado en `epic/inventario` (#182).
 
 PR 2 de T1 (rol Gerente, API del inventario y opción Gerente en usuarios): commit `6d1e355` en `feature/REQ-F-049-gerente-api` y PR #182 (https://github.com/orvigas/negocio/pull/182) hacia `epic/inventario` (no se despliega). QA aprobado en la ronda 2 (ver "QA Report — PR 2"). DEF-002 corregido con un caso nuevo de MySQL en `user-repository.test.ts` y verificado (X3a detectada). Pasan al PR 3: el doble de usuarios de `inventory-manager` con el rol, la redirección del gerente y el procedimiento de DT-2 en `despliegue.md` §6. Siguiente paso: el usuario revisa y hace merge del PR #182.
 
@@ -1483,6 +1489,437 @@ Revalidación de DEF-002 (decisión del usuario: "Si"). senior-fullstack añadi�
 
 **Resultado final: QA_APPROVED**
 
+## Implementation Result — PR 3
+
+### Rama
+
+`feature/REQ-F-049-pantallas`, desde `origin/epic/inventario` (`077dcf6`, con los PR 1 y 2 mergeados). Sin commit ni PR (pendiente de aprobación). El nombre es el que pidió la sesión principal; el plan proponía `feature/REQ-F-049-catalogo-pantallas`.
+
+### Cambios realizados
+
+- **Pantallas** (`inventory-manager`): controlador `src/controllers/inventory.ts`, vistas `src/views/inventory.ts`, 6 páginas `views/pages/inventory-*.html` y 25 parciales `views/partials/inventory-*.html`; rutas en `src/routes.ts` (antes de `/:negocio/...`) y composición en `src/app.ts`. Rutas: `GET /inventario` (303 a artículos), `GET|POST /inventario/articulos` (lista con filtros GET de estado, tipo, categoría y búsqueda, y páginas "Anterior/Siguiente"; alta), `GET /inventario/articulos/nuevo[?clase=padre|?padre=<id>]`, `GET /inventario/articulos/:id[?cantidad=&unidad=]` (ficha con datos, "Sin costo", empaques, tabla de equivalencias, formulario GET de conversión, variantes e historial), `GET …/:id/editar` y `POST …/:id` (409 con quién y cuándo, "Cargar la versión vigente" y "Guardar mis cambios sobre la versión vigente"), `GET|POST …/:id/desactivar` (confirmación con la lista de variantes activas que se inactivan), `POST …/:id/reactivar`, `GET|POST /inventario/categorias`, `GET …/:id/editar`, `POST …/:id` (renombrar) y `POST …/:id/desactivar|reactivar` (409 `CATEGORY_IN_USE` con el número). Sesión y rol (admin o gerente; si no, 403 "No tienes permiso para gestionar el inventario." sin llamar a la API), mismo origen, formularios cerrados (400), CSRF reenviado, PRG con 303, alta idempotente con `requestId`, 422 junto a cada campo y en el resumen enlazado (los errores de empaque vuelven a su fila del formulario), 503 conservando lo escrito, 404 y 403. Sin JavaScript nuevo; reutiliza `field-input`, `field-select`, `field-textarea`, `user-fieldset`, `row-fieldset`, `option`, `hidden`, `notice`, `empty`, `action-link`, `submit`, `overwrite`, `field-error`, `field-help`, `error-summary` y `business-nav`/`subnav-link`. Sistema visual del admin (PV-8): sin diseño nuevo y sin Stitch.
+- **Navegación e inicio:** `HeaderSection` con `inventory` e `inventory-categories`; enlace "Inventario" en la cabecera tras los negocios y antes de "Usuarios" y "Bot", solo para `INVENTORY_ROLES` (`src/views/index.ts`); subnavegación "Artículos | Categorías". `home` (`src/controllers/admin.ts`) lleva a `/inventario/articulos` a quien no tiene negocios y puede usar el inventario (el gerente).
+- **Semilla de desarrollo** (RF-10, PV-5): `api/scripts/support/inventory-dev-seed.ts` (datos ficticios por el repositorio de core, autor "Semilla de desarrollo", idempotente: con artículos o categorías no hace nada; `devSeedRefusal` rechaza `NODE_ENV=production` y hosts que no sean `127.0.0.1`, `localhost`, `::1` o `mysql-dev`) y `api/scripts/inventory-seed-dev.ts` (verifica la base sin migrar). Scripts `inventory:seed-dev` en `api/package.json` y `restaurante/package.json`. La `api` no siembra el inventario al arrancar.
+- **Documentación:** `restaurante/docs/arquitectura.md` (§4: módulo `inventory` y regla de las landings; §6: rutas del inventario; §8: "Paso 5: épica de inventario" con la rama, la partición y el rol), `restaurante/docs/despliegue.md` (§6: procedimiento DT-2 para gerentes antes de una vuelta atrás manual; §9 y §11.1: las tablas `inventory_*` en el volcado; §11.7: consulta de conteos del inventario tras restaurar) y `restaurante/README.md` (scripts, API, admin, roles, tablas y la nota de `DATABASE_ALLOW_NEWER_SCHEMA=true` al alternar en local entre la épica y `main`).
+- **Pruebas:** doble de la API con el rol Gerente (usuarios: solo el editor guarda negocios) y el inventario en memoria (`inventory-manager/tests/support/api-double-inventory.ts`, `api-double.ts`, `browser.ts` con `GEMA` y la opción `users`).
+
+Desviaciones del plan:
+
+- La semilla usa nombres completos en las variantes ("Refresco Coca-Cola 600 ml", "Agua fresca de horchata"…), porque el nombre es único en todo el catálogo (decisión P4 del QA del PR 1) y así se distinguen en la lista.
+- La edición no permite cambiar la clase ni el tipo (inmutables en core); en una variante, la categoría tampoco (la hereda del padre). Se muestran como texto de solo lectura.
+- Filas de empaque: se muestran las escritas más dos vacías (hasta 8), porque sin JavaScript no se pueden añadir filas; para más de dos empaques nuevos se guarda y se edita otra vez.
+- La cadena de punta a punta va en un archivo propio, `landing-pages/tests/integration/admin-inventory-e2e.test.ts` (como `admin-users-e2e.test.ts`, con los procesos reales), en lugar de dentro de `prisma-inventory-store.test.ts`: necesita arrancar la `api` y el admin como procesos.
+
+### Criterios de aceptación
+
+- CA-1: cumplido (alta en pantalla y en la cadena real: aparece en la lista y el historial dice "Alta · <usuario>").
+- CA-2, CA-3, CA-5, CA-6 y CA-13: reglas de core y API (PR 1 y 2); en pantalla, el 422 se pinta en su campo y la categoría en uso responde 409 con el número.
+- CA-4: cumplido en la ficha (tabla "1 bulto = 25 kg" y conversión "2 bulto = 50 kg"; con la caja de 24, igual).
+- CA-7: cumplido (padre sin existencias, variantes con SKU, unidad y estado propios; alta de variante con tipo y categoría heredados).
+- CA-8: cumplido (filtro de estado y reactivar desde la ficha).
+- CA-9: cumplido (409 con quién y cuándo, lo escrito conservado y "guardar encima"; también en la cadena real).
+- CA-10: cumplido (el editor no ve "Inventario"; 403 en todas las pantallas y acciones sin llamar a la API).
+- CA-11: cumplido (el gerente entra directo al inventario, solo ve "Inventario" y recibe 403 en usuarios, bot, cotizador, productos y página).
+- CA-12: cumplido (la semilla carga los 18 artículos de RF-10 en memoria y en MySQL local; segunda vez, nada; producción, vacía porque la `api` no siembra).
+- CA-14, CA-15, CA-16 y CA-17: los comprueba QA (regresión, vuelta atrás, respaldo y 360 px/teclado/sin JS/axe). Procedimiento DT-2 y consulta de conteos ejecutados en local (abajo).
+
+### Validaciones ejecutadas
+
+- `npm ci --strict-allow-scripts` y `npm run db:generate`: 0. `npm run build:css`: 0. `npm run typecheck`: 0. `npm run lint`: 0, sin avisos.
+- `npm test` (MySQL local con `npm run db:up`): api 52 archivos y 1210 pruebas; landing-pages 62 y 897; inventory-manager 17 y 286. Todo en verde.
+- Pruebas permanentes nuevas (funcionales): `inventory-manager/tests/integration/inventory.test.ts` (8 casos, ~0.7 s: CA-10 del editor sin llamar a la API, CA-11 del gerente con la redirección y la subnavegación, alta con empaque, ficha, equivalencia y conversión, 422 por campo y en la fila de empaque, 503 conservando lo escrito, 409 y "guardar encima", padre con variantes y su baja confirmada con filtros de estado y 422 de filtro, categoría en uso); `landing-pages/tests/integration/admin-inventory-e2e.test.ts` (1 caso, ~5 s: la cadena real del plan); `api/tests/unit/inventory-catalog.test.ts` (+2 casos: semilla RF-10 idempotente y su salvaguarda). Ajuste de una prueba existente: `bot-access.test.ts` (cabecera del administrador con "Inventario").
+- Semilla en local, sobre una base desechable `restaurante_test_seeddev` migrada con `prisma migrate deploy`: `npm run inventory:seed-dev` → "Semilla de desarrollo cargada: 18 artículos." (6 insumos kg, 3 intermedios, 3 compuestos, 2 padres de reventa y 4 variantes; 7 categorías; 3 empaques); segunda vez → "El inventario ya tiene datos: no se cargó la semilla."; con `NODE_ENV=production` y con un host remoto se niega con su mensaje y código 1.
+- Procedimiento DT-2 de `despliegue.md` §6 ejecutado en local (mismo SQL por `docker exec … mysql` sobre esa base, con un gerente y un editor): el paso 1 lista al gerente; el paso 2 lo deja como editor sin negocios con `session_version` + 1 y `gerentes_restantes = 0`, sin tocar al editor. La consulta de conteos de §11.7 devuelve `18 / 7 / 25`. Base borrada después.
+
+### Archivos afectados
+
+Nuevos: `restaurante/inventory-manager/src/controllers/inventory.ts`, `restaurante/inventory-manager/src/views/inventory.ts`, `restaurante/inventory-manager/src/views/pages/inventory-{items,item,item-form,item-deactivate,categories,category-form}.html`, 25 parciales `restaurante/inventory-manager/src/views/partials/inventory-*.html`, `restaurante/inventory-manager/tests/integration/inventory.test.ts`, `restaurante/inventory-manager/tests/support/api-double-inventory.ts`, `restaurante/api/scripts/inventory-seed-dev.ts`, `restaurante/api/scripts/support/inventory-dev-seed.ts`, `restaurante/landing-pages/tests/integration/admin-inventory-e2e.test.ts`.
+
+Modificados: `restaurante/inventory-manager/src/{app,routes}.ts`, `restaurante/inventory-manager/src/controllers/admin.ts`, `restaurante/inventory-manager/src/views/index.ts`, `restaurante/inventory-manager/tests/support/{api-double,browser}.ts`, `restaurante/inventory-manager/tests/integration/bot-access.test.ts` (la cabecera del administrador incluye "Inventario"), `restaurante/api/tests/unit/inventory-catalog.test.ts` (semilla), `restaurante/api/package.json`, `restaurante/package.json`, `restaurante/docs/arquitectura.md`, `restaurante/docs/despliegue.md`, `restaurante/README.md`.
+
+### Riesgos o pendientes
+
+- `.claude/CLAUDE.md` §8 no se editó (no autorizado): la propuesta va en el informe a la sesión principal.
+- QA: 360 px, teclado, sin JavaScript y axe de las pantallas nuevas (CA-17), regresión (CA-14), vuelta atrás con el procedimiento DT-2 contra la imagen de `main` (CA-15) y respaldo/restauración (CA-16).
+- El procedimiento DT-2 se probó en local con `docker exec … mysql` y el usuario de pruebas sobre una base `restaurante_test_*` (no con `$C` ni root del VPS, que no existen en local).
+
+### Correcciones del QA ronda 1
+
+- DEF-003 y DEF-004: caso nuevo en `inventory-manager/tests/integration/inventory.test.ts`, "la baja de un padre sin la confirmación de sus variantes activas no inactiva nada y vuelve a pedirla con sus nombres". Reproduce la carrera (confirmación cargada sin variantes activas, se reactiva la variante y se envía el formulario viejo, sin `variants`): 409, nada inactivado, la confirmación nombra "Coca-Cola" y lleva `variants=deactivate`; con ella, 303 y padre y variante inactivos. X4a y X4b ahora fallan en ese caso (archivos de producción restaurados, `shasum -c` OK).
+- DEF-005: `restaurante/docs/arquitectura.md` §8: "T4 y T5; T2 a T5 son REQ-F-050 a REQ-F-053, al refinarse". Sin el error en `despliegue.md` ni en el `README.md`.
+- Validaciones: `inventory.test.ts` 9/9 tres veces (~1.2 s); `npm run typecheck` 0; `npm run lint` 0; `npm test -w inventory-manager` 17 archivos y 287 pruebas en verde. Sin código de producción cambiado.
+
+## QA Action Plan — PR 3
+
+### Objetivo
+
+Validar, sin commit ni PR, el worktree `feature/REQ-F-049-pantallas` (desde `origin/epic/inventario` = `077dcf6`): pantallas de inventario, enlace y subnavegación, redirección del gerente, doble de usuarios con el rol, semilla `inventory:seed-dev`, documentación y pruebas permanentes, sin regresiones. Implementación y desviaciones aprobadas por el usuario ("Apruebo y autorizo"). El worktree no está indexado por CodeGraph: la revisión usa Read/Grep dirigidos.
+
+### Requisito bajo prueba
+
+RF-1, RF-3 a RF-7, RF-9 a RF-11, PV-1, PV-5, PV-8, DT-2 y "Frontend (`inventory-manager`)", "Contenido / configuración", "Documentación a actualizar" y "Testing" del Technical Action Plan. Fuera: T2 a T5 y ventas.
+
+### Criterios de aceptación (cada uno → pruebas que lo cubren)
+
+| CA | Alcance del PR 3 (en pantalla, contra `api` y admin reales sobre MySQL) | Pruebas |
+| --- | --- | --- |
+| CA-1 | Alta de insumo por el gerente → lista de activos e historial "Alta · <nombre>" | F1, F2 |
+| CA-2, CA-3, CA-6 | Nombre repetido (activo/inactivo), SKU repetido, factor 0/negativo/no numérico → 422 junto al campo y en el resumen | F4 |
+| CA-4, CA-5 | Ficha: tabla de equivalencias y conversión GET (2 cajas = 48 pza; 500 g = 0.5 kg; pza→kg rechazado con mensaje) | F3 |
+| CA-7 | Padre sin existencias; variantes con SKU, unidad y estado propios; alta de variante con tipo y categoría heredados de solo lectura | F6 |
+| CA-8 | Filtro Activos/Inactivos y reactivar desde la ficha | F2, F6 |
+| CA-9 | 409 con quién y cuándo, lo escrito conservado, "Cargar la versión vigente" y "Guardar encima" | F5 |
+| CA-10 | Editor: sin "Inventario"; 403 en las 16 rutas sin llamar a la API ni escribir | P1, P2, X1, X2 |
+| CA-11 | Gerente creado por el admin: entra, `/` lo lleva a `/inventario/articulos`, solo ve "Inventario"; 403 en usuarios, bot, cotizador, productos y página | P1, P3 |
+| CA-12 | Semilla: 18 artículos y 7 categorías de RF-10; idempotente; producción vacía | S1–S6 |
+| CA-13 | Categoría en uso → 409 con el número | F7 |
+| CA-14 | Landings, `/api/v1/public/*`, bot, productos, página y usuarios igual | G1–G4 |
+| CA-15 | Vuelta atrás con el código de `main` y DT-2 documentado | V1–V5 |
+| CA-16 | Consulta de conteos de §11.7 tras dump/restore | B1, B2 |
+| CA-17 | 360 y 1440 px, solo teclado, foco visible y sin JavaScript | A1–A10 |
+
+### Riesgos identificados
+
+1. Ruta `/inventario/...` registrada después de `/:negocio/...` o sin la comprobación de rol antes de llamar a la API (fuga o 404).
+2. Comprobación de rol solo en la vista (enlace oculto) y no en el controlador; o el admin reenvía sin CSRF.
+3. `?padre=<id>` o campos ocultos manipulables (cambiar tipo/categoría de una variante, clase en la edición): el formulario cerrado debe rechazarlos con 400 y la API manda.
+4. Doble envío del alta sin `requestId` estable → duplicado.
+5. 503/409 que pierden lo escrito o filtran detalles; errores de empaque pintados en la fila equivocada.
+6. Redirección del gerente en bucle o aplicada a un editor sin negocios.
+7. Semilla ejecutable contra una base remota o en producción, o enganchada al arranque de la `api`.
+8. Cabecera más alta a 360/375 px por el enlace y la subnavegación (AUD-006 ya conocido: 273 px a 375 px).
+9. Documentación que describe rutas, comandos o SQL inexistentes o erróneos (DT-2 con SQL que no funciona).
+
+### Revisión estática (R)
+
+- **R1.** `git status` y `git diff --stat origin/epic/inventario` del worktree: solo los archivos de "Implementation Result — PR 3" y el ticket; nada en landings (`src/`, `public/`), bot, `api/src`, `packages/`, `ops/`, `.github/`, `deploy/` ni `package-lock.json` (`dependencias.md`: sin dependencias nuevas; los cambios de `package.json` son solo el script `inventory:seed-dev`).
+- **R2.** Suma de `deploy/` con el método de `ci.yml`: `cd restaurante/deploy && shasum -a 256 -- compose.prod.yaml deploy.sh mysql/initdb/01-usuarios.sh | shasum -a 256 | cut -c1-64` = `591de8e7f259073f79ff34418c8b7a3a2680d465ef3bc7378c620221455cc7f0` (se confirma antes el método leyendo `ci.yml`).
+- **R3.** Diff frente al TAP: tabla de rutas (16 en `routes.ts` antes de `/:negocio`), orden sesión → rol → mismo origen → campos cerrados → CSRF, PRG 303, `requestId` del alta, parciales reutilizados (`componentizacion.md`), `HeaderSection`, `INVENTORY_ROLES` de contracts (sin duplicar listas de roles), `home` del gerente, tema `neutral`.
+- **R4.** Reglas: `html.md` (`main`, `nav`, `section`, `dl`, `table` con `caption` y `th scope`, `ol` del historial, botones para acciones y enlaces para navegar), `bem.md` y `tailwind.md` (sin CSS propio nuevo; clases del sistema), `javascript.md` (ningún archivo nuevo en `public/js` ni `<script>` en las páginas), `accesibilidad.md` y `formularios.md` (`label`, `aria-describedby`, `aria-invalid`, error con texto e icono), `diseno-responsivo.md`, `assets.md` (sin assets nuevos), `stitch-diseno.md` (sin diseño nuevo, PV-8), `typescript.md` (sin `any`, `as`/`!` justificados, imports `.ts`), `manejo-de-errores.md` (páginas de error sin detalles internos), `testing.md`.
+- **R5.** Sin secretos ni datos reales: semilla y documentación con datos ficticios; búsqueda de teléfonos, correos, contraseñas, IP y tokens en el diff.
+
+### Permisos y flujos contra la `api` y el admin reales (P y F)
+
+Entorno: MySQL 8.4 de QA (`docker compose -p restaurante-qa-049c`, `127.0.0.1:3307`), base `restaurante_test_*` migrada; `api` y admin del worktree con `node src/server.ts --env-file=<scratchpad>` en puertos libres de `127.0.0.1`. Cliente: script `fetch` del scratchpad que imita al navegador (cookie, token CSRF leído del formulario, `Origin`), más Chrome headless para A. Usuarios: admin, editor con negocio, gerente creado por el admin desde la pantalla de usuarios.
+
+- **P1.** Matriz de las 16 rutas × {sin sesión, editor, gerente, admin}: sin sesión → redirección al login (302/303) o 401 según el patrón del admin; editor → 403 "No tienes permiso para gestionar el inventario." y, en el log de la `api`, ninguna petición a `/api/v1/admin/inventario` (CA-10 "sin llamar a la API"); gerente y admin → 200/303. Las escrituras del editor se envían con CSRF válido.
+- **P2.** CSRF y origen: gerente sin token, con token ajeno o con `Origin` de otro sitio → 403 sin escribir; campos extra o faltantes en cada formulario POST → 400 sin escribir. Conteos de las tablas `inventory_*` antes y después de P1–P2 idénticos.
+- **P3.** CA-11: `/` del gerente → `/inventario/articulos`; cabecera solo con "Inventario"; 403 en `/usuarios`, bot, cotizador, productos y página de ambos negocios; `/` del editor y del admin igual que antes (sin bucle).
+- **F1.** Alta de "Masa de maíz" (kg, bulto = 25) → 303 a la ficha; lista de activos; historial con el nombre del gerente y la fecha en `BUSINESS_TIMEZONE`.
+- **F2.** Lista: filtros de tipo, categoría, estado y búsqueda por nombre y SKU; mensaje sin resultados; paginación con más de una página (sembrar > tamaño de página) y `aria-label`; filtro fuera de la lista cerrada → mensaje, sin 500.
+- **F3.** Ficha: "Sin costo"; equivalencias; conversión GET con valores válidos, inválidos (`abc`, `-1`, vacío) y unidad sin factor.
+- **F4.** 422: nombre repetido, SKU repetido (también de un inactivo), factor 0/negativo/`abc` en una fila de empaque concreta → error en su campo y fila, resumen enlazado enfocable, `aria-invalid`, lo escrito conservado.
+- **F5.** Dos sesiones (gerente y admin) editan la misma versión → la segunda ve 409 con quién y cuándo y lo escrito; "Cargar la versión vigente" no guarda; "Guardar encima" guarda y queda en el historial; el primer cambio se conserva.
+- **F6.** Padre con dos variantes: alta de variante desde `?padre=<id>` (tipo y categoría heredados de solo lectura; manipular el campo → 400 o ignorado por la API), padre sin existencias, inactivación del padre con la confirmación que lista las variantes activas, filtros Activos/Inactivos y reactivación.
+- **F7.** Categorías: alta, renombrado, nombre repetido (422), inactivación en uso → 409 con el número; inactivación sin uso y reactivación.
+- **F8.** Idempotencia: el mismo POST del alta reenviado dos veces (mismo `requestId`) y dos simultáneos → un solo artículo. PRG: tras el 303, recargar la ficha no reenvía.
+- **F9.** 503: `api` detenida (y aparte MySQL detenido) al guardar alta, edición y categoría → aviso, código 503, lo escrito conservado y sin detalles internos; al volver, guarda.
+- **F10.** 404: ids `0`, `abc`, `01`, inexistente, en ficha, edición, desactivar y categoría → página 404 del admin.
+
+### Accesibilidad y responsive (A; CA-17)
+
+Chrome headless con perfil temporal en el scratchpad y puerto de depuración 9222 (o Claude in Chrome si responde en 2–3 intentos), sobre las 6 páginas (lista, ficha con equivalencias y variantes, formulario con errores, confirmación de baja, categorías y su edición) y las páginas de 403/404:
+
+- **A1.** 360×800 y 1440×900: `scrollWidth` ≤ `clientWidth` (sin desborde; la tabla de equivalencias desplaza solo su contenedor); capturas sin datos personales.
+- **A2.** Cabecera a 360 y 375 px: altura medida de la cabecera y de la subnavegación para admin y gerente, comparada con `epic/inventario` sin el PR (AUD-006: 273 px a 375 px). Se declara el resultado; solo es defecto si el PR rompe la cabecera (solapes, recortes, desborde).
+- **A3.** Solo teclado: orden de foco lógico, skip link a `main`, foco visible (estilo del sistema) en enlaces, campos, botones y paginación, resumen de errores que recibe el foco o está al inicio y sus enlaces llevan al campo.
+- **A4.** Etiquetas: cada campo con `label` asociada, ayudas y errores por `aria-describedby`, `aria-invalid` solo con error; errores con texto (no solo color).
+- **A5.** Un `h1` por página y jerarquía sin saltos; landmarks `header`, `nav` (con nombre accesible distinto para la subnavegación), `main`.
+- **A6.** `aria-current="page"` en "Inventario" y en "Artículos"/"Categorías" según la página.
+- **A7.** Objetivos táctiles: ≥ 24×24 px (WCAG 2.5.8) en todos; se informa cuáles no llegan a 44 px.
+- **A8.** Contraste WCAG (texto 4.5:1, grande y no textual 3:1) con colores computados de los componentes nuevos o combinaciones nuevas (estado Inactivo, "N variantes", historial, filas de empaque, tabla). Componente reutilizado sin cambios: se anota, no es defecto del PR.
+- **A9.** axe-core (inyectado desde el `node_modules` existente si está; si no, sin instalar nada y se declara) sin violaciones serias o críticas en las páginas nuevas.
+- **A10.** Sin JavaScript (Chrome con JS desactivado o el cliente `fetch`): alta, edición, 409 y guardar encima, conversión, filtros, paginación, baja con confirmación, reactivar y categorías funcionan; ninguna página nueva carga `<script>`.
+
+### Semilla (S; CA-12)
+
+- **S1.** Base desechable migrada: `npm run inventory:seed-dev` con env del scratchpad → 18 artículos (6 insumos, 3 intermedios, 3 compuestos, 2 padres y 4 variantes) y 7 categorías por SQL; historial con autor "Semilla de desarrollo".
+- **S2.** Segunda ejecución → mensaje "ya tiene datos" y conteos sin cambios; también con solo una categoría creada a mano.
+- **S3.** `NODE_ENV=production` → se niega, código 1, sin escribir. Host remoto (p. ej. `DATABASE_URL` con `10.0.0.1` y con `db.example.com`) → se niega antes de conectar (sin intento de red: tiempo inmediato).
+- **S4.** Base sin migrar → mensaje claro, código ≠ 0, sin stack de Prisma.
+- **S5.** Producción vacía: la `api` arrancada sobre una base nueva migrada → `GET /inventario/articulos` vacío y 0 filas en `inventory_*`; `grep` de que `api/src` no importa la semilla.
+- **S6.** RF-10 en pantalla: masa 1 bulto = 25 kg; Refresco Coca-Cola y Mundet en pza con caja = 24 (2 cajas = 48 pza); agua fresca en L; tipos y padres correctos.
+
+### Vuelta atrás y DT-2 (V; CA-15)
+
+Código de `main` desde `/Users/orvigas/Desktop/Negocio/restaurante` (solo lectura) con `node src/server.ts --env-file=<scratchpad>`, nunca su `api/.env`, sobre la base migrada de la épica con datos de la semilla.
+
+- **V1.** Sin gerentes y sin `DATABASE_ALLOW_NEWER_SCHEMA` → sale con `DATABASE_NEWER_THAN_CODE`.
+- **V2.** Con `DATABASE_ALLOW_NEWER_SCHEMA=true` → arranca; públicas 200; login de admin; productos y página 2xx.
+- **V3.** Con gerentes: usuarios 503 (lo conocido de DT-2).
+- **V4.** Procedimiento de `despliegue.md` §6 "Volver a una versión anterior a la épica de inventario (REQ-F-049) con gerentes", copiado tal cual y adaptado solo en la forma de conectarse (`docker exec` al MySQL de QA en lugar de `$C`/root del VPS): cada SQL funciona y da lo que el texto dice; la `api` de `main` vuelve a dar 200 en usuarios; el exgerente queda sin acceso y su sesión cerrada.
+- **V5.** Avance a la `api` del worktree: arranca sin la variable y los roles se restauran como indica el documento.
+
+### Respaldo (B; CA-16)
+
+- **B1.** `mysqldump` con las opciones de `ops/backup` sobre la base con semilla, gerentes e historial; restauración en otra base del contenedor de QA.
+- **B2.** La consulta de conteos de §11.7, tal cual, da los mismos valores que en el origen (`18 / 7 / 25` o los vigentes tras F); el admin del worktree sobre la restaurada muestra la ficha con su historial. El simulacro `--drill` lo hace el usuario tras desplegar la épica.
+
+### Documentación (D)
+
+- **D1.** `arquitectura.md` §4/§6/§8 paso 5, `despliegue.md` §6, §9, §11.1 y §11.7, y `README.md` contra el código: rutas (admin y API), nombres de scripts (`inventory:seed-dev` en raíz y `api`), tablas `inventory_*` reales del esquema, roles y variables; nada inventado (T2 a T5 no descritos como existentes).
+- **D2.** Enlaces internos y anclas válidos; ortografía y tildes.
+
+### Pruebas permanentes (T; `testing.md`)
+
+- **T1.** Cada caso nuevo es funcional y no duplica otro (`inventory.test.ts` frente a `admin-inventory-api.test.ts`; la semilla en `inventory-catalog.test.ts`); sin pruebas de arquitectura; la cadena de punta a punta existe una sola vez (`admin-inventory-e2e.test.ts`) y usa `listenLocal`/procesos y `makeDatabase()` según la regla; sin esperas fijas ni `retry`; los ajustes de `bot-access.test.ts` y del doble no debilitan aserciones.
+- **T2.** `inventory.test.ts`, `admin-inventory-e2e.test.ts` e `inventory-catalog.test.ts` en 3 ejecuciones aisladas, cada una < 20 s.
+
+### Mutaciones (X), descartables
+
+Copia APFS (`cp -c`) de `restaurante/` del worktree en el scratchpad; una a una, ejecutando solo los archivos afectados:
+
+- **X1.** Quitar la comprobación de rol en el controlador del inventario.
+- **X2.** Mostrar el enlace "Inventario" al editor.
+- **X3.** No reenviar el token CSRF a la API.
+- **X4.** Quitar la confirmación de variantes (inactivar el padre sin `confirm`).
+- **X5.** Omitir el 409 / "guardar encima" (enviar siempre `overwrite`, y aparte no pintar el conflicto).
+- **X6.** Semilla sin la salvaguarda de `NODE_ENV=production` (y aparte sin la del host).
+- **X7.** `home` sin la redirección del gerente.
+
+Una mutación que sobrevive: `MAJOR` si ninguna prueba cubre el comportamiento, `MINOR` si otra lo cubre indirectamente.
+
+### Regresión (G; CA-14)
+
+- **G1.** Desde `restaurante/` del worktree: `npm run build:css`, `npm run typecheck`, `npm run lint` y `npm test` (3 workspaces) en 0.
+- **G2.** Landings `/`, `/molotes`, `/birria` y `/api/v1/public/{molotes,birria}/{productos,pagina}` 200 con la `api` del worktree.
+- **G3.** Admin: productos, página, usuarios (con la opción Gerente), bot y cotizador para el admin; productos y página para el editor; cabecera sin cambios salvo "Inventario".
+- **G4.** Diff sin cambios en landings, bot ni `api/src` (R1).
+
+### Evidencia requerida
+
+Salidas resumidas (código y totales) de cada comando; suma de `deploy/`; `git diff --name-only`; matriz P1 con códigos y el log de la `api` del editor; conteos antes/después; capturas a 360 y 1440 px; alturas de cabecera; resultados de foco, contraste, objetivos y axe; salidas de S1–S6, V1–V5 y B1–B2; duraciones de T2; resultado de X1–X7; comprobación de limpieza.
+
+### Limpieza (comprobada, no supuesta)
+
+`docker compose -p restaurante-qa-049c down -v` y `docker ps -a`, `docker volume ls`, `docker network ls` sin restos; `restaurante-mysql-dev-1` como estaba (apagado); sin procesos `server.ts`, `vitest` ni Chrome headless; puertos 3000–3004, 3307 y 9222 libres; 0 bases `restaurante_test*`; perfil de Chrome, copia de mutaciones, sondas, env, logs, capturas y volcados del scratchpad borrados; `git status` del worktree igual al inicial más el ticket; árbol principal en `main` sin cambios; `git worktree list` sin worktrees nuevos.
+
+### Criterios de aprobación
+
+`QA_APPROVED` solo si: R1–R5 sin desviaciones relevantes y suma de `deploy/` igual; CA-1 a CA-14 y CA-17 en PASS con evidencia; CA-15 (V1, V2, V4, V5) y CA-16 (B2) en PASS; documentación correcta; `build:css`, `typecheck`, `lint` y `npm test` en 0; archivos < 20 s; sin `BLOCKER` ni `CRITICAL` y cada `MAJOR` aceptado por el usuario.
+
+Escala por impacto observable: editor que ve o usa el inventario, gerente con acceso a usuarios/productos/página, semilla que corre en producción o contra un host remoto, o procedimiento DT-2 que no restablece la `api` de `main` = `CRITICAL`; pérdida de lo escrito en 409/503, duplicado por doble envío, pantalla inutilizable a 360 px o sin teclado/sin JS, filtración de detalles internos o mutación no detectada sin cobertura = `MAJOR`; contraste o foco insuficiente en un componente nuevo, objetivo < 24 px, error documental con impacto operativo = `MAJOR` o `MINOR` según el impacto; errata, tilde u objetivo entre 24 y 44 px = `MINOR`/`TRIVIAL`.
+
+### Autorizaciones que se piden al usuario
+
+1. Docker local: `docker compose -p restaurante-qa-049c up -d --wait mysql-dev` con el `compose.yaml` del worktree, volumen propio y `127.0.0.1:3307`; parar y arrancar ese contenedor (F9) y una base gemela para B. Si el `mysql-dev` de desarrollo está encendido, QA se detiene y pregunta.
+2. Arrancar la `api` y el admin del worktree, y la `api` de `main` (desde `/Users/orvigas/Desktop/Negocio/restaurante`, solo lectura), con `node src/server.ts` y env propios en el scratchpad; nunca el `api/.env` de desarrollo.
+3. Chrome headless con perfil temporal en el scratchpad (puerto 9222), o Claude in Chrome si responde.
+4. Sondas y copia de mutaciones solo en el scratchpad; nada en `restaurante/landing-pages/tests/` del worktree.
+5. Escribir en el ticket del worktree solo `## Estado`, este plan, el QA Report y el Historial.
+
+### Preguntas abiertas (con recomendación)
+
+1. ¿Vuelta atrás solo con el código de `main` o también con la imagen `production`? **Recomendado:** solo con el código, como en los PR 1 y 2; la imagen, en el QA del PR de la épica hacia `main`.
+2. Si la cabecera crece a 360/375 px respecto a AUD-006 sin romperse: ¿se acepta y queda en la auditoría aparcada? **Recomendado:** sí; se mide y se declara, y solo es defecto si hay solape, recorte o desborde.
+3. Si axe no está disponible en `node_modules`: ¿se valida con las comprobaciones manuales A3–A8 sin instalar nada? **Recomendado:** sí (`dependencias.md`), declarándolo en el informe.
+4. Un hallazgo `MINOR` en pruebas o documentación: ¿se corrige en este PR o se acepta? **Recomendado:** decidirlo con el informe, como DEF-001 del PR 1.
+
+**Aprobado por el usuario** ("Si"), con las autorizaciones y las cuatro recomendaciones.
+
+## QA Report — PR 3
+
+### Ronda
+
+1 (2026-11-19), sobre el worktree `feature/REQ-F-049-pantallas` sin commit (52 entradas en `git status`, igual antes y después). MySQL 8.4 de QA `restaurante-qa-049c` en `127.0.0.1:3307`; la `api` y el admin del worktree y la `api`/admin de `main` con env propio en el scratchpad; Chrome headless con perfil temporal (9222). axe no está instalado: accesibilidad con comprobaciones manuales por CDP (respuesta 3).
+
+### Pruebas ejecutadas
+
+- `npm run build:css`, `typecheck` y `lint`: 0. `npm test`: api 52 archivos/1210 pruebas, landing-pages 62/897, inventory-manager 17/286, todo en verde.
+- Duración en 3 ejecuciones aisladas: `inventory.test.ts` 1.45/1.13/1.10 s; `admin-inventory-e2e.test.ts` 4.07/4.02/3.86 s; `inventory-catalog.test.ts` 0.14/0.13/0.15 s.
+- Sondas HTTP descartables (cliente sin JS: cookie, `_csrf` del formulario, `Origin`) contra la `api` y el admin reales: matriz P1 (72 comprobaciones), flujos F (86 + 4), F9 (503) y regresión G.
+- CDP: 9 páginas + 422 × {360, 1440} × {gerente, admin}, teclado, skip link, cabecera y flujo sin JavaScript.
+
+### Revisión estática
+
+- R1: solo los archivos del Implementation Result; nada en landings, bot, `api/src`, `packages/`, `ops/`, `.github/` ni `package-lock.json`. Los `package.json` solo suman `inventory:seed-dev`. Ningún archivo nuevo en `public/js` ni `<script>` en las páginas (solo el `main.js` del layout ya existente).
+- R2: suma de `deploy/` (método de `ci.yml`) = `591de8e7f259073f79ff34418c8b7a3a2680d465ef3bc7378c620221455cc7f0`. Igual.
+- R3/R4: las 16 rutas van antes de `/:business`. Orden: mismo origen → campos cerrados (400) → sesión → rol (403 sin llamar a la API) → API. `INVENTORY_ROLES` sale de contracts. Se reutilizan los parciales y no hay CSS ni assets nuevos.
+- R5: semilla y documentación con datos ficticios; sin secretos. Los logs solo llevan eventos, ids y códigos (se buscaron nombres, cuerpos, tokens y cookies: ninguno).
+
+### Criterios de aceptación
+
+| CA | Resultado | Evidencia |
+| --- | --- | --- |
+| CA-1 | PASS | Alta 303 a la ficha con "Artículo creado."; aparece en Activos; historial "Alta · QA qagerente". |
+| CA-2 | PASS | "sal" con "Sal" activa → 422 en el campo; con "Sal" inactiva → 303. |
+| CA-3 | PASS | SKU repetido (activo e inactivo) → 422 en `sku` con `aria-invalid`. |
+| CA-4 | PASS | Coca-Cola de la semilla: "2 caja = 48 pza"; Masa QA: "2 bulto = 50 kg" y tabla con `caption` y `th scope`. |
+| CA-5 | PASS | "500 g = 0.5 kg"; pza→kg → 422 con mensaje; `abc`, `-1`, vacío, `1e3` y una unidad inexistente → 422. |
+| CA-6 | PASS | Factor 0 en la fila 2 se marca en `units.1.factor` y no en la 1; `-3`, `abc` y `1.2345` → 422 en su campo. |
+| CA-7 | PASS | Padre "Existencias: No tiene"; variantes con SKU, unidad y estado propios; tipo y categoría heredados sin campo editable (un `categoryId` inyectado se ignora: queda la del padre); `?padre=` de variante o `abc` → 404. |
+| CA-8 | PASS | Activos/Inactivos correctos (`estado=active|inactive`); reactivar 303. |
+| CA-9 | PASS | 409 con "Última modificación: qaadmin, el 19/11/2026 06:54", lo escrito conservado y el primer cambio intacto; "Cargar la versión vigente" y "Guardar encima" (303, aplicado y en el historial). |
+| CA-10 | PASS | Editor: 403 con el mensaje en 9 GET y 8 POST (con CSRF válido); 0 peticiones a `/api/v1/admin/inventario` en el log; sin "Inventario" en la cabecera. |
+| CA-11 | PASS | Gerente creado desde Usuarios (negocio marcado ignorado: 0 filas en `user_business`); `/` → 303 `/inventario/articulos`; cabecera solo con "Inventario"; 403 en usuarios, bot, cotizador, productos y página (`/cotizador` 404: no existe esa ruta). |
+| CA-12 | PASS | `inventory:seed-dev`: 18 artículos (6 insumos, 3 intermedios, 3 compuestos, 2 padres, 4 variantes), 7 categorías, 3 empaques y 25 cambios de "Semilla de desarrollo". La segunda vez no hace nada. La `api` arrancada sobre una base nueva deja `inventory_*` en 0. |
+| CA-13 | PASS | Inactivar "Abarrotes" → 409 con el número de artículos activos y sin escrituras; sin uso → 303. |
+| CA-14 | PASS | Suite verde; landings `/`, `/molotes` y `/birria` 200 con CTA; `/api/v1/public/*` 200; admin: productos, página, usuarios, bot, cotizador y cuenta 200; el editor como antes; webhook 503 sin bot configurado (igual que antes). |
+| CA-15 | PASS | V1–V5 (abajo). |
+| CA-16 | PASS | La consulta de §11.7 da `57 / 9 / 81` en el origen y en la restaurada; `CHECKSUM TABLE` idéntico en las 5 `inventory_*` y `user`. |
+| CA-17 | PASS | Ver Responsive y Accesibilidad. |
+
+### Semilla
+
+- S3: se niega con `NODE_ENV=production` y con los hosts `10.0.0.1`, `db.example.com` y `127.0.0.2` (código 1, 0.4 s, sin conectar).
+- S4: sobre una base sin migrar, sale con código 1 y "MIGRATIONS_PENDING", sin traza de Prisma.
+- `api/src` no importa la semilla.
+
+### Vuelta atrás y DT-2 (código de `main`)
+
+- V3: con gerentes y `DATABASE_ALLOW_NEWER_SCHEMA=true`, Usuarios da 503 y el login del gerente 503. Las públicas, productos y página siguen 200 y el editor entra. Es lo documentado.
+- V4: procedimiento de `despliegue.md` §6 ejecutado tal cual. Solo se cambió la conexión (`docker exec` en lugar de `$C`) y el nombre de la base.
+  - Paso 1: lista al gerente y `tee` crea el archivo.
+  - Paso 2: `gerentes_restantes = 0`. El gerente pasa a editor con `session_version` 0 → 1, y se borra el negocio que se le había puesto a mano. El editor no cambia.
+  - Después, la `api` de `main` da 200 en Usuarios; la sesión anterior del exgerente queda cerrada (303 al acceso) y el exgerente entra sin negocios.
+- V1: sin gerentes y sin la bandera, la `api` de `main` sale con código 1 y `DATABASE_NEWER_THAN_CODE`. V2: con la bandera, públicas, productos, página y bot 200.
+- V5: la `api` del worktree arranca sin la bandera; el admin devuelve el rol Gerente desde Usuarios (303) y el gerente vuelve al inventario con los datos intactos.
+
+### Mutaciones
+
+| Mutación | Resultado |
+| --- | --- |
+| X1 sin comprobación de rol | Detectada (`inventory.test.ts`) |
+| X2 enlace al editor | Detectada (`inventory.test.ts`, `bot-access.test.ts`) |
+| X3 sin reenviar CSRF | Detectada (6 casos y la e2e) |
+| X4a baja sin confirmación (`variants` siempre) | **Sobrevive** → DEF-003 |
+| X4b confirmación sin la lista de variantes | **Sobrevive** → DEF-004 |
+| X5a siempre "guardar encima" | Detectada (`inventory.test.ts` y la e2e) |
+| X5b sin pintar el 409 | Detectada (`inventory.test.ts` y la e2e) |
+| X6a semilla en producción | Detectada (`inventory-catalog.test.ts`) |
+| X6b semilla contra host remoto | Detectada (`inventory-catalog.test.ts`) |
+| X7 sin redirección del gerente | Detectada (`inventory.test.ts`) |
+
+### Defectos encontrados
+
+### DEF-003
+
+- Severidad: `MAJOR` (de cobertura; el código es correcto).
+- Criterio de aceptación afectado: RF-5 (inactivar el padre con confirmación de sus variantes), CA-7.
+- Descripción: ninguna prueba detecta que el admin envíe `variants: "deactivate"` sin que el usuario lo haya confirmado. Con esa mutación pasan las 8 pruebas.
+- Pasos para reproducir:
+  1. Abrir `/inventario/articulos/<padre>/desactivar` con 0 variantes activas: el formulario no lleva `variants`.
+  2. Reactivar una variante.
+  3. Enviar el formulario viejo.
+- Resultado esperado: 409 y una nueva confirmación que lista la variante. Es lo que hace el código actual: "El artículo tiene 1 variante activa: confirma que también se inactivan."
+- Resultado actual con X4a: 303 `?ok=deactivated`, y la variante se inactiva sin haberse mostrado (comprobado contra la `api` real).
+- Evidencia: X4a sobrevive; sonda de carrera sobre los artículos 21 y 22.
+- Impacto: una regresión futura inactivaría variantes sin confirmación y nadie lo notaría.
+- Recomendación: un caso en el que un POST de baja sin el campo de confirmación, sobre un padre con variantes activas, no inactive nada y vuelva a pedir la confirmación.
+
+### DEF-004
+
+- Severidad: `MINOR` (de cobertura).
+- Criterio de aceptación afectado: RF-5.
+- Descripción: la confirmación de baja puede dejar de listar los nombres de las variantes sin que ninguna prueba falle (X4b). La prueba solo comprueba "Tiene 1 variante activa: se inactivarán también.", y ese texto sigue en la página.
+- Pasos para reproducir: quitar `{{{ variants }}}` de `inventory-item-deactivate.html` y ejecutar `inventory.test.ts`: 8/8 en verde.
+- Resultado esperado: alguna prueba falla si la confirmación deja de nombrar las variantes que se inactivarán.
+- Resultado actual: no falla ninguna.
+- Evidencia: X4b sobrevive.
+- Impacto: bajo; el aviso con el número de variantes se mantiene.
+- Recomendación: comprobar en el mismo caso el nombre de la variante en la confirmación.
+
+### DEF-005
+
+- Severidad: `MINOR` (documental).
+- Criterio de aceptación afectado: ninguno (documentación de la épica).
+- Descripción: `restaurante/docs/arquitectura.md` §8, paso 5, línea 380, dice "T4 y T5 (REQ-F-050 a REQ-F-053, al refinarse)". Según el ticket (PV-9) y `git.md`, REQ-F-050 a REQ-F-053 son T2 a T5.
+- Pasos para reproducir: leer esa línea de §8, paso 5 y compararla con PV-9 del ticket.
+- Resultado esperado: que la documentación asigne REQ-F-050 a REQ-F-053 a T2 a T5.
+- Resultado actual: los asigna solo a T4 y T5.
+- Evidencia: `arquitectura.md`, línea 380.
+- Impacto: confusión sobre la numeración de los tickets.
+- Recomendación: atribuir los cuatro identificadores a T2 a T5.
+
+### Regresión
+
+Sin regresión. CA-14 en PASS; las mismas pruebas de admin y editor pasan con la `api` de `main` (V2).
+
+### Responsive
+
+- Sin desborde horizontal en ninguna página a 360 y 1440 px (`scrollWidth − clientWidth = 0`). La tabla de equivalencias cabe a 360 px.
+- Cabecera, frente a AUD-006:
+  - Admin: 273 px a 360 y 375 px en el inventario y en los negocios, y 217 px en Usuarios. Quitar el enlace "Inventario" no cambia nada (273 → 273, 217 → 217): el enlace no añade fila. Los 273 px en el inventario se deben a la subnavegación "Artículos | Categorías", igual que la de un negocio.
+  - Gerente: 181 px en el inventario (125 px de cabecera más la subnavegación) y 125 px en Mi cuenta.
+  - No empeora lo conocido. Queda anotado (respuesta 2).
+
+### Accesibilidad
+
+- Un `h1` por página y sin saltos de nivel.
+- Landmarks `header`, `main` y `nav` con nombres distintos: "Secciones", "Secciones de Inventario" y "Páginas de resultados".
+- `aria-current`: "Inventario" lleva `page`, y "Artículos" o "Categorías" `true`.
+- Todos los campos tienen etiqueta y ningún `aria-describedby` está roto.
+- En el 422, el resumen (`role="alert"`, `tabindex="-1"`) recibe el foco y sus enlaces van a cada campo. Los errores llevan texto e icono ⚠.
+- Teclado: el skip link es la primera parada y Enter lleva a `main#contenido`. El orden de foco es lógico (cabecera → subnavegación → acciones → filtros) y todas las paradas tienen foco visible.
+- Contraste WCAG calculado sobre todo el texto visible: 0 fallos.
+- Objetivos táctiles:
+  - Los controles miden ≥ 42 px de alto y los botones ≥ 44 px.
+  - Los nombres de artículo en las tarjetas, "Volver a artículos" y los enlaces del resumen de errores (componente reutilizado) miden 17 px de alto. Cumplen 2.5.8 por la excepción de espaciado: cada uno es el único objetivo de su fila o tarjeta. Quedan por debajo de los 44 px recomendados.
+- Sin JavaScript (Chrome con scripts desactivados, 360 px): alta 303 a la ficha, conversión "3 costal = 150 kg" y filtro por GET, como gerente y como administrador.
+
+### UX/UI
+
+Sistema visual del admin sin componentes nuevos; capturas a 360 y 1440 px revisadas (sin datos personales, ya borradas). Observaciones, sin defecto:
+
+1. El 409 muestra el usuario ("qaadmin"), mientras que el historial muestra el nombre visible ("QA qaadmin").
+2. El resumen del 422 ordena los errores Tipo → Categoría → Nombre → Unidad, y el formulario empieza por Nombre.
+3. La semilla imprime ".env not found. Continuing without it." (aviso de Node por `--env-file-if-exists`, igual que en `admin:recover`).
+
+### Performance
+
+Sin JS nuevo ni recursos nuevos. En consola solo aparecen los 404 y 422 provocados a propósito.
+
+### SEO
+
+No aplica: es el admin, con `X-Robots-Tag: noindex, nofollow`.
+
+### Pendientes de revisión manual
+
+- `verify-backup.sh --drill` tras desplegar la épica (usuario).
+- Vuelta atrás con la imagen `production` en el PR de la épica hacia `main`.
+
+### Limpieza
+
+- Bases `restaurante_test_qa049c` y `_rest` borradas (la `_vacia`, al terminar S4). `docker compose -p restaurante-qa-049c down -v`: sin contenedor, volumen ni redes de QA.
+- `restaurante-mysql-dev-1` sigue apagado, como estaba.
+- Sin procesos `server.ts`, vitest ni Chrome; puertos 3000–3009, 3307 y 9222 libres.
+- Scratchpad sin la copia de mutaciones, el perfil de Chrome, capturas, env, logs ni volcados.
+- `git worktree list` igual; `git status` del worktree igual (52 entradas); árbol principal en `main` sin cambios.
+
+### Resultado final
+
+NEEDS_USER_DECISION
+
+### Ronda 2
+
+Revalidación tras la corrección de DEF-003, DEF-004 y DEF-005 por senior-fullstack (decisión del usuario: "Si"). Sin Docker ni MySQL.
+
+- **Qué cambió.** Archivos modificados después de la ronda 1 (`find -newermt`, fuera de `node_modules`):
+  - `inventory-manager/tests/integration/inventory.test.ts`: un caso nuevo.
+  - `docs/arquitectura.md`: una línea.
+  - el ticket.
+  - `src/controllers/inventory.ts` y `src/views/pages/inventory-item-deactivate.html`: cambió la fecha de modificación (07:25), pero no el contenido de producción. Comprobado frente a la ronda 1: 532 líneas, la línea 434 (`variants` solo si el formulario lo trae) idéntica, y la plantilla con `{{{ variants }}}`. Son restos de mutaciones aplicadas y revertidas en el sitio.
+  - `api`, `packages` y `landing-pages`: sin cambios nuevos (`git diff --name-only` igual a la ronda 1; `git status` con 52 entradas).
+- **DEF-003: corregido.** En una copia APFS del árbol en el scratchpad, X4a (`variants: 'deactivate'` siempre) hace fallar `inventory.test.ts` (1 de 9, el caso nuevo).
+- **DEF-004: corregido.** X4b (sin `{{{ variants }}}`) hace fallar el mismo caso. Sin mutación pasan las 9 pruebas.
+- **DEF-005: corregido.** La línea 381 de `arquitectura.md` dice "T4 y T5; T2 a T5 son REQ-F-050 a REQ-F-053, al refinarse". `despliegue.md` y `README.md` no mencionan REQ-F-050 a REQ-F-053.
+- **Comprobaciones.**
+  - `npm run typecheck` y `npm run lint`: 0.
+  - `inventory-manager`: 17 archivos y 287 pruebas en verde.
+  - `inventory.test.ts` en 3 ejecuciones: 1.21, 1.28 y 1.21 s.
+  - El caso nuevo es funcional (RF-5) y no duplica otro: cumple `testing.md`.
+- **No repetido, porque no cambió lo que comprueba:**
+  - suites de `api` y `landing-pages`, y sondas HTTP contra MySQL (sin cambios de código de producción);
+  - CA en pantalla, accesibilidad y responsive (la vista no cambió);
+  - semilla, vuelta atrás, DT-2 y respaldo (sin cambios);
+  - el resto de mutaciones (su código no cambió).
+- **Limpieza.**
+  - Copia del árbol del scratchpad borrada; sin procesos vitest ni `server.ts`.
+  - `git worktree list` sin worktrees nuevos y `git status` del worktree con 52 entradas.
+  - No se usó Docker.
+
+Resultado final de la ronda 2: QA_APPROVED
+
 ## Plan técnico de T2 a T5 (aprobado 2026-11-19)
 
 Copia íntegra del plan técnico completo de T2 a T5 de senior-fullstack, aprobado por el usuario ("apruebo las recomedaciones").
@@ -1878,6 +2315,15 @@ Preguntas abiertas imprescindibles (con recomendación):
 > • Reporte fiscal y de facturación: Resume las facturas emitidas a clientes, facturas recibidas de proveedores y el cálculo de impuestos (IVA, ISR). (Solo crea la estructura, queda pendiente, aun no estamos dados de alta ante el SAT México)
 
 ## Historial de cambios
+
+- 2026-11-19, senior-fullstack (T4, PR 3): `.claude/CLAUDE.md` §8 actualizado (inventario en `api` e `inventory-manager`, `core` con `inventory`, roles del admin). Commit del PR 3 en `feature/REQ-F-049-pantallas` hacia `epic/inventario`. T1 queda completo con este PR.
+### PR 3 de T1 (implementación)
+
+- 2026-11-19, senior-qa (Q2, ronda 2): DEF-003, DEF-004 y DEF-005 corregidos por senior-fullstack (decisión del usuario: "Si"), con un caso nuevo en `inventory.test.ts` y una línea en `arquitectura.md`, sin cambios de producción. X4a y X4b detectadas; `typecheck` y `lint` en 0; `inventory-manager` con 287 pruebas en verde; el archivo tarda < 1.3 s en 3 ejecuciones. Limpieza comprobada. Estado `QA_APPROVED`.
+- 2026-11-19, senior-fullstack (T3): el usuario aprueba corregir los tres defectos en este PR ("Si"). DEF-003 y DEF-004: caso nuevo en `inventory.test.ts` (X4a y X4b ahora detectadas). DEF-005: `arquitectura.md` §8 atribuye REQ-F-050 a REQ-F-053 a T2 a T5. Estado `NEEDS_IMPLEMENTATION_APPROVAL`.
+- 2026-11-19, senior-qa (Q2, ronda 1): plan aprobado por el usuario ("Si") con las autorizaciones y las cuatro respuestas. CA-1 a CA-17 en PASS; suite, typecheck y lint en verde. DT-2 ejecutado tal cual desde `despliegue.md` §6: funciona. Cabecera sin empeorar AUD-006. Mutaciones: 8 de 10 detectadas; sobreviven X4a (DEF-003, `MAJOR` de cobertura) y X4b (DEF-004, `MINOR`). DEF-005 `MINOR` documental. Limpieza comprobada. Estado `NEEDS_USER_DECISION`.
+- 2026-11-19, senior-qa (Q1): implementación del PR 3 aprobada por el usuario ("Apruebo y autorizo"). QA Action Plan del PR 3 escrito (revisión estática, permisos y flujos contra la `api` y el admin reales sobre MySQL, CA-17 a 360 y 1440 px con teclado y sin JavaScript, semilla, vuelta atrás y DT-2, documentación, mutaciones, regresión y limpieza). Sin ejecutar nada. Estado `NEEDS_QA_PLAN_APPROVAL`.
+- 2026-11-19, senior-fullstack (T2): PR 3 de T1 implementado en `feature/REQ-F-049-pantallas` (pantallas de inventario, cabecera e inicio del gerente, doble con el rol, semilla `npm run inventory:seed-dev`, cadena de punta a punta y documentación), sin commit; estado `NEEDS_IMPLEMENTATION_APPROVAL`.
 
 ### QA del PR 2 (Q1)
 

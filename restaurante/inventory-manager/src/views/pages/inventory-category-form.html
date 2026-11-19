@@ -1,0 +1,12 @@
+<p><a class="font-semibold text-maiz underline underline-offset-4" href="/inventario/categorias">Volver a categorías</a></p>
+      <h1 class="mt-4 font-headline text-3xl font-black tracking-tight break-words uppercase">{{ title }}</h1>
+      {{{ notices }}}
+      <form id="inventory-category-form" class="inventory-form mt-6 space-y-6" method="post" action="{{ action }}" novalidate data-submit-guard>
+        <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+        <div class="grid gap-4 rounded-2xl border border-rim bg-surface p-4 md:grid-cols-2 md:p-6">{{{ field }}}
+        </div>
+        <div class="inventory-form__actions flex flex-wrap items-center gap-3">
+          <button class="button button--primary inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-(--accent) px-5 py-2.5 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-(--accent-strong) active:scale-[0.98] aria-busy:opacity-70" type="submit" data-busy-text="Guardando…">Guardar</button>
+          <a class="button button--ghost inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg px-3 py-2 font-label text-sm font-bold tracking-wider text-maiz uppercase hover:bg-surface-high" href="/inventario/categorias">Cancelar</a>
+        </div>
+      </form>

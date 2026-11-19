@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import {
   IDEMPOTENCY_KEY_PATTERN,
+  INVENTORY_ROLES,
   emptyProductFormValues,
   formErrors,
   parseProductForm,
@@ -19,6 +20,7 @@ import type { InventoryConfig } from '../config.ts';
 import { clearSessionId, readSessionId, sanitizeNext, writeSessionId } from '../session.ts';
 import { SMALL_BODY_LIMIT, createControllerKit, type Ctx, type Session } from './common.ts';
 import { BUSINESS_NAMES, NEW_TITLES, displayDate, productPath, productsPath, type PageContext, type Views } from '../views/index.ts';
+import { ITEMS_PATH } from '../views/inventory.ts';
 
 /**
  * Pantallas del admin nuevo (REQ-F-039, RF-1 a RF-11). El navegador solo habla con este servidor;
@@ -216,6 +218,8 @@ export function createAdminController({
       if (!auth) return;
       const [only] = auth.user.businesses;
       if (auth.user.businesses.length === 1 && only) return seeOther(ctx, productsPath(only));
+      // REQ-F-049: el gerente no tiene negocios; su inicio es el inventario (no "Elige un negocio" vacío).
+      if (auth.user.businesses.length === 0 && INVENTORY_ROLES.includes(auth.user.role)) return seeOther(ctx, ITEMS_PATH);
       send(ctx, 200, views.businesses(auth));
     },
 

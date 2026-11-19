@@ -1,0 +1,20 @@
+<div class="inventory-page__head">
+        <p class="font-label text-xs font-bold tracking-widest text-masa uppercase">Inventario</p>
+        <h1 class="font-headline text-3xl font-black tracking-tight uppercase">Categorías</h1>
+      </div>
+      {{{ notices }}}
+      <form id="inventory-category-form" class="inventory-form mt-6 rounded-2xl border border-rim bg-surface p-4 md:p-6" method="post" action="/inventario/categorias" novalidate data-submit-guard aria-labelledby="new-category-title">
+        <h2 id="new-category-title" class="font-headline text-lg font-bold">Nueva categoría</h2>
+        <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
+        <input type="hidden" name="requestId" value="{{ requestId }}" />
+        <div class="mt-3 grid gap-4 md:grid-cols-2">{{{ field }}}
+        </div>
+        <div class="mt-4">
+          <button class="button button--primary inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-(--accent) px-5 py-2.5 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-(--accent-strong) active:scale-[0.98] aria-busy:opacity-70" type="submit" data-busy-text="Guardando…">Crear categoría</button>
+        </div>
+      </form>
+      <section class="inventory-list mt-8" aria-labelledby="category-list-title">
+        <h2 id="category-list-title" class="font-headline text-xl font-extrabold tracking-tight uppercase">Lista de categorías</h2>
+        <p class="mt-1 text-sm text-masa">No se puede inactivar una categoría que usan artículos activos.</p>
+        {{{ list }}}
+      </section>

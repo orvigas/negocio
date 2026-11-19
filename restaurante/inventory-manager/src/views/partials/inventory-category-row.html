@@ -1,0 +1,10 @@
+
+          <li class="inventory-category flex flex-col gap-3 rounded-lg border border-rim bg-surface p-4 md:flex-row md:items-center md:justify-between">
+            <div class="min-w-0">
+              <p class="font-bold break-words">{{ name }}</p>
+              <p class="mt-1 text-sm text-masa">{{ usage }} · Estado: <span class="inventory-category__state inventory-category__state--{{ stateModifier }} font-semibold {{ stateClass }}">{{ state }}</span></p>
+            </div>
+            <div class="inventory-category__actions flex flex-wrap items-center gap-2">
+              <a class="button button--secondary inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border-[1.5px] border-adobo px-4 py-2 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-adobo/15" href="{{ renameHref }}">Renombrar<span class="sr-only">: {{ name }}</span></a>{{{ status }}}
+            </div>
+          </li>

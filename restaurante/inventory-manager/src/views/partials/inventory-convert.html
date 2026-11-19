@@ -1,0 +1,6 @@
+<form class="inventory-convert mt-6" method="get" action="{{ action }}#conversion" aria-labelledby="convert-title">
+          <h3 id="convert-title" class="font-headline text-base font-bold">Convertir una cantidad</h3>
+          <div class="mt-3 grid gap-4 sm:grid-cols-2">{{{ fields }}}
+          </div>
+          <div class="mt-4"><button class="button button--secondary inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border-[1.5px] border-adobo px-4 py-2 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-adobo/15" type="submit">Convertir</button></div>{{{ result }}}
+        </form>

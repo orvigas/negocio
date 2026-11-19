@@ -3,6 +3,7 @@ import type { Context } from 'koa';
 import { CSRF_HEADER } from '@restaurante/contracts';
 import {
   canEditBusiness,
+  canManageInventory,
   isAdmin,
   resolveSession,
   type SessionInfo,
@@ -43,6 +44,8 @@ export interface AdminAccess {
    * bot (REQ-F-043): igual, con su propio mensaje de 403.
    */
   adminOnly(ctx: Context, options: { write: boolean; forbiddenMessage?: string }): Promise<AdminAuth>;
+  /** Inventario (REQ-F-049, RF-9): sesión (401) -> rol administrador o gerente (403) -> en escrituras, el CSRF (403). */
+  inventory(ctx: Context, options: { write: boolean }): Promise<AdminAuth>;
 }
 
 const BEARER = /^Bearer ([A-Za-z0-9_-]{1,128})$/;
@@ -96,6 +99,16 @@ export function createAdminAccess({
       if (!isAdmin(auth.user)) {
         logger.warn('admin_forbidden', { path: ctx.path, method: ctx.method, userId: auth.user.id });
         throw new ApiHttpError(403, 'FORBIDDEN_ROLE', forbiddenMessage);
+      }
+      if (write) assertCsrf(ctx, auth);
+      return auth;
+    },
+
+    async inventory(ctx, { write }) {
+      const auth = await authenticate(ctx);
+      if (!canManageInventory(auth.user)) {
+        logger.warn('admin_forbidden', { path: ctx.path, method: ctx.method, userId: auth.user.id });
+        throw new ApiHttpError(403, 'FORBIDDEN_ROLE', 'No tienes permiso para gestionar el inventario.');
       }
       if (write) assertCsrf(ctx, auth);
       return auth;

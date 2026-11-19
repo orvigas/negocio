@@ -21,10 +21,11 @@ datasource db {
   provider = "mysql"
 }
 
-/// Rol de un usuario de /admin (D-2).
+/// Rol de un usuario de /admin (D-2). `gerente` (REQ-F-049): solo el inventario; va al final del ENUM.
 enum Role {
   admin
   editor
+  gerente
 }
 
 /// Negocios (mismos ids que src/config/businesses.ts).

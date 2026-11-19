@@ -11,6 +11,7 @@ import {
 } from '@restaurante/core/bot-control';
 import { createMemoryPageStore, createPageRepository, createProductRepository, type MemoryPageStore, type MemoryProductStore, type ProductRepository } from '@restaurante/core/catalog';
 import type { QuoteCatalogSource } from '@restaurante/core/cotizador';
+import { createInventoryRepository, createMemoryInventoryStore, type InventoryRepository, type MemoryInventoryStore } from '@restaurante/core/inventory';
 import {
   LastAdminError,
   SCRYPT_DEFAULTS,
@@ -53,6 +54,8 @@ export interface TestUser {
 
 export const ADMIN: TestUser = { username: 'ana', displayName: 'Ana Admin', role: 'admin', businesses: [] };
 export const MOLOTES_EDITOR: TestUser = { username: 'eli', displayName: 'Eli Molotes', role: 'editor', businesses: ['molotes'] };
+/** Gerente (REQ-F-049): solo el inventario, sin negocios. */
+export const MANAGER: TestUser = { username: 'gema', displayName: 'Gema Gerente', role: 'gerente', businesses: [] };
 
 /** Entrada de auditoría del doble (misma forma que la de `user_audit`, sin hashes). */
 export interface FakeAudit {
@@ -119,7 +122,7 @@ export function createFakeUsers(records: UserRecord[], hashes: Map<number, strin
     async create({ passwordHash, ...data }, actor) {
       assertUnique(data.username);
       const at = new Date('2026-10-26T18:00:00Z');
-      const user: UserRecord = { id: nextId++, ...data, businesses: data.role === 'admin' ? [] : [...data.businesses], active: true, sessionVersion: 1, createdAt: at, updatedAt: at, lastLoginAt: null };
+      const user: UserRecord = { id: nextId++, ...data, businesses: data.role === 'editor' ? [...data.businesses] : [], active: true, sessionVersion: 1, createdAt: at, updatedAt: at, lastLoginAt: null };
       commit(user);
       hashes.set(user.id, passwordHash);
       audit.push({ action: 'create', actorId: actorId(actor), targetId: user.id });
@@ -128,7 +131,7 @@ export function createFakeUsers(records: UserRecord[], hashes: Map<number, strin
     async update(id, data, actor) {
       const before = load(id);
       assertUnique(data.username, id);
-      const businesses = data.role === 'admin' ? [] : [...data.businesses];
+      const businesses = data.role === 'editor' ? [...data.businesses] : [];
       const changes: Record<string, { from: unknown; to: unknown }> = {};
       if (before.username !== data.username) changes.username = { from: before.username, to: data.username };
       if (before.displayName !== data.displayName) changes.displayName = { from: before.displayName, to: data.displayName };
@@ -205,6 +208,9 @@ export interface AdminHarness {
   ids: Record<string, number>;
   botControl: BotControl;
   botStore: BotControlStore;
+  /** Catálogo de inventario (REQ-F-049) sobre el store en memoria. */
+  inventory: InventoryRepository;
+  inventoryStore: MemoryInventoryStore;
 }
 
 /** Clave y personal del control del bot de las pruebas (REQ-F-043). */
@@ -264,6 +270,8 @@ export async function startAdmin({
     await fileQuotes.init();
     quoteSource = fileQuotes;
   }
+  const inventoryStore = createMemoryInventoryStore();
+  const inventory = createInventoryRepository({ store: inventoryStore, now });
   const admin = createAdminRoutes({
     users,
     products,
@@ -272,13 +280,14 @@ export async function startAdmin({
     botControl,
     botProvider: provider,
     quotes: quoteSource,
+    inventory,
     timeZone: 'America/Mexico_City',
     hashParams: TEST_HASH_PARAMS,
     now,
     logger,
   });
   const { url } = await listenLocal(createApiApp({ store, pages, admin, logger }));
-  return { url, store, pageStore, products, calls, change, audit, hashes, failNext, notified, notifier, logger, clock, botControl, botStore, ids: Object.fromEntries(records.map((user) => [user.username, user.id])) };
+  return { url, store, pageStore, products, calls, change, audit, hashes, failNext, notified, notifier, logger, clock, botControl, botStore, inventory, inventoryStore, ids: Object.fromEntries(records.map((user) => [user.username, user.id])) };
 }
 
 export interface Session {

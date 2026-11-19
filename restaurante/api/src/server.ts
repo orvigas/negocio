@@ -2,9 +2,11 @@ import { once } from 'node:events';
 
 import { createBotControl } from '@restaurante/core/bot-control';
 import { createPageRepository, createProductRepository } from '@restaurante/core/catalog';
+import { createInventoryRepository } from '@restaurante/core/inventory';
 import { errorProp } from '@restaurante/core/shared';
 import { createPrismaClient } from '@restaurante/db/client';
 import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
+import { createPrismaInventoryStore } from '@restaurante/db/prisma-inventory-store';
 import { createPrismaPageStore } from '@restaurante/db/prisma-page-store';
 import { createPrismaProductStore } from '@restaurante/db/prisma-product-store';
 import { createUserRepository } from '@restaurante/db/user-repository';
@@ -106,6 +108,8 @@ const pages = createPageRepository({ store: pageStore, timeZone: config.timezone
 // `quote_catalog_invalid` y solo el cotizador queda "no disponible" (503): nunca impide arrancar (P-2).
 const quotes = createFileQuoteCatalogSource({ logger });
 await quotes.init();
+// Catálogo de inventario (REQ-F-049): de MySQL, sin caché ni semilla (una instalación nueva queda vacía).
+const inventory = createInventoryRepository({ store: createPrismaInventoryStore({ prisma }) });
 const admin = createAdminRoutes({
   users,
   products,
@@ -114,6 +118,7 @@ const admin = createAdminRoutes({
   botControl,
   botProvider: bot?.chatBot.provider ?? null,
   quotes,
+  inventory,
   timeZone: config.timezone,
   logger,
 });

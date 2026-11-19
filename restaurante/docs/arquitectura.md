@@ -110,7 +110,7 @@ restaurante/
 │   │   ├── shared/          (ids de negocio, logger, errores comunes; desde el paso 2)
 │   │   ├── catalog/         (productos y menú visible)
 │   │   ├── schedule/        (horarios y aviso del día)
-│   │   ├── inventory/       (existencias, movimientos y mermas)   ← nuevo
+│   │   ├── inventory/       (catálogo de artículos, unidades y variantes; REQ-F-049, en epic/inventario)
 │   │   ├── sales/           (pedidos, ventas y cobros)            ← nuevo
 │   │   ├── customers/       (CRM: clientes e historial)           ← nuevo
 │   │   ├── identity/        (usuarios, roles y permisos por negocio)
@@ -124,15 +124,19 @@ restaurante/
 └── inventory-manager/       ← admin nuevo: Koa con SSR, Tailwind y Vanilla JS (decisión B, REQ-F-039)
 ```
 
-Cada módulo de `core` sigue la misma forma:
+Cada módulo de `core` sigue la misma forma (ejemplo real: el catálogo de inventario de REQ-F-049, T1):
 
 ```text
 packages/core/inventory/
-├── stock.ts                 ← tipo de dominio y reglas (invariantes, validación)
-├── stock-service.ts         ← casos de uso: ajustarExistencias, registrarMerma…
-├── stock-repository.ts      ← interfaz que implementa packages/db
+├── item-schema.ts, category-schema.ts, units.ts, decimal.ts ← reglas (validación, conversiones, punto fijo)
+├── inventory-repository.ts  ← casos de uso: alta, edición con conflicto, baja, variantes, categorías…
+├── inventory-store.ts       ← interfaz que implementa packages/db (prisma-inventory-store.ts)
+├── memory-inventory-store.ts ← la implementación en memoria para las pruebas
 └── index.ts                 ← lo único que se importa desde fuera del módulo
 ```
+
+Las landings no importan `core/identity`, `core/bot-control` ni `core/inventory` (regla de lint
+`LANDING_ADMIN_PATTERN` de `eslint.config.ts`).
 
 ### Regla de dependencias
 
@@ -263,6 +267,16 @@ página de la API encima (`mergePageData`) y los productos de la API: el HTML no
   ticket 5, en la [sección 8](#8-plan-de-migración)). Desde REQ-F-045 se retiró: una instalación
   nueva la prepara la `api` con la semilla, y los JSON de `DATA_DIR` no los lee ninguna app.
 
+**Inventario (REQ-F-049, T1; en `epic/inventario`).** `/api/v1/admin/inventario/…`: artículos
+(lista con filtros y páginas de 50, alta idempotente, ficha con historial, conversión, edición con
+409 y "guardar encima", inactivar y reactivar) y categorías (lista con su número de artículos
+activos, alta, renombrar, inactivar y reactivar). Solo administradores y gerentes
+(`access.inventory()`: 401 → 403 `FORBIDDEN_ROLE` → CSRF). Las cantidades y los factores viajan como
+texto decimal. `inventory-manager` lo muestra en la sección "Inventario" (`/inventario/articulos` y
+`/inventario/categorias`), con formularios SSR sin JavaScript, y lleva al gerente (rol sin negocios)
+directo a esa sección. La `api` nunca siembra el inventario al arrancar: en desarrollo,
+`npm run inventory:seed-dev` carga datos ficticios.
+
 **El bot de WhatsApp es un cliente más de `core`** (REQ-F-042). Vive dentro de `api` (`api/src/bot/`)
 y su webhook es otra entrada HTTP, en un puerto propio. Cuando exista `sales`, sus pedidos
 confirmados se guardan como ventas en lugar de solo avisar al personal.
@@ -353,6 +367,25 @@ El ticket 2 del paso 4 (REQ-F-040) llegó con el PR #114 (merge `3715486`) y se 
 | 3 | **Crear `api/`** con los endpoints públicos. Las landings pasan a consumirlos y dejan de acceder a la base (REQ-F-038, detalle abajo) | No (mismo HTML) |
 | 4 | **Llevar `/admin`** (productos, usuarios y control del bot) a `/api/v1/admin` y al nuevo `inventory-manager`. El `/admin` actual se retira cuando el nuevo tenga lo mismo | Sí: nueva interfaz de administración |
 | 5 | **Dominios nuevos, un ticket por módulo:** inventario → ventas (incluidos los pedidos del bot) → CRM | Sí |
+
+### Paso 5: épica de inventario (REQ-F-049, en curso)
+
+Decisiones del usuario (REQ-F-049, D-4 y PV-12; plan técnico DT-1 a DT-4):
+
+- **Rama intermedia `epic/inventario`**, creada desde `main` tras el PR 0 (#180, `ci.yml` admite
+  PR hacia ella). Los PR de T1 a T3 van a la épica: el CI los valida sin pruebas de humo y sin
+  publicar ni desplegar. Tras cada cambio a `main`, un PR de `main` hacia la épica (merge commit).
+  La épica llega a `main` con un PR propio cuando T1 a T3 sean utilizables; después, T4 y T5 van
+  directo a `main`, la rama se borra y se quita de `ci.yml`.
+- **Partición:** T1 (REQ-F-049, catálogo de artículos, unidades y variantes), T2 (recetas), T3
+  (compras y existencias), T4 y T5; T2 a T5 son REQ-F-050 a REQ-F-053, al refinarse. Ventas es otra épica.
+- **T1 en tres PR** hacia `epic/inventario`: PR 1 (#181) modelo, migración
+  `inventario_catalogo`, dominio y persistencia; PR 2 (#182) rol Gerente (migración `rol_gerente`),
+  contratos y API de inventario; PR 3 pantallas de `inventory-manager`, redirección del gerente,
+  semilla de desarrollo (`npm run inventory:seed-dev`) y documentación.
+- **Rol Gerente:** gestiona el inventario; no accede a productos, página, usuarios, bot ni
+  cotizador. Antes de una vuelta atrás manual a una imagen anterior a la épica con gerentes
+  creados, se sigue el procedimiento de [Despliegue](despliegue.md) §6.
 
 ### Dónde quedó el código (punto de partida del plan)
 

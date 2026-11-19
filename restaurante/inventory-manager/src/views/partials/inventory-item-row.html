@@ -1,0 +1,16 @@
+
+          <li class="inventory-row rounded-lg border border-rim bg-surface p-4">
+            <p class="inventory-row__name font-bold break-words"><a class="text-crema underline underline-offset-4 hover:text-maiz" href="{{ href }}">{{ name }}</a></p>
+            <dl class="inventory-row__meta mt-2 grid grid-cols-[auto_1fr] gap-x-2 text-sm text-masa">
+              <dt class="font-semibold">Tipo:</dt>
+              <dd>{{ type }}</dd>
+              <dt class="font-semibold">Categoría:</dt>
+              <dd class="break-words">{{ category }}</dd>
+              <dt class="font-semibold">Unidad base:</dt>
+              <dd>{{ baseUnit }}</dd>
+              <dt class="font-semibold">SKU:</dt>
+              <dd class="break-all">{{ sku }}</dd>
+              <dt class="font-semibold">Estado:</dt>
+              <dd class="inventory-row__state inventory-row__state--{{ stateModifier }} font-semibold {{ stateClass }}">{{ state }}</dd>{{{ variants }}}
+            </dl>
+          </li>

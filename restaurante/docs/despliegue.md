@@ -662,6 +662,47 @@ nada. Por eso el volumen **no se borra**. En un VPS nuevo, restaurado desde un r
 (sin `app-data`), no vuelvas a una versión anterior a REQ-F-045: restaura antes un respaldo de
 formato 1 ([11.7](#117-restaurar-runbook)).
 
+### Volver a una versión anterior a la épica de inventario (REQ-F-049) con gerentes
+
+La épica de inventario añade el rol **Gerente** (migración `rol_gerente`). Una `api` anterior a la
+épica no conoce ese valor: al leer un gerente responde 503 (la lista de usuarios falla para el
+administrador y el gerente no puede entrar), y un `inventory-manager` anterior rechaza la lista
+entera. Las landings, el bot, los productos, la página y el acceso de administradores y editores
+siguen funcionando. La vuelta atrás automática del despliegue que trae la épica no lo sufre (todavía
+no hay gerentes), y las de despliegues posteriores van a imágenes que ya conocen el rol. **Solo una
+vuelta atrás a mano a una `api` anterior a la épica, con gerentes ya creados, necesita este paso
+previo** (decisión DT-2 de REQ-F-049):
+
+1. Anota quiénes son los gerentes, para devolverles el rol al volver a avanzar:
+
+   ```sh
+   cd /opt/restaurante
+   C="sudo docker compose -f deploy/compose.prod.yaml --env-file .env --env-file state/release.env"
+   $C exec -T mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" restaurante' <<'SQL' | tee "gerentes-$(date -u +%Y%m%dT%H%M%SZ).txt"
+   SELECT id, username FROM user WHERE role = 'gerente';
+   SQL
+   ```
+
+2. Degrádalos a editor sin negocios (sin acceso a nada) y cierra sus sesiones:
+
+   ```sh
+   $C exec -T mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" restaurante' <<'SQL'
+   DELETE ub FROM user_business ub JOIN user u ON u.id = ub.user_id WHERE u.role = 'gerente';
+   UPDATE user SET role = 'editor', session_version = session_version + 1 WHERE role = 'gerente';
+   SELECT COUNT(*) AS gerentes_restantes FROM user WHERE role = 'gerente';
+   SQL
+   ```
+
+   Debe quedar `gerentes_restantes` en 0.
+
+3. Sigue los pasos de [arriba](#6-volver-a-una-versión-anterior-a-mano), con
+   `DATABASE_ALLOW_NEWER_SCHEMA=true` para la `api` (la base tiene las migraciones de la épica).
+4. Al volver a desplegar la épica (o una versión posterior), un administrador devuelve el rol
+   Gerente a cada usuario anotado desde "Usuarios" del admin.
+
+El inventario (tablas `inventory_*`) se queda en la base: la versión anterior no lo lee ni lo
+toca.
+
 ### Vuelta atrás tras el corte de la página (REQ-F-044)
 
 Histórico: solo aplica a las versiones anteriores a REQ-F-045, que se arrancan con el compose de su
@@ -879,7 +920,9 @@ gzip -dc backups/<archivo>.sql.gz | $C exec -T mysql sh -c 'exec mysql -uroot -p
    La página (REQ-F-044) vuelve con el volcado, incluida su marca `page_import`. Desde REQ-F-045
    nada la reimporta: con un volcado anterior a la importación (antes del 2026-11-16), la pantalla
    "Página" queda "no disponible" y las landings muestran la página de la semilla (RN-4 de
-   REQ-F-045; ver [11.7](#117-restaurar-runbook)).
+   REQ-F-045; ver [11.7](#117-restaurar-runbook)). El inventario (REQ-F-049: `inventory_category`,
+   `inventory_item`, `inventory_item_unit`, `inventory_sku` e `inventory_change`) también vuelve
+   con el volcado; con uno anterior a la épica, el inventario queda vacío.
 3. Comprueba `$C ps` (healthy) y el [paso 8](#8-comprobaciones-después-de-cada-despliegue).
 4. Si el siguiente despliegue desde `main` vuelve a fallar en la migración, corrige la migración
    antes de volver a desplegar.
@@ -935,7 +978,9 @@ REQ-F-019. Objetivo: perder como mucho 24 h de datos (RPO) y recuperar el servic
   está en UTC). Si el VPS estaba apagado a esa hora, se ejecuta al arrancar.
 - **Qué guarda:**
   - un `mysqldump` de `restaurante` hecho con el usuario de solo lectura `restaurante_backup` (con
-    la página desde REQ-F-044: `page_version`, `page_change` y `page_import`);
+    la página desde REQ-F-044: `page_version`, `page_change` y `page_import`; y el inventario
+    desde REQ-F-049: `inventory_category`, `inventory_item`, `inventory_item_unit`, `inventory_sku`
+    e `inventory_change`, sin cambiar los scripts);
   - un manifiesto con los conteos de `user` y `product`, la última migración, las imágenes y el
     commit de `state/release.env`, y las sumas sha256.
 - **Formatos:**
@@ -1195,6 +1240,15 @@ Después, haz las comprobaciones del [paso 8](#8-comprobaciones-después-de-cada
   ejemplo si se arrancó a mano una imagen anterior. Arranca la imagen del respaldo (la que imprime
   `restore.sh`, también en `state/release.env`). `DATABASE_ALLOW_NEWER_SCHEMA=true` solo se usa
   como en la vuelta atrás de `deploy.sh`, nunca en el `.env`.
+- **Inventario (REQ-F-049):** vuelve completo con el volcado (artículos, unidades, categorías e
+  historial). El manifiesto no cuenta sus filas; para comprobarlo tras restaurar:
+
+  ```sh
+  $C exec -T mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" restaurante -e "SELECT (SELECT COUNT(*) FROM inventory_item) AS articulos, (SELECT COUNT(*) FROM inventory_category) AS categorias, (SELECT COUNT(*) FROM inventory_change) AS cambios"'
+  ```
+
+  Compáralo con la misma consulta en producción antes del incidente si la tienes, o revisa en la
+  sección "Inventario" del admin que la lista y el historial de algunos artículos estén.
 - **VPS nuevo:**
   1. Prepara el VPS con los pasos 1.1 a 1.6, instala `deploy/` y la sección 11.5 sin activar el
      timer.

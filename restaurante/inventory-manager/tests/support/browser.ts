@@ -16,6 +16,8 @@ import { recordingLogger } from './logger.ts';
 
 export const ANA: DoubleUser = { username: 'ana', password: 'clave-de-ana-123', user: { id: 1, name: 'Ana Admin', role: 'admin', businesses: ['molotes', 'birria'] } };
 export const ELI: DoubleUser = { username: 'eli', password: 'clave-de-eli-123', user: { id: 2, name: 'Eli Molotes', role: 'editor', businesses: ['molotes'] } };
+/** Gerente (REQ-F-049): sin negocios; solo el inventario. */
+export const GEMA: DoubleUser = { username: 'gema', password: 'clave-de-gema-123', user: { id: 3, name: 'Gema Gerente', role: 'gerente', businesses: [] } };
 
 export interface Harness {
   url: string;
@@ -29,8 +31,9 @@ export async function startInventory({
   env = {},
   apiUrl,
   apiTimeoutMs = 2000,
-}: { products?: Parameters<typeof startApiDouble>[1]; env?: Record<string, string>; apiUrl?: string; apiTimeoutMs?: number } = {}): Promise<Harness> {
-  const api = await startApiDouble([ANA, ELI], products);
+  users = [ANA, ELI],
+}: { products?: Parameters<typeof startApiDouble>[1]; env?: Record<string, string>; apiUrl?: string; apiTimeoutMs?: number; users?: DoubleUser[] } = {}): Promise<Harness> {
+  const api = await startApiDouble(users, products);
   const logger = recordingLogger();
   const config = loadInventoryConfig({ NODE_ENV: 'test', API_INTERNAL_URL: apiUrl ?? api.url, ...env });
   const client = createAdminApiClient({ baseUrl: config.apiInternalUrl, timeoutMs: apiTimeoutMs });

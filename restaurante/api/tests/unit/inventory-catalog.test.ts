@@ -16,6 +16,8 @@ import {
   type CreateItemInput,
 } from '@restaurante/core/inventory';
 
+import { devSeedRefusal, seedInventoryDev } from '../../scripts/support/inventory-dev-seed.ts';
+
 /** Reglas del catálogo de inventario (REQ-F-049, T1) sobre el store en memoria. */
 
 const ANA = { id: 7, name: 'Ana Gerente' };
@@ -307,5 +309,37 @@ describe('categorías (RF-6, CA-13)', () => {
     expect(await fieldsOf(inventory.createCategory({ name: ' BEBIDAS ' }, ANA))).toEqual({ name: 'Ya hay una categoría activa con ese nombre.' });
     await expect(inventory.renameCategory(abarrotes.id, { name: 'Abarrotes secos' }, LUIS)).resolves.toMatchObject({ name: 'Abarrotes secos' });
     expect(await fieldsOf(inventory.renameCategory(abarrotes.id, { name: 'bebidas' }, LUIS))).toEqual({ name: 'Ya hay una categoría activa con ese nombre.' });
+  });
+});
+
+describe('semilla de desarrollo (RF-10, CA-12, PV-5)', () => {
+  it('carga los artículos de RF-10 con sus tipos, unidades y variantes, y una segunda vez no hace nada', async () => {
+    const inventory = createInventoryRepository({ store: createMemoryInventoryStore(), now: () => NOW });
+    expect(await seedInventoryDev(inventory)).toEqual({ created: 18 });
+    const { items } = await inventory.listItems({ status: 'all' });
+    const byName = new Map(items.map((item) => [item.name, item]));
+    expect(byName.get('Masa de maíz')).toMatchObject({ type: 'insumo', baseUnit: 'kg', categoryName: 'Abarrotes' });
+    expect(items.filter((item) => item.type === 'insumo')).toHaveLength(6);
+    expect(items.filter((item) => item.type === 'intermedio').map((item) => item.baseUnit).sort()).toEqual(['L', 'L', 'pza']);
+    expect(items.filter((item) => item.type === 'compuesto').map((item) => item.name).sort()).toEqual(['Molote', 'Quesabirria', 'Taco de birria']);
+    expect(byName.get('Refresco 600 ml')).toMatchObject({ kind: 'parent', type: 'reventa', baseUnit: null, variantCount: 2 });
+    expect(byName.get('Agua fresca')).toMatchObject({ kind: 'parent', variantCount: 2 });
+    const coca = await inventory.getItem(byName.get('Refresco Coca-Cola 600 ml')?.id ?? 0);
+    expect(coca.item).toMatchObject({ kind: 'variant', type: 'reventa', baseUnit: 'pza' });
+    expect(coca.equivalences.map(({ unit, quantity }) => [unit, formatDecimal(quantity)])).toContainEqual(['caja', '24.000']);
+    expect(coca.history[0]).toMatchObject({ action: INVENTORY_ACTIONS.CREATE, actorName: 'Semilla de desarrollo' });
+    const masa = await inventory.getItem(byName.get('Masa de maíz')?.id ?? 0);
+    expect(masa.equivalences.map(({ unit, quantity }) => [unit, formatDecimal(quantity)])).toContainEqual(['bulto', '25.000']);
+
+    expect(await seedInventoryDev(inventory)).toEqual({ created: 0 });
+    expect((await inventory.listItems({ status: 'all' })).page.total).toBe(18);
+  });
+
+  it('se niega a correr en producción o contra una base que no es local', () => {
+    expect(devSeedRefusal({ nodeEnv: 'development', host: '127.0.0.1' })).toBeNull();
+    expect(devSeedRefusal({ nodeEnv: undefined, host: 'mysql-dev' })).toBeNull();
+    expect(devSeedRefusal({ nodeEnv: 'production', host: '127.0.0.1' })).toMatch(/NODE_ENV=production/);
+    expect(devSeedRefusal({ nodeEnv: 'development', host: 'mysql' })).toMatch(/base local/);
+    expect(devSeedRefusal({ nodeEnv: 'development', host: '10.0.0.5' })).toMatch(/base local/);
   });
 });

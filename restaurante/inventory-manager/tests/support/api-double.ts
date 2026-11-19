@@ -13,6 +13,7 @@ import {
 import { readJsonBody } from '@restaurante/web';
 
 import { createBotDouble, handleBot, type BotDouble } from './api-double-bot.ts';
+import { createInventoryDouble, handleInventory, type InventoryDouble } from './api-double-inventory.ts';
 import { createPageDouble, handlePage, type PageDouble } from './api-double-page.ts';
 import { createQuoteDouble, handleQuote, type QuoteDouble } from './api-double-quote.ts';
 import { listenLocal } from './http.ts';
@@ -29,7 +30,7 @@ import { listenLocal } from './http.ts';
  * (D-8) con `meta.ownSessionClosed`, y la sesión nueva al cambiar la propia contraseña.
  *
  * Control del bot (REQ-F-043): `api-double-bot.ts`. Datos de página (REQ-F-044): `api-double-page.ts`.
- * Cotizador (REQ-F-046): `api-double-quote.ts`.
+ * Cotizador (REQ-F-046): `api-double-quote.ts`. Inventario y rol Gerente (REQ-F-049): `api-double-inventory.ts`.
  */
 
 export interface DoubleUser {
@@ -135,6 +136,8 @@ export interface ApiDouble {
   page: PageDouble;
   /** Cotizador de taquizas (REQ-F-046). */
   quote: QuoteDouble;
+  /** Inventario (REQ-F-049). */
+  inventory: InventoryDouble;
   /** Cambia un producto "desde otra sesión" (para el 409). */
   touch(id: number, by: string): void;
 }
@@ -148,7 +151,7 @@ export async function startApiDouble(initialUsers: DoubleUser[], products: Admin
     username,
     displayName: user.name,
     role: user.role,
-    businesses: user.role === 'admin' ? [] : [...user.businesses],
+    businesses: user.role === 'editor' ? [...user.businesses] : [],
     active: true,
     lastLoginAt: null,
     createdAt: '2026-10-28T10:00:00-06:00',
@@ -166,6 +169,7 @@ export async function startApiDouble(initialUsers: DoubleUser[], products: Admin
     bot: createBotDouble(),
     page: createPageDouble(),
     quote: createQuoteDouble(),
+    inventory: createInventoryDouble(),
     touch(id, by) {
       const found = state.products.find((candidate) => candidate.id === id);
       if (found) Object.assign(found, { version: found.version + 1, updatedAt: '2026-10-28T12:30:00-06:00', updatedBy: { id: 9, name: by } });
@@ -232,6 +236,8 @@ export async function startApiDouble(initialUsers: DoubleUser[], products: Admin
       if (user.role !== 'admin') return fail(403, 'FORBIDDEN_ROLE', 'No tienes permiso para gestionar el bot.');
       return handleBot(ctx, state.bot, user, path.slice('/bot'.length), record);
     }
+
+    if (path === '/inventario' || path.startsWith('/inventario/')) return handleInventory(ctx, state.inventory, user, path.slice('/inventario'.length), record);
 
     const quoteMatch = /^\/([^/]+)\/cotizador(\/calculos)?$/.exec(path);
     if (quoteMatch) {
@@ -326,6 +332,11 @@ export async function startApiDouble(initialUsers: DoubleUser[], products: Admin
   const { url } = await listenLocal(app);
   return Object.assign(state, { url });
 
+  /** Rol del formulario (REQ-F-049: gerente, sin negocios; los negocios solo son del editor). */
+  function roleOf(value: unknown): ManagedUser['role'] {
+    return value === 'admin' || value === 'gerente' ? value : 'editor';
+  }
+
   type Fail = (status: number, code: string, message: string, more?: Record<string, unknown>) => void;
   type Ctx = Parameters<Parameters<typeof app.use>[0]>[0];
 
@@ -352,7 +363,7 @@ export async function startApiDouble(initialUsers: DoubleUser[], products: Admin
     const entry = users.find((candidate) => candidate.user.id === target.id);
     if (!entry) return;
     entry.username = target.username;
-    entry.user = { id: target.id, name: target.displayName, role: target.role, businesses: target.role === 'admin' ? ['molotes', 'birria'] : [...target.businesses] };
+    entry.user = { id: target.id, name: target.displayName, role: target.role, businesses: target.role === 'admin' ? ['molotes', 'birria'] : target.role === 'gerente' ? [] : [...target.businesses] };
   }
 
   function respond(status: number, body: unknown): void {
@@ -368,13 +379,13 @@ export async function startApiDouble(initialUsers: DoubleUser[], products: Admin
       if (username === '') return invalid(fail, { username: 'Escribe el usuario de acceso.' });
       if (state.managed.some((entry) => entry.username.toLowerCase() === username.toLowerCase())) return invalid(fail, { username: 'Ya existe un usuario con ese nombre de acceso (sin distinguir mayúsculas).' });
       if (record.password !== record.passwordConfirmation) return invalid(fail, { passwordConfirmation: 'Las contraseñas no coinciden.' });
-      const role = record.role === 'admin' ? 'admin' : 'editor';
+      const role = roleOf(record.role);
       const created: ManagedUser = {
         id: ++sequence,
         username,
         displayName: (typeof record.displayName === 'string' ? record.displayName : ''),
         role,
-        businesses: role === 'admin' ? [] : ((record.businesses ?? []) as PublicBusinessId[]),
+        businesses: role === 'editor' ? ((record.businesses ?? []) as PublicBusinessId[]) : [],
         active: true,
         lastLoginAt: null,
         createdAt: '2026-10-28T11:00:00-06:00',
@@ -382,7 +393,7 @@ export async function startApiDouble(initialUsers: DoubleUser[], products: Admin
       };
       state.managed.push(created);
       state.passwords.set(created.id, String(record.password));
-      users.push({ username, password: String(record.password), user: { id: created.id, name: created.displayName, role, businesses: role === 'admin' ? ['molotes', 'birria'] : created.businesses } });
+      users.push({ username, password: String(record.password), user: { id: created.id, name: created.displayName, role, businesses: role === 'admin' ? ['molotes', 'birria'] : [...created.businesses] } });
       return respond(201, { user: created });
     }
     const target = /^[1-9]\d{0,9}$/.test(rawId) ? state.managed.find((entry) => entry.id === Number(rawId)) : undefined;
@@ -403,8 +414,8 @@ export async function startApiDouble(initialUsers: DoubleUser[], products: Admin
     // Edición.
     const username = typeof record.username === 'string' ? record.username.trim() : '';
     if (username === '') return invalid(fail, { username: 'Escribe el usuario de acceso.' });
-    const role = record.role === 'admin' ? 'admin' : 'editor';
-    const businesses = role === 'admin' ? [] : ((record.businesses ?? []) as PublicBusinessId[]);
+    const role = roleOf(record.role);
+    const businesses = role === 'editor' ? ((record.businesses ?? []) as PublicBusinessId[]) : [];
     if (role === 'editor' && businesses.length === 0) return invalid(fail, { businesses: 'Asigna al menos un negocio al editor.' });
     if (!leavesAdmin(target, { role })) return fail(409, 'LAST_ADMIN', 'Debe quedar al menos un administrador activo: no se guardó nada. Crea o reactiva otro administrador antes.');
     const closes = role !== target.role || businesses.join() !== target.businesses.join();

@@ -3,6 +3,7 @@ import Router from '@koa/router';
 import type { AccountController } from './controllers/account.ts';
 import type { AdminController } from './controllers/admin.ts';
 import type { BotController } from './controllers/bot.ts';
+import type { InventoryController } from './controllers/inventory.ts';
 import type { PageController } from './controllers/page.ts';
 import type { QuoteController } from './controllers/quote.ts';
 import type { UsersController } from './controllers/users.ts';
@@ -41,6 +42,18 @@ import type { UsersController } from './controllers/users.ts';
  * POST /bot/bloqueos                           -> alta manual
  * POST /bot/bloqueos/:id/quitar                -> baja
  * POST /bot/topes/:token/bloquear              -> bloquear desde "alcanzaron un tope hoy"
+ *
+ * Inventario (REQ-F-049, T1; solo administradores y gerentes):
+ * GET  /inventario                             -> 303 a /inventario/articulos
+ * GET  /inventario/articulos                   -> lista con filtros (GET) y páginas
+ * GET  /inventario/articulos/nuevo[?clase=padre|?padre=<id>] | POST /inventario/articulos -> alta
+ * GET  /inventario/articulos/:id[?cantidad=&unidad=] -> ficha (y conversión)
+ * GET  /inventario/articulos/:id/editar | POST /inventario/articulos/:id -> edición (409: guardar encima)
+ * GET|POST /inventario/articulos/:id/desactivar -> confirmar e inactivar (con sus variantes)
+ * POST /inventario/articulos/:id/reactivar     -> reactivar
+ * GET  /inventario/categorias | POST /inventario/categorias -> lista y alta
+ * GET  /inventario/categorias/:id/editar | POST /inventario/categorias/:id -> renombrar
+ * POST /inventario/categorias/:id/desactivar | …/reactivar -> estado
  */
 export function createRouter({
   admin: controller,
@@ -49,6 +62,7 @@ export function createRouter({
   bot,
   page,
   quote,
+  inventory,
 }: {
   admin: AdminController;
   users: UsersController;
@@ -56,6 +70,7 @@ export function createRouter({
   bot: BotController;
   page: PageController;
   quote: QuoteController;
+  inventory: InventoryController;
 }): Router {
   const router = new Router();
   router.get('/salud', (ctx) => {
@@ -81,6 +96,22 @@ export function createRouter({
   router.post('/bot/bloqueos', bot.block);
   router.post('/bot/bloqueos/:id/quitar', bot.unblock);
   router.post('/bot/topes/:token/bloquear', bot.blockReached);
+  router.get('/inventario', inventory.root);
+  router.get('/inventario/articulos', inventory.items);
+  router.post('/inventario/articulos', inventory.createItem);
+  router.get('/inventario/articulos/nuevo', inventory.newItem);
+  router.get('/inventario/articulos/:id', inventory.item);
+  router.post('/inventario/articulos/:id', inventory.updateItem);
+  router.get('/inventario/articulos/:id/editar', inventory.editItem);
+  router.get('/inventario/articulos/:id/desactivar', inventory.deactivatePage);
+  router.post('/inventario/articulos/:id/desactivar', inventory.deactivateItem);
+  router.post('/inventario/articulos/:id/reactivar', inventory.reactivateItem);
+  router.get('/inventario/categorias', inventory.categories);
+  router.post('/inventario/categorias', inventory.createCategory);
+  router.get('/inventario/categorias/:id/editar', inventory.editCategory);
+  router.post('/inventario/categorias/:id', inventory.renameCategory);
+  router.post('/inventario/categorias/:id/desactivar', inventory.deactivateCategory);
+  router.post('/inventario/categorias/:id/reactivar', inventory.reactivateCategory);
   router.get('/cuenta', account.page);
   router.post('/cuenta', account.changePassword);
   router.get('/:business/productos', controller.products);

@@ -37,6 +37,7 @@
     "admin:hash-password": "npm run admin:hash-password -w api --",
     "admin:recover": "npm run admin:recover -w api --",
     "bot:chat": "npm run bot:chat -w api --",
+    "inventory:seed-dev": "npm run inventory:seed-dev -w api --",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "audit:deps": "npm run audit:deps -w landing-pages --"

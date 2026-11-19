@@ -2,9 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
-QA del PR 1 de T1 aprobado (ronda 1; ver "QA Report — PR 1"), con DEF-001 (`MINOR`) aceptado sin cambios. Siguiente paso: commit y PR del PR 1 hacia `epic/inventario`.
+PR 1 de T1: Pull Request #181 (https://github.com/orvigas/negocio/pull/181) hacia `epic/inventario`, commit `d459b5a`. QA aprobado (ronda 1), con DEF-001 (`MINOR`) aceptado sin cambios. El CI se comprueba al marcar el PR como listo; el merge lo hace el usuario. Siguiente paso tras el merge: PR 2 de T1.
 
 T1 se implementa en el PR 0 (`ci.yml` y `git.md`, hacia `main`) y después en tres PR hacia `epic/inventario` (DT-1). PR 0 mergeado (#180). PR 1 (modelo, migración, dominio y persistencia) en la rama `feature/REQ-F-049-catalogo-modelo`.
 
@@ -1537,7 +1537,7 @@ Preguntas abiertas imprescindibles (con recomendación):
 
 ### Versión 6 (T4 del PR 1)
 
-- 2026-11-19, senior-fullstack (T4): DT-1 y DT-5 a DT-15 del plan técnico de T2 a T5 y las respuestas recomendadas a P-1 a P-8 aprobadas por el usuario ("apruebo las recomedaciones"); el plan se copia íntegro en "Plan técnico de T2 a T5". DEF-001 aceptado sin cambios. Commit y PR del PR 1 hacia `epic/inventario`.
+- 2026-11-19, senior-fullstack (T4): DT-1 y DT-5 a DT-15 del plan técnico de T2 a T5 y las respuestas recomendadas a P-1 a P-8 aprobadas por el usuario ("apruebo las recomedaciones"); el plan se copia íntegro en "Plan técnico de T2 a T5". DEF-001 aceptado sin cambios. Commit `d459b5a` y PR #181 (https://github.com/orvigas/negocio/pull/181) hacia `epic/inventario`; estado `READY_FOR_MERGE`.
 
 ### QA del PR 1 (Q1)
 

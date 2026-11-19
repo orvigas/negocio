@@ -2,9 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
-PR 3 de T1: commit en `feature/REQ-F-049-pantallas` y PR hacia `epic/inventario` en curso (no se despliega). DEF-003, DEF-004 y DEF-005: corregidos y verificados. `.claude/CLAUDE.md` §8 actualizado (edición autorizada). Con este PR, T1 queda completo: PR 0 #180, PR 1 #181, PR 2 #182 y PR 3. Lo siguiente es T2 (REQ-F-050, recetas), que se refina con el business-analyst; según la hoja de ruta, la épica de ventas va tras T3, y T4 y T5 después.
+PR 3 de T1: commit `784cada` en `feature/REQ-F-049-pantallas` y PR #183 (https://github.com/orvigas/negocio/pull/183) hacia `epic/inventario` (no se despliega). CI del PR: `calidad`, `docker`, `auditoria` y `pruebas` en pass. Siguiente paso: el usuario revisa y hace merge del PR #183. DEF-003, DEF-004 y DEF-005: corregidos y verificados. `.claude/CLAUDE.md` §8 actualizado (edición autorizada). Con este PR, T1 queda completo: PR 0 #180, PR 1 #181, PR 2 #182 y PR 3 #183. Lo siguiente es T2 (REQ-F-050, recetas), que se refina con el business-analyst; según la hoja de ruta, la épica de ventas va tras T3, y T4 y T5 después.
 
 QA del PR 3 aprobado en la ronda 2 (ver "QA Report — PR 3", "Ronda 2"): DEF-003, DEF-004 y DEF-005 corregidos y verificados (X4a y X4b ahora se detectan). Siguiente paso: senior-fullstack hace el commit (con la edición autorizada de `.claude/CLAUDE.md` §8) y el PR hacia `epic/inventario`.
 
@@ -2316,6 +2316,7 @@ Preguntas abiertas imprescindibles (con recomendación):
 
 ## Historial de cambios
 
+- 2026-11-19, senior-fullstack (T4, PR 3): PR #183 hacia `epic/inventario` con el CI en pass. Estado `READY_FOR_MERGE`.
 - 2026-11-19, senior-fullstack (T4, PR 3): `.claude/CLAUDE.md` §8 actualizado (inventario en `api` e `inventory-manager`, `core` con `inventory`, roles del admin). Commit del PR 3 en `feature/REQ-F-049-pantallas` hacia `epic/inventario`. T1 queda completo con este PR.
 ### PR 3 de T1 (implementación)
 

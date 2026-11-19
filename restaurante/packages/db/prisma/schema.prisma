@@ -59,6 +59,7 @@ model User {
   botBlocksRemoved BotBlock[]      @relation("blockRemover")
   botAudits        BotAudit[]
   botControls      BotControl[]
+  inventoryChanges InventoryChange[]
 
   @@map("user")
 }
@@ -362,4 +363,139 @@ model PageImport {
   skippedLines  Int      @map("skipped_lines")
 
   @@map("page_import")
+}
+
+// --- Inventario: catálogo de artículos (REQ-F-049, T1) ----------------------------------------
+// Catálogo aparte del menú (D-2), compartido por los dos negocios (D-3: sin columna de negocio).
+// Factores en DECIMAL exacto (PV-13), nunca FLOAT ni DOUBLE: core los maneja como bigint escalados
+// (packages/core/inventory/decimal.ts) y el store los escribe como texto.
+
+/// Tipo de artículo (RN-1). No cambia después de crearlo.
+enum InventoryItemType {
+  insumo
+  intermedio
+  compuesto
+  reventa
+}
+
+/// simple: artículo normal; parent: agrupa variantes (sin unidad base, SKU ni empaques);
+/// variant: hija de un parent (un solo nivel). No cambia después de crearlo.
+enum InventoryItemKind {
+  simple
+  parent
+  variant
+}
+
+/// Unidades del sistema (RN-3): kg y g (masa), L y ml (volumen), pza (pieza).
+enum InventoryUnit {
+  kg
+  g
+  L
+  ml
+  pza
+}
+
+/// Categoría administrable del catálogo (RF-6). No se borra: se inactiva.
+model InventoryCategory {
+  id            Int             @id @default(autoincrement())
+  name          String          @db.VarChar(60)
+  /// Nombre normalizado (NFC y minúsculas). Hasta 120: toLowerCase() puede alargar el texto.
+  nameKey       String          @map("name_key") @db.VarChar(120)
+  /// = nameKey si está activa; null si no. Único: nombre único entre las activas.
+  activeNameKey String?         @unique @map("active_name_key") @db.VarChar(120)
+  active        Boolean         @default(true)
+  createdAt     DateTime        @map("created_at")
+  updatedAt     DateTime        @map("updated_at")
+  items         InventoryItem[]
+
+  @@map("inventory_category")
+}
+
+/// Artículo del inventario (RF-2 y RF-5). No se borra: se inactiva (RN-2, PV-11).
+model InventoryItem {
+  id            Int                 @id @default(autoincrement())
+  kind          InventoryItemKind
+  type          InventoryItemType
+  parentId      Int?                @map("parent_id")
+  categoryId    Int                 @map("category_id")
+  name          String              @db.VarChar(80)
+  /// Nombre normalizado (NFC y minúsculas). Hasta 160: toLowerCase() puede alargar el texto.
+  nameKey       String              @map("name_key") @db.VarChar(160)
+  /// = nameKey si está activo; null si no (RF-2: único entre los activos, sin distinguir mayúsculas).
+  activeNameKey String?             @unique @map("active_name_key") @db.VarChar(160)
+  description   String?             @db.VarChar(400)
+  /// SKU vigente tal como se escribió (su unicidad la impone inventory_sku; PV-14).
+  sku           String?             @db.VarChar(40)
+  /// null solo en un parent.
+  baseUnit      InventoryUnit?      @map("base_unit")
+  active        Boolean             @default(true)
+  /// Aumenta con cada escritura (control de concurrencia, RF-8).
+  version       Int                 @default(1)
+  createdAt     DateTime            @map("created_at")
+  updatedAt     DateTime            @map("updated_at")
+  /// Autor de la última escritura (aviso de conflicto). Sin clave foránea, como page_version.
+  updatedById   Int?                @map("updated_by_id")
+  updatedByName String?             @map("updated_by_name") @db.VarChar(60)
+  parent        InventoryItem?      @relation("variants", fields: [parentId], references: [id], onDelete: Restrict)
+  variants      InventoryItem[]     @relation("variants")
+  category      InventoryCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  units         InventoryItemUnit[]
+  skus          InventorySku[]
+
+  @@index([active, type])
+  @@index([categoryId, active])
+  @@index([parentId])
+  @@map("inventory_item")
+}
+
+/// Unidad de empaque propia del artículo (RF-3): factor > 0 hacia la unidad base.
+model InventoryItemUnit {
+  id       Int           @id @default(autoincrement())
+  itemId   Int           @map("item_id")
+  /// Orden dentro del artículo (1 = primero).
+  position Int
+  name     String        @db.VarChar(30)
+  /// Nombre normalizado (NFC y minúsculas): único dentro del artículo.
+  nameKey  String        @map("name_key") @db.VarChar(60)
+  /// Unidades base que contiene (la columna admite hasta 9 999 999 999.999; core, hasta 1 000 000).
+  factor   Decimal       @db.Decimal(13, 3)
+  item     InventoryItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([itemId, nameKey])
+  @@unique([itemId, position])
+  @@map("inventory_item_unit")
+}
+
+/// Registro de todo SKU asignado alguna vez (PV-14 y DT-3): único entre activos e inactivos y no
+/// reutilizable, aunque el artículo cambie de SKU.
+model InventorySku {
+  /// SKU en mayúsculas.
+  skuKey     String        @id @map("sku_key") @db.VarChar(40)
+  itemId     Int           @map("item_id")
+  assignedAt DateTime      @map("assigned_at")
+  item       InventoryItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([itemId])
+  @@map("inventory_sku")
+}
+
+/// Historial del catálogo (RN-16), escrito en la misma transacción que el cambio.
+model InventoryChange {
+  id        Int      @id @default(autoincrement())
+  at        DateTime
+  /// item | category
+  entity    String   @db.VarChar(16)
+  entityId  Int      @map("entity_id")
+  /// create | update | overwrite_after_conflict | deactivate | reactivate | inherit
+  action    String   @db.VarChar(32)
+  /// Usuario autenticado; null si fue el sistema (semilla de desarrollo).
+  actorId   Int?     @map("actor_id")
+  /// Nombre visible en el momento del cambio.
+  actorName String   @map("actor_name") @db.VarChar(60)
+  /// JSON: [{ field, before, after }].
+  changes   String   @db.MediumText
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([entity, entityId, id])
+  @@map("inventory_change")
 }

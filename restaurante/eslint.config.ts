@@ -82,7 +82,8 @@ const LANDING_APP_PATTERNS = [...RELATIVE_JS_IMPORT_PATTERNS, ...PACKAGE_INTERNA
 
 // Código de landing-pages (REQ-F-038, RF-8; REQ-F-044, RF-5; REQ-F-045, RF-7): src/ y scripts/ obtienen
 // los productos y la página solo de la API (cliente de contracts). Nunca la base de datos, Prisma, la
-// identidad ni el control del bot: la administración vive en api e inventory-manager. De core/catalog,
+// identidad, el control del bot ni el inventario (REQ-F-049): la administración vive en api e
+// inventory-manager. De core/catalog,
 // solo las funciones puras que se listan (lista de permitidos: una exportación nueva queda prohibida
 // hasta que se añada aquí); de core, también shared y schedule, hasta que el aviso y los horarios sean
 // endpoints (desviación registrada en restaurante/docs/arquitectura.md §4). Las pruebas quedan fuera:
@@ -90,11 +91,11 @@ const LANDING_APP_PATTERNS = [...RELATIVE_JS_IMPORT_PATTERNS, ...PACKAGE_INTERNA
 const LANDING_CODE_FILES = ['landing-pages/src/**/*.ts', 'landing-pages/scripts/**/*.ts'];
 const LANDING_CODE_HINT = `landing-pages solo obtiene los productos y la página del cliente de la API (@restaurante/contracts; REQ-F-038, REQ-F-044 y REQ-F-045). ${DEPENDENCY_HINT}`;
 const LANDING_DB_PATTERN = String.raw`^@restaurante/db(?:/|$)|^(?:prisma|mariadb)(?:/|$)|^@prisma/`;
-const LANDING_ADMIN_PATTERN = String.raw`^@restaurante/core/(?:identity|bot-control)(?:/|$)`;
+const LANDING_ADMIN_PATTERN = String.raw`^@restaurante/core/(?:identity|bot-control|inventory)(?:/|$)`;
 const LANDING_CODE_PATTERNS = [
   ...LANDING_APP_PATTERNS,
   { regex: LANDING_DB_PATTERN, message: `Las landings no leen la base de datos. ${LANDING_CODE_HINT}` },
-  { regex: LANDING_ADMIN_PATTERN, message: `Las landings no usan la identidad ni el control del bot: la administración vive en api e inventory-manager. ${LANDING_CODE_HINT}` },
+  { regex: LANDING_ADMIN_PATTERN, message: `Las landings no usan la identidad, el control del bot ni el inventario: la administración vive en api e inventory-manager. ${LANDING_CODE_HINT}` },
 ];
 const LANDING_CODE_PATHS = [
   {
@@ -150,7 +151,7 @@ const LANDING_DYNAMIC_IMPORTS = [
 ];
 const LANDING_CODE_DYNAMIC_IMPORTS = [
   dynamicImport(LANDING_DB_PATTERN.replaceAll('/', String.raw`\/`), `Las landings no leen la base de datos. ${LANDING_CODE_HINT}`),
-  dynamicImport(LANDING_ADMIN_PATTERN.replaceAll('/', String.raw`\/`), `Las landings no usan la identidad ni el control del bot. ${LANDING_CODE_HINT}`),
+  dynamicImport(LANDING_ADMIN_PATTERN.replaceAll('/', String.raw`\/`), `Las landings no usan la identidad, el control del bot ni el inventario. ${LANDING_CODE_HINT}`),
 ];
 const API_DYNAMIC_IMPORTS = [
   dynamicImport(String.raw`(^|\/)landing-pages(\/|$)`, `Una app nunca importa otra app. ${DEPENDENCY_HINT}`),

@@ -2,9 +2,13 @@
 
 ## Estado
 
-IN_PROGRESS
+QA_APPROVED
 
-T1 se implementa en el PR 0 (`ci.yml` y `git.md`, hacia `main`) y después en tres PR hacia `epic/inventario` (DT-1). En curso: PR 0, #180 (https://github.com/orvigas/negocio/pull/180).
+QA del PR 1 de T1 aprobado (ronda 1; ver "QA Report — PR 1"), con DEF-001 (`MINOR`) aceptado sin cambios. Siguiente paso: commit y PR del PR 1 hacia `epic/inventario`.
+
+T1 se implementa en el PR 0 (`ci.yml` y `git.md`, hacia `main`) y después en tres PR hacia `epic/inventario` (DT-1). PR 0 mergeado (#180). PR 1 (modelo, migración, dominio y persistencia) en la rama `feature/REQ-F-049-catalogo-modelo`.
+
+Las decisiones técnicas DT-5 a DT-15 del plan técnico de T2 a T5 y las respuestas recomendadas a P-1 a P-8 están aprobadas (ver "Aprobación" y "Plan técnico de T2 a T5").
 
 ## Aprobación
 
@@ -21,12 +25,26 @@ Aprobado por el usuario (versión 1, fecha 2026-11-18).
 
 - Decisiones bloqueantes (respuestas literales del selector): ventas = "Inventario sin ventas por ahora (Recomendado)"; catálogo = "Uno aparte (Recomendado)"; negocios = "Compartidos"; rama = "Sí, rama intermedia (Recomendado)".
 - Validación del requisito completo, con las 14 propuestas PV-1 a PV-14 tal como se presentaron: "si lo valido" (en respuesta a "Dime si validas el requisito con las 14 propuestas tal cual, o cuáles corriges").
+- Hoja de ruta de cuatro épicas y orden nuevo (versión 5, 2026-11-18), tras entregar el requerimiento completo (Anexo A): "A tu recomendación y ajustar lo necesario ya que estamos en una etapa temprana" (camino A: T1 a T3; después la épica de Ventas; después T4 y T5; luego Costos y rentabilidad, y Finanzas y administración).
 
 Este documento contiene el **marco de la épica** (reglas comunes, glosario, partición y decisiones) y el **detalle del ticket T1**. Los tickets T2 a T5 se crearán como REQ-F-050 a REQ-F-053 cuando se refinen con el usuario.
 
 ---
 
 # Parte A — Marco de la épica
+
+- Plan técnico completo de T2 a T5 (versión 6): "apruebo las recomedaciones" (cita textual). Quedan aprobadas:
+  - **DT-1** (partición de T2 a T5: 3 PR por T2, T3 y T4; 2 en T5) y **DT-5 a DT-15** con la recomendación de la tabla de la sección 7 del plan.
+  - Respuestas recomendadas a las preguntas abiertas:
+    - **P-1:** los platillos (compuestos) no tienen existencias; solo receta y costo.
+    - **P-2:** el rendimiento de la receta va siempre en la unidad base del artículo.
+    - **P-3:** un platillo no es ingrediente de otro en esta épica.
+    - **P-4:** se pueden comprar intermedios (además de insumos y reventa).
+    - **P-5:** listas de motivos de merma, consumo interno y ajuste aprobadas tal como se propusieron (sección 2.3 del plan).
+    - **P-6:** alertas solo en pantalla.
+    - **P-7:** evolución de precios en tabla.
+    - **P-8:** Cocina no captura conteos (son del gerente).
+- DEF-001 (`MINOR`, QA del PR 1) aceptado sin cambios, con la aprobación de la implementación y del plan de QA por el usuario.
 
 ## Decisiones del usuario
 
@@ -54,9 +72,9 @@ Este documento contiene el **marco de la épica** (reglas comunes, glosario, par
 | PV-7 (conservación) | Movimientos, compras y versiones de receta se conservan indefinidamente. Del proveedor solo se guardan el nombre comercial y un contacto mínimo. | Trazabilidad y minimización de datos personales. |
 | PV-8 (diseño) | Se reutiliza el sistema visual del admin (Decisión B de `restaurante/docs/arquitectura.md`). Stitch solo para pantallas complejas (el editor de recetas de T2), con aprobación previa del usuario (`.claude/rules/stitch-diseno.md`). | No hay diseño en `_stich_source_/` para el admin y el diseño de interfaces está aparcado. |
 | PV-9 (tickets) | REQ-F-049 contiene el marco y T1. T2 a T5 son REQ-F-050 a REQ-F-053, y cada uno se refina con el usuario cuando le toque. | Cada ticket pasa su propia revisión técnica, implementación y QA, y queda revisable. |
-| PV-10 (precio de venta) | Los artículos de inventario **no** llevan precio de venta en esta épica. El precio sigue en el menú y se vinculará en la épica de ventas. | Evita tener el precio en dos fuentes sin ventas que lo usen. |
+| PV-10 (precio de venta) | Los artículos de inventario **no** llevan precio de venta en esta épica. El precio sigue en el menú y se vinculará en la épica de ventas. **Revisable (v5):** vigente por ahora; se revisa al refinar E2, porque el requerimiento original (Anexo A) lista "precio de venta" entre los datos del producto. Se resolverá enlazando el artículo con el precio del menú. | Evita tener el precio en dos fuentes sin ventas que lo usen. |
 | PV-11 (estado y baja) | "Dar de baja" es pasar a **Inactivo**, y es reversible. No hay un tercer estado "eliminado". | Unifica el estado ACTIVE/INACTIVE con el borrado lógico y evita una diferencia ambigua. |
-| PV-12 (T4 y T5) | Tras llevar `epic/inventario` a `main`, T4 y T5 van directo a `main` y la rama se borra. | Para entonces el modelo ya es estable y T4 y T5 son aditivos. |
+| PV-12 (T4 y T5) | Tras llevar `epic/inventario` a `main`, T4 y T5 van directo a `main` y la rama se borra. Sigue vigente (v5), con la épica de Ventas (E2) entre T3 y T4. | Para entonces el modelo ya es estable y T4 y T5 son aditivos. |
 | PV-13 (precisión) | Cantidades con 3 decimales en la unidad base. Costos unitarios con 4 decimales en MXN. Importes mostrados redondeados a 2 decimales. Nunca coma flotante. Los tipos exactos los confirma senior-fullstack. | Un costo por gramo necesita más de 2 decimales. |
 | PV-14 (SKU) | El SKU o código de barras es opcional. Si se informa, es único entre todos los artículos (activos e inactivos) y no se reutiliza. | Evita confusiones en la historia; mismo criterio que el slug de productos. |
 
@@ -85,13 +103,68 @@ Con ello el negocio conoce el costo real de cada platillo, el valor de lo que ti
 - **T1 (REQ-F-049, este ticket):** catálogo de artículos (cuatro tipos), categorías, variantes o sabores, unidades y conversiones, estado, historial de cambios y rol Gerente.
 - **T2 (REQ-F-050, por crear):** recetas multinivel con validación de ciclos, merma y rendimiento por ingrediente, versiones con vigencia y costo teórico.
 - **T3 (REQ-F-051, por crear):** Kardex, saldo inicial, proveedores, compras con CPP y último costo, consulta del Kardex, y respaldo y restauración de las tablas nuevas.
-- **T4 (REQ-F-052, por crear):** producción por lotes, mermas, consumo interno, conteos físicos con ajuste justificado, stock mínimo y punto de reorden con alertas, y rol Cocina/Producción.
-- **T5 (REQ-F-053, por crear):** reportes de Kardex filtrable, valorización, stock crítico, historial de compras y evolución de precios.
+- **T4 (REQ-F-052, por crear; se hace después de E2):** producción por lotes, mermas, consumo interno, conteos físicos con ajuste justificado, stock mínimo y punto de reorden con alertas, y rol Cocina/Producción.
+- **T5 (REQ-F-053, por crear; después de T4):** reportes de inventario que no dependen de ventas:
+  - Kardex filtrable;
+  - valorización, actual y a una fecha;
+  - stock crítico;
+  - historial de compras y evolución de precios;
+  - **mermas y desperdicios** (v5): cantidad y valor por artículo, motivo, usuario y periodo;
+  - **consumo de insumos críticos** (v5): salidas por periodo de los insumos marcados como críticos (p. ej. carne, queso, aceite, gas y masa);
+  - **costeo de recetas estándar o escandallos** (v5): costo por porción de cada platillo según la versión vigente o la de una fecha.
 
-## Fuera de alcance (PV-4)
+  Criterios de aceptación de T5 (a detallar en REQ-F-053): cada reporte filtra por rango de fechas en `BUSINESS_TIMEZONE`, sus totales cuadran con el Kardex del periodo, el escandallo usa la versión de receta vigente en la fecha consultada y el CPP de esa fecha, y ninguno requiere ventas registradas.
 
-- **La épica de ventas (posterior):** POS o registro de ventas, persistencia de los pedidos del bot, descuento de insumos por venta y explosión al vuelo, modificadores, cancelaciones y cortesías, corte de caja (Zeta), mix de ventas, ventas por horario, consumo teórico contra real, utilidad bruta (COGS) y rol Cajero.
-- Facturación electrónica (CFDI), impuestos y contabilidad.
+## Hoja de ruta: cuatro épicas encadenadas (v5, decisión del usuario)
+
+| Épica | Tickets | Contenido | Cuándo |
+| --- | --- | --- | --- |
+| **E1 — Inventario** | REQ-F-049 a REQ-F-053 | T1, T2, T3 → [E2] → T4, T5 | En curso |
+| **E2 — Ventas** | REQ-F-054 y siguientes | Registro de ventas o POS en el admin (o captura); descuento de insumos por receta al vender, con explosión al vuelo; modificadores fijos, removibles y extras; cancelaciones con reintegro frente a merma; cortesías; formas de pago (efectivo, tarjeta, transferencia y apps de reparto); comisiones de plataformas; rol Cajero; enlace producto del menú ↔ receta o artículo (revisa PV-10). Reportes: corte de caja Zeta con cuadre del fondo de caja, mix de ventas, ventas por horario y día, cancelaciones y cortesías, y comisiones de delivery. | **No se empieza hasta que T1 a T3 estén utilizables.** Se refina con el business-analyst después de T3. |
+| **E3 — Costos y rentabilidad** | Por asignar | Escandallos por porción frente al precio de venta, Food Cost, ingeniería de menú e inventario teórico contra físico. | Después de T5 |
+| **E4 — Finanzas y administración** | Por asignar | Gastos operativos, estado de resultados, flujo de efectivo, cuentas por pagar, nómina y costo laboral. Reporte fiscal y de facturación **solo como estructura pendiente**: el negocio aún no está dado de alta ante el SAT; la facturación y los impuestos reales siguen fuera de alcance. | Después de E3 |
+
+Cada épica posterior tiene sus propias decisiones pendientes (rama intermedia, POS frente a pedidos del bot, persistencia de esos pedidos, roles, etc.), que se toman con el usuario cuando se refine. Nada de E2 a E4 está aprobado en su detalle.
+
+## Cobertura del requerimiento original (Anexo A)
+
+| Requisito o reporte | Épica | Ticket |
+| --- | --- | --- |
+| Catálogo: nombre, descripción, id único, unidad, costo de adquisición | E1 | T1 (costo: T3) |
+| Precio de venta del producto | E2 | Enlace con el menú (PV-10 revisable) |
+| Ingredientes anidados (tortilla en pza hecha de masa en g). La "referencia circular" descrita es una **receta anidada**, soportada; lo que se rechaza es un **ciclo real** (RN-5) | E1 | T2 |
+| Unidades de compra y consumo (masa por kg, agua en L, sal en g) | E1 | T1 |
+| Sabores y versiones (refrescos, aguas frescas) | E1 | T1 (variantes) |
+| Recetas libres, editables y versionadas | E1 | T2 |
+| Actualizar y dar de baja sin afectar el historial | E1 | T1 (PV-11, RN-2) |
+| Descuento de insumos al vender | E2 | REQ-F-054+ |
+| Movimientos históricos de inventario | E1 | T3 (Kardex), T5 (reporte) |
+| Compras y proveedores, variación de precios | E1 | T3, T5 |
+| Cuentas por pagar | E4 | Por asignar |
+| Mermas y desperdicios | E1 | T4 (registro), T5 (reporte) |
+| Consumo de insumos críticos | E1 | T5 |
+| Escandallos (costo por porción) | E1 / E3 | T5 (costo); E3 (frente al precio) |
+| Inventario físico vs. teórico | E3 | Necesita ventas (conteos en T4) |
+| Corte de caja Zeta | E2 | REQ-F-054+ |
+| Mix de ventas | E2 | REQ-F-054+ |
+| Ventas por horario y día | E2 | REQ-F-054+ |
+| Cancelaciones y cortesías | E2 | REQ-F-054+ |
+| Comisiones de delivery | E2 | REQ-F-054+ |
+| Reportes de ventas | E2 | REQ-F-054+ |
+| Food Cost | E3 | Por asignar |
+| Ingeniería de menú | E3 | Por asignar |
+| Estado de resultados | E4 | Por asignar |
+| Flujo de efectivo | E4 | Por asignar |
+| Nómina y costo laboral | E4 | Por asignar |
+| Fiscal y facturación (solo estructura) | E4 | Por asignar |
+
+## Fuera de alcance de E1 (PV-4)
+
+Ventas, costos y rentabilidad, y finanzas no quedan fuera para siempre: son las épicas E2 a E4 de la hoja de ruta.
+
+- **E2 — Ventas (posterior):** POS o registro de ventas, persistencia de los pedidos del bot, descuento de insumos por venta y explosión al vuelo, modificadores, cancelaciones y cortesías, corte de caja (Zeta), mix de ventas, ventas por horario, comisiones de plataformas, utilidad bruta (COGS) y rol Cajero.
+- **E3 y E4 (posteriores):** Food Cost, ingeniería de menú, inventario teórico contra físico, gastos, estado de resultados, flujo de efectivo, cuentas por pagar y nómina.
+- Facturación electrónica (CFDI), impuestos y contabilidad reales (E4 solo dejará la estructura).
 - Varias monedas: solo MXN.
 - Lotes y caducidad por lote. La caducidad solo existe como motivo de merma.
 - Escáner de códigos de barras (el campo SKU sí entra).
@@ -161,12 +234,13 @@ Con ello el negocio conoce el costo real de cada platillo, el valor de lo que ti
 | 2 | T2 — REQ-F-050 | `epic/inventario` | Recetas y costo teórico. Sin CPP, el costo se muestra como "sin costo" |
 | 3 | T3 — REQ-F-051 | `epic/inventario` | Existencias valorizadas y CPP |
 | — | Merge `epic/inventario` → `main` | `main` | **Valor mínimo en producción:** costo real de las recetas y existencias valorizadas |
-| 4 | T4 — REQ-F-052 | `main` (PV-12) | Inventario al día sin depender de ventas |
-| 5 | T5 — REQ-F-053 | `main` (PV-12) | Reportes de inventario |
+| — | **E2 — Ventas** (REQ-F-054+) | Por decidir al refinarla | Ventas con descuento de insumos por receta |
+| 4 | T4 — REQ-F-052 | `main` (PV-12) | Producción, mermas, conteos y alertas |
+| 5 | T5 — REQ-F-053 | `main` (PV-12) | Reportes de inventario, incluidos mermas, insumos críticos y escandallos |
 
 Como nada llega a producción antes del merge, el orden interno de T1 a T3 no afecta a los usuarios.
 
-La épica de ventas se refinará después, en sus propios tickets.
+La épica de ventas (E2) se refina después de T3, en sus propios tickets, y se ejecuta antes de T4 (versión 5).
 
 ## Riesgos de la épica
 
@@ -804,7 +878,685 @@ Cada PR pasa su propio ciclo (implementación, aprobación, QA, PR y CI en verde
 - **DT-3. SKU "no reutilizable".** Recomendado: SKU **editable**, con un registro (`inventory_sku`) de todo SKU asignado alguna vez, que impide reutilizarlo aunque el artículo cambie el suyo. Alternativa: SKU inmutable una vez guardado (como el slug), sin tabla extra; un error de captura obligaría a inactivar y crear otro artículo.
 - **DT-4. CI y regla de git.** Recomendado: autorizar el PR 0 de `ci.yml` a `main` (redespliega producción sin cambios funcionales) y la actualización propuesta de `.claude/rules/git.md` (y, si lo quiere, la de `.claude/CLAUDE.md` §8).
 
+## Implementation Result — PR 1
+
+### Rama
+
+`feature/REQ-F-049-catalogo-modelo`, desde `origin/epic/inventario` (`1c88e30`). Sin commit ni PR (pendiente de aprobación). El nombre es el del plan aprobado (partición de T1), no `feature/REQ-F-049-t1-1-modelo-dominio`.
+
+### Cambios realizados
+
+- **Modelo y migración** (`packages/db/prisma/schema.prisma`, `migrations/20261119004332_inventario_catalogo/migration.sql`): enums `InventoryItemType`, `InventoryItemKind`, `InventoryUnit` y las cinco tablas del plan (`inventory_category`, `inventory_item`, `inventory_item_unit`, `inventory_sku`, `inventory_change`), con la relación `User.inventoryChanges` (solo en Prisma; no altera `user`). Generada con `prisma migrate dev --create-only` contra bases desechables `restaurante_test_gen_*` (no la de desarrollo) y revisada a mano: colación `utf8mb4_es_0900_as_cs` en los cinco `CREATE TABLE` y cabecera de migración aditiva. `prisma migrate diff --from-migrations … --to-schema …`: sin diferencias.
+- **Dominio** (`packages/core/inventory/`, export `@restaurante/core/inventory`): `decimal.ts` (punto fijo con `bigint`, escala 3, coma rechazada, redondeo mitad hacia arriba), `units.ts` (RN-3: factores fijos, empaques, `UnitConversionError`, resultado que redondea a 0 o supera el máximo, equivalencias de la ficha), `text.ts`, `item-schema.ts` (RF-2, RF-3, RF-5, CA-6), `category-schema.ts`, `errors.ts`, `inventory-store.ts` (contrato, con `isInUse` como único punto de RN-4, siempre `false` en T1), `inventory-repository.ts` (alta, edición con conflicto y "guardar encima", baja y reactivación, padres y variantes, herencia de categoría, SKU con registro, categorías, lista, ficha y conversión) y `memory-inventory-store.ts` (doble con las mismas claves únicas, `failNext` y `markInUse`).
+- **Persistencia** (`packages/db/src/prisma-inventory-store.ts`, export `@restaurante/db/prisma-inventory-store`): escrituras `Serializable` con reintento acotado ante interbloqueo; P2002 → `ItemNameTakenError`, `SkuTakenError` o `CategoryNameTakenError`; resto → `DatabaseUnavailableError`; factores leídos con `toFixed(3)` y escritos como texto; número de variantes con una consulta agrupada; búsqueda con los comodines de `LIKE` escapados.
+- **Lint** (`eslint.config.ts`): `LANDING_ADMIN_PATTERN` incluye `core/inventory` (comprobado con un archivo de sonda en `landing-pages/src`, borrado después).
+
+Desviaciones del plan (menores): los errores de dominio van en `errors.ts` (no en `inventory-store.ts`) para que `units.ts` no dependa del store; `text.ts` reúne la normalización de nombres. La búsqueda por SKU usa el registro `inventory_sku`, así que un SKU anterior del artículo también lo encuentra (es único y no reutilizable: no hay ambigüedad). Hallazgo corregido: Prisma no escapa `%` y `_` en `contains`; se escapan en el store y queda cubierto en la prueba de MySQL.
+
+### Criterios de aceptación (alcance del PR 1: reglas y persistencia; pantallas y API en PR 2 y PR 3)
+
+- CA-1, CA-2, CA-3, CA-4, CA-5, CA-6, CA-7, CA-8, CA-9 y CA-13: cumplidos en el dominio y la persistencia (pruebas abajo).
+- CA-15 (parcial, para esta migración): `verifyDatabase` con las migraciones anteriores sobre una base con la migración nueva da `DATABASE_NEWER_THAN_CODE` sin `allowNewerSchema` y arranca con él (aviso `database_newer_than_code_allowed`); el usuario solo DML sigue escribiendo `user`. Sonda no commiteada. La vuelta atrás con la imagen anterior la comprueba QA.
+- Permisos: los `GRANT` de `deploy/mysql/initdb/01-usuarios.sh` y `docker/mysql/initdb/01-usuarios.sh` son sobre `restaurante.*` (app: DML; migrator: DDL con `REFERENCES` e `INDEX`; backup: lectura): las tablas nuevas quedan cubiertas sin tocar `deploy/`. Las pruebas de MySQL corren con el usuario solo DML.
+- CA-10, CA-11, CA-12, CA-14, CA-16 y CA-17: PR 2 y PR 3.
+
+### Validaciones ejecutadas
+
+- `npm run build:css`: 0. `npm run typecheck`: 0. `npm run lint`: 0, sin avisos.
+- `npm test`: api 51 archivos y 1196 pruebas; landing-pages 61 y 894; inventory-manager 16 y 278. Todo en verde.
+- `prisma-inventory-store.test.ts` ejecutado 5 veces seguidas: 7/7 cada vez, unos 3 a 4 s por archivo; las unitarias, menos de 0.2 s.
+
+### Archivos afectados
+
+`restaurante/packages/db/prisma/schema.prisma`, `restaurante/packages/db/prisma/migrations/20261119004332_inventario_catalogo/migration.sql`, `restaurante/packages/db/src/prisma-inventory-store.ts`, `restaurante/packages/db/package.json`, `restaurante/packages/core/inventory/*` (9 archivos), `restaurante/packages/core/package.json`, `restaurante/eslint.config.ts`, `restaurante/api/tests/unit/inventory-units.test.ts`, `restaurante/api/tests/unit/inventory-catalog.test.ts`, `restaurante/landing-pages/tests/integration/prisma-inventory-store.test.ts`.
+
+### Riesgos o pendientes
+
+- Sin documentación en este PR (el plan la asigna al PR 3).
+- En desarrollo local, una base migrada con esta rama exige `DATABASE_ALLOW_NEWER_SCHEMA=true` para arrancar la `api` de `main` (riesgo técnico 3, documentación en el PR 3).
+- Nombre de variante único en todo el catálogo (RF-2): dos padres no pueden tener una variante "Coca-Cola" cada uno.
+
+## QA Action Plan — PR 1
+
+### Objetivo
+
+Validar con evidencia que el PR 1 (migración `20261119004332_inventario_catalogo`, `packages/core/inventory`, `packages/db/src/prisma-inventory-store.ts`, lint y 37 pruebas permanentes) cumple el Technical Action Plan de T1 en lo que le toca, que la migración es solo aditiva y compatible con la vuelta atrás, que los respaldos conservan las tablas nuevas y que no hay regresión.
+
+Objeto bajo prueba: worktree `.claude/worktrees/agent-a695af6eae346107d`, rama `feature/REQ-F-049-catalogo-modelo` desde `1c88e30`, sin commit. Todo se ejecuta desde `restaurante/` del worktree salvo donde se indique.
+
+### Requisito bajo prueba
+
+RF-2 a RF-8 (reglas y persistencia), RN-3, RN-4 (punto único `isInUse`), RN-16 (historial), PV-13 (decimales), PV-14 y DT-3 (SKU no reutilizable); CA-15 y CA-16 para la migración de este PR.
+
+### Criterios de aceptación (cada uno → pruebas que lo cubren)
+
+| CA | Alcance en el PR 1 | Prueba |
+| --- | --- | --- |
+| CA-1 | Alta con historial "create" y autor (repositorio) | `inventory-catalog.test.ts` + sonda MySQL (S5) que lee `inventory_change` |
+| CA-2 | Nombre único entre activos sin distinguir mayúsculas; aceptado si el otro está inactivo; reactivación con nombre ocupado | `inventory-catalog.test.ts`; carrera "Sal"/"SAL" en `prisma-inventory-store.test.ts` y S1; mutación M1 |
+| CA-3 | SKU único entre activos e inactivos y no reutilizable tras cambiarlo | `inventory-catalog.test.ts`; registro `inventory_sku` en MySQL; S2; mutación M2 |
+| CA-4 | 2 cajas = 48 pza | `inventory-units.test.ts` |
+| CA-5 | 500 g = 0.5 kg; pza → kg sin factor rechazado con mensaje | `inventory-units.test.ts` |
+| CA-6 | Factor 0, negativo, no numérico, con coma o con 4 decimales rechazado por campo | `inventory-units.test.ts`, `inventory-catalog.test.ts`; S4 (límites) |
+| CA-7 | Padre sin unidad/SKU/empaques ni existencias; variantes con SKU, unidad y estado propios; padre inactivo | `inventory-catalog.test.ts` |
+| CA-8 | Filtro activos/inactivos/todos y reactivación | `inventory-catalog.test.ts` + S6 (filtros y búsqueda en MySQL) |
+| CA-9 | Conflicto de versión con datos vigentes; "guardar encima" con `overwrite_after_conflict` | `inventory-catalog.test.ts`, `prisma-inventory-store.test.ts`; S3; mutación M4 |
+| CA-13 | Categoría en uso rechazada con el número de artículos | `inventory-catalog.test.ts`; carrera inactivar-categoría/alta en MySQL y S7 |
+| CA-15 | Vuelta atrás con el código de `main` sobre la base migrada | Procedimiento R1 a R5 (sondas descartables) |
+| CA-16 | Respaldo y restauración con las tablas nuevas | Procedimiento B1 a B4 |
+| CA-14 | Regresión: landings, `/api/v1/public/*`, bot, productos y página | Suite completa + diff fuera de alcance vacío (el PR no toca esas rutas) |
+
+**No aplica a este PR** (se validan en el QA de PR 2 o PR 3): CA-10 y CA-11 (rol Gerente, rutas y 403), CA-12 (semilla), CA-17 (pantallas), la parte de API y pantallas de CA-1, CA-8 y CA-9 (lista visible, aviso en pantalla, idempotencia del doble envío por HTTP), CA-14 en su forma de despliegue y la cadena de punta a punta. Tampoco el procedimiento DT-2 de gerentes (el rol no existe aún).
+
+### Riesgos identificados
+
+1. La migración altera algo existente (FK hacia `user` mal generada, cambio de colación o de columnas): rompe la vuelta atrás.
+2. Unicidad sostenida solo por la comprobación previa (carrera) o por el índice sin traducción a error por campo (P2002 sin mapear → 503).
+3. Pérdida de precisión: `Prisma.Decimal` → `number`, redondeo distinto de "mitad hacia arriba", límites 0.001 y 1 000 000.000.
+4. Comodines `%` y `_` sin escapar en la búsqueda (hallazgo ya corregido: confirmar).
+5. Serializable con reintento: interbloqueo no reintentado o reintento que duplica historial.
+6. Pruebas que no detectan la regresión que dicen proteger (se mide con mutaciones).
+7. Nombre de variante único en todo el catálogo (observación de RF-2, no defecto si el requisito no dice lo contrario).
+8. T3 deberá crear el saldo del artículo en el alta: hoy no hay tabla de saldos (observación para T3, no defecto del PR 1).
+
+### Pruebas funcionales
+
+- **F1. Revisión del diff frente al plan.** `git status`, `git diff --stat` y `git diff` de los 5 archivos modificados; lectura dirigida de los nuevos. Comprobar: tablas, tipos (`DECIMAL(13,3)`, sin `FLOAT`/`DOUBLE`), índices y FK del plan; dominio solo con sintaxis borrable, imports `.ts`, entradas como `unknown`, sin `any` ni `as`/`!` injustificados (`typescript.md`); errores de dominio con código y sin mensaje de Prisma hacia fuera, inesperados → `DatabaseUnavailableError` (`manejo-de-errores.md`); `package.json` de `core` y `db` solo con `exports` nuevos, sin dependencias nuevas, y `package-lock.json` sin cambios (`dependencias.md`).
+- **F2. Fuera de alcance.** `git diff --name-only` limitado a los archivos de "Archivos afectados"; ningún cambio en `api/src`, `landing-pages/src`, `inventory-manager/`, `public/`, `ops/`, `.github/`, `docker/`, `compose*.yaml`. Suma de `deploy/` con el mismo cálculo del CI, adaptado a macOS: `cd restaurante/deploy && shasum -a 256 compose.prod.yaml deploy.sh mysql/initdb/01-usuarios.sh | shasum -a 256 | cut -c1-64` debe dar `591de8e7f259073f79ff34418c8b7a3a2680d465ef3bc7378c620221455cc7f0`.
+- **F3. Migración solo aditiva.** Lectura completa del `migration.sql`: solo `CREATE TABLE`, `CREATE INDEX`/`UNIQUE` sobre tablas nuevas y `ALTER TABLE <tabla nueva> ADD CONSTRAINT … FOREIGN KEY`; ningún `ALTER`, `DROP`, `RENAME` ni `MODIFY` sobre tablas existentes; cinco `CREATE TABLE` con `utf8mb4_es_0900_as_cs`. Comprobación en MySQL real: en una base desechable, `information_schema.COLUMNS`/`STATISTICS`/`TABLE_CONSTRAINTS` de las tablas existentes antes y después de aplicar la migración, diff vacío. `prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url <base restaurante_test_qa049_shadow>`: sin diferencias.
+
+### Pruebas negativas y casos límite (sondas en MySQL real, descartables)
+
+Sondas en `restaurante/landing-pages/tests/qa-req-f-049-*.test.ts` usando `makeDatabase()` y el usuario solo DML (la única carpeta donde QA puede escribir); se borran al terminar y no se commitean.
+
+- **S1.** 10 altas simultáneas alternando "Sal", "SAL", "sal", " Sal " → exactamente 1 éxito, el resto error por campo `name`, 1 fila activa, 1 entrada de historial.
+- **S2.** Mismo SKU (`ab-1` y `AB-1`) en altas simultáneas → 1 éxito; SKU de un artículo inactivo rechazado; artículo A cambia su SKU y B intenta el anterior → rechazado; A vuelve a su SKU anterior → aceptado.
+- **S3.** 5 ediciones simultáneas con la misma versión → 1 éxito, 4 `InventoryConflictError` con `version`, `updatedAt` y `updatedBy` vigentes; versión final = inicial + 1; "guardar encima" con la versión vigente registra `overwrite_after_conflict`.
+- **S4.** Factores `0.355`, `1000000.000`, `0.001` guardados y leídos exactos; `0.0005`, `1000000.001`, `1e3`, `-1`, `0`, `1,5`, `abc` rechazados por campo; conversión con redondeo mitad hacia arriba en el límite (p. ej. 1 g → kg = `0.001`; 0.4 g → rechazado por "demasiado pequeña"; un caso .0005 que sube).
+- **S5.** Historial: cada escritura de S1 a S4 deja exactamente su entrada en `inventory_change` (sin duplicados por reintento), con autor.
+- **S6.** Búsqueda `q` con `%`, `_` y `\` literales: solo devuelve artículos que los contienen; filtros estado/tipo/categoría combinados; nombre con tildes ("Jitomate" vs "jitomate", "Cebolla" vs "cebollá" distintos).
+- **S7.** Inactivar una categoría mientras otro proceso da de alta un artículo en ella, repetido 10 veces → nunca queda una categoría inactiva con un artículo activo; uno de los dos recibe `CATEGORY_IN_USE` o `CATEGORY_INACTIVE`.
+- **S8.** Interbloqueos: en las carreras S1, S3 y S7 se registra cuántas veces actuó el reintento (si es observable) y que ninguna operación termina en `DatabaseUnavailableError` salvo agotamiento; ningún error expone texto de Prisma.
+
+### Pruebas de regresión
+
+- `npm run typecheck`, `npm run lint` (0, sin avisos) y `npm test` completo de los 3 workspaces, con MySQL desechable.
+- Lint de la regla nueva: archivo de sonda temporal en `landing-pages/src/` que importa `@restaurante/core/inventory` → `npm run lint` debe fallar; borrar la sonda y repetir → 0. Además, un import desde `api/src` no debe fallar (la regla solo afecta a landings).
+- Duración: `npx vitest run <archivo>` de los 3 archivos nuevos, 3 veces cada uno; cada ejecución < 20 s (referencia: 3 a 4 s el de MySQL).
+- CA-14: con el diff fuera de alcance vacío (F2), la suite existente de landings, `/api/v1/public/*`, bot, productos y página es la evidencia; no se levantan pantallas en este PR.
+- Blast radius con CodeGraph de `eslint.config.ts` y de los `exports` de `core` y `db` para confirmar que ningún consumidor existente cambia.
+
+### Mutaciones (diferencial mínimo, descartable)
+
+En una copia del árbol fuera del repo (`cp -c` de `restaurante/` del worktree, con `node_modules`, al scratchpad; clon APFS), una mutación cada vez, ejecutando solo el archivo de prueba afectado; cada una debe hacer fallar al menos una prueba permanente:
+
+- **M1.** Quitar el `UNIQUE` de `active_name_key` en `inventory_item` (migración) y la comprobación previa del repositorio → falla la carrera de nombre de `prisma-inventory-store.test.ts`.
+- **M2.** No insertar en `inventory_sku` al cambiar el SKU → falla la prueba de SKU no reutilizable.
+- **M3.** Redondeo "mitad hacia abajo" en `decimal.ts` → falla `inventory-units.test.ts`.
+- **M4.** `updateMany` sin la condición de `version` → falla la prueba de conflicto.
+- **M5.** No escapar `%`/`_` en la búsqueda → falla la prueba de comodines.
+
+Una mutación que sobrevive es un hallazgo (prueba insuficiente): `MINOR` si otra prueba cubre el comportamiento, `MAJOR` si ninguna lo cubre.
+
+### Vuelta atrás (CA-15, descartable)
+
+Entorno: MySQL desechable (ver Autorizaciones) con la base `restaurante` del contenedor de QA, no la de desarrollo. Código anterior: el árbol principal del repo (`/Users/orvigas/Desktop/Negocio/restaurante`, en `main` = `1c88e30`, ya con `node_modules`), arrancado con `node src/server.ts` y las variables en un archivo del scratchpad pasado con `--env-file=<scratch>`; **nunca** `npm start` ahí, porque carga el `api/.env` de desarrollo.
+
+- **R1.** Migrar la base con el código de `main` (`prisma migrate deploy` con el usuario migrator), arrancar la `api` de `main`, crear datos (un producto, un usuario editor). Línea base.
+- **R2.** Aplicar las migraciones del worktree (incluida la nueva) con el migrator. Insertar con el store del worktree una categoría, un artículo con empaque y un SKU (para que las tablas no estén vacías).
+- **R3.** Arrancar la `api` de `main` **sin** `DATABASE_ALLOW_NEWER_SCHEMA` → debe negarse a arrancar con `DATABASE_NEWER_THAN_CODE` (log y código de salida).
+- **R4.** Arrancar con `DATABASE_ALLOW_NEWER_SCHEMA=true` → arranca con el aviso `database_newer_than_code_allowed`; `GET /api/v1/public/*` de ambos negocios 200; login de admin, alta y edición de un producto, edición de datos de página y alta de un usuario 2xx (el usuario de app solo DML escribe en las tablas existentes).
+- **R5.** `migrate deploy` del código de `main` sobre la base con la migración nueva presente: documentar el resultado tal cual (en el despliegue el servicio `migrate` de la imagen anterior no corre en la vuelta atrás automática; si fallara, se registra como observación con su contexto, no como defecto, y se pregunta). Opcional (pregunta 2): repetir R3–R4 con la imagen `production` construida de `1c88e30` en lugar del código.
+
+### Respaldo y restauración (CA-16)
+
+Sin VPS, sin R2 y sin producción. `ops/backup/ci/smoke.sh` requiere Linux (GNU coreutils, flock): no se ejecuta en el Mac; corre en el CI del PR de la épica hacia `main`.
+
+- **B1.** Sobre la base del contenedor de QA con datos en las cinco tablas (R2 más varias escrituras con historial, un padre con variantes y un SKU cambiado), `mysqldump` dentro del contenedor con las mismas opciones que `backup.sh` (`--single-transaction --no-tablespaces --skip-lock-tables --default-character-set=utf8mb4 --hex-blob --set-gtid-purged=OFF --databases restaurante`), con un usuario de solo lectura con los mismos privilegios que `restaurante_backup` (SELECT, SHOW VIEW, TRIGGER, LOCK TABLES), creado solo en el contenedor de QA.
+- **B2.** Comprobar que el volcado contiene los cinco `CREATE TABLE inventory_*` con su colación y sus `INSERT`.
+- **B3.** Restaurar en un segundo contenedor desechable del mismo proyecto (o tras `DROP DATABASE` en el de QA), como hace `restore.sh` (mysql como root con el volcado).
+- **B4.** Comparar conteos y `CHECKSUM TABLE` de las cinco tablas, y de `user`, `product` y `_prisma_migrations`, antes y después; arrancar la `api` del worktree sobre la base restaurada (verifica colación y migraciones).
+- `verify-backup.sh --drill` pide la clave privada de age por TTY y un respaldo real de R2 o un `.tar.age`: **QA no lo ejecuta**. Lo que cubre (descifrado, manifiesto, arranque de la imagen) no cambia en este PR; recomendación: el usuario lo corre en el simulacro mensual tras desplegar la épica, con la consulta de conteos de `inventory_item` que añadirá el PR 3 a §11.8.
+
+### Revisión de las pruebas permanentes
+
+Para cada una de las 37 (12 + 18 + 7): protege un comportamiento de la app (catálogo, permisos, conflicto, datos) según `testing.md`, no reproduce la implementación, no hay duplicados con otra prueba, nombres de dominio sin `qa-req-f-*`, ninguna prueba de arquitectura, fronteras ni migración "por sí misma"; usan `makeDatabase()` sin leer `DATABASE_URL`; sin esperas fijas ni `retry`. Una prueba que no cumpla se informa como hallazgo `MINOR` con la recomendación de quitarla.
+
+### Evidencia requerida
+
+Salida resumida de cada comando (código de salida y totales), suma de `deploy/`, `git diff --name-only`, extracto del SQL, salida de `migrate diff`, diff de `information_schema`, logs de R3 y R4 y códigos HTTP, conteos y checksums de B4, resultado de cada sonda S1–S8 y de cada mutación M1–M5, duraciones por archivo y la comprobación de limpieza.
+
+### Limpieza (comprobada, no supuesta)
+
+- Sondas `qa-req-f-049-*` borradas del worktree; `git status` del worktree idéntico al inicial (solo los cambios del PR 1 y el ticket).
+- Copia de mutaciones, archivos de env y volcados del scratchpad borrados.
+- `docker compose -p restaurante-qa-049 down -v` (contenedores, volúmenes y red del proyecto); `docker ps -a`, `docker volume ls` y `docker network ls` sin restos `restaurante-qa-049`. El `mysql-dev` de desarrollo sigue como estaba (hoy apagado; Docker sin contenedores en marcha al planificar).
+- Procesos `node`/`vitest` de la `api` de `main` detenidos y puertos libres (`lsof -i :3307` y los de la `api`).
+- Bases `restaurante_test*` inexistentes al final (se van con el volumen de QA).
+- `git worktree list` sin worktrees nuevos; el árbol principal en `main` sin cambios (`git status`).
+- Si se instalan `node_modules` o el cliente generado en el worktree (`npm ci`, `db:generate`), se dejan (los necesita el PR) o se borran según indique el usuario; se informa.
+
+### Criterios de aprobación
+
+`QA_APPROVED` solo si: F1–F3 sin desviaciones relevantes; suma de `deploy/` igual; migración solo aditiva demostrada en MySQL; CA-1 a CA-9 y CA-13 (alcance del PR 1) en PASS; CA-15 (R3 y R4) y CA-16 (B4) en PASS; `typecheck`, `lint` y `npm test` en 0; S1–S8 sin duplicados ni pérdida de precisión; M1–M5 detectadas; cada archivo nuevo < 20 s; sin `BLOCKER` ni `CRITICAL`, y cada `MAJOR` aceptado por el usuario. Escala de defectos: la del agente (`BLOCKER`, `CRITICAL`, `MAJOR`, `MINOR`, `TRIVIAL`), justificada por impacto observable. Ejemplos: duplicado posible en carrera o vuelta atrás que no arranca = `CRITICAL`; pérdida de precisión = `CRITICAL`; mutación sin prueba que la detecte = `MAJOR`; desviación documental = `MINOR`.
+
+### Autorizaciones que se piden al usuario
+
+1. Docker local: `docker compose -p restaurante-qa-049 up -d --wait mysql-dev` con el `compose.yaml` del worktree (volumen propio, `127.0.0.1:3307`). Requiere que el `mysql-dev` de desarrollo siga apagado (si estuviera encendido, QA se detiene y pregunta). Un segundo contenedor del mismo proyecto para B3, si hace falta.
+2. `npm ci` y `npm run db:generate` en el worktree, si no tiene `node_modules` o el cliente de Prisma.
+3. Ejecutar la `api` de `main` desde el árbol principal (solo lectura del código) contra el MySQL de QA, con variables en el scratchpad.
+4. Crear sondas temporales en `restaurante/landing-pages/tests/` del worktree (se borran) y una copia del árbol en el scratchpad para las mutaciones.
+5. Escribir en el ticket del worktree solo `## Estado`, este QA Action Plan, el QA Report y el Historial.
+
+### Preguntas abiertas (con recomendación)
+
+1. ¿El simulacro `verify-backup.sh --drill` lo hace el usuario? **Recomendado:** sí, tras desplegar la épica a producción (no en este PR); QA cubre CA-16 con B1–B4.
+2. ¿Vuelta atrás con el código de `main` o también con la imagen `production` construida de `1c88e30`? **Recomendado:** solo con el código (mismo código que la imagen; ahorra tiempo y créditos); la imagen, en el QA del PR de la épica hacia `main`.
+3. ¿`node_modules` y el cliente generado del worktree se conservan al terminar? **Recomendado:** conservarlos hasta el commit del PR 1 (los usa senior-fullstack) y que se borren con el worktree.
+4. Nombre de variante único en todo el catálogo: ¿se acepta como lo dice RF-2 o se quiere único por padre? **Recomendado:** aceptarlo en T1 (es lo que dice RF-2) y revisarlo en E2 si hace falta; QA no lo trata como defecto.
+
+**Aprobado por el usuario** ("si a las dos"), con las cuatro recomendaciones.
+
+## QA Report — PR 1
+
+### Ronda
+
+1 (2026-11-18). Worktree `agent-a695af6eae346107d`, rama `feature/REQ-F-049-catalogo-modelo` sobre `1c88e30`, sin commit. CodeGraph no indexa el worktree: lecturas dirigidas con Read y Grep. MySQL desechable `docker compose -p restaurante-qa-049` (`127.0.0.1:3307`); el `mysql-dev` de desarrollo estaba apagado y siguió apagado.
+
+### Pruebas ejecutadas
+
+- `npm run build:css` 0; `npm run typecheck` 0; `npm run lint` 0 (sin avisos); `npm test` 0: api 51 archivos / 1196 pruebas, landing-pages 61 / 894, inventory-manager 16 / 278.
+- F1/F2: `git diff --name-only` = solo los archivos de "Archivos afectados" (más el ticket); `package-lock.json` sin cambios; `package.json` de `core` y `db` solo con un `exports` nuevo cada uno; suma de `deploy/` = `591de8e7f259073f79ff34418c8b7a3a2680d465ef3bc7378c620221455cc7f0` (igual).
+- F3: SQL con solo cinco `CREATE TABLE` (`utf8mb4_es_0900_as_cs`), sus índices y FK desde tablas nuevas (una hacia `user`, sin alterarla); `DECIMAL(13, 3)` en `factor`, sin `FLOAT`/`DOUBLE`. `prisma migrate diff --from-migrations … --to-schema …`: "No difference detected". `information_schema` (columnas, índices, restricciones, colación) de las tablas existentes antes y después de migrar: idéntico; solo aparecen las cinco tablas nuevas.
+- Sondas MySQL (descartables, borradas): S1 10 altas simultáneas "Sal/SAL/sal/␣Sal␣" → 1 ok + 9 error por campo `name`, 1 fila, 1 historial. S2 6 altas con `ab-1/AB-1…` → 1 ok + 5 `sku`; SKU de inactivo rechazado; SKU liberado rechazado en otro artículo; volver al propio aceptado. S3 5 ediciones con la misma versión → 1 ok + 4 `InventoryConflictError` con versión 2 y autor; "guardar encima" → historial `create, update, overwrite_after_conflict`. S4 factores `0, -1, abc, 1,5, 0.0005, 1000000.001, 1e3, ""` → error en `units.0.factor`, 0 filas; 1 g = 0.001, 1.5 g = 0.002, 2.5 g = 0.003, 0.5 g = 0.001 (mitad hacia arriba), 500 g = 0.500, 2 bultos = 50.000; 0.4 g y pza→kg rechazados. S6 `%`, `_`, `l_f` y `\` literales; "JITOMATE" encuentra "Jitomate"; "cebollá" ≠ "Cebolla"; filtros tipo y categoría combinados. S7 10 rondas inactivar categoría vs. alta → nunca categoría inactiva con artículo activo. S8 ninguna operación terminó en `DatabaseUnavailableError` en las carreras.
+- Duración: los 3 archivos nuevos (+ sondas), 3 veces: MySQL 3.9 a 4.7 s; unitarias ~0.14 s. Todo < 20 s.
+- Lint de la regla nueva: import estático y dinámico de `@restaurante/core/inventory` en `landing-pages/src` → error; en `api/src` → sin error (sondas borradas).
+
+### Criterios de aceptación
+
+| CA | Resultado | Evidencia |
+| --- | --- | --- |
+| CA-1 | PASS (dominio y persistencia) | unitaria de alta; historial `create` con autor en MySQL (S3, prueba de lista y ficha) |
+| CA-2 | PASS | unitaria; S1; prueba de clave única; M1 detectada |
+| CA-3 | PASS | unitaria; S2; M2 detectada |
+| CA-4 | PASS | `inventory-units.test.ts`; 2 bultos = 50 en S4 |
+| CA-5 | PASS | `inventory-units.test.ts`; S4 |
+| CA-6 | PASS | unitarias; S4 (error por campo `units.0.factor`) |
+| CA-7 | PASS | unitarias de padres y variantes; lista con `variantCount` en MySQL |
+| CA-8 | PASS | unitaria de lista; MySQL (inactivos, todos, búsqueda) |
+| CA-9 | PASS | unitaria; prueba MySQL y S3; M4b detectada (ver DEF-001) |
+| CA-13 | PASS | unitaria; carrera de categoría en MySQL y S7 |
+| CA-15 | PASS | R1 base con migraciones de `main` + `api` de `main` (público 200, login, alta de usuario, edición de producto y de página 2xx). R2 migración nueva + datos en las 5 tablas. R3 `api` de `main` sin la variable → salida 1 con `DATABASE_NEWER_THAN_CODE` (`20261119004332_inventario_catalogo`). R4 con `DATABASE_ALLOW_NEWER_SCHEMA=true` → aviso `database_newer_than_code_allowed`; `/api/v1/public/{molotes,birria}/{productos,pagina}` 200; login 201, alta de usuario 201, edición de producto 200, guardado de página 200 (usuario solo DML). R5 `migrate deploy` de `main` sobre la base nueva: "No pending migrations to apply", sin error. |
+| CA-16 | PASS | `mysqldump` con las opciones de `backup.sh` y un usuario con los privilegios de `restaurante_backup`; volcado con los 5 `CREATE TABLE inventory_*` y sus `INSERT`; `DROP DATABASE` y restauración como `restore.sh`; `CHECKSUM TABLE` de las 5 tablas, `user`, `product`, `page_version` y `_prisma_migrations` idéntico; conteos 4/3/3/7/1 iguales; `api` del worktree arranca sobre la restaurada sin la variable; lectura: factor `0.355`, SKU vigente `MASA-2`, búsqueda por el SKU anterior, historial y `variantCount` conservados. `--drill`: lo hace el usuario tras desplegar la épica (P1). |
+| CA-14 | PASS (alcance del PR 1) | suite completa en verde; diff sin cambios en rutas, landings, bot, productos ni página; R4 con la `api` de `main` |
+| CA-10, CA-11, CA-12, CA-17 | No aplica a este PR | PR 2 y PR 3 |
+
+### Defectos encontrados
+
+### DEF-001
+- Severidad: `MINOR`
+- Criterio de aceptación afectado: CA-9 (cobertura de pruebas, no comportamiento)
+- Descripción: la condición `version` del `updateMany` de `replaceItem` en `prisma-inventory-store.ts` no la protege ninguna prueba: quitarla (M4) deja las 7 pruebas de MySQL en verde, porque el repositorio ya compara la versión dentro de la transacción `Serializable`.
+- Pasos para reproducir: en una copia del árbol, cambiar `where: { id: item.id, version: expectedVersion }` por `where: { id: item.id }` y ejecutar `prisma-inventory-store.test.ts`.
+- Resultado esperado: alguna prueba falla.
+- Resultado actual: 7/7 en verde. Quitar la comprobación del repositorio (M4b) sí falla (1 prueba en MySQL y 1 unitaria), y quitar ambas (M4c) también.
+- Evidencia: salidas de M4, M4b y M4c en esta ronda.
+- Impacto: ninguno observable hoy (CA-9 se cumple y está protegido por el repositorio); la segunda defensa podría perderse sin aviso en un refactor.
+- Recomendación: aceptar como está o cubrir la condición del store con una prueba dirigida en la prueba de MySQL existente; decisión de senior-fullstack/usuario, no bloquea.
+- Decisión: **aceptado sin cambios** (T4 del PR 1).
+
+### Mutaciones
+
+M1 (sin `UNIQUE` en `active_name_key`) detectada: 1 fallo. M2 (sin registro de SKU) detectada: 2 fallos. M3 (redondeo mitad hacia abajo) detectada: 2 fallos en `inventory-units.test.ts` (en `inventory-catalog.test.ts` no, como es de esperar). M4 (sin `version` en el UPDATE) **no detectada** (DEF-001). M4b (sin comprobación del repositorio) detectada. M5 (sin escapar comodines) detectada: 1 fallo.
+
+### Regresión
+
+Suite completa en verde en los 3 workspaces; lint y typecheck en 0; R4 confirma que el código de `main` funciona sobre la base migrada.
+
+### Revisión de pruebas permanentes
+
+Las 37 protegen comportamientos del catálogo (unidades, conversión, nombres, SKU, conflicto, padres, categorías, lista) y garantías de la base (claves únicas en carrera, decimales exactos, comodines); nombres de dominio, sin `qa-req-f-*`, sin esperas fijas ni `retry`, con `makeDatabase()`. Ninguna es de arquitectura. Algunas reglas (CA-2, CA-3, CA-9) se prueban en memoria y en MySQL, pero la de MySQL comprueba la garantía de la base ante carreras, no la regla: se aceptan.
+
+### Responsive / Accesibilidad / UX/UI / SEO / Performance
+
+No aplica a este PR (sin pantallas). Performance: lista con `count` + página y una consulta agrupada para variantes (sin N+1), revisado en el código.
+
+### Observaciones (no defectos)
+
+- Nombre de variante único en todo el catálogo (RF-2), aceptado por el usuario (P4).
+- S7 resolvió siempre con la inactivación rechazada (`CategoryInUseError`/ok); el invariante se cumple, el otro orden no se observó en 10 rondas.
+- T3 deberá crear la fila de saldo en el alta del artículo.
+
+### Pendientes de revisión manual
+
+- Simulacro `verify-backup.sh --drill` tras desplegar la épica (usuario, P1).
+
+### Limpieza
+
+Sonda `qa-req-f-049-sondas.test.ts` y sondas de lint borradas; copia de mutaciones (`scratchpad/mut`), env, logs y volcados borrados; `docker compose -p restaurante-qa-049 down -v` (contenedor, volumen y redes eliminados); 0 bases `restaurante_test*` antes del borrado; sin procesos `server.ts`/`vitest` ni puertos 3191, 3192 y 3307 en escucha; `restaurante-mysql-dev-1` sigue apagado como estaba; `git status` del worktree igual al inicial (más el ticket); `git worktree list` sin worktrees nuevos; árbol principal sin cambios. `node_modules` y cliente generado del worktree conservados (P3).
+
+### Resultado final
+
+QA_APPROVED
+
+## Plan técnico de T2 a T5 (aprobado 2026-11-19)
+
+Copia íntegra del plan técnico completo de T2 a T5 de senior-fullstack, aprobado por el usuario ("apruebo las recomedaciones").
+
+# Plan técnico completo — Épica de inventario (T2 a T5: REQ-F-050 a REQ-F-053)
+
+Autor: senior-fullstack, 2026-11-18. Solo lectura y redacción: nada modificado en el repositorio ni en el ticket.
+
+Fuentes: ticket `REQ-F-049` (marco, D-1 a D-4, PV-1 a PV-14 y TAP de T1); implementación del PR 1 de T1 sin commit en el worktree `agent-a695af6eae346107d` (`schema.prisma`, migración `20261119004332_inventario_catalogo`, `packages/core/inventory/*`, `packages/db/src/prisma-inventory-store.ts`); `deploy/mysql/initdb/01-usuarios.sh` (grants), `compose.yaml` y `deploy/compose.prod.yaml` (espera de bloqueo), `packages/db/src/client.ts` (pool), `api/src/config.ts` (`BUSINESS_TIMEZONE` ya existe en la api), `landing-pages/tests/support/database.ts` (TRUNCATE).
+NotebookLM: no se consultó en esta fase (encargo de solo lectura con créditos limitados; ningún cuaderno conocido cubre el inventario). Todo lo que sigue sale del repositorio o es una propuesta mía, marcada como tal.
+
+## 0. Base heredada de T1 (lo que T2 a T5 deben respetar)
+
+| Aspecto | Lo implementado en T1 (worktree) | Consecuencia para T2 a T5 |
+| --- | --- | --- |
+| Precisión | `decimal.ts`: `bigint` escalado; `QUANTITY_SCALE = 3`, `parseDecimal`, `formatDecimal`, `divideRounded` (mitad hacia arriba), `multiplyDecimals(a, aEsc, b, bEsc, outEsc)` | Cantidades `DECIMAL(13,3)`, costos unitarios `DECIMAL(15,4)`, importes `DECIMAL(19,4)`. Se añade `COST_SCALE = 4` y `PERCENT_SCALE = 2`. Core nunca ve `Prisma.Decimal`; el store escribe texto. |
+| Colación | Cada `CREATE TABLE … DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_es_0900_as_cs`, revisado a mano | Igual en cada migración nueva (`migrations-collation.test.ts` lo vigila). |
+| Unicidad sin mayúsculas | `name_key` + `active_name_key` único y nulo cuando está inactivo | Mismo patrón para proveedores y para "una sola versión vigente" de receta. |
+| Historial | `inventory_change` (`entity` VarChar(16), `action` VarChar(32), `changes` JSON en MediumText) | T2 añade `entity = 'recipe'`; T4 `entity = 'item'` para el punto de reorden. Sin tabla nueva de historial. |
+| Bloqueo por uso (RN-4) | `store.isInUse(itemId)` devuelve `false` | T2: `true` si aparece en una línea de receta o tiene versiones; T3: también si tiene movimientos. |
+| Transacciones | `WRITE_TX = { Serializable, maxWait 5000, timeout 10000 }`; pool `connectionLimit 5`, `acquireTimeout 5000` | El Kardex NO usa Serializable (ver 2.3). |
+| Enums | Prisma `enum` → `ENUM` de MySQL | Un valor nuevo de ENUM rompe la lectura en una imagen anterior (Prisma lanza): en T3 se define la lista completa de tipos de movimiento (ver DT-9). |
+| Grants | `restaurante_app`: DML sobre `restaurante.*`; `restaurante_migrator`: DDL sin `TRIGGER`; `restaurante_backup`: incluye `TRIGGER` | Sin tocar `deploy/`, la base no puede imponer la inmutabilidad (ver 2.3). |
+
+## 1. Partición en PR, destino y tamaño
+
+| Ticket | PR | Contenido | Destino | Tamaño |
+| --- | --- | --- | --- | --- |
+| T2 REQ-F-050 | 1 | Migración `inventario_recetas` + `core/inventory/recipe-*.ts` (esquema, DAG, costo) + store memoria/Prisma + `isInUse` + pruebas unitarias y de MySQL | `epic/inventario` | M |
+| | 2 | Contratos `inventory-recipes` + rutas api + cliente + pruebas de API | `epic/inventario` | M |
+| | 3 | Pantallas (editor de receta: propuesta Stitch previa si el usuario la aprueba) + docs + pruebas del admin | `epic/inventario` | M |
+| T3 REQ-F-051 | 1 | Migración `inventario_kardex` + `core/inventory/kardex-*.ts` (CPP, saldo, reversión) + stores + comando `inventory:verify` + pruebas (incluida concurrencia en MySQL) | `epic/inventario` | L |
+| | 2 | Contratos y rutas: proveedores, saldo inicial, compras, reversión, Kardex por artículo + pruebas de API | `epic/inventario` | M |
+| | 3 | Pantallas + costo real en recetas y fichas + docs (`despliegue.md` §6, §9, §11) + pruebas del admin + cadena punta a punta | `epic/inventario` | M |
+| — | 4 | PR `epic/inventario` → `main` (CI completo con humo de despliegue y respaldos) | `main` | — |
+| T4 REQ-F-052 | 1 | Migración `inventario_produccion` (lotes, conteos, punto de reorden) + `rol_cocina` + core + stores + pruebas | `main` | L |
+| | 2 | Contratos y rutas + rol en usuarios + pruebas de API | `main` | M |
+| | 3 | Pantallas (lotes, mermas, consumo, conteos, alertas) + docs + pruebas del admin | `main` | M |
+| T5 REQ-F-053 | 1 | Migración `inventario_reportes` (solo índices) + consultas en store + rutas + pruebas | `main` | M |
+| | 2 | Pantallas de reportes + docs + pruebas del admin | `main` | S/M |
+
+Total: 11 PR de ticket + el PR de la épica. Se puede fusionar PR 2 y 3 de cada ticket si el usuario prefiere menos ciclos (DT-1).
+
+## 2. Esquema de datos y decisiones por ticket
+
+### 2.1 T2 — Recetas multinivel (migración `inventario_recetas`)
+
+```sql
+-- Aditiva: solo crea tablas nuevas. La versión anterior funciona con ella (DATABASE_ALLOW_NEWER_SCHEMA).
+CREATE TABLE `inventory_recipe_version` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT,
+  `item_id` INTEGER NOT NULL,                 -- intermedio o compuesto (simple o variante), nunca parent
+  `number` INTEGER NOT NULL,                  -- 1, 2, 3… por artículo
+  `yield_quantity` DECIMAL(13,3) NOT NULL,    -- rendimiento en la unidad base del artículo (> 0)
+  `valid_from` DATETIME(3) NOT NULL,
+  `valid_to` DATETIME(3) NULL,                -- null = vigente
+  `current_item_id` INTEGER NULL,             -- = item_id si vigente; null si cerrada
+  `note` VARCHAR(400) NULL,
+  `created_at` DATETIME(3) NOT NULL,
+  `created_by_id` INTEGER NULL, `created_by_name` VARCHAR(60) NOT NULL,
+  UNIQUE INDEX `inventory_recipe_version_item_id_number_key`(`item_id`, `number`),
+  UNIQUE INDEX `inventory_recipe_version_current_item_id_key`(`current_item_id`),
+  INDEX `inventory_recipe_version_item_id_valid_from_idx`(`item_id`, `valid_from`),
+  PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_es_0900_as_cs;
+
+CREATE TABLE `inventory_recipe_line` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT,
+  `version_id` INTEGER NOT NULL,
+  `position` INTEGER NOT NULL,
+  `ingredient_item_id` INTEGER NOT NULL,      -- insumo, intermedio o reventa; activo al crear la versión
+  `quantity` DECIMAL(13,3) NOT NULL,          -- neta, en la unidad de receta tal como se capturó
+  `unit` VARCHAR(30) NOT NULL,                -- unidad del sistema o nombre de empaque del ingrediente
+  `net_base_quantity` DECIMAL(13,3) NOT NULL, -- neta en la unidad base del ingrediente (instantánea)
+  `waste_percent` DECIMAL(5,2) NOT NULL,      -- [0, 100)
+  `gross_base_quantity` DECIMAL(13,3) NOT NULL, -- neta/(1−merma), mitad hacia arriba
+  UNIQUE INDEX (`version_id`, `position`),
+  UNIQUE INDEX (`version_id`, `ingredient_item_id`),
+  INDEX (`ingredient_item_id`),
+  PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_es_0900_as_cs;
+
+CREATE TABLE `inventory_lock` (               -- candados de aplicación (una fila por ámbito)
+  `name` VARCHAR(32) NOT NULL, PRIMARY KEY (`name`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_es_0900_as_cs;
+INSERT INTO `inventory_lock` (`name`) VALUES ('recetas');
+-- FK: version.item_id → inventory_item, version.current_item_id → inventory_item, line.version_id → version,
+-- line.ingredient_item_id → inventory_item (todas ON DELETE RESTRICT).
+```
+
+Decisiones (a):
+
+- **Versiones inmutables y una sola vigente.** MySQL no tiene índices parciales: se usa `current_item_id` único y nulo al cerrar (el patrón `active_name_key` de T1). Crear versión = en una transacción: candado `recetas`, `UPDATE … SET valid_to = now, current_item_id = NULL WHERE current_item_id = :item`, `INSERT` de la nueva con `valid_from = now` (mismo instante: intervalos `[valid_from, valid_to)` contiguos) y sus líneas, y la entrada `inventory_change` (`entity 'recipe'`, `action 'new_version'`). Las líneas nunca se actualizan; la única escritura sobre una versión cerrada es la del cierre. El store no expone ningún otro `update`/`delete` sobre estas tablas. "Desactivar receta" = cerrar la vigente sin crear otra (`action 'close'`). `valid_from` lo pone el servidor; no se programan versiones futuras.
+- **Líneas.** Cantidad neta > 0, unidad del sistema de la misma magnitud o empaque del ingrediente (conversión con `units.ts`; sin factor → 422), merma con 2 decimales en [0, 100) (100 → 422), máximo 40 líneas, ingrediente repetido rechazado, ingrediente activo y no `parent` ni `compuesto` (un platillo no es ingrediente de otro en esta épica; ver P-3). Se guardan la captura y la instantánea en unidad base: como RN-4 bloquea los factores en cuanto el artículo está en una receta, la instantánea nunca diverge.
+- **Bruta** = `divideRounded(net × 10 000, 10 000 − merma×100)` en escala 3 (merma en centésimas de punto: `bigint`), mitad hacia arriba, coherente con REQ-F-046 RN-1.
+- **DAG (RN-5).** Al guardar la versión de X: cargar en una consulta todas las líneas de las versiones vigentes (cientos de filas), construir la adyacencia en memoria y hacer DFS desde cada ingrediente de X buscando X (coste O(V+E) del subgrafo alcanzable, < 1 ms con cientos de nodos; profundidad máxima 8, más → 422 "demasiados niveles"). Error 422 `RECIPE_CYCLE` con la ruta ("Salsa → Adobo → Salsa"). Carrera A→B y B→A simultáneas: el candado `SELECT … FROM inventory_lock WHERE name='recetas' FOR UPDATE` serializa las escrituras de recetas (poco frecuentes), así que la segunda ve la primera y detecta el ciclo. Evita depender de interbloqueos de Serializable.
+- **Costo teórico.** `costoUnitario(art)`: insumo o reventa → CPP vigente (T3); intermedio con receta vigente → Σ(bruta × costoUnitario(ingrediente)) / rendimiento, recursivo con memoización por petición (DT-7: se explota hasta los insumos; el CPP propio del intermedio producido se muestra aparte desde T4). Aritmética: `multiplyDecimals(bruta, 3, costo, 4, 7)`, suma en escala 7, división por el rendimiento a escala 4 con `divideRounded`; se muestra a 2 decimales. Sin CPP (antes de T3, o un insumo sin compras): el resultado es `{ status: 'incomplete', missing: [ids] }` y la pantalla dice "Sin costo" con la lista de ingredientes sin costo; nunca se trata como 0. **Sin caché**: se recalcula en cada lectura (volumen pequeño; una consulta de líneas vigentes + una de saldos). Si un día pesa, una caché por petición basta.
+- **Inactivar un artículo usado en recetas vigentes** (insumo o sub-receta): se permite con confirmación, como las variantes de T1: sin ella 409 `ITEM_IN_ACTIVE_RECIPES` con el número; las versiones vigentes siguen igual (historia intacta) y muestran "usa un artículo inactivo"; una versión nueva no puede añadirlo. Inactivar un intermedio no cierra su receta.
+- `isInUse` (RN-4): `true` si el artículo tiene versiones o aparece en líneas.
+
+### 2.2 T3 — Kardex, proveedores, compras, CPP, saldo inicial (migración `inventario_kardex`)
+
+```sql
+CREATE TABLE `inventory_supplier` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(80) NOT NULL, `name_key` VARCHAR(160) NOT NULL,
+  `active_name_key` VARCHAR(160) NULL UNIQUE,
+  `contact` VARCHAR(120) NULL,                -- PV-7: un contacto mínimo (teléfono o correo), nada más
+  `active` BOOLEAN NOT NULL DEFAULT true, `version` INTEGER NOT NULL DEFAULT 1,
+  `created_at` DATETIME(3) NOT NULL, `updated_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_es_0900_as_cs;
+
+CREATE TABLE `inventory_stock` (               -- proyección mutable del Kardex (una fila por artículo no parent)
+  `item_id` INTEGER NOT NULL,
+  `quantity` DECIMAL(13,3) NOT NULL DEFAULT 0, -- con signo: PV-2 permite negativos
+  `avg_cost` DECIMAL(15,4) NULL,              -- CPP; null = sin costo
+  `last_cost` DECIMAL(15,4) NULL,
+  `last_seq` INTEGER NOT NULL DEFAULT 0,
+  `updated_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`item_id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_es_0900_as_cs;
+INSERT INTO `inventory_stock` (`item_id`, `updated_at`)
+  SELECT `id`, CURRENT_TIMESTAMP(3) FROM `inventory_item` WHERE `kind` <> 'parent';
+
+CREATE TABLE `inventory_document` (            -- documento de referencia (cabecera), inmutable
+  `id` INTEGER NOT NULL AUTO_INCREMENT,
+  `type` ENUM('saldo_inicial','compra','reversion','ajuste','merma','consumo_interno','produccion','conteo','venta','devolucion_venta') NOT NULL,
+  `occurred_on` DATE NOT NULL,                -- fecha del hecho en BUSINESS_TIMEZONE (factura)
+  `recorded_at` DATETIME(3) NOT NULL,
+  `supplier_id` INTEGER NULL,                 -- compras
+  `reference` VARCHAR(40) NULL,               -- folio de factura o nota
+  `cost_basis` ENUM('con_iva','sin_iva') NULL,-- PV-6: criterio con el que se registró la compra
+  `reason` VARCHAR(32) NULL,                  -- T4: motivo de lista cerrada (validado en core)
+  `note` VARCHAR(400) NULL,
+  `total_cost` DECIMAL(19,4) NOT NULL,
+  `reverses_document_id` INTEGER NULL UNIQUE, -- una reversión por documento
+  `idempotency_key` VARCHAR(80) NULL UNIQUE,  -- ámbito + requestId del formulario
+  `actor_id` INTEGER NULL, `actor_name` VARCHAR(60) NOT NULL,
+  INDEX (`type`, `recorded_at`), INDEX (`supplier_id`, `recorded_at`), INDEX (`recorded_at`),
+  PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_es_0900_as_cs;
+
+CREATE TABLE `inventory_movement` (            -- Kardex: solo altas
+  `id` INTEGER NOT NULL AUTO_INCREMENT,
+  `document_id` INTEGER NOT NULL,
+  `item_id` INTEGER NOT NULL,
+  `seq` INTEGER NOT NULL,                     -- 1, 2, 3… por artículo, sin huecos
+  `type` (mismo ENUM que el documento) NOT NULL,
+  `quantity` DECIMAL(13,3) NOT NULL,          -- con signo: + entrada, − salida (≠ 0)
+  `entered_quantity` DECIMAL(13,3) NOT NULL, `entered_unit` VARCHAR(30) NOT NULL,
+  `balance_before` DECIMAL(13,3) NOT NULL, `balance_after` DECIMAL(13,3) NOT NULL,
+  `unit_cost` DECIMAL(15,4) NULL,             -- costo aplicado (compra: pagado/unidad base; salida: CPP)
+  `line_total` DECIMAL(19,4) NULL,            -- compra: importe pagado tal como se capturó
+  `avg_cost_before` DECIMAL(15,4) NULL, `avg_cost_after` DECIMAL(15,4) NULL,
+  `recorded_at` DATETIME(3) NOT NULL,
+  `actor_id` INTEGER NULL, `actor_name` VARCHAR(60) NOT NULL,
+  UNIQUE INDEX (`item_id`, `seq`),
+  INDEX (`item_id`, `recorded_at`), INDEX (`document_id`), INDEX (`type`, `recorded_at`), INDEX (`recorded_at`),
+  PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_es_0900_as_cs;
+-- FK: stock.item_id, movement.item_id → inventory_item; movement.document_id → document;
+-- document.supplier_id → supplier; document.reverses_document_id → document; actor_id → user. RESTRICT.
+```
+
+Decisiones (b):
+
+- **Inmutabilidad del Kardex (DT-5).** Opciones:
+  | Opción | Pros | Contras |
+  | --- | --- | --- |
+  | Solo dominio: el store no tiene `update`/`delete` de documento ni movimiento; regla de ESLint (`no-restricted-syntax`) que prohíbe `inventoryMovement.update*/delete*/upsert` e `inventoryDocument.*` igual fuera del store; comando `inventory:verify` que comprueba la cadena | Sin tocar `deploy/` ni el VPS; compatible con TRUNCATE de pruebas y con la vuelta atrás | Un acceso SQL manual con el usuario de la app podría alterar filas (lo detecta `verify`) |
+  | Grants por tabla (quitar UPDATE/DELETE a `restaurante_app`) | Garantía en la base | MySQL no revoca una tabla de un grant `restaurante.*`: hay que rehacer todos los grants por tabla en `01-usuarios.sh` y a mano en el VPS, y mantenerlos en cada tabla nueva |
+  | Triggers `BEFORE UPDATE/DELETE … SIGNAL` | Garantía en la base | `restaurante_migrator` no tiene `TRIGGER`; con binlog hace falta `log_bin_trust_function_creators`; cambia `deploy/` y el VPS; las restauraciones deben llevar los triggers |
+  Recomendación: **solo dominio + lint + `inventory:verify`** ahora; triggers como endurecimiento posterior en un ticket de operación si el usuario lo quiere.
+- **`inventory:verify`** (`api/scripts/inventory-verify.ts`, solo lectura): para cada artículo, `seq` contiguo, `balance_before(n) = balance_after(n−1)`, `balance_after = before + quantity`, y `inventory_stock.quantity/last_seq/avg_cost` = último movimiento. Sale con 1 si algo no cuadra. Se usa en el simulacro de restauración (sustituye a ampliar el manifiesto de respaldos).
+- **Saldo y bloqueo por fila.** Toda escritura del Kardex: transacción `ReadCommitted` (no Serializable: evita los bloqueos compartidos implícitos y los interbloqueos de rango), `timeout 10 000`, `maxWait 5 000`; primero `SELECT … FROM inventory_stock WHERE item_id IN (…) ORDER BY item_id FOR UPDATE` (`$queryRaw`, orden ascendente fijo = sin interbloqueos entre documentos de varios artículos), después cálculo en core y `INSERT` de documento y movimientos y `UPDATE` de los saldos. Interbloqueo (1213) → reintento acotado (3); espera agotada (1205, 10 s en producción, 5 s en pruebas) → 503 `INVENTORY_BUSY` "Inténtalo de nuevo". Las filas de saldo existen siempre: la migración las crea para los artículos de T1 y el alta de un artículo no parent (repositorio de T1, ajuste mínimo) las crea en su transacción. El cambio de unidad o empaques (RN-4) toma también el `FOR UPDATE` de su saldo antes de `isInUse`, así un primer movimiento simultáneo no se cuela.
+- **Pool de 5.** Transacciones cortas (una lectura bloqueante, N inserciones en un `createMany`, N updates): ~10–30 ms. Un documento admite como máximo 50 líneas. Sin llamadas externas dentro de la transacción.
+- **CPP (RN-9) en enteros.** `q` escala 3, `c` escala 4. Entrada con costo `k` y cantidad `d`: si `q ≤ 0` o `c` nulo → `c' = k`; si no, `c' = divideRounded(q·c + d·k, q + d)` (numerador escala 7 / denominador escala 3 = escala 4, mitad hacia arriba). Salidas: `unit_cost = c`, CPP sin cambio; con `c` nulo, salida sin costo (se marca). `last_cost = k`.
+- **Compra.** Cabecera: proveedor (opcional, activo), fecha del hecho (`occurred_on`: hoy o hasta 31 días atrás, nunca futura; DT-8), folio, criterio de IVA (por defecto `con_iva`, PV-6), nota. Líneas: artículo activo de tipo insumo o reventa (o intermedio comprado: P-4), cantidad en unidad del sistema o empaque, **importe pagado de la línea** (escala 4). Costo por unidad base = importe / cantidad base (escala 4). Importe 0 se permite (regalo) con aviso. El Kardex se ordena por `seq` (orden de registro); `occurred_on` es informativo y filtra reportes de compras.
+- **Saldo inicial (PV-5).** Documento `saldo_inicial` con varias líneas (cantidad ≥ 0 y costo unitario); solo para artículos con `last_seq = 0`, si no 409 `INITIAL_BALANCE_NOT_ALLOWED` ("Usa un ajuste o un conteo").
+- **Corrección (RN-8).** Reversión de un documento completo, una vez (`reverses_document_id` único): movimientos contrarios. Compra revertida: salida al costo de la compra; CPP = `(q·c − d·k)/(q − d)` si `q − d > 0`, si no se conserva `c`. Reversión de salidas: entrada al costo con que salió.
+- **Idempotencia.** Persistente (dinero): `idempotency_key` único en el documento (`compra:<requestId>`); P2002 en esa clave → 200 con el documento existente. El store en memoria de T1 (`createIdempotencyStore`) no sobrevive a un reinicio: no basta aquí.
+- **Respaldo y restauración.** `mysqldump --databases restaurante` ya incluye las tablas; `restore.sh` sin cambios; simulacro (`verify-backup.sh --drill`, §11.8) + `npm run inventory:verify` contra la base restaurada.
+
+### 2.3 T4 — Producción, mermas, consumo interno, conteos, reorden, rol Cocina (migraciones `inventario_produccion` y `rol_cocina`)
+
+```sql
+CREATE TABLE `inventory_production` (           -- detalle del lote (1:1 con su documento 'produccion')
+  `document_id` INTEGER NOT NULL,
+  `item_id` INTEGER NOT NULL,                   -- intermedio producido
+  `recipe_version_id` INTEGER NOT NULL,         -- versión vigente al registrar
+  `batches` DECIMAL(13,3) NOT NULL,             -- tandas de receta (consumo = líneas × tandas)
+  `expected_quantity` DECIMAL(13,3) NOT NULL,   -- rendimiento × tandas
+  `actual_quantity` DECIMAL(13,3) NOT NULL,     -- lo que realmente salió (entra al Kardex)
+  PRIMARY KEY (`document_id`)
+) …;
+CREATE TABLE `inventory_count` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT,
+  `status` ENUM('abierto','aplicado','cancelado') NOT NULL,
+  `category_id` INTEGER NULL, `note` VARCHAR(400) NULL,
+  `opened_at` DATETIME(3) NOT NULL, `closed_at` DATETIME(3) NULL,
+  `document_id` INTEGER NULL UNIQUE,            -- documento 'conteo' al aplicar
+  `version` INTEGER NOT NULL DEFAULT 1,
+  `actor_id` INTEGER NULL, `actor_name` VARCHAR(60) NOT NULL, PRIMARY KEY (`id`)
+) …;
+CREATE TABLE `inventory_count_line` (
+  `count_id` INTEGER NOT NULL, `item_id` INTEGER NOT NULL,
+  `counted_quantity` DECIMAL(13,3) NOT NULL, `entered_quantity` DECIMAL(13,3) NOT NULL, `entered_unit` VARCHAR(30) NOT NULL,
+  `seq_at_count` INTEGER NOT NULL,              -- last_seq del artículo al capturar
+  `balance_at_count` DECIMAL(13,3) NOT NULL,
+  `reason` VARCHAR(32) NULL,                    -- obligatorio si hay diferencia
+  `counted_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`count_id`, `item_id`)
+) …;
+ALTER TABLE `inventory_item` ADD COLUMN `min_quantity` DECIMAL(13,3) NULL, ADD COLUMN `reorder_point` DECIMAL(13,3) NULL;
+-- rol_cocina (aparte):
+ALTER TABLE `user` MODIFY `role` ENUM('admin','editor','gerente','cocina') NOT NULL;
+```
+
+Decisiones (c):
+
+- **Lote atómico (RN-10).** Una transacción: versión vigente del intermedio (si no tiene → 409 `NO_ACTIVE_RECIPE`), consumo de cada ingrediente = `gross_base_quantity × tandas` (un nivel: consume existencias de intermedios, no las vuelve a explotar), bloqueo `FOR UPDATE` de todos los saldos (ingredientes + producto) en orden de `item_id`, salidas al CPP, entrada del producto con `unit_cost = Σ valor consumido / actual_quantity` (actualiza su CPP). Saldos negativos permitidos (PV-2) y señalados. Todo o nada. Diferencia entre esperado y real queda en `inventory_production` (rendimiento real; DT-10).
+- **Mermas, consumo interno y ajustes (RN-11).** Documentos con `reason` de lista cerrada en core (`VARCHAR` y no ENUM, para poder ampliarla sin romper la vuelta atrás). Propuesta (P-5): merma = `caducidad`, `dano`, `preparacion`, `derrame`, `otro`; consumo interno = `comida_personal`, `prueba`, `otro`; ajuste = `error_captura`, `otro`. `otro` exige nota. Ajuste de entrada sin costo usa el CPP vigente.
+- **Conteos concurrentes con movimientos.** Cada línea guarda `seq_at_count` y `balance_at_count` al capturarla. Al aplicar: diferencia = contado − `balance_at_count`; se aplica como movimiento `conteo` sobre el saldo actual (saldo nuevo = actual + diferencia), así los movimientos posteriores a la captura no se pierden ni se duplican. Diferencia ≠ 0 exige motivo. Aplicar bloquea los saldos en orden. Un conteo abierto no bloquea la operación.
+- **Reorden y alertas.** `reorder_point` y `min_quantity` en el artículo (edición del catálogo con historial; `ADD COLUMN NULL` es instantáneo en MySQL 8.4 y la imagen anterior lo ignora). Crítico = `quantity ≤ reorder_point` o `quantity < 0`. Alertas calculadas al consultar (sin tabla de alertas ni notificaciones salientes; P-6): aviso en la cabecera del inventario con el número de críticos y la lista.
+- **Rol Cocina/Producción.** Mismo procedimiento que el gerente (core `ROLES`, contratos, `user-repository`, pantalla de usuarios, sin negocios). Riesgo de vuelta atrás manual a una imagen sin `cocina`: el procedimiento DT-2 de T1 se amplía (`UPDATE user SET role='editor', session_version=session_version+1 WHERE role IN ('gerente','cocina')`). La vuelta atrás automática del despliegue de T4 no lo sufre (aún no hay cocineros).
+
+### 2.4 T5 — Reportes (migración `inventario_reportes`, solo índices si las mediciones lo piden)
+
+- **Kardex filtrable:** artículo, tipo, usuario, documento, rango de fechas. Rangos en `BUSINESS_TIMEZONE` (la api ya la tiene): el día local se convierte a `[inicio, fin)` en UTC en core con `Intl` (como `schedule`). Paginación por clave (`id < :cursor ORDER BY id DESC LIMIT 50`) con los índices de T3 `(item_id, recorded_at)`, `(type, recorded_at)`, `(recorded_at)`; si se filtra por usuario, índice `(actor_id, recorded_at)` en esta migración.
+- **Valorización:** actual = Σ `inventory_stock.quantity × avg_cost` (una consulta, agrupada por categoría y tipo; negativos y "sin costo" aparte). A una fecha (DT-11): último movimiento de cada artículo con `recorded_at < fin` (`balance_after × avg_cost_after`) con el índice `(item_id, recorded_at)`.
+- **Stock crítico:** consulta de T4, ordenada por déficit.
+- **Historial de compras y evolución de precios:** documentos `compra` por proveedor, artículo y fecha (`occurred_on`); evolución = tabla de `unit_cost` por compra de un artículo (sin gráfica con JavaScript; P-7).
+- **Exportación:** el marco de la épica no la pide → **no** se incluye (DT-12); si el usuario la quiere, CSV desde la api con escape contra inyección de fórmulas.
+- **Rendimiento:** todas las consultas por índice y paginadas; sin N+1; lectura en `READ_TX`. Volumen esperado: miles de movimientos al mes.
+
+## 3. Contratos, endpoints y pantallas
+
+Todas bajo `/api/v1/admin/inventario/…`, con `access.inventory(ctx, { write, permission })` (401 → 403 `FORBIDDEN_ROLE` → CSRF 403), JSON cerrado, cantidades y costos como texto decimal, errores con el formato central.
+
+| Ticket | Rutas (api) | Códigos propios |
+| --- | --- | --- |
+| T2 | `GET articulos/:id/recetas` (vigente + versiones), `GET recetas/versiones/:id` (líneas + costo teórico), `POST articulos/:id/recetas` (nueva versión, `Idempotency-Key`), `POST articulos/:id/recetas/cerrar`, `GET recetas` (lista de artículos con receta y su costo) | 422 `RECIPE_CYCLE`, `fields`; 409 `ITEM_IN_ACTIVE_RECIPES`, `RECIPE_NOT_ALLOWED` |
+| T3 | `GET/POST proveedores`, `PUT proveedores/:id`, `POST …/desactivar|reactivar`; `POST documentos/saldo-inicial`, `POST documentos/compras`, `POST documentos/:id/reversion`, `GET documentos/:id`; `GET existencias?q=&categoria=&pagina=`; `GET articulos/:id/kardex?pagina=` | 409 `INITIAL_BALANCE_NOT_ALLOWED`, `ALREADY_REVERSED`; 503 `INVENTORY_BUSY` |
+| T4 | `POST documentos/produccion`, `POST documentos/mermas`, `POST documentos/consumo-interno`, `POST documentos/ajustes`; `GET/POST conteos`, `PUT conteos/:id/lineas`, `POST conteos/:id/aplicar|cancelar`; `GET criticos` | 409 `NO_ACTIVE_RECIPE`, `COUNT_CLOSED` |
+| T5 | `GET reportes/kardex`, `GET reportes/valorizacion?fecha=`, `GET reportes/criticos`, `GET reportes/compras`, `GET reportes/precios/:itemId` | 422 filtros |
+
+Permisos (core `authorization.ts`, `canInventory(user, permiso)`):
+
+| Permiso | Admin | Gerente | Cocina (T4) | Editor |
+| --- | --- | --- | --- | --- |
+| Catálogo y recetas (escribir) | sí | sí | no | no |
+| Recetas y existencias (leer) | sí | sí | sí, sin costos | no |
+| Proveedores, compras, saldo inicial, reversiones | sí | sí | no | no |
+| Lotes, mermas, consumo interno | sí | sí | sí | no |
+| Ajustes y conteos | sí | sí | no (P-8) | no |
+| Reportes con costos | sí | sí | no | no |
+
+Pantallas SSR (`inventory-manager/src/controllers/inventory-*.ts`, `views/pages/inventory-*.html`, subnavegación "Artículos | Categorías | Recetas | Existencias | Compras | Producción | Conteos | Reportes" según rol):
+
+- T2: receta del artículo (versión vigente, historial de versiones, costo teórico o "Sin costo" con faltantes) y editor de versión: formulario con filas fijas (`row-fieldset`, 40 filas en bloques de 10 con "Añadir más filas" por GET, sin JS). Es la única pantalla candidata a Stitch (PV-8): propuesta y aprobación del usuario antes del PR 3.
+- T3: proveedores (lista y formulario), existencias (lista con saldo, CPP, valor y estado negativo), alta de compra (cabecera + 15 filas), saldo inicial (filas), documento (detalle + "Revertir" con confirmación), Kardex del artículo en su ficha; la ficha y las recetas muestran el CPP y el costo real.
+- T4: registrar lote (artículo → versión vigente mostrada → tandas y cantidad real), merma, consumo interno, ajuste, conteos (abrir por categoría, capturar, revisar diferencias con motivo, aplicar), aviso de críticos en la cabecera del inventario.
+- T5: reportes con formulario GET de filtros, tablas con `caption`, paginación.
+
+## 4. Compatibilidad, respaldos y documentación
+
+| Migración | Vuelta atrás automática (imagen anterior + `DATABASE_ALLOW_NEWER_SCHEMA`) | Vuelta atrás manual |
+| --- | --- | --- |
+| `inventario_recetas` | Tablas nuevas ignoradas; colación correcta | Sin pasos |
+| `inventario_kardex` | Tablas nuevas + filas de saldo; la imagen de T2 no las lee | Sin pasos. Los movimientos registrados se conservan y vuelven a usarse al avanzar |
+| `inventario_produccion` | `ADD COLUMN NULL` y tablas nuevas; la imagen de T3 lee documentos con tipos de T4: no rompe porque el ENUM ya los traía desde T3 (DT-9) | Sin pasos |
+| `rol_cocina` | Sin cocineros en el momento del despliegue | Procedimiento DT-2 ampliado a `cocina` |
+| `inventario_reportes` | Solo índices | Sin pasos |
+
+Documentación por ticket:
+
+- T2: `arquitectura.md` §4 (recetas en `core/inventory`) y §6 (rutas); `README.md` (semilla de desarrollo con recetas ficticias).
+- T3: `arquitectura.md` (Kardex, CPP, concurrencia, inmutabilidad); `despliegue.md` §9 y §11.1 (tablas del Kardex), §11.8 (`inventory:verify` en el simulacro); `README.md` (`npm run inventory:verify`).
+- T4: `despliegue.md` §6 (procedimiento de roles ampliado); `arquitectura.md` (lotes y conteos, rol Cocina); `README.md`.
+- T5: `arquitectura.md` §6 (rutas de reportes).
+- Propuestas de `.claude/` (con autorización expresa): `CLAUDE.md` §8 y `senior-fullstack.md` (Persistencia y API) al cerrar T3 y T4.
+
+## 5. Pruebas funcionales permanentes y DoD
+
+| Ticket | Archivo (permanente) | Casos |
+| --- | --- | --- |
+| T2 | `api/tests/unit/inventory-recipes.test.ts` (store en memoria) | bruta = neta/(1−merma) con redondeo y límites (0 %, 99.99 %, 100 % rechazado); conversión de unidad de receta; ciclo directo e indirecto con su ruta; profundidad máxima; nueva versión cierra la anterior (una vigente, intervalos contiguos); versión cerrada inmutable; costo teórico multinivel exacto y "Sin costo" con faltantes; inactivar usado con y sin confirmación; RN-4 bloquea la unidad base al usarse |
+| | `landing-pages/tests/integration/prisma-inventory-store.test.ts` (ampliar) | dos versiones simultáneas del mismo artículo (una vigente); ciclo A→B / B→A simultáneo (uno falla) |
+| | `api/tests/integration/admin-inventory-api.test.ts` (ampliar o `…-recipes-api.test.ts` si pasa de 20 s) | permisos, 422 `RECIPE_CYCLE`, idempotencia |
+| | `inventory-manager/tests/integration/inventory-recipes.test.ts` | editor de versión sin JS, errores por línea, "Sin costo" |
+| T3 | `api/tests/unit/inventory-kardex.test.ts` | CPP (fórmula, existencia ≤ 0, redondeo), salida al CPP, negativo permitido, saldo inicial solo una vez, reversión de compra y su CPP, una reversión por documento, costo por unidad base desde empaque, criterio de IVA guardado |
+| | `landing-pages/tests/integration/prisma-inventory-kardex.test.ts` (MySQL) | N salidas concurrentes del mismo artículo: `seq` contiguo y saldo exacto; dos documentos con artículos cruzados sin interbloqueo visible; idempotencia persistente (doble envío = un documento); DECIMAL exacto ida y vuelta; `inventory:verify` detecta una fila alterada; **cadena punta a punta** (saldo inicial → compra → costo real de una receta) |
+| | `api/tests/integration/admin-inventory-kardex-api.test.ts` | permisos por rol, 409/422/503 |
+| | `inventory-manager/tests/integration/inventory-kardex.test.ts` | compra, Kardex, existencias, reversión con confirmación |
+| T4 | `api/tests/unit/inventory-production.test.ts` | lote todo o nada, consumo × tandas, costo del lote, sin receta vigente, motivos cerrados, conteo con movimientos posteriores, críticos |
+| | `prisma-inventory-kardex.test.ts` (ampliar) | lote concurrente con una compra del mismo insumo; aplicar conteo con una salida simultánea; usuario `cocina` guardado y leído |
+| | API y admin | permisos de Cocina (sí lotes/mermas, no compras/ajustes/costos) |
+| T5 | `api/tests/unit/inventory-reports.test.ts` | rango de fechas en `BUSINESS_TIMEZONE` (borde de medianoche, `vi.setSystemTime`), valorización con negativos y sin costo, valorización a una fecha, paginación por clave |
+| | API y admin | filtros inválidos 422, permisos |
+
+Cada archivo < 20 s (si no, se parte por `describe` con la preparación en `tests/support/`). Se ejecutan y **no se commitean** (QA Report): vuelta atrás por migración, respaldo y restauración con `inventory:verify`, carreras extra y mediciones de contención del pool, 360 px/teclado/sin JS/axe, regresión de landings, bot, productos y página, mutaciones.
+
+DoD por ticket (verificable): migración aditiva con colación revisada y vuelta atrás comprobada con la imagen anterior; `build:css`, `typecheck`, `lint` y `test` en verde; CI en verde (`calidad`, `docker`, `auditoria`, `pruebas` en `pass`); permisos por rol comprobados en API y admin; criterios del ticket con evidencia; docs actualizadas; sin pruebas no funcionales commiteadas. Además: T2, costo teórico exacto contra un cálculo a mano y ciclo rechazado; T3, 20 salidas concurrentes sin pérdida y `inventory:verify` en 0 sobre la base restaurada; T4, lote revertible solo por documento y conteo concurrente correcto; T5, consultas del Kardex con índice (EXPLAIN en QA) y < 300 ms con 50 000 movimientos sintéticos (medición, no prueba).
+
+## 6. Dependencias, riesgos y lo que puede posponerse
+
+Dependencias: T2 ← T1 (PR 1–3). T3 ← T2 (`isInUse`, costo real). PR épica → `main` ← T3. T4 ← T3 (Kardex) y T2 (recetas). T5 ← T3 y T4 (críticos).
+
+| Riesgo | Mitigación |
+| --- | --- |
+| Concurrencia/interbloqueos | `FOR UPDATE` en orden ascendente de `item_id`, `ReadCommitted`, reintento acotado de 1213, 503 en 1205, pruebas reales en MySQL |
+| Precisión | Solo `bigint`; una única función de redondeo; pruebas de límites; importes guardados tal como se pagaron |
+| Inmutabilidad | Store sin updates, lint, `inventory:verify` en el simulacro; triggers como opción futura |
+| Explosión multinivel | Una consulta de líneas vigentes y DFS/memoización en memoria; profundidad ≤ 8, ≤ 40 líneas |
+| Pool de 5 | Transacciones cortas, ≤ 50 líneas por documento, medición de contención en QA |
+| Divergencia de la rama | PR de integración `main` → épica tras cada merge; la épica a `main` al acabar T3 |
+| ENUM en vuelta atrás | Tipos de movimiento completos desde T3; motivos en VARCHAR; procedimiento de roles |
+| Pantallas sin diseño | Sistema visual del admin; Stitch solo en el editor de recetas, con aprobación |
+
+Posponible sin romper el modelo: valorización a una fecha (T5), reversión de documentos que no sean compras (T3 → T4), punto mínimo separado del de reorden, CSV, triggers.
+
+## 7. Decisiones técnicas para aprobar
+
+| # | Decisión | Recomendación |
+| --- | --- | --- |
+| DT-1 | Partición | 3 PR por T2, T3 y T4; 2 en T5 (11 en total) |
+| DT-5 | Inmutabilidad del Kardex y de las versiones | Dominio + lint + `inventory:verify`; sin triggers ni cambios en `deploy/` |
+| DT-6 | Versiones de receta | `valid_from/valid_to` + `current_item_id` único; candado `inventory_lock('recetas')` para serializar escrituras de recetas |
+| DT-7 | Costo teórico de un intermedio | Explosión hasta insumos al CPP (teórico puro); el CPP propio del intermedio producido se muestra aparte (T4) |
+| DT-8 | Fecha de los documentos | Orden del Kardex por registro (`seq`); fecha del hecho informativa, hasta 31 días atrás |
+| DT-9 | ENUM de tipos de movimiento | Lista completa desde T3, incluidos `venta` y `devolucion_venta` reservados para la épica de ventas |
+| DT-10 | Lote | Tandas de receta + cantidad real; consumo según receta, entrada según lo real |
+| DT-11 | Valorización a una fecha | Incluirla en T5 (sale del Kardex sin tablas nuevas) |
+| DT-12 | Exportación CSV | No incluir (no está pedida) |
+| DT-13 | Transacciones del Kardex | `ReadCommitted` + `SELECT … FOR UPDATE` ordenado, no Serializable |
+| DT-14 | Idempotencia de documentos | Clave persistente única en `inventory_document` |
+| DT-15 | Motivos | Lista cerrada en core sobre `VARCHAR(32)` |
+
+Preguntas abiertas imprescindibles (con recomendación):
+
+- **P-1.** ¿Un compuesto (platillo) necesita existencias? Recomendado: no; se prepara al momento, solo tiene receta y costo (su descuento llega con ventas).
+- **P-2.** Rendimiento de la receta: ¿siempre en la unidad base del artículo? Recomendado: sí (p. ej. "rinde 5 kg de salsa", "1 pza de taco").
+- **P-3.** ¿Un platillo puede ser ingrediente de otro (combo)? Recomendado: no en esta épica.
+- **P-4.** ¿Se compran intermedios (tortilla comprada)? Recomendado: permitir compras de insumo, reventa e intermedio.
+- **P-5.** Listas de motivos de merma, consumo interno y ajuste: confirmar la propuesta de 2.3.
+- **P-6.** ¿Alertas solo en pantalla, o también aviso por WhatsApp al personal? Recomendado: solo pantalla.
+- **P-7.** ¿Evolución de precios como tabla o con gráfica? Recomendado: tabla (sin JS).
+- **P-8.** ¿Cocina captura conteos? Recomendado: no; los conteos y ajustes son del gerente.
+
+## 8. Épica de ventas posterior (solo cómo queda preparada)
+
+- **Enlace menú ↔ inventario:** tabla futura `sales_product_link (product_id, variant_id NULL) → inventory_item (compuesto o reventa)`; T1 a T5 no tocan el menú (D-2).
+- **Descuento y explosión:** una venta crea un documento `venta` (tipo ya reservado en DT-9) con salidas de los ingredientes de la versión de receta vigente en el instante de la venta (`valid_from ≤ t < valid_to`), consumiendo intermedios de existencias (mismo criterio de un nivel que el lote). El bloqueo ordenado y el CPP de T3 sirven sin cambios.
+- **Modificadores:** fijos = líneas de la receta; removibles y extras = columna futura en `inventory_recipe_line` (`ADD COLUMN NULL`, aditiva) o una tabla de modificadores; nada que adelantar ahora.
+- **Cancelaciones:** reintegro = documento `devolucion_venta` (entrada al costo con que salió, como la reversión); si el producto ya se preparó, documento `merma`. Ambos existen tras T3/T4.
+
+## 9. Correspondencia con las 5 fases del prompt original
+
+| Fase original | Ticket | Qué queda fuera por decisión del usuario |
+| --- | --- | --- |
+| 1. Catálogo, unidades y variantes | T1 | Precio de venta (PV-10); negocio en artículos (D-3) |
+| 2. Recetas multinivel, merma y costo | T2 | Modificadores (ventas) |
+| 3. Kardex, compras, CPP | T3 | Facturación/CFDI, varias monedas |
+| 4. Operación diaria (producción, mermas, conteos, alertas) | T4 | Lotes con caducidad, escáner, comandas |
+| 5. Ventas, POS, corte Zeta, mix, teórico vs. real, utilidad | — (épica posterior, D-1) | Todo; T5 solo cubre los reportes de inventario |
+
+## Anexo A — Requerimiento original completo del usuario (texto íntegro)
+
+> Quiero crear una épica nueva para integrar la estructura completa de inventarios, en ella se podrá manejar desde la existencia de productos, los ingredientes que conforman los productos si son manufacturados/preparados en el negocio, los sabores de las bebidas, todos los productos tienen, su información individual, nombre, descripción, id único, unidad de medida costo de adquisición y precio de venta, los ingredientes que conforman un taco, o un molote o una birria y los ingredientes pueden tener referencia circular ya que la tortilla es un ingrediente pero está hecha de otro ingrediente que es la masa, la tortilla es por unidad y su unidad de medida está en piezas y usa cierta cantidad de masa en gramos, la masa de maíz se adquiere por kilo, lo mismo el consomé, usa agua en litros, jitomate en kilos, cebolla en kilos, sal en gramos, etc.
+> De esta forma cuando marque un taco o quesabirria vendida sabre cuantas tortillas, cuantos gramos de maza, queso carne etc., tengo que descontar del inventario, lo mismo con refrescos y sus sabores, las aguas frescas, etc.
+> Quiero contar una interfaz intuitiva, segura y fiable, para controlar el CRUD de ingredientes, productos, hay productos que tienen sabores o versiones y otros tienen una receta asociada, quiero poder crear recetas libremente y poder modificarlas, quiero poder actualizar productos y darlos de baja sin afectar el historial, quiero contar con reportes históricos de movimientos de inventarios, registro y gestión de recetas e ingredientes con la capacidad de guardar las versiones con forme vayan cambiando, así poder saber cuáles eran los ingredientes en el pasado si consulto un reporte, quiero poder generar reportes de ventas, compras.
+> A continuación, se enlistan los reportes esenciales clasificados por área operativa:
+> 1. Reportes de Ventas y Operación (Diarios y Semanales)
+> • Reporte de corte de caja diario (Zeta): Detalla el total vendido, las formas de pago (efectivo, tarjeta, transferencias, apps de reparto) y el cuadre del fondo de caja.
+> • Reporte de ventas por platillo (Mix de ventas): Muestra cuáles antojitos o bebidas se venden más y cuáles tienen baja rotación.
+> • Reporte de ventas por horario y día: Identifica las horas pico y los días más flojos para programar turnos de personal y producción de masa o guisados.
+> • Reporte de cancelaciones y cortesías: Registra platillos devueltos, errores en comanda o descuentos otorgados para prevenir robos hormiga.
+> • Reporte de comisiones por plataformas de delivery: Desglosa las ventas generadas por aplicaciones externas y el porcentaje exacto retenido por comisiones.
+> 2. Reportes de Inventarios y Almacén (Diarios y Semanales)
+> • Reporte de inventario físico vs. teórico: Compara la materia prima que debería haber según las ventas contra lo que realmente queda en cocina y almacén.
+> • Reporte de mermas y desperdicios: Contabiliza ingredientes echados a perder, comida quemada o sobrantes no reutilizables al final del día.
+> • Reporte de consumo de insumos críticos: Monitorea el gasto exacto de ingredientes de alto costo o volumen, como carne, queso, aceite, gas y masa.
+> • Reporte de compras y proveedores: Registra las adquisiciones realizadas, variaciones de precios en insumos clave (como limón, aguacate o tomate) y cuentas por pagar.
+> 3. Reportes de Costos y Rentabilidad (Quincenales o Mensuales)
+> • Reporte de costeo de recetas estándar (Escandallos): Define el costo exacto de producción por porción de cada taco, quesadilla, pozole o agua fresca.
+> • Reporte de costo de alimentos y bebidas (Food Cost): Calcula el porcentaje que representa el gasto en insumos respecto al total de las ventas (idealmente debe mantenerse entre el 28% y 35%).
+> • Reporte de ingeniería de menú: Clasifica los platillos según su popularidad y margen de ganancia para decidir cuáles promocionar, rediseñar o eliminar.
+> 4. Reportes Financieros y Administrativos (Mensuales)
+> • Estado de resultados (Pérdidas y ganancias): Muestra los ingresos totales menos los costos de insumos, gastos operativos (renta, luz, gas, nómina) y la utilidad neta real.
+> • Reporte de flujo de efectivo (Cash Flow): Controla las entradas y salidas reales de dinero para asegurar liquidez y cubrir pagos inmediatos.
+> • Reporte de nómina y costo laboral: Detalla sueldos, horas extras, propinas y prestaciones del personal frente al volumen de ventas.
+> • Reporte fiscal y de facturación: Resume las facturas emitidas a clientes, facturas recibidas de proveedores y el cálculo de impuestos (IVA, ISR). (Solo crea la estructura, queda pendiente, aun no estamos dados de alta ante el SAT México)
+
 ## Historial de cambios
+
+### Versión 6 (T4 del PR 1)
+
+- 2026-11-19, senior-fullstack (T4): DT-1 y DT-5 a DT-15 del plan técnico de T2 a T5 y las respuestas recomendadas a P-1 a P-8 aprobadas por el usuario ("apruebo las recomedaciones"); el plan se copia íntegro en "Plan técnico de T2 a T5". DEF-001 aceptado sin cambios. Commit y PR del PR 1 hacia `epic/inventario`.
+
+### QA del PR 1 (Q1)
+
+- 2026-11-18, senior-qa (Q2): plan aprobado por el usuario ("si a las dos"; P1 simulacro `--drill` lo hace el usuario tras desplegar la épica; P2 vuelta atrás solo con el código de `main`; P3 se conservan `node_modules` y el cliente generado; P4 nombre de variante único en todo el catálogo aceptado). Ejecutado; estado `QA_APPROVED` con DEF-001 (`MINOR`).
+- 2026-11-18, senior-qa: QA Action Plan del PR 1 escrito; estado `NEEDS_QA_PLAN_APPROVAL`. Contexto transmitido por la sesión principal: el usuario aprobó la implementación del PR 1 ("si la apruebo pero no inicies el agente QA ... cuando se restablezcan mis límites") y las recomendaciones del plan técnico de T2 a T5 ("apruebo las recomedaciones"); persistir esta última aprobación en el plan corresponde a senior-fullstack.
+
+### Versión 5
+
+Requerimiento completo del usuario (Anexo A) y decisión de orden (2026-11-18): "A tu recomendación y ajustar lo necesario ya que estamos en una etapa temprana". Cambios:
+
+- hoja de ruta de cuatro épicas (E1 Inventario, E2 Ventas, E3 Costos y rentabilidad, E4 Finanzas y administración), con E2 entre T3 y T4 y sin empezar hasta que T1 a T3 estén utilizables;
+- tabla de cobertura del requerimiento original por épica y ticket;
+- T5 añade los reportes de mermas y desperdicios, consumo de insumos críticos y escandallos; T4 sin cambios salvo su posición;
+- "Fuera de alcance" de E1 reescrito: ventas, costos y finanzas son épicas posteriores; PV-10 revisable al refinar E2; PV-12 vigente;
+- estado `IN_PROGRESS`: PR 1 de T1 aprobado, sin commit. Pendientes de aprobación: DT-5 a DT-15 del plan técnico de T2 a T5 y las respuestas a las 8 preguntas abiertas. Sin cambios en el Technical Action Plan de T1 ni en el Implementation Result.
+
+### Versión 4
+
+PR 1 de T1 implementado (2026-11-18, senior-fullstack) en `feature/REQ-F-049-catalogo-modelo`: migración `inventario_catalogo`, `core/inventory`, `prisma-inventory-store`, lint y pruebas funcionales. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
 
 ### Versión 3
 

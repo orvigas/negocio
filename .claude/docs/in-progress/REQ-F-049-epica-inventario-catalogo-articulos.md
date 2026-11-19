@@ -4,7 +4,7 @@
 
 IN_PROGRESS
 
-T1 se implementa en el PR 0 (`ci.yml` y `git.md`, hacia `main`) y después en tres PR hacia `epic/inventario` (DT-1). En curso: PR 0.
+T1 se implementa en el PR 0 (`ci.yml` y `git.md`, hacia `main`) y después en tres PR hacia `epic/inventario` (DT-1). En curso: PR 0, #180 (https://github.com/orvigas/negocio/pull/180).
 
 ## Aprobación
 

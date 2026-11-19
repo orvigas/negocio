@@ -4,6 +4,7 @@ import { ADMIN_API_PREFIX } from '@restaurante/contracts';
 
 import type { AccountRoutes } from './account-routes.ts';
 import type { BotRoutes } from './bot-routes.ts';
+import type { InventoryRoutes } from './inventory-routes.ts';
 import type { PageRoutes } from './page-routes.ts';
 import type { ProductRoutes } from './product-routes.ts';
 import type { QuoteRoutes } from './quote-routes.ts';
@@ -11,7 +12,7 @@ import type { SessionRoutes } from './session-routes.ts';
 import type { UserRoutes } from './user-routes.ts';
 
 /**
- * Rutas de `/api/v1/admin` (REQ-F-039; usuarios y cuenta propia, REQ-F-040; control del bot, REQ-F-043; datos de página, REQ-F-044; cotizador, REQ-F-046). Una ruta conocida con otro método responde 405 con `Allow`
+ * Rutas de `/api/v1/admin` (REQ-F-039; usuarios y cuenta propia, REQ-F-040; control del bot, REQ-F-043; datos de página, REQ-F-044; cotizador, REQ-F-046; inventario, REQ-F-049). Una ruta conocida con otro método responde 405 con `Allow`
  * (`allowedMethods`; el cuerpo lo pone el manejador central); una ruta desconocida, 404.
  */
 export function createAdminRouter({
@@ -22,6 +23,7 @@ export function createAdminRouter({
   account,
   bot,
   quotes,
+  inventory,
 }: {
   session: SessionRoutes;
   products: ProductRoutes;
@@ -30,6 +32,7 @@ export function createAdminRouter({
   account: AccountRoutes;
   bot: BotRoutes;
   quotes: QuoteRoutes;
+  inventory: InventoryRoutes;
 }): Router {
   const router = new Router({ prefix: ADMIN_API_PREFIX });
 
@@ -54,6 +57,20 @@ export function createAdminRouter({
   router.post('/bot/bloqueos', bot.block);
   router.post('/bot/bloqueos/:id/quitar', bot.unblock);
   router.post('/bot/topes/:token/bloquear', bot.blockReached);
+
+  // Inventario (REQ-F-049) antes de las rutas `/:business/...`.
+  router.get('/inventario/articulos', inventory.listItems);
+  router.post('/inventario/articulos', inventory.createItem);
+  router.get('/inventario/articulos/:id', inventory.getItem);
+  router.get('/inventario/articulos/:id/conversion', inventory.convert);
+  router.put('/inventario/articulos/:id', inventory.updateItem);
+  router.post('/inventario/articulos/:id/desactivar', inventory.deactivateItem);
+  router.post('/inventario/articulos/:id/reactivar', inventory.reactivateItem);
+  router.get('/inventario/categorias', inventory.listCategories);
+  router.post('/inventario/categorias', inventory.createCategory);
+  router.put('/inventario/categorias/:id', inventory.renameCategory);
+  router.post('/inventario/categorias/:id/desactivar', inventory.deactivateCategory);
+  router.post('/inventario/categorias/:id/reactivar', inventory.reactivateCategory);
 
   router.get('/:business/cotizador', quotes.defaults);
   router.post('/:business/cotizador/calculos', quotes.calculate);

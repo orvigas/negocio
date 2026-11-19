@@ -40,6 +40,27 @@ import {
 } from './admin.ts';
 import { isJson, isTimeout, readLimited } from './http.ts';
 import {
+  inventoryCategoryListResponseSchema,
+  inventoryCategoryResponseSchema,
+  inventoryConversionResponseSchema,
+  inventoryItemDetailResponseSchema,
+  inventoryItemListResponseSchema,
+  inventoryItemResponseSchema,
+  inventoryPaths,
+  type InventoryCategoryListResponse,
+  type InventoryCategoryRequest,
+  type InventoryCategoryResponse,
+  type InventoryConversionResponse,
+  type InventoryItemCreateRequest,
+  type InventoryItemDeactivateRequest,
+  type InventoryItemDetailResponse,
+  type InventoryItemFilter,
+  type InventoryItemListResponse,
+  type InventoryItemReactivateRequest,
+  type InventoryItemResponse,
+  type InventoryItemUpdateRequest,
+} from './inventory.ts';
+import {
   pageConflictSchema,
   pageStateResponseSchema,
   pageWriteResponseSchema,
@@ -141,6 +162,32 @@ export interface AdminApiClient {
   // Cotizador de taquizas (solo administradores; REQ-F-046). El cálculo no escribe nada.
   getQuoteDefaults(auth: AdminCredentials, business: PublicBusinessId): Promise<AdminApiResult<QuoteDefaultsResponse>>;
   calculateQuote(auth: AdminCredentials, business: PublicBusinessId, input: QuoteCalculationRequest): Promise<AdminApiResult<QuoteCalculationResponse>>;
+  // Catálogo de inventario (administradores y gerentes; REQ-F-049).
+  listInventoryItems(auth: AdminCredentials, filter?: InventoryItemFilter): Promise<AdminApiResult<InventoryItemListResponse>>;
+  getInventoryItem(auth: AdminCredentials, id: number): Promise<AdminApiResult<InventoryItemDetailResponse>>;
+  convertInventoryQuantity(auth: AdminCredentials, id: number, quantity: string, unit: string): Promise<AdminApiResult<InventoryConversionResponse>>;
+  createInventoryItem(auth: AdminCredentials, input: InventoryItemCreateRequest, idempotencyKey?: string): Promise<AdminApiResult<InventoryItemResponse>>;
+  updateInventoryItem(auth: AdminCredentials, id: number, input: InventoryItemUpdateRequest): Promise<AdminApiResult<InventoryItemResponse>>;
+  deactivateInventoryItem(auth: AdminCredentials, id: number, input: InventoryItemDeactivateRequest): Promise<AdminApiResult<InventoryItemResponse>>;
+  reactivateInventoryItem(auth: AdminCredentials, id: number, input: InventoryItemReactivateRequest): Promise<AdminApiResult<InventoryItemResponse>>;
+  listInventoryCategories(auth: AdminCredentials): Promise<AdminApiResult<InventoryCategoryListResponse>>;
+  createInventoryCategory(auth: AdminCredentials, input: InventoryCategoryRequest, idempotencyKey?: string): Promise<AdminApiResult<InventoryCategoryResponse>>;
+  renameInventoryCategory(auth: AdminCredentials, id: number, input: InventoryCategoryRequest): Promise<AdminApiResult<InventoryCategoryResponse>>;
+  setInventoryCategoryActive(auth: AdminCredentials, id: number, active: boolean): Promise<AdminApiResult<InventoryCategoryResponse>>;
+}
+
+/** Query de la lista de artículos (claves en español, como la ruta). */
+function inventoryQuery({ status, type, categoryId, q, page }: InventoryItemFilter = {}): string {
+  const entries: [string, string | undefined][] = [
+    ['estado', status],
+    ['tipo', type],
+    ['categoria', categoryId],
+    ['q', q],
+    ['pagina', page],
+  ];
+  const query = new URLSearchParams(entries.filter((entry): entry is [string, string] => entry[1] !== undefined && entry[1] !== ''));
+  const text = query.toString();
+  return text === '' ? '' : `?${text}`;
 }
 
 interface Schema<T> {
@@ -239,5 +286,20 @@ export function createAdminApiClient({ baseUrl, timeoutMs, fetch: fetchFn = (inp
     blockReached: (auth, token, input) => request('POST', adminPaths.botBlockReached(token), { auth, body: input, schema: botBlockResponseSchema, expect: 201 }),
     getQuoteDefaults: (auth, business) => request('GET', adminPaths.quote(business), { auth, schema: quoteDefaultsResponseSchema }),
     calculateQuote: (auth, business, input) => request('POST', adminPaths.quoteCalculations(business), { auth, body: input, schema: quoteCalculationResponseSchema }),
+    listInventoryItems: (auth, filter) => request('GET', `${inventoryPaths.items}${inventoryQuery(filter)}`, { auth, schema: inventoryItemListResponseSchema }),
+    getInventoryItem: (auth, id) => request('GET', inventoryPaths.item(id), { auth, schema: inventoryItemDetailResponseSchema }),
+    convertInventoryQuantity: (auth, id, quantity, unit) =>
+      request('GET', `${inventoryPaths.itemConversion(id)}?${new URLSearchParams({ cantidad: quantity, unidad: unit }).toString()}`, { auth, schema: inventoryConversionResponseSchema }),
+    createInventoryItem: (auth, input, idempotencyKey) =>
+      request('POST', inventoryPaths.items, { auth, body: input, headers: idempotencyKey ? { [IDEMPOTENCY_HEADER]: idempotencyKey } : {}, schema: inventoryItemResponseSchema, expect: 201 }),
+    updateInventoryItem: (auth, id, input) => request('PUT', inventoryPaths.item(id), { auth, body: input, schema: inventoryItemResponseSchema }),
+    deactivateInventoryItem: (auth, id, input) => request('POST', inventoryPaths.itemStatus(id, 'desactivar'), { auth, body: input, schema: inventoryItemResponseSchema }),
+    reactivateInventoryItem: (auth, id, input) => request('POST', inventoryPaths.itemStatus(id, 'reactivar'), { auth, body: input, schema: inventoryItemResponseSchema }),
+    listInventoryCategories: (auth) => request('GET', inventoryPaths.categories, { auth, schema: inventoryCategoryListResponseSchema }),
+    createInventoryCategory: (auth, input, idempotencyKey) =>
+      request('POST', inventoryPaths.categories, { auth, body: input, headers: idempotencyKey ? { [IDEMPOTENCY_HEADER]: idempotencyKey } : {}, schema: inventoryCategoryResponseSchema, expect: 201 }),
+    renameInventoryCategory: (auth, id, input) => request('PUT', inventoryPaths.category(id), { auth, body: input, schema: inventoryCategoryResponseSchema }),
+    setInventoryCategoryActive: (auth, id, active) =>
+      request('POST', inventoryPaths.categoryStatus(id, active ? 'reactivar' : 'desactivar'), { auth, body: {}, schema: inventoryCategoryResponseSchema }),
   });
 }

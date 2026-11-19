@@ -2,11 +2,11 @@
 
 ## Estado
 
-READY_FOR_MERGE
+QA_APPROVED
 
-PR 1 de T1: Pull Request #181 (https://github.com/orvigas/negocio/pull/181) hacia `epic/inventario`, commit `d459b5a`. QA aprobado (ronda 1), con DEF-001 (`MINOR`) aceptado sin cambios. El CI se comprueba al marcar el PR como listo; el merge lo hace el usuario. Siguiente paso tras el merge: PR 2 de T1.
+PR 2 de T1 (rol Gerente, API del inventario y opción Gerente en usuarios) en la rama `feature/REQ-F-049-gerente-api`, sin commit ni PR. QA aprobado en la ronda 2 (ver "QA Report — PR 2"): todos los CA del alcance en PASS. DEF-002 corregido con un caso de MySQL y verificado (X3a detectada). El doble de usuarios queda para el PR 3 (decisión del usuario). Siguiente paso: commit y PR hacia `epic/inventario`.
 
-T1 se implementa en el PR 0 (`ci.yml` y `git.md`, hacia `main`) y después en tres PR hacia `epic/inventario` (DT-1). PR 0 mergeado (#180). PR 1 (modelo, migración, dominio y persistencia) en la rama `feature/REQ-F-049-catalogo-modelo`.
+T1 se implementa en el PR 0 (`ci.yml` y `git.md`, hacia `main`) y después en tres PR hacia `epic/inventario` (DT-1). PR 0 mergeado (#180). PR 1 (modelo, migración, dominio y persistencia) mergeado en `epic/inventario` (#181, merge `84f0a9a`).
 
 Las decisiones técnicas DT-5 a DT-15 del plan técnico de T2 a T5 y las respuestas recomendadas a P-1 a P-8 están aprobadas (ver "Aprobación" y "Plan técnico de T2 a T5").
 
@@ -1139,6 +1139,350 @@ Sonda `qa-req-f-049-sondas.test.ts` y sondas de lint borradas; copia de mutacion
 
 QA_APPROVED
 
+## Implementation Result — PR 2
+
+### Rama
+
+`feature/REQ-F-049-gerente-api`, desde `origin/epic/inventario` (`84f0a9a`). Sin commit ni PR (pendiente de aprobación). El nombre es el que pidió la sesión principal; el plan proponía `feature/REQ-F-049-catalogo-api`.
+
+### Cambios realizados
+
+- **Migración `20261119120000_rol_gerente`** (`packages/db/prisma/migrations/…/migration.sql`) y `enum Role` en `schema.prisma`: `ALTER TABLE `user` MODIFY `role` ENUM('admin', 'editor', 'gerente') NOT NULL;`. Valor al final del ENUM: aditiva, sin reconstruir la tabla. Columna resultante: `enum('admin','editor','gerente')`, `utf8mb4_es_0900_as_cs`. `verifyDatabase` de la rama arranca sobre ella.
+- **Identidad** (`packages/core/identity`): `ROLES` y `ROLE_LABELS` con `gerente`; `validateUserData` guarda negocios solo del editor; `authorization.ts` con `canManageInventory` (admin o gerente) y `allowedBusinesses` explícito por rol (gerente: ninguno). `packages/db/src/user-repository.ts`: negocios solo del editor en `createUser` y `diffUser` (pasar un editor a gerente borra sus negocios y sube `sessionVersion`).
+- **Contratos** (`packages/contracts`): `admin.ts` con `USER_ROLES` (subido antes de `adminUserSchema`, que ahora lo usa) e `INVENTORY_ROLES`; `inventory.ts` nuevo (listas cerradas, códigos, `inventoryPaths`, DTO de lista, artículo, ficha, historial, conversión y categorías, cuerpos de petición; cantidades y factores como texto decimal); `admin-client.ts` con 11 métodos de inventario.
+- **API** (`api/src/admin`): `access.inventory()` (401 → 403 `FORBIDDEN_ROLE` "No tienes permiso para gestionar el inventario." → CSRF); `inventory-routes.ts` con las 12 rutas del plan bajo `/api/v1/admin/inventario`, registradas antes de `/:business/...` (`router.ts`); cuerpos cerrados de 16 KiB; ids con `^[1-9]\d{0,9}$` (otro → 404); 422 por campo (en la lista y la conversión con los nombres de la query: `estado`, `tipo`, `categoria`, `pagina`, `cantidad`); 409 `VERSION_CONFLICT` con `current`, `ITEM_LOCKED`, `ITEM_HAS_ACTIVE_VARIANTS`, `ITEM_NAME_TAKEN`, `PARENT_INACTIVE`, `CATEGORY_INACTIVE`, `CATEGORY_IN_USE`, `CATEGORY_NAME_TAKEN`; 422 con el código de `UnitConversionError` (`UNIT_CONVERSION_UNAVAILABLE`, …); "guardar encima" con `overwrite: true`; altas idempotentes con `Idempotency-Key` (ámbitos `inventario-articulos` e `inventario-categorias`); logs solo con ids, acción y códigos. `index.ts` y `server.ts`: repositorio de core sobre `createPrismaInventoryStore`, sin semilla.
+- **inventory-manager** (`src/views/users.ts`): opción "Gerente" en el rol, etiqueta, ayuda ("El gerente gestiona el inventario; no accede a productos, página, usuarios, bot ni cotizador.") y negocios "No aplica" en la ficha.
+
+Desviaciones del plan:
+
+- **Redirección del inicio del gerente a `/inventario/articulos`: no hecha.** El plan la asigna al PR 3 ("navegación e inicio") y la ruta SSR no existe todavía: redirigir ahí daría 404. Con el PR 2, un gerente que entra al admin ve "Elige un negocio" vacío; la API ya le da acceso al inventario.
+- La sesión del gerente (`sessionVersion`) no necesitó código nuevo: desactivar, cambiar el rol o los negocios ya la invalidan (REQ-F-040); queda cubierto con pruebas.
+- El detalle del artículo devuelve `{ item, history }` con la categoría, el padre, las variantes, `locked` y las equivalencias dentro de `item`.
+- En la edición se lee el cuerpo antes de comprobar que el artículo existe (productos lo hace al revés); un id inexistente con un cuerpo válido da 404 igual.
+
+### Criterios de aceptación (alcance del PR 2: API y rol; pantallas de inventario en el PR 3)
+
+- CA-9 (en la API): cumplido (409 con los datos vigentes, el primer cambio se conserva, "guardar encima" registrado).
+- CA-10 (API): cumplido (editor con 403 `FORBIDDEN_ROLE` en las 12 rutas, sin escribir nada). La parte del admin (no ver "Inventario") es del PR 3.
+- CA-11 (API y usuarios): cumplido (un administrador crea un gerente; entra y accede al inventario; 403 en usuarios, bot, cotizador, productos y página).
+- CA-1, CA-2, CA-4, CA-5, CA-6, CA-7 y CA-13: expuestos por la API con los códigos del plan (reglas probadas en el PR 1).
+- CA-15 (para esta migración, evidencia de sonda no commiteada contra el código de `main` en la base migrada): `verifyDatabase` de `main` da `DATABASE_NEWER_THAN_CODE` sin `allowNewerSchema` y arranca con él. Con un gerente guardado, el cliente Prisma de `main` rechaza la fila (`P2023`, "Value 'gerente' not found in enum 'Role'") y el repositorio lo convierte en `DatabaseUnavailableError`: `list()`, `findById(gerente)` y `findCredentials(gerente)` fallan (503 en la lista de usuarios y en el acceso del gerente); `findById(admin)` y `hasUsers()` funcionan. Es el riesgo DT-2: la vuelta atrás automática del despliegue de la épica no lo sufre (aún no hay gerentes); la vuelta atrás a mano con gerentes exige el procedimiento de `despliegue.md`, que se documenta en el PR 3.
+- CA-3, CA-8, CA-12, CA-14, CA-16 y CA-17: PR 3 y QA.
+
+### Validaciones ejecutadas
+
+- `npm run build:css`: 0. `npm run typecheck`: 0. `npm run lint`: 0, sin avisos.
+- `npm test`: api 52 archivos y 1208 pruebas; landing-pages 61 y 895; inventory-manager 16 y 278. Todo en verde.
+- Duración: `admin-inventory-api.test.ts` 1.3 s (12 pruebas); `user-repository.test.ts` (MySQL) 3.5 s.
+
+### Archivos afectados
+
+Nuevos: `restaurante/api/src/admin/inventory-routes.ts`, `restaurante/packages/contracts/inventory.ts`, `restaurante/packages/db/prisma/migrations/20261119120000_rol_gerente/migration.sql`, `restaurante/api/tests/integration/admin-inventory-api.test.ts`.
+
+Modificados: `restaurante/api/src/admin/{access,index,router}.ts`, `restaurante/api/src/server.ts`, `restaurante/api/tests/support/admin.ts`, `restaurante/api/tests/unit/contract-types.test.ts`, `restaurante/inventory-manager/src/views/users.ts`, `restaurante/landing-pages/tests/integration/user-repository.test.ts`, `restaurante/packages/contracts/{admin,admin-client,index}.ts`, `restaurante/packages/core/identity/{authorization,user-schema}.ts`, `restaurante/packages/db/prisma/schema.prisma`, `restaurante/packages/db/src/user-repository.ts`.
+
+Pruebas permanentes: `admin-inventory-api.test.ts` (nuevo: 401, 403 del editor, CSRF, gerente con acceso al inventario y 403 en el resto, alta de un gerente por un administrador, sesión invalidada al desactivarlo, alta con ficha, lista y conversión, 422 y 404, 409 y "guardar encima", alta idempotente, 409 de variantes, categoría en uso y padre inactivo, 503); `user-repository.test.ts` (un caso nuevo en MySQL: el ENUM acepta `gerente`, sin negocios, y pasar un editor a gerente borra sus negocios y cierra sus sesiones); `contract-types.test.ts` (ampliado: listas cerradas del inventario iguales a las de core); doble de usuarios de `api/tests/support/admin.ts` ajustado a "negocios solo del editor".
+
+- **DEF-002 corregido (T3):** caso nuevo en `user-repository.test.ts` (MySQL): "cambiar solo el rol, sin negocios de por medio, cierra las sesiones (gerente -> admin -> gerente)"; la mutación X3a (quitar `'role' in changes` de `closesSessions`) ahora hace fallar ese caso; código restaurado (mismo hash), sin cambios de producción.
+
+### Riesgos o pendientes
+
+- **DT-2 (conocido):** una vuelta atrás a mano a una imagen anterior a la épica con gerentes ya creados rompe la lista de usuarios y el acceso de los gerentes en esa `api` (evidencia arriba). Mitigación: procedimiento de `despliegue.md` §6 (degradar los gerentes a editor sin negocios con `session_version + 1`, anotarlos), que se escribe en el PR 3.
+- En local, una base migrada con esta rama exige `DATABASE_ALLOW_NEWER_SCHEMA=true` para la `api` de `main` (se documenta en el PR 3).
+- Sin pantallas de inventario, navegación ni redirección del gerente (PR 3).
+- Limpieza: sonda temporal contra el código de `main` borrada; 0 bases `restaurante_test*`; MySQL de desarrollo detenido con `npm run db:down`; sin procesos ni worktrees adicionales.
+
+## QA Action Plan — PR 2
+
+### Objetivo
+
+Validar, sin commit ni PR, la rama `feature/REQ-F-049-gerente-api` (desde `epic/inventario` = `84f0a9a`): el rol Gerente (migración, core, db, contratos y opción en usuarios) y las 12 rutas de la API del inventario, con sus permisos, errores, concurrencia, vuelta atrás y respaldo, sin regresiones. La implementación y la desviación (la redirección del gerente pasa al PR 3) están aprobadas por el usuario ("Si, apruebo").
+
+### Requisito bajo prueba
+
+RF-9 (permisos), PV-1, DT-2 y el contrato "Backend: contratos y endpoints" del Technical Action Plan; CA-10, CA-11, CA-14, CA-15 y CA-16 en el alcance del PR 2; CA-9 y la idempotencia de CA-8 por HTTP.
+
+### Criterios de aceptación (cada uno → pruebas que lo cubren)
+
+| CA | Alcance del PR 2 | Pruebas |
+| --- | --- | --- |
+| CA-10 | Editor: 403 en las 12 rutas de la API, sin escribir nada | P1–P4, X1, X4 |
+| CA-11 | Un admin crea un gerente; entra; accede al inventario y no a usuarios, bot, cotizador, productos ni página | P1, P5–P8, U1, X2, X3 |
+| CA-9 / CA-8 (HTTP) | 409 con `current` y "guardar encima"; alta idempotente | E2, E5, C1, C2, X5, X6 |
+| CA-14 | Landings, `/api/v1/public/*`, bot, productos, página y usuarios igual que antes | F2, G1–G4, P6 |
+| CA-15 | La `api` de `main` sobre la base migrada (sin gerentes) y el riesgo DT-2 con gerentes | V1–V6 |
+| CA-16 | Respaldo y restauración con el ENUM ampliado y gerentes | B1–B4 |
+
+**No aplica a este PR** (PR 3): CA-10 en pantalla ("Inventario" oculto en el menú), redirección del gerente a `/inventario/articulos`, CA-12 (semilla), CA-17 (pantallas de inventario), documentación de DT-2 en `despliegue.md`, cadena de punta a punta, responsive/SEO/performance de pantallas nuevas. Con el PR 2 el gerente ve "Elige un negocio" vacío: es lo aprobado, no un defecto.
+
+### Riesgos identificados
+
+1. Ruta de inventario registrada después de `/:business/...` o sin `access.inventory` (fuga a editores o 404 inesperado).
+2. Orden de comprobaciones: CSRF antes del rol daría `CSRF_INVALID` a un editor (filtra que la ruta existe y rompe el contrato).
+3. El gerente hereda acceso a productos/página por `allowedBusinesses` o por una comprobación "no editor".
+4. Sesión del gerente no invalidada al desactivarlo o cambiar rol/negocios.
+5. Escritura parcial en un 403/422/409 (historial o idempotencia guardados antes del rechazo).
+6. Idempotencia por proceso: dos altas concurrentes con la misma clave crean dos artículos o devuelven 500.
+7. ALTER del ENUM que reconstruye `user` o la bloquea (el despliegue migra con la `api` en marcha).
+8. Errores 503 que filtran el `message` de Prisma o SQL; logs con nombres o cuerpos.
+9. Vuelta atrás con gerentes (DT-2) peor que lo descrito (p. ej. que también caiga el login de admins).
+
+### Revisión estática (F)
+
+- **F1.** `git diff --stat` y `git status` del worktree contra `84f0a9a`: solo los archivos listados en "Implementation Result — PR 2" más el ticket; nada en landings, bot, `public/`, `deploy/`, `ops/`, `.github/` ni `docs/`.
+- **F2.** Diff completo frente al TAP: tabla de rutas (método, ruta, códigos), `access.inventory` (401 → 403 `FORBIDDEN_ROLE` → CSRF), registro antes de `/:business`, cuerpos cerrados de 16 KiB, ids `^[1-9]\d{0,9}$`, texto decimal en contratos, `toAdminUser` con `businesses: []`, `canManageInventory` y `allowedBusinesses` del gerente vacío. Reglas: `typescript.md` (sin `any`, `as` y `!` justificados, imports `.ts`), `manejo-de-errores.md` (formato central, sin detalles internos), `frontend-backend.md` (contratos en `packages/contracts`, el cliente usa los mismos esquemas, sin duplicar tipos), `logging.md` (solo ids, acción y códigos).
+- **F3.** `dependencias.md`: `package.json` y `package-lock.json` sin cambios.
+- **F4.** Suma de `deploy/` con el método de `ci.yml`: `cd restaurante/deploy && shasum -a 256 -- compose.prod.yaml deploy.sh mysql/initdb/01-usuarios.sh | shasum -a 256 | cut -c1-64` (equivalente a `sha256sum` en macOS) = `591de8e7f259073f79ff34418c8b7a3a2680d465ef3bc7378c620221455cc7f0`.
+
+### Migración (M), en el MySQL 8.4 de QA
+
+- **M1.** El SQL de `20261119120000_rol_gerente` es una sola sentencia `ALTER TABLE \`user\` MODIFY \`role\` ENUM('admin','editor','gerente') NOT NULL` (valor añadido al final, mismo `NOT NULL`, sin cambio de colación/charset ni de valor por defecto).
+- **M2.** Algoritmo real: base con las migraciones de `84f0a9a` y filas en `user` (admin, editor con negocios, inactivo). Antes y después de `migrate deploy`: `TABLE_ID` y `TOTAL_ROW_VERSIONS` de `information_schema.INNODB_TABLES` para `restaurante/user` (mismo `TABLE_ID` = sin reconstrucción). Además, en una base gemela, la misma sentencia con `, ALGORITHM=INSTANT` y con `, ALGORITHM=INPLACE, LOCK=NONE` debe aceptarse; y con una transacción abierta que lee y otra que escribe en `user` en paralelo, el ALTER no bloquea esas sesiones más allá del bloqueo de metadatos breve (se registra el tiempo).
+- **M3.** Filas intactas: `CHECKSUM TABLE user` y `SELECT id, role, session_version, …` antes/después idénticos; `SHOW CREATE TABLE user` solo cambia la definición del ENUM.
+- **M4.** `prisma migrate diff --from-url <base migrada> --to-schema-datamodel packages/db/prisma/schema.prisma --exit-code` → 0 (sin diferencias), y `migrate status` "up to date".
+
+### Permisos contra la API real y MySQL (P)
+
+Entorno: la `api` del worktree con stores de Prisma sobre una base `restaurante_test_*` del MySQL de QA, arrancada con `node src/server.ts --env-file=<scratchpad>` en un puerto libre de `127.0.0.1`; peticiones con un script `fetch` del scratchpad (login, cookie y token CSRF como el cliente real). Usuarios: admin, editor (con negocio), gerente, y un gerente creado por el admin vía `POST /usuarios`.
+
+- **P1.** Matriz de las 12 rutas × {sin sesión, editor, gerente, admin}: 401 / 403 `FORBIDDEN_ROLE` (mensaje exacto) / 2xx o el error de dominio esperado / ídem. Las escrituras del editor se envían **con** CSRF válido (para aislar el rol).
+- **P2.** Orden: editor sin CSRF en una escritura → `FORBIDDEN_ROLE` (no `CSRF_INVALID`); gerente sin CSRF o con uno ajeno → 403 `CSRF_INVALID`, sin escribir.
+- **P3.** Sin escritura en 403: conteos y `CHECKSUM TABLE` de las 5 tablas `inventory_*` y del almacén de idempotencia antes/después de toda la matriz del editor y de los `CSRF_INVALID`.
+- **P4.** Logs del rechazo: sin cuerpo ni nombres.
+- **P5.** CA-11: el admin crea un gerente con negocios en el cuerpo → 201, `businesses: []` en la respuesta y en la base; el gerente hace login y lista/crea en el inventario.
+- **P6.** El gerente recibe 403 en usuarios (lista, alta, edición), bot (estado y cambio), cotizador, productos y página de **ambos** negocios (lectura y escritura), y en "mi cuenta" conserva lo que hoy tiene un editor (cambio de su propia contraseña), sin regresión para admin y editor en esas mismas rutas.
+- **P7.** `sessionVersion`: con sesión abierta del gerente, el admin (a) lo desactiva, (b) lo pasa a editor, (c) pasa un editor con sesión a gerente → la siguiente petición de esa sesión da 401; `session_version` sube en la base. Cambiar solo los negocios de un gerente (ignorados) no debe cerrar su sesión ni guardar negocios.
+- **P8.** Editor → gerente borra sus filas de negocios en la base (consulta directa).
+
+### Contrato de errores y códigos HTTP (E)
+
+- **E1.** Por ruta: 422 con `fields` (cuerpo inválido, filtro fuera de la lista cerrada, `q` > 80, `pagina` 0/negativa/no numérica, cantidad inválida en conversión, nombre/SKU repetido como error de campo).
+- **E2.** `PUT` con versión vieja → 409 `VERSION_CONFLICT` con `current { id, version, updatedAt, updatedBy }` real; el primer cambio se conserva; "guardar encima" (`overwrite: true`) lo aplica y queda en el historial.
+- **E3.** 404 con ids `0`, `-1`, `01`, `abc`, `1e3`, 11 dígitos, `%20` y uno inexistente válido, en GET, PUT y las acciones.
+- **E4.** Cuerpo: JSON no cerrado (campo extra) → 422; > 16 KiB → 413 (o el código central vigente); `Content-Type` no JSON y JSON malformado → código del manejador central, sin stack.
+- **E5.** Alta con la misma `Idempotency-Key` dos veces seguidas → mismo 201 y un solo artículo; misma clave con otro cuerpo → el comportamiento del alta de productos (se documenta tal cual); sin clave → según el contrato.
+- **E6.** 503: con MySQL detenido (`docker compose -p … stop`) una lectura y una escritura dan 503 con el formato central y sin texto de Prisma/SQL; al volver la base, la `api` se recupera sin reiniciar.
+- **E7.** Ningún cuerpo de error ni log contiene SQL, stack, rutas de archivo, `DATABASE_URL`, nombres de artículos o cuerpos (búsqueda en la salida capturada).
+
+### Concurrencia y robustez (C), con la `api` real
+
+- **C1.** 10 rondas de dos `POST articulos` simultáneos con la misma `Idempotency-Key` y cuerpo → un artículo, ambas respuestas 201 iguales o una 201 y una respuesta definida por el contrato; nunca 500 ni duplicado.
+- **C2.** 10 rondas de dos `PUT` simultáneos con la misma versión → un 200 y un 409 con `current`.
+- **C3.** Inactivar una categoría mientras otro alta la usa → el invariante de CA-13 (nunca categoría inactiva con artículos activos), sin 500.
+- **C4.** Lista: `pagina` enorme → lista vacía con `total`; filtros repetidos (`?estado=a&estado=b`) → 422 o el primero, documentado; `q` con `%`, `_` y Unicode.
+
+### Vuelta atrás (V; CA-15 automática y DT-2 manual)
+
+Código anterior: el árbol principal `/Users/orvigas/Desktop/Negocio/restaurante` en `main`, solo lectura, con `node src/server.ts --env-file=<scratchpad>` (nunca `npm start` ni su `api/.env`). Base: la del MySQL de QA.
+
+- **V1.** Base con las migraciones de `epic/inventario` + la nueva, con admin y editor y **sin** gerentes.
+- **V2.** `api` de `main` sin `DATABASE_ALLOW_NEWER_SCHEMA` → sale con `DATABASE_NEWER_THAN_CODE` (log y código de salida).
+- **V3.** Con `DATABASE_ALLOW_NEWER_SCHEMA=true` → arranca; `/api/v1/public/{molotes,birria}/{productos,pagina}` 200; login de admin y editor; lista y alta de usuario; edición de producto y de página 2xx (CA-15 automática).
+- **V4.** DT-2: con la `api` del worktree se crea un gerente; con la de `main`: lista de usuarios 503, login y `findById` del gerente 503, sin detalles internos; rutas públicas, login de admin/editor, productos y página siguen 2xx. Cualquier efecto más amplio que lo descrito = defecto.
+- **V5.** Mitigación: `UPDATE user SET role='editor', session_version=session_version+1 WHERE role='gerente';` → con la `api` de `main` la lista de usuarios vuelve a 200, el exgerente entra sin negocios (sin acceso) y su sesión anterior queda cerrada; el ENUM con `gerente` sigue en la base sin efectos.
+- **V6.** Avance de nuevo a la `api` del worktree: arranca sin la variable y el rol se restaura con `PUT /usuarios`.
+
+### Respaldo y restauración (B; CA-16)
+
+Igual que B1–B4 del PR 1 (opciones de `backup.sh`, usuario con los privilegios de `restaurante_backup` solo en el contenedor de QA, restauración como `restore.sh`), sobre una base con gerentes, artículos, variantes, categorías e historial creados por la API:
+
+- **B1.** `mysqldump` → el volcado contiene `enum('admin','editor','gerente')` y las filas de gerente.
+- **B2.** Restauración en otra base/contenedor.
+- **B3.** `CHECKSUM TABLE` y conteos iguales de `user`, `user_business` (o su tabla de negocios), las 5 `inventory_*` y `_prisma_migrations`.
+- **B4.** La `api` del worktree arranca sobre la restaurada sin la variable; el gerente hace login y lee una ficha con su historial.
+- `verify-backup.sh --drill`: lo hace el usuario tras desplegar la épica (no en este PR).
+
+### Mutaciones (X), descartables
+
+En una copia APFS (`cp -c`) de `restaurante/` del worktree en el scratchpad, una a una, ejecutando solo los archivos afectados (`admin-inventory-api.test.ts`, `admin-users-api.test.ts`, `user-repository.test.ts`, `authorization`/`user-schema` unitarias):
+
+- **X1.** `inventory()` sin la comprobación de rol.
+- **X2.** `canManageInventory` siempre `true`.
+- **X3.** Cambiar el rol no cierra sesiones (`closesSessions` sin el rol) y, aparte, el gerente con `allowedBusinesses` = todos.
+- **X4.** Escrituras del inventario sin CSRF.
+- **X5.** Alta sin idempotencia.
+- **X6.** 409 sin `current`.
+- **X7.** Editor → gerente conserva negocios.
+
+Una mutación que sobrevive es un hallazgo: `MAJOR` si ninguna prueba cubre ese comportamiento, `MINOR` si otra lo cubre indirectamente.
+
+### Regresión (G)
+
+- **G1.** Desde `restaurante/` del worktree: `npm run build:css`, `npm run typecheck`, `npm run lint` y `npm test` (3 workspaces) en 0.
+- **G2.** `admin-inventory-api.test.ts` y `user-repository.test.ts` en 3 ejecuciones aisladas, cada una < 20 s.
+- **G3.** CA-14: diff sin cambios en landings, `/api/v1/public/*`, bot, productos ni página (F1/F2) + suite verde + V3 y P6 para admin y editor.
+- **G4.** Revisión de las pruebas permanentes nuevas o cambiadas según `testing.md`: funcionales (permisos, sesión, conflicto, idempotencia, rol en MySQL), sin duplicar otra prueba, sin arquitectura ni migración "por sí misma", nombres de dominio, sin esperas fijas ni `retry`, `listenLocal`/`startAdmin` y `makeDatabase()`. El caso de 503 y el de contratos (`contract-types.test.ts`) se revisan con lupa por si son de arquitectura. Una que no cumpla → `MINOR` con la recomendación de quitarla.
+
+### Pantalla de usuarios (U)
+
+- **U1.** Con el doble de la API de `inventory-manager` (o el entorno local de QA con la `api` del worktree): alta y edición con rol "Gerente": opción visible, texto de ayuda, negocios "No aplica" en la ficha, el formulario envía `gerente` y pinta los `fields` de un 422.
+- **U2.** Accesibilidad básica del formulario: `label` asociado al selector de rol, ayuda referenciada (`aria-describedby` o texto contiguo), orden de tabulación, foco visible y funcionamiento sin JavaScript (SSR). Captura a 375 px y 1440 px si se usa el navegador; si Claude in Chrome no responde, se valida con el HTML renderizado y queda como revisión manual (ningún CA depende solo de ello).
+
+### Evidencia requerida
+
+Salida resumida (código de salida y totales) de cada comando; suma de `deploy/`; `git diff --name-only`; SQL de la migración; `INNODB_TABLES` antes/después; salida de `migrate diff`; matriz P1 con códigos; conteos/checksums de P3 y B3; logs de V2–V5; resultados de C1–C4 y X1–X7; duraciones de G2; comprobación de limpieza.
+
+### Limpieza (comprobada, no supuesta)
+
+`docker compose -p restaurante-qa-049b down -v` y `docker ps -a`, `docker volume ls`, `docker network ls` sin restos; `restaurante-mysql-dev-1` como estaba (apagado); sin procesos `server.ts`/`vitest` ni puertos de QA ni 3307 en escucha; 0 bases `restaurante_test*`; copia de mutaciones, sondas, env, logs y volcados del scratchpad borrados; `git status` del worktree igual al inicial más el ticket; árbol principal en `main` sin cambios; `git worktree list` sin worktrees nuevos; `node_modules` y cliente generado del worktree conservados.
+
+### Criterios de aprobación
+
+`QA_APPROVED` solo si: F1–F4 sin desviaciones relevantes y suma de `deploy/` igual; migración aditiva sin reconstrucción (M2) y sin diferencias (M4); CA-10, CA-11, CA-14, CA-15 (V2, V3) y CA-16 (B3, B4) en PASS; DT-2 (V4, V5) igual a lo descrito y la mitigación funciona; E1–E7 y C1–C3 sin 500, sin duplicados y sin filtraciones; `typecheck`, `lint` y `npm test` en 0; archivos < 20 s; sin `BLOCKER` ni `CRITICAL` y cada `MAJOR` aceptado por el usuario. Escala por impacto observable: editor con acceso o escritura en 403, gerente con acceso a usuarios/productos/página, o vuelta atrás que no arranca = `CRITICAL`; sesión no invalidada, duplicado por idempotencia, filtración de SQL/stack o ALTER que reconstruye la tabla = `MAJOR` o superior; mutación no detectada = `MAJOR`/`MINOR` (arriba); desviación de código HTTP sin impacto en el cliente o documental = `MINOR`.
+
+### Autorizaciones que se piden al usuario
+
+1. Docker local: `docker compose -p restaurante-qa-049b up -d --wait mysql-dev` con el `compose.yaml` del worktree, volumen propio y `127.0.0.1:3307`; parar/arrancar ese contenedor para E6, y una base/contenedor gemelo para M2 y B2. Si el `mysql-dev` de desarrollo está encendido, QA se detiene y pregunta.
+2. Ejecutar la `api` del worktree y la de `main` (desde `/Users/orvigas/Desktop/Negocio/restaurante`, solo lectura) con `node src/server.ts` y env propios en el scratchpad; nunca el `api/.env` de desarrollo. `npm ci` y `db:generate` ya están hechos en el worktree.
+3. Sondas y copia de mutaciones solo en el scratchpad (fuera del repo); nada en `restaurante/landing-pages/tests/` del worktree.
+4. Escribir en el ticket del worktree solo `## Estado`, este plan, el QA Report y el Historial.
+
+### Preguntas abiertas (con recomendación)
+
+1. ¿Vuelta atrás solo con el código de `main` o también con la imagen `production`? **Recomendado:** solo con el código, como en el PR 1; la imagen, en el QA del PR de la épica hacia `main`.
+2. ¿U1/U2 en el navegador o solo con el HTML del doble? **Recomendado:** HTML del doble más una pasada rápida en el navegador si la extensión responde; el cambio es una opción y un texto.
+3. Misma `Idempotency-Key` con otro cuerpo: ¿se acepta el comportamiento del alta de productos? **Recomendado:** sí; QA lo documenta y solo es defecto si crea un duplicado o da 500.
+4. Un hallazgo `MINOR` en las pruebas permanentes (G4, X): ¿se corrige en este PR o se acepta? **Recomendado:** decidirlo con el informe, como DEF-001 del PR 1.
+
+**Aprobado por el usuario** ("Si"), con las autorizaciones y las cuatro recomendaciones.
+
+## QA Report — PR 2
+
+### Ronda
+
+1 (2026-11-19), sobre el árbol de trabajo sin commit de `feature/REQ-F-049-gerente-api` (base `84f0a9a`). MySQL 8.4 desechable `restaurante-qa-049b` en `127.0.0.1:3307`; el `mysql-dev` de desarrollo siguió apagado.
+
+### Pruebas ejecutadas
+
+- G1: `build:css` 0; `typecheck` 0; `lint` 0, sin avisos; `npm test`: api 52 archivos y 1208 pruebas, landing-pages 61 y 895, inventory-manager 16 y 278, todo en verde.
+- G2: `admin-inventory-api.test.ts` (+ `contract-types.test.ts`) 1.32 / 1.28 / 1.27 s; `user-repository.test.ts` 3.39 / 3.31 / 3.26 s.
+- F1–F4: `git status`/diff solo con los archivos del Implementation Result; sin cambios en `package*.json`, `deploy/`, `ops/`, `.github/` ni `docs/`; suma de `deploy/` = `591de8e7f259073f79ff34418c8b7a3a2680d465ef3bc7378c620221455cc7f0` (igual).
+- M1–M4, P1–P8, E1–E7, C1–C4, V1–V6, B1–B4, X1–X7, U1–U2 con la `api` del worktree y la de `main` (`1c88e30`, solo lectura, `node src/server.ts` y env del scratchpad) sobre el MySQL de QA.
+
+### Migración
+
+- M1: una sola sentencia; `gerente` al final; `NOT NULL` y colación `utf8mb4_es_0900_as_cs` sin cambios.
+- M2: `INNODB_TABLES` de `restaurante/user` antes y después: `TABLE_ID` 1967 → 1967, `TOTAL_ROW_VERSIONS` 0 → 0 (solo metadatos, sin reconstrucción). En una base gemela, la sentencia con `ALGORITHM=INSTANT` y con `ALGORITHM=INPLACE, LOCK=NONE`: aceptada (código 0); control negativo (reordenar el ENUM con `INSTANT`): rechazado con ERROR 1846 "Need to rebuild the table". Con 200 000 filas y 40 escrituras/lecturas concurrentes, el ALTER tardó 0.197 s y el escritor terminó sus 40 operaciones.
+- M3: `CHECKSUM TABLE user` 603916290 antes y después; filas (id, rol, activo, `session_version`, `updated_at`) idénticas; `SHOW CREATE TABLE` solo cambia la definición del ENUM.
+- M4: `prisma migrate diff --from-config-datasource --to-schema` → "No difference detected" (código 0); `migrate status` "up to date".
+
+### Criterios de aceptación
+
+| CA | Resultado | Evidencia |
+| --- | --- | --- |
+| CA-10 (API) | PASS | P1: sin sesión 401 `UNAUTHENTICATED` en las 12 rutas; editor 403 `FORBIDDEN_ROLE` en las 12 con CSRF válido y en las 8 escrituras sin CSRF (P2: el rol se comprueba antes que el CSRF). P3: las 5 tablas `inventory_*` en 0,0,0,0,0 antes y después. X1 y X2 detectadas. |
+| CA-11 (API y usuarios) | PASS | P5: el admin crea un gerente con `businesses: ['molotes','birria']` → 201, `businesses: []` en la respuesta y 0 filas en `user_business`; login 201. P1: gerente con 2xx en las 12 rutas (409 `CATEGORY_IN_USE` donde corresponde). P6: 403 en usuarios (lista, alta, ficha, edición), bot (estado e interruptor), cotizador de ambos negocios (`FORBIDDEN_ROLE`), productos y página de ambos negocios, lectura y escritura (`FORBIDDEN_BUSINESS`); cambia su propia contraseña (200). Admin y editor conservan sus accesos. |
+| CA-9 / CA-8 (HTTP) | PASS | E2: 409 `VERSION_CONFLICT` con `current {id, version, updatedAt, updatedBy}`; el primer cambio se conserva; "guardar encima" con la versión de `current` → 200 y `overwrite_after_conflict` en el historial (con la versión vieja, otra vez 409). E5/C1: misma clave repetida → mismo id, 1 fila; 10 rondas concurrentes con la misma clave → 201/201 con el mismo id y 1 fila cada una. |
+| CA-14 | PASS | Diff sin cambios en landings, `/api/v1/public/*`, bot, productos ni página; suite completa en verde; P6 y V3 (públicas, productos, página y usuarios 2xx). |
+| CA-15 automática | PASS | V2: la `api` de `main` sin la variable termina con código 1 y `DATABASE_NEWER_THAN_CODE` (`20261119120000_rol_gerente`). V3: con `DATABASE_ALLOW_NEWER_SCHEMA=true` y sin gerentes, aviso `database_newer_than_code_allowed`; las 4 públicas 200; login de admin, lista y alta de usuario; editor: login, edición de producto 200 y guardado de página 200. |
+| DT-2 manual | PASS (igual a lo descrito) | V4 con 6 gerentes: lista de usuarios, ficha del gerente y login del gerente → 503 `DATABASE_UNAVAILABLE` sin detalles (log `P2023`); públicas 200; login de admin y editor, productos, página, bot, ficha de un editor y alta de usuario 2xx. Su sesión previa da 401 porque las sesiones viven en memoria y no sobreviven al cambio de proceso. V5: con el `UPDATE … role='editor', session_version=session_version+1 WHERE role='gerente'` (6 filas), la lista vuelve a 200; el exgerente entra como editor sin negocios y recibe 403 en productos, página y usuarios. V6: la `api` del worktree arranca sin la variable y el rol se restaura con `PUT /usuarios/5` (200; el gerente vuelve a tener 200 en el inventario). |
+| CA-16 | PASS | B1: `mysqldump` con las opciones de `backup.sh` y un usuario con los privilegios de `restaurante_backup` (salida 0): 5 `CREATE TABLE inventory_*`, `enum('admin','editor','gerente')` y filas de gerente. B2: `DROP DATABASE` y restauración como `restore.sh`. B3: conteos y `CHECKSUM TABLE` de `user`, `user_business`, las 5 `inventory_*`, `product`, `page_version` y `_prisma_migrations` idénticos (10/3/32/20/70/0/32/16/4/5), con el ENUM y 6 gerentes. B4: la `api` del worktree arranca sin la variable; el gerente entra y lee una ficha con 13 entradas de historial y su empaque `25.000`. `--drill`: lo hace el usuario tras desplegar la épica. |
+| CA-10 en pantalla, CA-12, CA-17, redirección del gerente | No aplica a este PR | PR 3 |
+
+### Errores y robustez
+
+- E1: 422 `VALIDATION_FAILED` con `fields` para los filtros `estado`, `tipo`, `categoria` y `pagina` (0, -1, x), `q` > 80, filtro repetido y cantidad de conversión inválida (texto, negativa, 4 decimales); campo extra, nombre repetido, nombre vacío, factor 0, tipo inválido y categoría repetida sin distinguir mayúsculas. Unidad inexistente en la conversión → 422 `UNKNOWN_UNIT` (código de core, no `UNIT_CONVERSION_UNAVAILABLE`; correcto: es otra causa). Parámetro desconocido en la lista: ignorado (200).
+- E3: ids `0`, `-1`, `01`, `abc`, `1e3`, 11 dígitos, `%20` e inexistente → 404 en GET, PUT, desactivar y PUT de categoría.
+- E4: más de 16 KiB → 413 `PAYLOAD_TOO_LARGE`; JSON malformado → 400 `INVALID_JSON`; no JSON → 415; array → 422.
+- E5: misma clave con otro cuerpo → 422 `IDEMPOTENCY_KEY_REUSED` sin escribir (aceptado, P3); sin clave → 201; la misma clave de otro usuario es independiente (201).
+- E6: con MySQL detenido, lectura y escritura → 503 `DATABASE_UNAVAILABLE` "Servicio no disponible temporalmente."; al volver la base, 200/201 sin reiniciar la `api`.
+- E7: 551 líneas de log revisadas: eventos `inventory_item_saved`, `inventory_category_saved`, `inventory_conflict`, `inventory_create_replayed`, `inventory_create_key_reused`, `admin_forbidden` y `admin_csrf_rejected` solo con ids, acción, ruta y códigos; sin nombres de artículos, cuerpos, SQL, stack, URL de la base ni tokens. Ninguna respuesta de error lleva detalles internos.
+- C2: 10 rondas de dos `PUT` con la misma versión → siempre un 200 y un 409 con `current`. C3: 10 rondas de inactivar una categoría frente a un alta en ella → 409 `CATEGORY_IN_USE` y 201, 0 violaciones del invariante. C4: página 999999 → 200 vacía con `total`; `%`, `_` y Unicode en `q` sin comodines ni error.
+- P7: desactivar a un gerente, pasarlo a editor, pasar un editor a gerente o un gerente a admin → la sesión abierta da 401 y `session_version` sube. Cambiar solo los negocios de un gerente se ignora (200, sin negocios, sin cerrar la sesión). P8: de editor a gerente quedan 0 filas en `user_business`.
+
+### Mutaciones
+
+X1 (sin comprobación de rol en `inventory()`): detectada. X2 (`canManageInventory` siempre verdadero): detectada. **X3a (cambiar el rol no cierra sesiones en `user-repository.ts`): no detectada** con la suite completa de api, landing-pages e inventory-manager (DEF-002). X3b (gerente con todos los negocios): detectada (api y MySQL). X4 (escrituras sin CSRF): detectada. X5 (alta sin idempotencia): detectada. X6 (409 sin `current`): detectada. X7 (pasar un editor a gerente conserva sus negocios en `diffUser`): detectada en MySQL.
+
+### Defectos encontrados
+
+### DEF-002
+
+- Severidad: `MAJOR` (según el criterio aprobado: una mutación no detectada cuyo comportamiento no protege ninguna prueba)
+- Criterio de aceptación afectado: RF-9, caso límite "gerente degradado pierde la sesión" (cobertura; el comportamiento actual es correcto)
+- Descripción: ninguna prueba protege que `updateUser` del repositorio de Prisma suba `sessionVersion` cuando cambia **solo** el rol. La prueba nueva de `user-repository.test.ts` pasa de editor con negocios a gerente, y el cambio de negocios ya cierra la sesión por sí solo. Las pruebas de la API usan el doble de usuarios de `api/tests/support/admin.ts`, no este código. El TAP preveía ampliar `admin-users-api.test.ts` con "sesión cerrada al cambiar el rol", y eso no se hizo.
+- Pasos para reproducir: en una copia del árbol, cambiar en `packages/db/src/user-repository.ts` `const closesSessions = 'role' in changes || 'businesses' in changes;` por `const closesSessions = 'businesses' in changes;`, y ejecutar `npm test` de api, landing-pages e inventory-manager.
+- Resultado esperado: alguna prueba falla.
+- Resultado actual: api 1208/1208, `user-repository.test.ts` 17/17 e inventory-manager 278/278 en verde. Las 2 únicas fallas de la suite completa de landing-pages son de `content.test.ts`, que en la copia del árbol no encuentra `_stich_source_/` y falla igual sin la mutación.
+- Evidencia: X3a de esta ronda. En vivo, con el código sin mutar, pasar un gerente a admin sin tocar negocios da 401 en la sesión vieja.
+- Impacto: hoy ninguno observable. Con el rol Gerente, los cambios de rol sin cambio de negocios se vuelven habituales (gerente ↔ admin y editor sin negocios ↔ gerente). Un cambio futuro podría dejar abierta la sesión de un gerente degradado sin que falle ninguna prueba.
+- Recomendación: un caso en MySQL en `user-repository.test.ts` (o en `admin-users-api.test.ts`, como decía el TAP) que cambie solo el rol, p. ej. gerente → admin o editor sin negocios → gerente, y compruebe que sube `sessionVersion`. O aceptarlo sin cambios.
+
+### Revisión de pruebas permanentes
+
+- Las 12 de `admin-inventory-api.test.ts` son funcionales: permisos, CSRF, sesión, alta y ficha, errores, conflicto, idempotencia, 409 de dominio y 503. Usan `startAdmin`/`listenLocal`, no usan esperas fijas ni `retry`, y los nombres son de dominio.
+- El caso nuevo de `user-repository.test.ts` (ENUM con `gerente` y de editor a gerente) es funcional y usa `makeDatabase()`.
+- Lo de `contract-types.test.ts` amplía un archivo existente (listas cerradas iguales a las de core) y se acepta. Lo de `support/admin.ts` es solo un ajuste del doble.
+- Ninguna es de arquitectura.
+
+### Regresión
+
+Suite completa en verde, lint y typecheck en 0. V3 y V4 confirman que el código de `main` funciona sobre la base migrada.
+
+### Responsive / Accesibilidad / UX/UI
+
+U1 se probó con el doble y con el entorno real (inventory-manager del worktree y la `api` del worktree):
+
+- El selector "Rol" tiene `label`, las opciones Editor, Gerente y Administrador, y la ayuda con `aria-describedby="f-role-help"`.
+- El formulario es SSR (`method=post`, `action=/usuarios`) y envía `gerente`.
+- En la lista real, "Gema (gema2) Rol: Gerente Negocios: No aplica".
+- La ficha de edición carga el rol `gerente` y los negocios sin marcar, y hay un solo `h1`.
+
+Observaciones (no son defectos):
+
+- El doble de la API de `inventory-manager` (`tests/support/api-double.ts`) no conoce el rol: guarda un gerente como editor.
+- El formulario deja marcar negocios para un gerente; la API los ignora (P5).
+
+SEO y performance: no aplican (sin pantallas nuevas).
+
+### Pendientes de revisión manual
+
+- Visual a 375 px y foco visible del selector: la extensión de Chrome no capturó la pantalla (CDP agotó el tiempo). Ningún CA depende de ello; el DOM se validó arriba.
+- Simulacro `verify-backup.sh --drill` tras desplegar la épica (usuario).
+
+### Limpieza
+
+- `docker compose -p restaurante-qa-049b down -v`: volumen y redes eliminados. La base `restaurante_test_v1` se fue con el volumen; no había otras `restaurante_test*`. `docker ps -a`, `docker volume ls` y `docker network ls` sin restos `qa-049b`.
+- `restaurante-mysql-dev-1` sigue apagado, como estaba.
+- Sin procesos `server.ts` ni `vitest`; los puertos 3291 a 3295 y 3307 están libres.
+- Borrado el directorio `qa2` del scratchpad: copia de mutaciones, sondas, env, logs, volcados y capturas.
+- La pestaña del navegador está cerrada.
+- `git status` del worktree igual al inicial, más el ticket. El árbol principal en `main` sin cambios. `git worktree list` sin worktrees nuevos.
+- `node_modules` y el cliente generado del worktree se conservan.
+
+### Resultado final
+
+NEEDS_USER_DECISION
+
+### Ronda 2
+
+Revalidación de DEF-002 (decisión del usuario: "Si"). senior-fullstack añadió un caso a `landing-pages/tests/integration/user-repository.test.ts`: "gerente (REQ-F-049): cambiar solo el rol, sin negocios de por medio, cierra las sesiones (gerente -> admin -> gerente)". No cambió código de producción.
+
+**Qué cambió.** `git status` tiene los mismos archivos que en la ronda 1.
+- El diff de `packages/db/src/user-repository.ts` contra `84f0a9a` es el validado: 4 inserciones y 3 borrados (comentario del ENUM, negocios solo del editor en `diffUser` y en `createUser`). `closesSessions` sigue igual en la línea 208.
+- Ese archivo tiene una fecha de modificación posterior a la ronda 1 (04:35), pero su contenido coincide con el validado.
+- El resto de los archivos de `src/` y `packages/` conservan la fecha de modificación de antes de la ronda 1 (22:58–23:04).
+- El único cambio nuevo es el caso de prueba.
+
+**Pruebas repetidas.**
+- `typecheck` 0 y `lint` 0.
+- `npm test`: api 1208, landing-pages 896 (+1, el caso nuevo) e inventory-manager 278, todo en verde.
+- `user-repository.test.ts`: 18/18 en 3.47 / 3.43 / 3.47 s.
+- X3a, en una copia del árbol en el scratchpad: quitar `'role' in changes` de `closesSessions` hace **fallar** el caso nuevo (1 fallo y 17 en verde).
+
+**No repetido, a propósito.** Lo demás del plan (migración, permisos, errores, concurrencia, vuelta atrás, respaldo, pantalla y el resto de las mutaciones) no se repite: el código de producción no cambió y las pruebas añadidas no afectan a esas comprobaciones.
+
+**DEF-002: corregido y verificado.**
+
+**Limpieza.**
+- `docker compose -p restaurante-qa-049b down -v`: contenedor, volumen y redes eliminados; 0 bases `restaurante_test*` antes del borrado.
+- La copia del árbol en el scratchpad está borrada.
+- No quedan procesos `vitest` ni `server.ts`, y el puerto 3307 está libre.
+- `restaurante-mysql-dev-1` está apagado (ya lo estaba al empezar).
+- No hay worktrees nuevos y el árbol principal no cambió.
+
+**Resultado final: QA_APPROVED**
+
 ## Plan técnico de T2 a T5 (aprobado 2026-11-19)
 
 Copia íntegra del plan técnico completo de T2 a T5 de senior-fullstack, aprobado por el usuario ("apruebo las recomedaciones").
@@ -1534,6 +1878,17 @@ Preguntas abiertas imprescindibles (con recomendación):
 > • Reporte fiscal y de facturación: Resume las facturas emitidas a clientes, facturas recibidas de proveedores y el cálculo de impuestos (IVA, ISR). (Solo crea la estructura, queda pendiente, aun no estamos dados de alta ante el SAT México)
 
 ## Historial de cambios
+
+### QA del PR 2 (Q1)
+
+- 2026-11-19, senior-qa (Q2, ronda 2): DEF-002 corregido por senior-fullstack (decisión del usuario: "Si") con un caso nuevo en `user-repository.test.ts`, sin cambios de producción. X3a ahora se detecta; `typecheck`, `lint` y `npm test` en verde; `user-repository.test.ts` < 3.5 s en 3 ejecuciones; limpieza comprobada. Estado `QA_APPROVED`.
+- 2026-11-19, senior-fullstack (T3): DEF-002 corregido por decisión del usuario ("Si"): caso de MySQL que cambia solo el rol (gerente -> admin -> gerente, sin negocios) y comprueba que sube `session_version`; X3a detectada; typecheck y lint en 0, archivo en verde 3 veces. El doble de usuarios queda para el PR 3. Estado `NEEDS_IMPLEMENTATION_APPROVAL`.
+- 2026-11-19, senior-qa (Q2): plan aprobado por el usuario ("Si") con las autorizaciones y las cuatro recomendaciones. Ejecutado (ronda 1): CA-10, CA-11, CA-14, CA-15, CA-16 y DT-2 en PASS; migración sin reconstrucción (`TABLE_ID` 1967 → 1967, `INSTANT` aceptado); mutaciones X1–X7 detectadas salvo X3a (DEF-002, `MAJOR` de cobertura). Estado `NEEDS_USER_DECISION`.
+- 2026-11-19, senior-qa: implementación del PR 2 aprobada por el usuario ("Si, apruebo"), incluida la desviación (la redirección del gerente pasa al PR 3). QA Action Plan del PR 2 escrito; estado `NEEDS_QA_PLAN_APPROVAL`.
+
+### PR 2 de T1 (implementación)
+
+- 2026-11-18, senior-fullstack (T2): PR 2 de T1 implementado en `feature/REQ-F-049-gerente-api` (migración `rol_gerente`, rol Gerente, contratos y cliente del inventario, 12 rutas de la API con acceso por rol, CSRF, conflicto e idempotencia, opción Gerente en usuarios), sin commit; estado `NEEDS_IMPLEMENTATION_APPROVAL`. La redirección del gerente queda para el PR 3, como dice el plan.
 
 ### Versión 6 (T4 del PR 1)
 

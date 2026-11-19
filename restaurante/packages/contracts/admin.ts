@@ -60,11 +60,17 @@ const id = z.number().int().positive();
 export const loginRequestSchema = z.object({ username: z.string().max(200), password: z.string().max(1024) });
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 
+/** Roles (copia de `ROLES` de core; una prueba de `api/` comprueba que coinciden). `gerente`: REQ-F-049. */
+export const USER_ROLES = Object.freeze(['admin', 'editor', 'gerente'] as const);
+export type UserRole = (typeof USER_ROLES)[number];
+/** Roles que usan el inventario (REQ-F-049, PV-1): solo para la interfaz; la autoridad es la API. */
+export const INVENTORY_ROLES: readonly UserRole[] = Object.freeze(['admin', 'gerente']);
+
 export const adminUserSchema = z.object({
   id,
   name: z.string(),
-  role: z.enum(['admin', 'editor']),
-  /** Negocios en los que puede editar (el administrador, todos). */
+  role: z.enum(USER_ROLES),
+  /** Negocios en los que puede editar (el administrador, todos; el gerente, ninguno). */
   businesses: z.array(businessId),
 });
 export type AdminUser = z.infer<typeof adminUserSchema>;
@@ -160,9 +166,6 @@ export type ProductFieldsResponse = z.infer<typeof productFieldsResponseSchema>;
 
 // --- Usuarios y cuenta propia (REQ-F-040) ---------------------------------------------
 
-export const USER_ROLES = Object.freeze(['admin', 'editor'] as const);
-export type UserRole = (typeof USER_ROLES)[number];
-
 /**
  * Límites de los campos de usuario, solo para los textos de ayuda del admin: la regla está en core
  * (`validateUserData`, `validatePasswordPair`) y la API responde 422 con `fields`. Las longitudes se
@@ -176,7 +179,7 @@ export const managedUserSchema = z.object({
   username: z.string(),
   displayName: z.string(),
   role: z.enum(USER_ROLES),
-  /** Negocios asignados (editor); vacío para el administrador, que los tiene todos. */
+  /** Negocios asignados (editor); vacío para el administrador, que los tiene todos, y para el gerente. */
   businesses: z.array(businessId),
   active: z.boolean(),
   /** ISO con la zona del negocio; null si nunca entró. */

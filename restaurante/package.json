@@ -56,5 +56,8 @@
     "globals": "^17.13.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.1"
+  },
+  "overrides": {
+    "effect": "3.22.5"
   }
 }

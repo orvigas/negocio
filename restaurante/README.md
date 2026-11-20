@@ -745,9 +745,17 @@ concreto durante 30 días como máximo:
 
 #### Overrides vigentes
 
-Ninguno. Si hace falta uno (`overrides` en `package.json`), documenta aquí su motivo, porque
-`package.json` no admite comentarios, y retíralo en cuanto la dependencia que lo exige publique
+Cada override de `overrides` en `package.json` se documenta aquí con su motivo, porque
+`package.json` no admite comentarios, y se retira en cuanto la dependencia que lo exige publique
 la corrección.
+
+| Override | Motivo | Cuándo retirarlo |
+| -------- | ------ | ---------------- |
+| `effect` → `3.22.5` | GHSA-7589-6fvf-x4pw (high, ReDoS en `effect <=3.22.0`). Llega por `@restaurante/db` → `prisma@7.10.1` → `@prisma/config@7.10.1`, que fija `effect@3.20.0`: solo el CLI de Prisma (corte `migrate` y desarrollo), no la imagen de producción. Versión exacta, misma mayor; `prisma generate` y `prisma migrate deploy` se validaron con ella | Cuando una versión de Prisma fije `effect` ≥ 3.22.1: al subir Prisma, quita el override, regenera el lock y comprueba que `npm run audit:deps` sigue en 0 |
+
+Para aplicar o cambiar un override sobre un lock existente, npm puede responder `up to date` sin
+tocarlo: usa `npm update <paquete> --package-lock-only` y revisa que `git diff package-lock.json`
+solo cambie ese paquete.
 
 #### Versión de Node y avisos atendidos
 

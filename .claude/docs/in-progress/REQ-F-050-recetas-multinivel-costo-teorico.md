@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED — PR 2 de 3 (contratos y rutas de la API de recetas, importación única A5 y semilla de desarrollo), en la rama `feature/REQ-F-050-recetas-api-importacion` (desde `origin/epic/inventario`, `0187298`), sin commit. Implementación aprobada por el usuario ("Si": partir al commitear en PR 2a y PR 2b y aceptar las 6 desviaciones). QA Action Plan del PR 2 aprobado ("Si", 2026-11-20). QA ejecutado, ronda 1: sin defectos BLOCKER, CRITICAL ni MAJOR (1 MINOR y 1 TRIVIAL). Reparto 2a/2b validado, con su huella. Ver "QA Report — PR 2 (T2)". Siguiente paso: senior-fullstack reproduce el reparto, compara la huella y abre los PR 2a y 2b.
+QA_APPROVED — PR 2 de 3 (contratos y rutas de la API de recetas, importación única A5 y semilla de desarrollo), en la rama `feature/REQ-F-050-recetas-api-importacion` (desde `origin/epic/inventario`, `0187298`), sin commit. Implementación aprobada por el usuario ("Si": partir al commitear en PR 2a y PR 2b y aceptar las 6 desviaciones). QA Action Plan del PR 2 aprobado ("Si", 2026-11-20). QA ejecutado, ronda 1: sin defectos BLOCKER, CRITICAL ni MAJOR (1 MINOR y 1 TRIVIAL). Reparto 2a/2b validado, con su huella. Ver "QA Report — PR 2 (T2)". PR 2a: commit `ade09f1` y PR #188 hacia `epic/inventario` (https://github.com/orvigas/negocio/pull/188), pendiente de su CI. PR 2b: commit `05a4c4e` en `feature/REQ-F-050-recetas-importacion` (publicada), PR tras el merge del 2a. Ver "Commit y Pull Requests — PR 2a y PR 2b".
 
 Antecedente (PR 1, mergeado en `epic/inventario` con #185): READY_FOR_MERGE — PR 1 de 3 (modelo, dominio y persistencia): implementación aprobada por el usuario ("Apruebo", 2026-11-19); QA Action Plan aprobado ("Si", 2026-11-19); QA ejecutado, ronda 1, sin defectos BLOCKER, CRITICAL ni MAJOR (4 MINOR). Ver "QA Report — PR 1 (T2)". Commit `cb9bc4d` y Pull Request #185 hacia `epic/inventario`: https://github.com/orvigas/negocio/pull/185. Integrada `epic/inventario` (`d3a78be`, con el override de `effect` 3.22.5 de #186) en el merge commit `5df99c5`; CI del PR en verde (ejecución 44720216193): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion` en `pass`.
 
@@ -1745,7 +1745,17 @@ El PR 2 se parte en dos PR hacia `epic/inventario`, con el reparto validado por 
 - **PR 2a** (contratos y rutas de recetas, campos nuevos del artículo, DEF-001 y semilla de desarrollo): rama `feature/REQ-F-050-recetas-api-importacion`.
 - **PR 2b** (importación única A5, DEF-002, `Dockerfile` y `despliegue.md` §5): rama `feature/REQ-F-050-recetas-importacion`, salida del commit de 2a con un solo commit encima. Se publica la rama, pero el PR 2b (en borrador) se abre solo después de que el usuario haga merge del PR 2a, para que su diff contra `epic/inventario` sea solo 2b.
 
+Resultado:
+
+- `epic/inventario` sin cambios desde `0187298`: no hizo falta integrarla. Índice revisado sin hojas de cálculo, `~$`, `datos-privados` ni JSON de importación real; archivos añadidos por nombre.
+- **PR 2a:** commit `ade09f1` (`feat`), huella `ade09f1:restaurante` = `59c7cc064a14daded1235e99001cf0221441a404` (igual a la de QA). Pull Request #188 hacia `epic/inventario`: https://github.com/orvigas/negocio/pull/188 (abierto en borrador; se marca listo tras este registro).
+- **PR 2b:** commit `05a4c4e` (`feat`) sobre `ade09f1`, rama `feature/REQ-F-050-recetas-importacion` publicada; huella `05a4c4e:restaurante` = `d385d63b05d0c3b340fa43139f4ef0183d359a67` (igual a la de QA); su diff contra `ade09f1` son exactamente los 15 archivos del reparto. PR pendiente de abrir tras el merge del PR 2a.
+
 ## Historial de cambios
+
+### Commit y Pull Requests PR 2a y PR 2b (senior-fullstack, 2026-11-20)
+
+`epic/inventario` sin cambios (`0187298`). Pendientes del QA del PR 2 asignados ("Pendientes del PR 2 para el PR 3 y seguimientos"; DEF-005 y DEF-006 al PR 3 o a un seguimiento menor; OBS-7 vigilada en el CI). PR 2a: commit `ade09f1` y PR #188 en borrador hacia `epic/inventario` (https://github.com/orvigas/negocio/pull/188), huella `59c7cc06…` comprobada. PR 2b: commit `05a4c4e` en `feature/REQ-F-050-recetas-importacion`, publicada, huella `d385d63b…` comprobada; su PR se abre tras el merge del 2a.
 
 ### QA Report PR 2, ronda 1 (senior-qa, 2026-11-20)
 

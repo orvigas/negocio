@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED — PR 1 de 3 (modelo, dominio y persistencia): implementación aprobada por el usuario ("Apruebo", 2026-11-19); QA Action Plan aprobado ("Si", 2026-11-19); QA ejecutado, ronda 1, sin defectos BLOCKER, CRITICAL ni MAJOR (4 MINOR). Ver "QA Report — PR 1 (T2)". Commit `cb9bc4d` y Pull Request #185 hacia `epic/inventario`: https://github.com/orvigas/negocio/pull/185 (abierto en borrador; se marca listo tras este registro y `READY_FOR_MERGE` se confirma cuando `calidad`, `docker`, `auditoria` y `pruebas` estén en `pass`).
+READY_FOR_MERGE — PR 1 de 3 (modelo, dominio y persistencia): implementación aprobada por el usuario ("Apruebo", 2026-11-19); QA Action Plan aprobado ("Si", 2026-11-19); QA ejecutado, ronda 1, sin defectos BLOCKER, CRITICAL ni MAJOR (4 MINOR). Ver "QA Report — PR 1 (T2)". Commit `cb9bc4d` y Pull Request #185 hacia `epic/inventario`: https://github.com/orvigas/negocio/pull/185. Integrada `epic/inventario` (`d3a78be`, con el override de `effect` 3.22.5 de #186) en el merge commit `5df99c5`; CI del PR en verde (ejecución 44720216193): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion` en `pass`.
 
 Technical Action Plan aprobado por el usuario el 2026-11-19: "Si" (en respuesta a "¿Apruebas el plan técnico de T2 con mis recomendaciones a PT-1 a PT-7?"). Decisiones, tal como se recomendaron:
 
@@ -1296,6 +1296,10 @@ Pendientes del usuario:
 3. Borrar el scratchpad de la sesión de QA interrumpida con la copia del libro de datos reales (punto 3 de "Pendientes de revisión manual").
 
 ## Historial de cambios
+
+### Integración de epic/inventario y CI del PR 1 (senior-fullstack, 2026-11-20)
+
+`auditoria` fallaba en #185 porque la rama salía de la base vieja `0c3c293` (sin el arreglo de GHSA-7589-6fvf-x4pw). Con la autorización del usuario ("Si lo autorizo"), merge de `origin/epic/inventario` (`d3a78be`, tras #186 y #187) en la rama: merge commit `5df99c5`, sin conflictos; el diff del PR contra la épica sigue siendo solo el PR 1 de T2. En local: `npm ls effect` = 3.22.5 (overridden), `npm run typecheck` y `npm run lint` en 0 (barrera: 844 archivos, sin datos privados). Push normal, sin force. CI del PR (ejecución 44720216193): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion` en `pass` (`deploy`, `publish`, `vigente` y `validado` omitidos, como corresponde a un PR hacia `epic/inventario`). Estado `READY_FOR_MERGE`.
 
 ### Commit y Pull Request PR 1 (senior-fullstack, 2026-11-19)
 

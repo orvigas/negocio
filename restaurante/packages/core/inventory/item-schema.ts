@@ -1,4 +1,4 @@
-import { QUANTITY_SCALE, formatDecimal, parseDecimal } from './decimal.ts';
+import { COST_INTEGER_DIGITS, COST_SCALE, QUANTITY_SCALE, formatDecimal, parseDecimal } from './decimal.ts';
 import type { FieldErrors } from './errors.ts';
 import { readName, readOptionalText, nameKey } from './text.ts';
 import { INVENTORY_UNITS, SYSTEM_UNIT_KEYS, isInventoryUnit, unitKey, type InventoryUnit, type PackagingUnit } from './units.ts';
@@ -55,6 +55,10 @@ export interface InventoryItem {
   updatedAt: Date;
   updatedById: number | null;
   updatedByName: string | null;
+  /** Costo de referencia por unidad base, escala 4, en MXN con IVA (REQ-F-050, C-1). null: sin costo. */
+  referenceCost: bigint | null;
+  /** false: sin existencias; se costea por su referencia (REQ-F-050, C-3). */
+  inventoriable: boolean;
 }
 
 /** Campos editables ya validados y normalizados. */
@@ -74,6 +78,10 @@ export interface ItemFieldsInput {
   sku?: unknown;
   baseUnit?: unknown;
   units?: unknown;
+  /** Texto decimal (≥ 0, 4 decimales) o null/'' para quitarlo. Ausente en una edición: no cambia. */
+  referenceCost?: unknown;
+  /** Ausente en una edición: no cambia; en un alta, sí. */
+  inventoriable?: unknown;
 }
 
 export type ItemFieldsResult = { ok: true; value: ItemFields } | { ok: false; errors: FieldErrors };
@@ -169,3 +177,31 @@ export function validateItemFields(input: ItemFieldsInput, kind: ItemKind): Item
 /** Empaques como texto (historial y comparación): [{ name, factor: '24.000' }]. */
 export const unitsSnapshot = (units: readonly PackagingUnit[]): { name: string; factor: string }[] =>
   units.map((unit) => ({ name: unit.name, factor: formatDecimal(unit.factor) }));
+
+// --- Costo de referencia e inventariable (REQ-F-050, C-1, C-3 y PT-7) -------------------------
+
+/** Tipos que admiten costo de referencia (no Compuesto: se costea por su receta). Nunca un padre. */
+export const REFERENCE_COST_TYPES: readonly ItemType[] = Object.freeze(['insumo', 'intermedio', 'reventa']);
+/** Solo un Insumo puede ser no inventariable. */
+export const NON_INVENTORIABLE_TYPES: readonly ItemType[] = Object.freeze(['insumo']);
+
+/** Costo de referencia: vacío o ausente es null; si no, ≥ 0 con 4 decimales como máximo. */
+export function readReferenceCost(raw: unknown): { value: bigint | null } | { error: string } {
+  if (isBlank(raw)) return { value: null };
+  const parsed = parseDecimal(raw, { scale: COST_SCALE, integerDigits: COST_INTEGER_DIGITS });
+  return parsed.ok ? { value: parsed.value } : { error: parsed.error };
+}
+
+export function readInventoriable(raw: unknown): { value: boolean } | { error: string } {
+  return typeof raw === 'boolean' ? { value: raw } : { error: 'Indica si lleva existencias (sí o no).' };
+}
+
+/** Reglas por tipo y clase del costo de referencia y del atributo inventariable. */
+export function costFieldErrors(kind: ItemKind, type: ItemType, referenceCost: bigint | null, inventoriable: boolean): FieldErrors {
+  const errors: FieldErrors = {};
+  if (referenceCost !== null && (kind === 'parent' || !REFERENCE_COST_TYPES.includes(type))) {
+    errors.referenceCost = kind === 'parent' ? 'Un artículo padre no lleva costo: va en cada variante.' : 'Un Compuesto se costea por su receta: no lleva costo de referencia.';
+  }
+  if (!inventoriable && !NON_INVENTORIABLE_TYPES.includes(type)) errors.inventoriable = 'Solo un Insumo puede no llevar existencias.';
+  return errors;
+}

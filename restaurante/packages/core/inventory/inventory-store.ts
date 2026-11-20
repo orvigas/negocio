@@ -1,5 +1,6 @@
 import type { InventoryCategory } from './category-schema.ts';
 import type { InventoryItem, ItemType } from './item-schema.ts';
+import type { NewRecipeVersion, RecipeUsage, RecipeVersion } from './recipe-schema.ts';
 
 /**
  * Store del catálogo de inventario (REQ-F-049): contrato que implementan Prisma/MySQL
@@ -22,7 +23,16 @@ export const INVENTORY_ACTIONS = Object.freeze({
 } as const);
 export type InventoryAction = (typeof INVENTORY_ACTIONS)[keyof typeof INVENTORY_ACTIONS];
 
-export type InventoryEntity = 'item' | 'category';
+/** Acciones del historial de una receta (REQ-F-050): entity 'recipe', entityId = artículo producido. */
+export const RECIPE_ACTIONS = Object.freeze({
+  NEW_VERSION: 'new_version',
+  CLOSE: 'close',
+} as const);
+export type RecipeAction = (typeof RECIPE_ACTIONS)[keyof typeof RECIPE_ACTIONS];
+
+export type InventoryEntity = 'item' | 'category' | 'recipe';
+/** Entidades cuyo historial se consulta con `history` (el de una receta son sus versiones). */
+export type HistoryEntity = 'item' | 'category';
 
 export interface FieldChange {
   field: string;
@@ -34,15 +44,17 @@ export interface InventoryChangeEntry {
   at: Date;
   entity: InventoryEntity;
   entityId: number;
-  action: InventoryAction;
-  /** null: el sistema (semilla de desarrollo). */
+  action: InventoryAction | RecipeAction;
+  /** null: el sistema (semilla de desarrollo o importación). */
   actorId: number | null;
   actorName: string;
   changes: FieldChange[];
 }
 
-export interface StoredInventoryChange extends InventoryChangeEntry {
+export interface StoredInventoryChange extends Omit<InventoryChangeEntry, 'entity' | 'action'> {
   id: number;
+  entity: HistoryEntity;
+  action: InventoryAction;
 }
 
 export type NewItem = Omit<InventoryItem, 'id'>;
@@ -81,12 +93,25 @@ export interface InventoryStoreReader {
   /** Todas las categorías, por nombre, con su número de artículos activos. */
   listCategories(): Promise<CategoryWithUsage[]>;
   /** Últimos `limit` cambios de la entidad, del más reciente al más antiguo. */
-  history(entity: InventoryEntity, entityId: number, limit: number): Promise<StoredInventoryChange[]>;
+  history(entity: HistoryEntity, entityId: number, limit: number): Promise<StoredInventoryChange[]>;
   /**
-   * RN-4: ¿el artículo aparece en una receta o en un movimiento? T1 no tiene ni recetas ni
-   * movimientos: devuelve siempre false. T2 y T3 añaden aquí sus comprobaciones.
+   * RN-4: ¿el artículo tiene versiones de receta o aparece en una línea de cualquier versión (REQ-F-050)?
+   * T3 añadirá los movimientos.
    */
   isInUse(itemId: number): Promise<boolean>;
+  /** ¿El artículo tiene movimientos de existencias? Hasta T3 (REQ-F-051) no hay movimientos: false. */
+  hasMovements(itemId: number): Promise<boolean>;
+  /** Artículos con esos ids (los que no existen se omiten). */
+  itemsByIds(ids: readonly number[]): Promise<InventoryItem[]>;
+  /** Artículos que se pueden ofrecer como ingrediente (RN-T2-3): activos, de esos tipos y que no son padres; por nombre. */
+  ingredientCandidates(types: readonly ItemType[]): Promise<InventoryItem[]>;
+  /** Versiones vigentes de todas las recetas, con sus líneas por posición. */
+  currentRecipes(): Promise<RecipeVersion[]>;
+  /** Todas las versiones de la receta del artículo, de la más reciente a la más antigua. */
+  recipeVersions(itemId: number): Promise<RecipeVersion[]>;
+  recipeVersion(id: number): Promise<RecipeVersion | null>;
+  /** Recetas vigentes con una línea que usa el artículo (RF-8, C-5), por nombre del artículo producido. */
+  usedIn(itemId: number): Promise<RecipeUsage[]>;
 }
 
 export interface InventoryStoreTx extends InventoryStoreReader {
@@ -103,6 +128,15 @@ export interface InventoryStoreTx extends InventoryStoreReader {
   updateCategory(category: InventoryCategory): Promise<void>;
   countActiveItemsInCategory(categoryId: number): Promise<number>;
   addChange(entry: InventoryChangeEntry): Promise<void>;
+  /**
+   * Candado de recetas (REQ-F-050): la primera sentencia de toda escritura de recetas y de las
+   * escrituras de artículos que consultan su uso. Serializa esas escrituras hasta el fin de la transacción.
+   */
+  lockRecipes(): Promise<void>;
+  /** Inserta una versión vigente con sus líneas. */
+  insertRecipeVersion(version: NewRecipeVersion): Promise<RecipeVersion>;
+  /** Cierra la versión si sigue vigente (única escritura sobre una versión guardada); false si no lo era. */
+  closeRecipeVersion(id: number, at: Date): Promise<boolean>;
 }
 
 export interface InventoryStore {
@@ -110,4 +144,10 @@ export interface InventoryStore {
   read<T>(task: (reader: InventoryStoreReader) => Promise<T>): Promise<T>;
   /** Ejecuta `task` de forma atómica y aislada: si lanza, no queda nada escrito. */
   transaction<T>(task: (tx: InventoryStoreTx) => Promise<T>): Promise<T>;
+  /**
+   * Transacción de las escrituras de recetas (REQ-F-050): READ COMMITTED, con el candado `recetas`
+   * como primera sentencia (la toma `task` con `lockRecipes`), para que cada lectura posterior vea lo
+   * último confirmado (dos guardados A→B y B→A no pasan los dos).
+   */
+  recipeTransaction<T>(task: (tx: InventoryStoreTx) => Promise<T>): Promise<T>;
 }

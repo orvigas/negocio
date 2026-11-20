@@ -4,19 +4,22 @@ import { CategoryNameTakenError, ItemNameTakenError, SkuTakenError } from './err
 import type { InventoryItem } from './item-schema.ts';
 import type {
   CategoryWithUsage,
+  InventoryChangeEntry,
   InventoryStore,
   InventoryStoreTx,
   ItemQuery,
   StoredInventoryChange,
 } from './inventory-store.ts';
+import type { RecipeUsage, RecipeVersion } from './recipe-schema.ts';
 
 /**
  * Store del catálogo de inventario en memoria (REQ-F-049): mismas operaciones y claves únicas que el
  * de Prisma, sin base de datos. Doble de las pruebas unitarias.
  *
  * Atomicidad: cada transacción trabaja sobre una copia y solo la publica si termina sin error (las
- * transacciones se serializan). `state` permite inspeccionar los datos, `failNext` simula una base
- * caída y `markInUse` simula un artículo usado en una receta o un movimiento (RN-4).
+ * transacciones se serializan, así que el candado de recetas no hace nada). `state` permite
+ * inspeccionar los datos, `failNext` simula una base caída y `markInUse` simula un artículo usado en un
+ * movimiento (RN-4; las recetas ya cuentan solas, REQ-F-050).
  */
 
 export interface MemoryInventoryState {
@@ -24,18 +27,21 @@ export interface MemoryInventoryState {
   items: InventoryItem[];
   /** Registro de SKU: clave en mayúsculas -> artículo. */
   skus: Map<string, { itemId: number; assignedAt: Date }>;
-  changes: StoredInventoryChange[];
+  /** Historial de artículos, categorías y recetas. */
+  changes: (InventoryChangeEntry & { id: number })[];
   inUse: Set<number>;
+  recipeVersions: RecipeVersion[];
   nextCategoryId: number;
   nextItemId: number;
   nextChangeId: number;
+  nextRecipeVersionId: number;
 }
 
 export interface MemoryInventoryStore extends InventoryStore {
   readonly state: MemoryInventoryState;
   /** Las próximas `times` operaciones (lectura o transacción) fallan como si la base no respondiera. */
   failNext(times?: number): void;
-  /** RN-4: el artículo pasa a estar en uso (T2 y T3 lo harán con recetas y movimientos). */
+  /** RN-4: el artículo pasa a estar en uso (T3 lo hará con los movimientos). */
   markInUse(itemId: number): void;
 }
 
@@ -45,9 +51,11 @@ const emptyState = (): MemoryInventoryState => ({
   skus: new Map(),
   changes: [],
   inUse: new Set(),
+  recipeVersions: [],
   nextCategoryId: 1,
   nextItemId: 1,
   nextChangeId: 1,
+  nextRecipeVersionId: 1,
 });
 
 const copyState = (state: MemoryInventoryState): MemoryInventoryState => ({
@@ -56,9 +64,11 @@ const copyState = (state: MemoryInventoryState): MemoryInventoryState => ({
   skus: structuredClone(state.skus),
   changes: structuredClone(state.changes),
   inUse: new Set(state.inUse),
+  recipeVersions: structuredClone(state.recipeVersions),
   nextCategoryId: state.nextCategoryId,
   nextItemId: state.nextItemId,
   nextChangeId: state.nextChangeId,
+  nextRecipeVersionId: state.nextRecipeVersionId,
 });
 
 const byName = <T extends { name: string; id: number }>(a: T, b: T): number => a.name.localeCompare(b.name, 'es') || a.id - b.id;
@@ -120,10 +130,55 @@ export function createMemoryInventoryStore(): MemoryInventoryStore {
           .map((category) => ({ ...category, activeItemCount: data.items.filter((item) => item.active && item.categoryId === category.id).length }));
       },
       async history(entity, entityId, limit) {
-        return structuredClone(data.changes.filter((change) => change.entity === entity && change.entityId === entityId).sort((a, b) => b.id - a.id).slice(0, limit));
+        const entries = data.changes.filter((change) => change.entity === entity && change.entityId === entityId).sort((a, b) => b.id - a.id).slice(0, limit);
+        // Filtrado por una entidad de artículo o categoría: sus acciones son las de INVENTORY_ACTIONS.
+        return structuredClone(entries) as StoredInventoryChange[];
       },
       async isInUse(itemId) {
-        return data.inUse.has(itemId);
+        return data.inUse.has(itemId) || data.recipeVersions.some((version) => version.itemId === itemId || version.lines.some((line) => line.ingredientId === itemId));
+      },
+      async hasMovements() {
+        return false;
+      },
+      async itemsByIds(ids) {
+        return structuredClone(data.items.filter((item) => ids.includes(item.id)));
+      },
+      async ingredientCandidates(types) {
+        return structuredClone(data.items.filter((item) => item.active && item.kind !== 'parent' && types.includes(item.type)).sort(byName));
+      },
+      async currentRecipes() {
+        return structuredClone(data.recipeVersions.filter((version) => version.validTo === null));
+      },
+      async recipeVersions(itemId) {
+        return structuredClone(data.recipeVersions.filter((version) => version.itemId === itemId).sort((a, b) => b.number - a.number));
+      },
+      async recipeVersion(id) {
+        return structuredClone(data.recipeVersions.find((version) => version.id === id) ?? null);
+      },
+      async usedIn(itemId) {
+        const usages: RecipeUsage[] = [];
+        for (const version of data.recipeVersions) {
+          if (version.validTo !== null || !version.lines.some((line) => line.ingredientId === itemId)) continue;
+          const producer = findItem(version.itemId);
+          if (producer) usages.push({ itemId: producer.id, itemName: producer.name, itemActive: producer.active, versionId: version.id, versionNumber: version.number });
+        }
+        return usages.sort((a, b) => a.itemName.localeCompare(b.itemName, 'es') || a.itemId - b.itemId);
+      },
+      async lockRecipes() {},
+      async insertRecipeVersion(version) {
+        if (data.recipeVersions.some((other) => other.itemId === version.itemId && (other.validTo === null || other.number === version.number))) {
+          throw new Error('Versión vigente o número repetido');
+        }
+        const saved: RecipeVersion = { ...structuredClone(version), id: data.nextRecipeVersionId, validTo: null };
+        data.nextRecipeVersionId += 1;
+        data.recipeVersions.push(saved);
+        return structuredClone(saved);
+      },
+      async closeRecipeVersion(id, at) {
+        const version = data.recipeVersions.find((other) => other.id === id);
+        if (!version || version.validTo !== null) return false;
+        version.validTo = at;
+        return true;
       },
       async activeItemIdByNameKey(nameKey) {
         return data.items.find((item) => item.active && item.nameKey === nameKey)?.id ?? null;
@@ -182,6 +237,15 @@ export function createMemoryInventoryStore(): MemoryInventoryStore {
     return run;
   }
 
+  const transaction: InventoryStore['transaction'] = (task) =>
+    enqueue(async () => {
+      maybeFail();
+      const draft = copyState(state);
+      const result = await task(txOn(draft));
+      Object.assign(state, draft);
+      return result;
+    });
+
   return {
     state,
     failNext(times = 1) {
@@ -196,14 +260,7 @@ export function createMemoryInventoryStore(): MemoryInventoryStore {
         return task(txOn(state));
       });
     },
-    transaction(task) {
-      return enqueue(async () => {
-        maybeFail();
-        const draft = copyState(state);
-        const result = await task(txOn(draft));
-        Object.assign(state, draft);
-        return result;
-      });
-    },
+    transaction,
+    recipeTransaction: transaction,
   };
 }

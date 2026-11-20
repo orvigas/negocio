@@ -66,7 +66,7 @@ describe('alta (RF-2, CA-1)', () => {
       name: 'Escribe el nombre.',
       type: 'Elige el tipo de artículo.',
       categoryId: 'Elige la categoría.',
-      baseUnit: 'Elige la unidad base (kg, g, L, ml, pza).',
+      baseUnit: 'Elige la unidad base (kg, g, L, ml, pza, hr).',
     });
     const units = [
       { name: 'caja', factor: '0' },
@@ -80,7 +80,7 @@ describe('alta (RF-2, CA-1)', () => {
       'units.1.factor': 'Escribe un número sin signo, con punto decimal (p. ej. 24 o 0.355).',
       'units.2.name': 'Ya hay un empaque con ese nombre en el artículo.',
       'units.2.factor': 'Escribe un número sin signo, con punto decimal (p. ej. 24 o 0.355).',
-      'units.3.name': 'No puede llamarse como una unidad del sistema (kg, g, L, ml, pza).',
+      'units.3.name': 'No puede llamarse como una unidad del sistema (kg, g, L, ml, pza, hr).',
       'units.4.factor': 'Máximo 3 decimales.',
     });
   });

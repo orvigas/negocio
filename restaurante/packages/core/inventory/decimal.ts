@@ -12,6 +12,12 @@
 export const QUANTITY_SCALE = 3;
 /** Dígitos enteros de una cantidad o un factor (DECIMAL(13,3): 10 enteros y 3 decimales). */
 export const QUANTITY_INTEGER_DIGITS = 10;
+/** Escala de los costos por unidad (DECIMAL(15,4); REQ-F-050). */
+export const COST_SCALE = 4;
+/** Dígitos enteros de un costo (DECIMAL(15,4): 11 enteros y 4 decimales). */
+export const COST_INTEGER_DIGITS = 11;
+/** Escala de la merma en % (DECIMAL(5,2): 40.00 % es 4000n; 100 % es 10000n). */
+export const WASTE_SCALE = 2;
 
 export type DecimalParseResult = { ok: true; value: bigint } | { ok: false; error: string };
 

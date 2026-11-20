@@ -119,3 +119,92 @@ export class CategoryInUseError extends InventoryError {
     this.count = count;
   }
 }
+
+// --- Recetas (REQ-F-050, T2) -----------------------------------------------------------------
+
+/** RN-T2-2: solo un Intermedio o un Compuesto que no es padre lleva receta (409 RECIPE_NOT_ALLOWED). */
+export class RecipeNotAllowedError extends InventoryError {
+  constructor() {
+    super('Solo un artículo Intermedio o Compuesto (que no sea padre) lleva receta.');
+    this.name = 'RecipeNotAllowedError';
+  }
+}
+
+/** Un artículo inactivo no admite versiones nuevas de su receta (409 RECIPE_ITEM_INACTIVE); sí se puede cerrar. */
+export class RecipeItemInactiveError extends InventoryError {
+  constructor() {
+    super('El artículo está inactivo: no admite versiones nuevas de su receta.');
+    this.name = 'RecipeItemInactiveError';
+  }
+}
+
+export class RecipeVersionNotFoundError extends InventoryError {
+  constructor() {
+    super('Versión de receta no encontrada');
+    this.name = 'RecipeVersionNotFoundError';
+  }
+}
+
+export interface RecipeVersionInfo {
+  id: number;
+  number: number;
+  validFrom: Date;
+  createdByName: string;
+}
+
+/**
+ * C-4, RF-9: la versión de partida ya no es la vigente (409 RECIPE_VERSION_CONFLICT). `current` es la
+ * vigente (null si el artículo ya no tiene receta vigente o si no se pudo leer tras un choque).
+ */
+export class RecipeVersionConflictError extends InventoryError {
+  readonly current: RecipeVersionInfo | null;
+
+  constructor(current: RecipeVersionInfo | null) {
+    super('La receta cambió mientras se editaba');
+    this.name = 'RecipeVersionConflictError';
+    this.current = current;
+  }
+}
+
+/** RN-5, RF-5: la receta se contendría a sí misma (422 RECIPE_CYCLE). `path`: nombres, del artículo a sí mismo. */
+export class RecipeCycleError extends InventoryError {
+  readonly path: string[];
+
+  constructor(path: string[]) {
+    super(`La receta se contendría a sí misma: ${path.join(' → ')}.`);
+    this.name = 'RecipeCycleError';
+    this.path = path;
+  }
+}
+
+/** RF-5: más niveles de recetas anidadas de los permitidos (422 RECIPE_TOO_DEEP). */
+export class RecipeTooDeepError extends InventoryError {
+  readonly depth: number;
+  readonly max: number;
+
+  constructor(depth: number, max: number) {
+    super(`Las recetas quedarían anidadas en ${depth} niveles; el máximo es ${max}.`);
+    this.name = 'RecipeTooDeepError';
+    this.depth = depth;
+    this.max = max;
+  }
+}
+
+/** RF-7, CA-10: inactivar un artículo usado en recetas vigentes exige confirmarlo (409 ITEM_IN_ACTIVE_RECIPES). */
+export class ItemInActiveRecipesError extends InventoryError {
+  readonly recipes: { itemId: number; name: string }[];
+
+  constructor(recipes: { itemId: number; name: string }[]) {
+    super(`Se usa en ${recipes.length === 1 ? '1 receta vigente' : `${recipes.length} recetas vigentes`}: confirma que se inactiva igualmente.`);
+    this.name = 'ItemInActiveRecipesError';
+    this.recipes = recipes;
+  }
+}
+
+/** Otra escritura del inventario retiene el candado más de lo que se espera (503 INVENTORY_BUSY). */
+export class InventoryBusyError extends InventoryError {
+  constructor() {
+    super('El inventario está ocupado con otra escritura: inténtalo de nuevo.');
+    this.name = 'InventoryBusyError';
+  }
+}

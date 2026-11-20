@@ -1,5 +1,5 @@
 import { validateCategoryFields, type CategoryFieldsInput, type InventoryCategory } from './category-schema.ts';
-import { parseDecimal } from './decimal.ts';
+import { COST_SCALE, formatDecimal, parseDecimal } from './decimal.ts';
 import {
   CategoryInUseError,
   CategoryInactiveError,
@@ -8,6 +8,7 @@ import {
   InventoryConflictError,
   InventoryValidationError,
   ItemHasActiveVariantsError,
+  ItemInActiveRecipesError,
   ItemLockedError,
   ItemNameTakenError,
   ItemNotFoundError,
@@ -17,8 +18,11 @@ import {
 } from './errors.ts';
 import {
   PARENT_TYPES,
+  costFieldErrors,
   isItemKind,
   isItemType,
+  readInventoriable,
+  readReferenceCost,
   skuKey,
   unitsSnapshot,
   validateItemFields,
@@ -54,7 +58,10 @@ import { convertToBase, equivalences, type Equivalence, type InventoryUnit } fro
  * - Nombre único entre los activos sin distinguir mayúsculas (RF-2): comprobación previa (error por
  *   campo) y la clave única del store como garantía ante carreras.
  * - SKU (PV-14, DT-3): editable; todo SKU asignado queda registrado y no se reutiliza en otro artículo.
- * - RN-4: la unidad base y los empaques se bloquean cuando `store.isInUse` lo indica (en T1, nunca).
+ * - RN-4: la unidad base y los empaques se bloquean cuando `store.isInUse` lo indica (REQ-F-050: el
+ *   artículo tiene versiones de receta o aparece en una línea).
+ * - REQ-F-050: la edición y la inactivación toman primero el candado `recetas` (consultan el uso en
+ *   recetas); inactivar un artículo usado en recetas vigentes exige `recipes: 'keep'` (RF-7).
  */
 
 export const ITEM_PAGE_SIZE = 50;
@@ -93,6 +100,8 @@ export interface DeactivateItemInput {
   version: unknown;
   /** En un padre con variantes activas: 'deactivate' confirma que también se inactivan. */
   variants?: unknown;
+  /** RF-7: 'keep' confirma inactivar aunque se use en recetas vigentes (las versiones no cambian). */
+  recipes?: unknown;
 }
 
 export interface ItemListFilterInput {
@@ -148,7 +157,7 @@ const NAME_TAKEN = 'Ya hay un artículo activo con ese nombre.';
 const SKU_TAKEN = 'Ese SKU ya se usó en otro artículo.';
 const CATEGORY_NAME_TAKEN = 'Ya hay una categoría activa con ese nombre.';
 
-function normalizeAuthor(author: InventoryAuthor): InventoryAuthor {
+export function normalizeAuthor(author: InventoryAuthor): InventoryAuthor {
   const name = typeof author?.name === 'string' ? author.name.trim() : '';
   if (name === '') throw new TypeError('El autor de un cambio del inventario necesita un nombre');
   if (author.id !== null && !(Number.isSafeInteger(author.id) && author.id >= 1)) throw new TypeError('Id de autor inválido');
@@ -180,7 +189,25 @@ function itemSnapshot(item: InventoryItem): Record<string, unknown> {
     baseUnit: item.baseUnit,
     units: unitsSnapshot(item.units),
     active: item.active,
+    referenceCost: item.referenceCost === null ? null : formatDecimal(item.referenceCost, COST_SCALE),
+    inventoriable: item.inventoriable,
   };
+}
+
+/** Costo de referencia e inventariable de la entrada; ausentes: `fallback` (alta: null y true). */
+function readCostInput(input: ItemFieldsInput, fallback: { referenceCost: bigint | null; inventoriable: boolean }, errors: FieldErrors) {
+  let { referenceCost, inventoriable } = fallback;
+  if (input.referenceCost !== undefined) {
+    const parsed = readReferenceCost(input.referenceCost);
+    if ('error' in parsed) errors.referenceCost = parsed.error;
+    else referenceCost = parsed.value;
+  }
+  if (input.inventoriable !== undefined) {
+    const parsed = readInventoriable(input.inventoriable);
+    if ('error' in parsed) errors.inventoriable = parsed.error;
+    else inventoriable = parsed.value;
+  }
+  return { referenceCost, inventoriable };
 }
 
 function diff(before: Record<string, unknown> | null, after: Record<string, unknown>): FieldChange[] {
@@ -338,6 +365,8 @@ export function createInventoryRepository({ store, now = () => new Date() }: { s
       }
       const fields = validateItemFields(input, kind ?? 'simple');
       if (!fields.ok) Object.assign(errors, fields.errors);
+      const cost = readCostInput(input, { referenceCost: null, inventoriable: true }, errors);
+      if (kind !== null && type !== null) Object.assign(errors, costFieldErrors(kind, type, cost.referenceCost, cost.inventoriable));
       if (!fields.ok || kind === null || Object.keys(errors).length > 0) throw new InventoryValidationError(errors);
       const { value } = fields;
 
@@ -349,6 +378,8 @@ export function createInventoryRepository({ store, now = () => new Date() }: { s
           if (!parent.active) throw new ParentInactiveError();
           type = parent.type;
           categoryId = parent.categoryId;
+          // Validado aquí: el tipo de una variante es el del padre.
+          fail(costFieldErrors(kind, type, cost.referenceCost, cost.inventoriable));
         }
         // Validados arriba (o heredados del padre): categoryId y type ya no son null.
         await activeCategory(tx, categoryId as number);
@@ -359,6 +390,7 @@ export function createInventoryRepository({ store, now = () => new Date() }: { s
           parentId,
           categoryId: categoryId as number,
           ...value,
+          ...cost,
           active: true,
           version: 1,
           createdAt: at,
@@ -376,6 +408,7 @@ export function createInventoryRepository({ store, now = () => new Date() }: { s
       const author = normalizeAuthor(rawAuthor);
       const version = requireVersion(input.version);
       return write(async (tx) => {
+        await tx.lockRecipes();
         const at = now();
         const current = await tx.getItem(id);
         if (!current) throw new ItemNotFoundError();
@@ -391,15 +424,20 @@ export function createInventoryRepository({ store, now = () => new Date() }: { s
         }
         const fields = validateItemFields(input, current.kind);
         if (!fields.ok) Object.assign(errors, fields.errors);
+        const cost = readCostInput(input, current, errors);
+        Object.assign(errors, costFieldErrors(current.kind, current.type, cost.referenceCost, cost.inventoriable));
         if (!fields.ok || Object.keys(errors).length > 0) throw new InventoryValidationError(errors);
         if (current.version !== version) throw conflictOf(current);
+        if (cost.inventoriable !== current.inventoriable && (await tx.hasMovements(id))) {
+          throw new InventoryValidationError({ inventoriable: 'El artículo ya tiene movimientos: no puede cambiar si lleva existencias.' });
+        }
 
         if (categoryId !== current.categoryId) await activeCategory(tx, categoryId);
         if (current.active && fields.value.nameKey !== current.nameKey) await checkName(tx, fields.value.nameKey, id);
         const unitsChanged = fields.value.baseUnit !== current.baseUnit || JSON.stringify(unitsSnapshot(fields.value.units)) !== JSON.stringify(unitsSnapshot(current.units));
         if (unitsChanged && (await tx.isInUse(id))) throw new ItemLockedError();
 
-        const next: InventoryItem = { ...current, ...fields.value, categoryId };
+        const next: InventoryItem = { ...current, ...fields.value, ...cost, categoryId };
         if (diff(itemSnapshot(current), itemSnapshot(next)).length === 0) return current;
         if (fields.value.sku !== null && skuKey(fields.value.sku) !== (current.sku === null ? null : skuKey(current.sku))) await claimSku(tx, fields.value.sku, id, at);
 
@@ -418,15 +456,21 @@ export function createInventoryRepository({ store, now = () => new Date() }: { s
       const author = normalizeAuthor(rawAuthor);
       const version = requireVersion(input.version);
       if (input.variants !== undefined && input.variants !== 'deactivate') throw new InventoryValidationError({ variants: 'Valor no válido.' });
+      if (input.recipes !== undefined && input.recipes !== 'keep') throw new InventoryValidationError({ recipes: 'Valor no válido.' });
       return write(async (tx) => {
+        await tx.lockRecipes();
         const at = now();
         const current = await loadItem(tx, id, version);
         if (!current.active) return current;
-        if (current.kind === 'parent') {
-          const active = (await tx.listVariants(id)).filter((variant) => variant.active);
-          if (active.length > 0 && input.variants !== 'deactivate') throw new ItemHasActiveVariantsError(active.length);
-          for (const variant of active) await save(tx, variant, stamp({ ...variant, active: false }, author, at), INVENTORY_ACTIONS.DEACTIVATE, author, at);
+        const active = current.kind === 'parent' ? (await tx.listVariants(id)).filter((variant) => variant.active) : [];
+        if (active.length > 0 && input.variants !== 'deactivate') throw new ItemHasActiveVariantsError(active.length);
+        if (input.recipes !== 'keep') {
+          // RF-7, CA-10: recetas vigentes que usan el artículo o, en cascada, sus variantes activas.
+          const usages = (await Promise.all([current, ...active].map((entry) => tx.usedIn(entry.id)))).flat();
+          const recipes = [...new Map(usages.map((usage) => [usage.itemId, { itemId: usage.itemId, name: usage.itemName }])).values()];
+          if (recipes.length > 0) throw new ItemInActiveRecipesError(recipes);
         }
+        for (const variant of active) await save(tx, variant, stamp({ ...variant, active: false }, author, at), INVENTORY_ACTIONS.DEACTIVATE, author, at);
         const saved = stamp({ ...current, active: false }, author, at);
         await save(tx, current, saved, INVENTORY_ACTIONS.DEACTIVATE, author, at);
         return saved;

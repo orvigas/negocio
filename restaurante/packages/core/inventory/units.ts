@@ -4,29 +4,31 @@ import { InventoryError } from './errors.ts';
 /**
  * Unidades y conversiones del inventario (REQ-F-049, RN-3, RF-3 y RF-4).
  *
- * - Unidades del sistema: kg y g (masa), L y ml (volumen) y pza (pieza). Dentro de una magnitud se
- *   convierte con factores fijos (1 kg = 1000 g; 1 L = 1000 ml).
+ * - Unidades del sistema: kg y g (masa), L y ml (volumen), pza (pieza) y hr (tiempo; REQ-F-050). Dentro
+ *   de una magnitud se convierte con factores fijos (1 kg = 1000 g; 1 L = 1000 ml); hr no se convierte
+ *   a ninguna otra unidad del sistema.
  * - Entre magnitudes distintas o desde una presentación (caja → pza, bulto → kg) solo se convierte
  *   con una unidad de empaque propia del artículo, cuyo factor va hacia su unidad base.
  * - Una conversión sin factor se rechaza. Toda cantidad se expresa con escala 3 (decimal.ts).
  */
 
-export const INVENTORY_UNITS = Object.freeze(['kg', 'g', 'L', 'ml', 'pza'] as const);
+export const INVENTORY_UNITS = Object.freeze(['kg', 'g', 'L', 'ml', 'pza', 'hr'] as const);
 export type InventoryUnit = (typeof INVENTORY_UNITS)[number];
 
-export const MAGNITUDES = Object.freeze(['mass', 'volume', 'piece'] as const);
+export const MAGNITUDES = Object.freeze(['mass', 'volume', 'piece', 'time'] as const);
 export type Magnitude = (typeof MAGNITUDES)[number];
 
 export const isInventoryUnit = (value: unknown): value is InventoryUnit =>
   typeof value === 'string' && (INVENTORY_UNITS as readonly string[]).includes(value);
 
-/** Magnitud y factor de cada unidad hacia la menor de su magnitud (g, ml o pza). */
+/** Magnitud y factor de cada unidad hacia la menor de su magnitud (g, ml, pza o hr). */
 const SYSTEM_UNITS: Readonly<Record<InventoryUnit, { magnitude: Magnitude; factor: bigint }>> = Object.freeze({
   kg: { magnitude: 'mass', factor: 1000n },
   g: { magnitude: 'mass', factor: 1n },
   L: { magnitude: 'volume', factor: 1000n },
   ml: { magnitude: 'volume', factor: 1n },
   pza: { magnitude: 'piece', factor: 1n },
+  hr: { magnitude: 'time', factor: 1n },
 });
 
 export const magnitudeOf = (unit: InventoryUnit): Magnitude => SYSTEM_UNITS[unit].magnitude;

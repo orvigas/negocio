@@ -36,31 +36,32 @@ enum Business {
 
 /// Cuenta personal de la administración (D-10). No se elimina: se desactiva (D-6).
 model User {
-  id               Int             @id @default(autoincrement())
+  id               Int                      @id @default(autoincrement())
   /// Usuario de acceso tal como se escribió.
-  username         String          @db.VarChar(60)
+  username         String                   @db.VarChar(60)
   /// Usuario normalizado (NFC y minúsculas): único sin distinguir mayúsculas.
   /// Hasta 120 puntos de código: toLowerCase() convierte «İ» en dos.
-  usernameKey      String          @unique @map("username_key") @db.VarChar(128)
-  displayName      String          @map("display_name") @db.VarChar(60)
+  usernameKey      String                   @unique @map("username_key") @db.VarChar(128)
+  displayName      String                   @map("display_name") @db.VarChar(60)
   role             Role
-  active           Boolean         @default(true)
+  active           Boolean                  @default(true)
   /// scrypt$N$r$p$sal$hash (sal ≤ 64 bytes; ver services/admin-auth.ts).
-  passwordHash     String          @map("password_hash") @db.VarChar(255)
+  passwordHash     String                   @map("password_hash") @db.VarChar(255)
   /// Cambia al desactivar, cambiar rol/negocios o contraseña: invalida las sesiones abiertas (D-8).
-  sessionVersion   Int             @default(0) @map("session_version")
-  createdAt        DateTime        @default(now()) @map("created_at")
-  updatedAt        DateTime        @updatedAt @map("updated_at")
-  lastLoginAt      DateTime?       @map("last_login_at")
+  sessionVersion   Int                      @default(0) @map("session_version")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @updatedAt @map("updated_at")
+  lastLoginAt      DateTime?                @map("last_login_at")
   businesses       UserBusiness[]
-  auditActions     UserAudit[]     @relation("actor")
-  auditEvents      UserAudit[]     @relation("target")
+  auditActions     UserAudit[]              @relation("actor")
+  auditEvents      UserAudit[]              @relation("target")
   productChanges   ProductChange[]
-  botBlocksAdded   BotBlock[]      @relation("blockCreator")
-  botBlocksRemoved BotBlock[]      @relation("blockRemover")
+  botBlocksAdded   BotBlock[]               @relation("blockCreator")
+  botBlocksRemoved BotBlock[]               @relation("blockRemover")
   botAudits        BotAudit[]
   botControls      BotControl[]
   inventoryChanges InventoryChange[]
+  recipeVersions   InventoryRecipeVersion[]
 
   @@map("user")
 }
@@ -387,13 +388,15 @@ enum InventoryItemKind {
   variant
 }
 
-/// Unidades del sistema (RN-3): kg y g (masa), L y ml (volumen), pza (pieza).
+/// Unidades del sistema (RN-3): kg y g (masa), L y ml (volumen), pza (pieza) y hr (tiempo, sin
+/// conversión a otras; REQ-F-050). Un valor nuevo siempre va al final (ALTER INSTANT, sin reconstruir).
 enum InventoryUnit {
   kg
   g
   L
   ml
   pza
+  hr
 }
 
 /// Categoría administrable del catálogo (RF-6). No se borra: se inactiva.
@@ -414,34 +417,41 @@ model InventoryCategory {
 
 /// Artículo del inventario (RF-2 y RF-5). No se borra: se inactiva (RN-2, PV-11).
 model InventoryItem {
-  id            Int                 @id @default(autoincrement())
-  kind          InventoryItemKind
-  type          InventoryItemType
-  parentId      Int?                @map("parent_id")
-  categoryId    Int                 @map("category_id")
-  name          String              @db.VarChar(80)
+  id             Int                      @id @default(autoincrement())
+  kind           InventoryItemKind
+  type           InventoryItemType
+  parentId       Int?                     @map("parent_id")
+  categoryId     Int                      @map("category_id")
+  name           String                   @db.VarChar(80)
   /// Nombre normalizado (NFC y minúsculas). Hasta 160: toLowerCase() puede alargar el texto.
-  nameKey       String              @map("name_key") @db.VarChar(160)
+  nameKey        String                   @map("name_key") @db.VarChar(160)
   /// = nameKey si está activo; null si no (RF-2: único entre los activos, sin distinguir mayúsculas).
-  activeNameKey String?             @unique @map("active_name_key") @db.VarChar(160)
-  description   String?             @db.VarChar(400)
+  activeNameKey  String?                  @unique @map("active_name_key") @db.VarChar(160)
+  description    String?                  @db.VarChar(400)
   /// SKU vigente tal como se escribió (su unicidad la impone inventory_sku; PV-14).
-  sku           String?             @db.VarChar(40)
+  sku            String?                  @db.VarChar(40)
   /// null solo en un parent.
-  baseUnit      InventoryUnit?      @map("base_unit")
-  active        Boolean             @default(true)
+  baseUnit       InventoryUnit?           @map("base_unit")
+  active         Boolean                  @default(true)
   /// Aumenta con cada escritura (control de concurrencia, RF-8).
-  version       Int                 @default(1)
-  createdAt     DateTime            @map("created_at")
-  updatedAt     DateTime            @map("updated_at")
+  version        Int                      @default(1)
+  createdAt      DateTime                 @map("created_at")
+  updatedAt      DateTime                 @map("updated_at")
   /// Autor de la última escritura (aviso de conflicto). Sin clave foránea, como page_version.
-  updatedById   Int?                @map("updated_by_id")
-  updatedByName String?             @map("updated_by_name") @db.VarChar(60)
-  parent        InventoryItem?      @relation("variants", fields: [parentId], references: [id], onDelete: Restrict)
-  variants      InventoryItem[]     @relation("variants")
-  category      InventoryCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  units         InventoryItemUnit[]
-  skus          InventorySku[]
+  updatedById    Int?                     @map("updated_by_id")
+  updatedByName  String?                  @map("updated_by_name") @db.VarChar(60)
+  /// Costo de referencia por unidad base, en MXN con IVA (REQ-F-050, C-1 y RN-T2-6). null: sin costo.
+  referenceCost  Decimal?                 @map("reference_cost") @db.Decimal(15, 4)
+  /// false: no lleva existencias; se costea siempre por su referencia (REQ-F-050, C-3 y RN-T2-5).
+  inventoriable  Boolean                  @default(true)
+  parent         InventoryItem?           @relation("variants", fields: [parentId], references: [id], onDelete: Restrict)
+  variants       InventoryItem[]          @relation("variants")
+  category       InventoryCategory        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  units          InventoryItemUnit[]
+  skus           InventorySku[]
+  recipeVersions InventoryRecipeVersion[] @relation("recipeVersions")
+  currentRecipe  InventoryRecipeVersion?  @relation("currentRecipe")
+  usedInLines    InventoryRecipeLine[]
 
   @@index([active, type])
   @@index([categoryId, active])
@@ -484,10 +494,11 @@ model InventorySku {
 model InventoryChange {
   id        Int      @id @default(autoincrement())
   at        DateTime
-  /// item | category
+  /// item | category | recipe (REQ-F-050: entityId = artículo producido)
   entity    String   @db.VarChar(16)
   entityId  Int      @map("entity_id")
-  /// create | update | overwrite_after_conflict | deactivate | reactivate | inherit
+  /// create | update | overwrite_after_conflict | deactivate | reactivate | inherit;
+  /// recetas: new_version | close
   action    String   @db.VarChar(32)
   /// Usuario autenticado; null si fue el sistema (semilla de desarrollo).
   actorId   Int?     @map("actor_id")
@@ -499,4 +510,70 @@ model InventoryChange {
 
   @@index([entity, entityId, id])
   @@map("inventory_change")
+}
+
+// --- Inventario: recetas multinivel versionadas (REQ-F-050, T2) ---------------------------------
+// Una versión es inmutable: solo se cierra (valid_to y current_item_id). Cantidades DECIMAL(13,3) y
+// merma DECIMAL(5,2) exactas (PV-13); el costo teórico se calcula al consultar, nunca se guarda.
+
+/// Versión de la receta de un artículo Intermedio o Compuesto (RN-T2-2, RF-4).
+model InventoryRecipeVersion {
+  id            Int                   @id @default(autoincrement())
+  itemId        Int                   @map("item_id")
+  /// 1, 2, 3… por artículo (máximo + 1 dentro del candado `recetas`).
+  number        Int
+  /// Rendimiento en la unidad base del artículo producido (> 0).
+  yieldQuantity Decimal               @map("yield_quantity") @db.Decimal(13, 3)
+  validFrom     DateTime              @map("valid_from")
+  /// null mientras está vigente.
+  validTo       DateTime?             @map("valid_to")
+  /// = item_id mientras está vigente; null al cerrarse. Único: una sola vigente por artículo.
+  currentItemId Int?                  @unique @map("current_item_id")
+  note          String?               @db.VarChar(400)
+  createdAt     DateTime              @map("created_at")
+  /// null: importación o semilla.
+  createdById   Int?                  @map("created_by_id")
+  createdByName String                @map("created_by_name") @db.VarChar(60)
+  item          InventoryItem         @relation("recipeVersions", fields: [itemId], references: [id], onDelete: Restrict)
+  currentItem   InventoryItem?        @relation("currentRecipe", fields: [currentItemId], references: [id], onDelete: Restrict)
+  createdBy     User?                 @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  lines         InventoryRecipeLine[]
+
+  @@unique([itemId, number])
+  @@index([itemId, validFrom])
+  @@map("inventory_recipe_version")
+}
+
+/// Línea de una versión (RF-3, RN-6): neta en la unidad capturada y en la base, merma y bruta.
+model InventoryRecipeLine {
+  id                Int                    @id @default(autoincrement())
+  versionId         Int                    @map("version_id")
+  /// 1..40
+  position          Int
+  ingredientItemId  Int                    @map("ingredient_item_id")
+  /// Cantidad neta (aprovechable tras la merma) en `unit`.
+  quantity          Decimal                @db.Decimal(13, 3)
+  /// Unidad del sistema o empaque del ingrediente, tal como quedó normalizada.
+  unit              String                 @db.VarChar(30)
+  netBaseQuantity   Decimal                @map("net_base_quantity") @db.Decimal(13, 3)
+  /// Merma en % [0, 100).
+  wastePercent      Decimal                @map("waste_percent") @db.Decimal(5, 2)
+  /// neta / (1 − merma), en la unidad base del ingrediente.
+  grossBaseQuantity Decimal                @map("gross_base_quantity") @db.Decimal(13, 3)
+  note              String?                @db.VarChar(200)
+  version           InventoryRecipeVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  ingredient        InventoryItem          @relation(fields: [ingredientItemId], references: [id], onDelete: Restrict)
+
+  @@unique([versionId, position])
+  @@unique([versionId, ingredientItemId])
+  @@index([ingredientItemId])
+  @@map("inventory_recipe_line")
+}
+
+/// Candados lógicos del inventario. La fila `recetas` serializa las escrituras de recetas y las de
+/// artículos que consultan su uso (se toma con un upsert: funciona aunque falte la fila).
+model InventoryLock {
+  name String @id @db.VarChar(32)
+
+  @@map("inventory_lock")
 }

@@ -591,6 +591,55 @@ Corre `calidad`, `docker` y `auditoria`, y con las tres en verde, `publish` y
 Sobre otra rama se rechaza (`cambios` falla y no corre nada más). Si mientras tanto llega otro
 commit a `main`, no se despliega: lo hará el del commit nuevo.
 
+### Importación única del inventario (REQ-F-050, A5)
+
+Carga una sola vez los datos maestros del inventario (categorías, artículos, variantes, costos de
+referencia, inventariable y recetas) desde el JSON revisado por el usuario. Solo cuando la épica de
+inventario esté en `main`, después de T3 (PT-5): antes, la base de producción no tiene las tablas.
+El JSON tiene datos reales del negocio: se genera y se guarda **fuera del repositorio** y nunca se
+copia al contenedor (la `api` lo lee por la entrada estándar).
+
+1. En tu Mac, copia el JSON a tu carpeta del VPS (no a `/opt/restaurante`):
+   `scp <ruta-local>/inventario.json <tu-usuario>@<vps>:~/inventario.json`.
+2. En el VPS, con tu usuario de administración:
+
+   ```sh
+   chmod 600 ~/inventario.json
+   cd /opt/restaurante
+   C="sudo docker compose -f deploy/compose.prod.yaml --env-file .env --env-file state/release.env"
+   sudo systemctl start restaurante-backup.service      # recomendado: un respaldo justo antes
+   # Ensayo: valida y cuenta sin escribir nada.
+   $C exec -T api node scripts/inventory-import.ts --archivo - --produccion < ~/inventario.json
+   ```
+
+   Termina con código 0 y "Ensayo sin problemas" si se puede importar. Con errores o conflictos
+   termina con 1 y los lista por fila del origen, campo y mensaje (sin valores): corrige el JSON en
+   tu Mac y repite desde el paso 1.
+3. Escritura (todo o nada en una transacción):
+
+   ```sh
+   $C exec -T api node scripts/inventory-import.ts --archivo - --produccion --escribir < ~/inventario.json
+   ```
+
+   Debe decir "escrita" con los conteos esperados. Repetirla con el mismo archivo no crea nada
+   ("Creados: … 0"); un dato que ya existe distinto es un conflicto y no se sobrescribe.
+4. Borra el archivo y comprueba que no quedó copia:
+
+   ```sh
+   shred -u ~/inventario.json
+   ls ~/inventario.json      # debe responder que no existe
+   ```
+
+- El comando se niega sin `--produccion` (el contenedor `api` siempre es `NODE_ENV=production`) y
+  con el archivo ficticio de las pruebas (`"ficticio": true`).
+- Usa el `DATABASE_URL` de la `api` (usuario solo DML) y no migra: si la base no está lista, termina
+  con 1 sin escribir nada.
+- Las recetas entran como versión 1, vigentes desde la importación, y todo queda en el historial con
+  el autor "Importación". No hace falta otro respaldo que el del paso 2: si algo falla, no se escribe
+  nada.
+- En local (base de `api/.env`, solo `127.0.0.1`, `localhost`, `::1` o `mysql-dev`):
+  `npm run inventory:import -- --archivo <ruta>` (ensayo) y con `--escribir`.
+
 ## 6. Volver a una versión anterior a mano
 
 La vuelta atrás automática solo cubre una versión nueva que no arranca. Para volver por otro

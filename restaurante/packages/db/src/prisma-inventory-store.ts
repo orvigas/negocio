@@ -428,8 +428,14 @@ function txOn(tx: Tx): InventoryStoreTx {
   };
 }
 
-export function createPrismaInventoryStore({ prisma }: { prisma: Database }): InventoryStore {
+/**
+ * `writeTimeoutMs`: tiempo máximo de una transacción de `transaction` (10 s por defecto). Solo la
+ * importación única de datos maestros (REQ-F-050, A5), que escribe todo en una transacción, lo sube.
+ */
+export function createPrismaInventoryStore({ prisma, writeTimeoutMs = WRITE_TX.timeout }: { prisma: Database; writeTimeoutMs?: number }): InventoryStore {
   if (!prisma) throw new TypeError('createPrismaInventoryStore requiere el cliente de la base de datos');
+  if (!(Number.isSafeInteger(writeTimeoutMs) && writeTimeoutMs > 0)) throw new TypeError('writeTimeoutMs debe ser un entero positivo');
+  const writeTx = { ...WRITE_TX, timeout: writeTimeoutMs };
 
   /** Errores de dominio tal cual; interbloqueo -> se repite la transacción entera; resto -> 503. */
   async function run<T>(operation: () => Promise<T>): Promise<T> {
@@ -451,7 +457,7 @@ export function createPrismaInventoryStore({ prisma }: { prisma: Database }): In
 
   return Object.freeze<InventoryStore>({
     read: (task) => run(() => prisma.$transaction((tx) => task(readerOn(tx)), READ_TX)),
-    transaction: (task) => run(() => prisma.$transaction((tx) => task(txOn(tx)), WRITE_TX)),
+    transaction: (task) => run(() => prisma.$transaction((tx) => task(txOn(tx)), writeTx)),
     recipeTransaction: (task) => run(() => prisma.$transaction((tx) => task(txOn(tx)), RECIPE_TX)),
   });
 }

@@ -577,3 +577,9 @@ export function createInventoryRepository({ store, now = () => new Date() }: { s
     },
   });
 }
+
+/**
+ * Forma del historial de un alta o un cambio (RN-16), para las escrituras que no pasan por este
+ * repositorio (importación única de REQ-F-050, A5): mismas entradas que un alta desde la API.
+ */
+export { categorySnapshot as categoryHistorySnapshot, diff as historyChanges, itemSnapshot as itemHistorySnapshot };

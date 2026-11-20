@@ -7,10 +7,12 @@ import {
   BOT_PROVIDER_IDS,
   BOT_REASON_MAX,
   BOT_USAGE_COUNTERS,
+  INVENTORY_COST_SOURCES,
   INVENTORY_HISTORY_ACTIONS,
   INVENTORY_ITEM_KINDS,
   INVENTORY_ITEM_STATUSES,
   INVENTORY_ITEM_TYPES,
+  INVENTORY_RECIPE_ITEM_TYPES,
   INVENTORY_UNITS as CONTRACT_INVENTORY_UNITS,
   PUBLIC_BUSINESS_IDS,
   USER_LIMITS,
@@ -48,7 +50,7 @@ import {
   type UserRecord,
 } from '@restaurante/core/identity';
 import type { PageDataByBusiness, PublishedProducts } from '@restaurante/core/catalog';
-import { INVENTORY_ACTIONS, INVENTORY_UNITS, ITEM_KINDS, ITEM_STATUSES, ITEM_TYPES } from '@restaurante/core/inventory';
+import { COST_SOURCES, INVENTORY_ACTIONS, INVENTORY_UNITS, ITEM_KINDS, ITEM_STATUSES, ITEM_TYPES, RECIPE_ITEM_TYPES } from '@restaurante/core/inventory';
 import { BUSINESS_IDS, silentLogger, type BusinessId } from '@restaurante/core/shared';
 
 /**
@@ -117,6 +119,9 @@ describe('contrato del bot ↔ core (REQ-F-043)', () => {
     expect([...CONTRACT_INVENTORY_UNITS]).toEqual([...INVENTORY_UNITS]);
     expect([...INVENTORY_ITEM_STATUSES]).toEqual([...ITEM_STATUSES]);
     expect([...INVENTORY_HISTORY_ACTIONS].sort()).toEqual(Object.values(INVENTORY_ACTIONS).sort());
+    // Recetas (REQ-F-050).
+    expect([...INVENTORY_COST_SOURCES]).toEqual([...COST_SOURCES]);
+    expect([...INVENTORY_RECIPE_ITEM_TYPES]).toEqual([...RECIPE_ITEM_TYPES]);
   });
 
   it('el estado del bot no expone el seudónimo, la clave ni los dígitos sueltos', () => {

@@ -4,6 +4,7 @@ import { ADMIN_API_PREFIX } from '@restaurante/contracts';
 
 import type { AccountRoutes } from './account-routes.ts';
 import type { BotRoutes } from './bot-routes.ts';
+import type { InventoryRecipeRoutes } from './inventory-recipe-routes.ts';
 import type { InventoryRoutes } from './inventory-routes.ts';
 import type { PageRoutes } from './page-routes.ts';
 import type { ProductRoutes } from './product-routes.ts';
@@ -12,7 +13,7 @@ import type { SessionRoutes } from './session-routes.ts';
 import type { UserRoutes } from './user-routes.ts';
 
 /**
- * Rutas de `/api/v1/admin` (REQ-F-039; usuarios y cuenta propia, REQ-F-040; control del bot, REQ-F-043; datos de página, REQ-F-044; cotizador, REQ-F-046; inventario, REQ-F-049). Una ruta conocida con otro método responde 405 con `Allow`
+ * Rutas de `/api/v1/admin` (REQ-F-039; usuarios y cuenta propia, REQ-F-040; control del bot, REQ-F-043; datos de página, REQ-F-044; cotizador, REQ-F-046; inventario, REQ-F-049; recetas, REQ-F-050). Una ruta conocida con otro método responde 405 con `Allow`
  * (`allowedMethods`; el cuerpo lo pone el manejador central); una ruta desconocida, 404.
  */
 export function createAdminRouter({
@@ -24,6 +25,7 @@ export function createAdminRouter({
   bot,
   quotes,
   inventory,
+  recipes,
 }: {
   session: SessionRoutes;
   products: ProductRoutes;
@@ -33,6 +35,7 @@ export function createAdminRouter({
   bot: BotRoutes;
   quotes: QuoteRoutes;
   inventory: InventoryRoutes;
+  recipes: InventoryRecipeRoutes;
 }): Router {
   const router = new Router({ prefix: ADMIN_API_PREFIX });
 
@@ -66,6 +69,14 @@ export function createAdminRouter({
   router.put('/inventario/articulos/:id', inventory.updateItem);
   router.post('/inventario/articulos/:id/desactivar', inventory.deactivateItem);
   router.post('/inventario/articulos/:id/reactivar', inventory.reactivateItem);
+  // Recetas (REQ-F-050): rutas fijas de /recetas antes de /recetas/versiones/:id.
+  router.get('/inventario/articulos/:id/recetas', recipes.get);
+  router.post('/inventario/articulos/:id/recetas', recipes.save);
+  router.post('/inventario/articulos/:id/recetas/cerrar', recipes.close);
+  router.get('/inventario/articulos/:id/usado-en', recipes.usedIn);
+  router.get('/inventario/recetas', recipes.list);
+  router.get('/inventario/recetas/ingredientes', recipes.ingredients);
+  router.get('/inventario/recetas/versiones/:id', recipes.version);
   router.get('/inventario/categorias', inventory.listCategories);
   router.post('/inventario/categorias', inventory.createCategory);
   router.put('/inventario/categorias/:id', inventory.renameCategory);

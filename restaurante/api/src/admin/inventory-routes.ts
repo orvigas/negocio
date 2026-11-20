@@ -1,8 +1,4 @@
-import type { Context } from 'koa';
-
 import {
-  IDEMPOTENCY_HEADER,
-  IDEMPOTENCY_KEY_PATTERN,
   INVENTORY_ERROR_CODES as CODES,
   inventoryCategoryListResponseSchema,
   inventoryCategoryResponseSchema,
@@ -22,14 +18,17 @@ import {
   CategoryInactiveError,
   CategoryNameTakenError,
   CategoryNotFoundError,
+  InventoryBusyError,
   InventoryConflictError,
   InventoryValidationError,
   ItemHasActiveVariantsError,
+  ItemInActiveRecipesError,
   ItemLockedError,
   ItemNameTakenError,
   ItemNotFoundError,
   ParentInactiveError,
   UnitConversionError,
+  COST_SCALE,
   formatDecimal,
   unitsSnapshot,
   type InventoryAuthor,
@@ -44,7 +43,8 @@ import { toZonedIsoString, type Logger } from '@restaurante/core/shared';
 
 import { ApiHttpError } from '../errors.ts';
 import type { AdminAccess, AdminAuth } from './access.ts';
-import { IdempotencyKeyReusedError, fingerprintOf, type IdempotencyStore } from './idempotency.ts';
+import type { IdempotencyStore } from './idempotency.ts';
+import { idempotencyKey, inventoryBusy, routeId, runOnce, type Handler, type RouteContext } from './inventory-shared.ts';
 import { createResponder, validationFailed } from './responses.ts';
 
 /**
@@ -56,7 +56,7 @@ import { createResponder, validationFailed } from './responses.ts';
  *   GET  /articulos/:id                                   -> { item, history }
  *   GET  /articulos/:id/conversion?cantidad=&unidad=      -> { quantity, unit }
  *   PUT  /articulos/:id                (version, overwrite) -> { item }
- *   POST /articulos/:id/desactivar     (version, variants)  -> { item }
+ *   POST /articulos/:id/desactivar     (version, variants, recipes) -> { item }
  *   POST /articulos/:id/reactivar      (version)            -> { item }
  *   GET  /categorias                                      -> { categories }
  *   POST /categorias                   (Idempotency-Key)  -> 201 { category }
@@ -65,10 +65,11 @@ import { createResponder, validationFailed } from './responses.ts';
  *
  * Orden: sesión (401) -> rol administrador o gerente (403) -> CSRF en escrituras (403) -> id (404) ->
  * cuerpo (413/415/400/422) -> reglas (422, 409). Los logs solo llevan ids, acciones y códigos.
+ *
+ * REQ-F-050: el artículo lleva `referenceCost` e `inventoriable`; inactivar uno usado en recetas
+ * vigentes responde 409 `ITEM_IN_ACTIVE_RECIPES` con la lista hasta confirmar con `recipes: 'keep'`;
+ * una espera agotada del candado del inventario responde 503 `INVENTORY_BUSY`.
  */
-
-type RouteContext = Context & { params: Record<string, string> };
-type Handler = (ctx: RouteContext) => Promise<void>;
 
 export interface InventoryRoutes {
   listItems: Handler;
@@ -87,11 +88,11 @@ export interface InventoryRoutes {
 
 /** Cuerpo JSON de un artículo: textos cortos y como mucho 8 empaques. */
 export const INVENTORY_BODY_LIMIT = 16 * 1024;
-const ID_PATTERN = /^[1-9]\d{0,9}$/;
 const UNIT_MAX = 40;
-const ITEM_CREATE_FIELDS: readonly string[] = Object.freeze(['kind', 'type', 'categoryId', 'parentId', 'name', 'description', 'sku', 'baseUnit', 'units']);
-const ITEM_UPDATE_FIELDS: readonly string[] = Object.freeze(['version', 'overwrite', 'type', 'categoryId', 'name', 'description', 'sku', 'baseUnit', 'units']);
-const DEACTIVATE_FIELDS: readonly string[] = Object.freeze(['version', 'variants']);
+const COST_FIELDS = ['referenceCost', 'inventoriable'] as const;
+const ITEM_CREATE_FIELDS: readonly string[] = Object.freeze(['kind', 'type', 'categoryId', 'parentId', 'name', 'description', 'sku', 'baseUnit', 'units', ...COST_FIELDS]);
+const ITEM_UPDATE_FIELDS: readonly string[] = Object.freeze(['version', 'overwrite', 'type', 'categoryId', 'name', 'description', 'sku', 'baseUnit', 'units', ...COST_FIELDS]);
+const DEACTIVATE_FIELDS: readonly string[] = Object.freeze(['version', 'variants', 'recipes']);
 const REACTIVATE_FIELDS: readonly string[] = Object.freeze(['version']);
 const CATEGORY_FIELDS: readonly string[] = Object.freeze(['name']);
 /** Claves de core -> parámetros de la query (los `fields` de un 422 usan los nombres de la query). */
@@ -141,6 +142,8 @@ export function createInventoryRoutes({
     createdAt: iso(item.createdAt),
     updatedAt: iso(item.updatedAt),
     updatedBy: item.updatedByName,
+    referenceCost: item.referenceCost === null ? null : formatDecimal(item.referenceCost, COST_SCALE),
+    inventoriable: item.inventoriable,
   });
 
   const summaryDto = (item: ItemSummary): InventoryItemSummary => ({
@@ -184,11 +187,7 @@ export function createInventoryRoutes({
     updatedAt: iso(category.updatedAt),
   });
 
-  function idOf(ctx: RouteContext, notFound: () => ApiHttpError): number {
-    const { id } = ctx.params;
-    if (typeof id !== 'string' || !ID_PATTERN.test(id)) throw notFound();
-    return Number(id);
-  }
+  const idOf = routeId;
   const itemNotFound = () => new ApiHttpError(404, CODES.ITEM_NOT_FOUND, 'Artículo no encontrado.');
   const categoryNotFound = () => new ApiHttpError(404, CODES.CATEGORY_NOT_FOUND, 'Categoría no encontrada.');
 
@@ -220,31 +219,20 @@ export function createInventoryRoutes({
       if (err instanceof CategoryInUseError) throw new ApiHttpError(409, CODES.CATEGORY_IN_USE, err.message);
       if (err instanceof CategoryNameTakenError) throw new ApiHttpError(409, CODES.CATEGORY_NAME_TAKEN, err.message);
       if (err instanceof UnitConversionError) throw new ApiHttpError(422, err.code, err.message);
+      if (err instanceof ItemInActiveRecipesError) {
+        logger.info('inventory_item_in_active_recipes', { recipes: err.recipes.length });
+        ctx.status = 409;
+        ctx.body = { error: { code: CODES.ITEM_IN_ACTIVE_RECIPES, message: err.message, recipes: err.recipes.map(({ itemId, name }) => ({ itemId, name })) } };
+        return;
+      }
+      if (err instanceof InventoryBusyError) throw inventoryBusy(ctx, logger);
       throw err;
     }
   }
 
-  function idempotencyKey(ctx: RouteContext): string {
-    const key = ctx.get(IDEMPOTENCY_HEADER);
-    if (key !== '' && !IDEMPOTENCY_KEY_PATTERN.test(key)) throw new ApiHttpError(400, 'INVALID_IDEMPOTENCY_KEY', 'La clave de idempotencia no es válida.');
-    return key;
-  }
-
-  /**
-   * Alta idempotente (caso límite "doble envío"): la misma clave del mismo usuario en el mismo ámbito y
-   * con el mismo cuerpo devuelve el primer resultado sin crear otro; con otro cuerpo, 422. El índice
-   * único del nombre es la segunda barrera.
-   */
-  async function once<T>(store: IdempotencyStore<T>, scope: string, auth: AdminAuth, key: string, body: unknown, task: () => Promise<T>): Promise<{ value: T; replayed: boolean }> {
-    if (key === '') return { value: await task(), replayed: false };
-    try {
-      return await store.run({ userId: auth.user.id, scope, key, fingerprint: fingerprintOf(body) }, task);
-    } catch (err) {
-      if (!(err instanceof IdempotencyKeyReusedError)) throw err;
-      logger.warn('inventory_create_key_reused', { scope });
-      throw new ApiHttpError(422, 'IDEMPOTENCY_KEY_REUSED', 'La clave de idempotencia ya se usó con otros datos: no se guardó nada.');
-    }
-  }
+  /** Alta idempotente (doble envío); el índice único del nombre es la segunda barrera. */
+  const once = <T>(store: IdempotencyStore<T>, scope: string, auth: AdminAuth, key: string, body: unknown, task: () => Promise<T>) =>
+    runOnce(logger, { store, scope, auth, key, body }, task);
 
   const saved = (ctx: RouteContext, item: InventoryItem, action: string, status = 200) => {
     logger.info('inventory_item_saved', { itemId: item.id, action });
@@ -320,7 +308,7 @@ export function createInventoryRoutes({
       const id = idOf(ctx, itemNotFound);
       const body = await closedBody(ctx, DEACTIVATE_FIELDS);
       if (!body) return;
-      await run(ctx, async () => saved(ctx, await inventory.deactivateItem(id, { version: body.version, variants: body.variants }, authorOf(auth)), 'deactivate'));
+      await run(ctx, async () => saved(ctx, await inventory.deactivateItem(id, { version: body.version, variants: body.variants, recipes: body.recipes }, authorOf(auth)), 'deactivate'));
     },
 
     async reactivateItem(ctx) {

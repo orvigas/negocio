@@ -2,7 +2,9 @@
 
 ## Estado
 
-READY_FOR_MERGE — PR 1 de 3 (modelo, dominio y persistencia): implementación aprobada por el usuario ("Apruebo", 2026-11-19); QA Action Plan aprobado ("Si", 2026-11-19); QA ejecutado, ronda 1, sin defectos BLOCKER, CRITICAL ni MAJOR (4 MINOR). Ver "QA Report — PR 1 (T2)". Commit `cb9bc4d` y Pull Request #185 hacia `epic/inventario`: https://github.com/orvigas/negocio/pull/185. Integrada `epic/inventario` (`d3a78be`, con el override de `effect` 3.22.5 de #186) en el merge commit `5df99c5`; CI del PR en verde (ejecución 44720216193): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion` en `pass`.
+QA_APPROVED — PR 2 de 3 (contratos y rutas de la API de recetas, importación única A5 y semilla de desarrollo), en la rama `feature/REQ-F-050-recetas-api-importacion` (desde `origin/epic/inventario`, `0187298`), sin commit. Implementación aprobada por el usuario ("Si": partir al commitear en PR 2a y PR 2b y aceptar las 6 desviaciones). QA Action Plan del PR 2 aprobado ("Si", 2026-11-20). QA ejecutado, ronda 1: sin defectos BLOCKER, CRITICAL ni MAJOR (1 MINOR y 1 TRIVIAL). Reparto 2a/2b validado, con su huella. Ver "QA Report — PR 2 (T2)". Siguiente paso: senior-fullstack reproduce el reparto, compara la huella y abre los PR 2a y 2b.
+
+Antecedente (PR 1, mergeado en `epic/inventario` con #185): READY_FOR_MERGE — PR 1 de 3 (modelo, dominio y persistencia): implementación aprobada por el usuario ("Apruebo", 2026-11-19); QA Action Plan aprobado ("Si", 2026-11-19); QA ejecutado, ronda 1, sin defectos BLOCKER, CRITICAL ni MAJOR (4 MINOR). Ver "QA Report — PR 1 (T2)". Commit `cb9bc4d` y Pull Request #185 hacia `epic/inventario`: https://github.com/orvigas/negocio/pull/185. Integrada `epic/inventario` (`d3a78be`, con el override de `effect` 3.22.5 de #186) en el merge commit `5df99c5`; CI del PR en verde (ejecución 44720216193): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion` en `pass`.
 
 Technical Action Plan aprobado por el usuario el 2026-11-19: "Si" (en respuesta a "¿Apruebas el plan técnico de T2 con mis recomendaciones a PT-1 a PT-7?"). Decisiones, tal como se recomendaron:
 
@@ -1295,7 +1297,467 @@ Pendientes del usuario:
 2. Ejecutar `verify-backup.sh --drill` tras desplegar la épica.
 3. Borrar el scratchpad de la sesión de QA interrumpida con la copia del libro de datos reales (punto 3 de "Pendientes de revisión manual").
 
+## Implementation Result — PR 2
+
+### Rama
+
+`feature/REQ-F-050-recetas-api-importacion`, desde la punta de `origin/epic/inventario` (`0187298`, con el PR 1 mergeado en #185), en el worktree `.claude/worktrees/req-f-050-pr2`. Sin commit (pendiente de aprobación y QA). PR futuro hacia `epic/inventario`.
+
+### Cambios realizados
+
+- **Contratos** (`packages/contracts`):
+  - `inventory.ts`: el artículo lleva `referenceCost` (texto con 4 decimales o `null`) e `inventoriable`; peticiones con esos campos y `recipes: 'keep'` en la baja; códigos `ITEM_IN_ACTIVE_RECIPES` e `INVENTORY_BUSY`; esquema del 409 `ITEM_IN_ACTIVE_RECIPES` con `recipes`.
+  - `inventory-recipes.ts` (nuevo): rutas, esquemas de las 7 respuestas (lista, receta con costo por línea y origen, versión sin costo, guardar, cerrar, «usado en», ingredientes), errores `RECIPE_VERSION_CONFLICT` (con `current`) y `RECIPE_CYCLE` (con `path`), `INVENTORY_COST_SOURCES` y tipos de petición. Cantidades con 3 decimales, merma con 2 y costos con 4, siempre como texto; un costo que falta es `null`.
+- **Rutas** (`api/src/admin`):
+  - `inventory-recipe-routes.ts` (nuevo): `GET recetas`, `GET recetas/ingredientes`, `GET recetas/versiones/:id`, `GET|POST articulos/:id/recetas` (201 versión nueva con `Location`, 200 sin cambios, `Idempotency-Key`), `POST articulos/:id/recetas/cerrar` y `GET articulos/:id/usado-en`. Orden de acceso 401 → 403 `FORBIDDEN_ROLE` → CSRF → 404 → cuerpo cerrado (también dentro de `lines`) → reglas. Logs `inventory_recipe_saved`, `inventory_recipe_conflict`, `inventory_recipe_cycle` e `inventory_recipe_too_deep`, solo con ids, números y acciones.
+  - `inventory-shared.ts` (nuevo): id de la ruta, clave de idempotencia, alta idempotente y el 503 `INVENTORY_BUSY`, compartidos con las rutas de T1 (antes duplicados).
+  - `inventory-routes.ts` (T1): campos nuevos del artículo, `recipes: 'keep'` en la baja, 409 `ITEM_IN_ACTIVE_RECIPES` con la lista y **DEF-001**: `InventoryBusyError` → 503 `INVENTORY_BUSY` (antes 500).
+  - `router.ts`, `index.ts` y `server.ts`: composición con `createRecipeRepository` sobre el mismo store.
+- **Importación única (A5)**:
+  - `packages/core/inventory/master-import.ts` (nuevo, puro): `parseImportFile` (forma cerrada del formato v1), `planImport` (correcciones, unidades `gr`/`lt`, validación con las funciones de core, comparación por nombre normalizado: omitido o conflicto, ciclos y profundidad con las vigentes) y `runMasterImport` (ensayo de solo lectura; escritura todo o nada con el candado de recetas, que vuelve a calcular el plan dentro de la transacción). Autor "Importación", recetas como versión vigente desde la importación (número = máximo + 1 si el artículo tenía versiones cerradas). Los problemas se informan por fila del origen, campo y mensaje, sin valores; un ciclo, con las filas de sus recetas.
+  - `api/scripts/inventory-import.ts` y `api/scripts/support/inventory-import-cli.ts` (nuevos): argumentos, salvaguardas (`production` exige `--produccion`; `--produccion` exige `production`; fuera de producción solo bases locales; un archivo `"ficticio": true` nunca en producción), 2 MB, JSON estricto, ruta relativa desde donde se lanzó npm (`INIT_CWD`), `verifyDatabase` sin migrar, informe con conteos y código de salida 1 ante errores o conflictos.
+  - `packages/db/src/prisma-inventory-store.ts`: opción `writeTimeoutMs` (por defecto 10 s); la importación usa 60 s.
+  - `inventory-repository.ts`: exporta la forma del historial (`itemHistorySnapshot`, `categoryHistorySnapshot`, `historyChanges`) para que la importación deje las mismas entradas que un alta desde la API.
+  - Scripts `inventory:import` en `api/package.json` y en la raíz; `landing-pages/Dockerfile` copia `scripts/inventory-import.ts` a la etapa `api`.
+  - Fixture ficticio `api/tests/fixtures/inventory-import/ficticio.json` (5 categorías, 12 artículos simples, un padre con 3 variantes, 3 recetas y 9 líneas; con una corrección, `gr`, `lt`, `hr` no inventariable, un insumo sin costo y la carne con merma del 40 %).
+- **Semilla de desarrollo** (`api/scripts/support/inventory-dev-seed.ts` y `inventory-seed-dev.ts`): costos de referencia ficticios, "Cebolla" sin costo, "Mano de obra ficticia" (`hr`, no inventariable) y las recetas "Salsa base", "Carne cocida ficticia" (6.000 kg netos al 40 %, rendimiento 6 kg) y "Taco ficticio" (Compuesto de 2 niveles, «Sin costo» por la cebolla). Sigue siendo idempotente.
+- **DEF-002** (barrera de datos privados): `scripts/check-private-data.ts` revisa el contenido preparado en el índice (`git cat-file blob :ruta`) y, si existe, también el del árbol de trabajo.
+- **Dobles de prueba:** `memory-inventory-store.ts` admite `failNext(n, 'busy')` (espera de bloqueo agotada); el doble de la API de `inventory-manager` devuelve los dos campos nuevos del artículo (solo para que compile; DEF-004 sigue asignado al PR 3).
+- **Documentación:** `README.md` (comando `inventory:import`, semilla ampliada, campos nuevos del artículo y rutas de recetas en la API) y `docs/despliegue.md` §5 ("Importación única del inventario", procedimiento en el VPS por la entrada estándar). `.env.example` sin cambios.
+
+### Criterios de aceptación (alcance del PR 2)
+
+- **CA-12:** cumplido en la API. Un Editor recibe 403 `FORBIDDEN_ROLE` en las 7 rutas de recetas (lectura y escritura), sin sesión 401, sin CSRF 403, y no se escribe nada (`admin-inventory-recipes-api.test.ts`). Las rutas del admin son del PR 3.
+- **CA-13:** cumplido con el fixture ficticio (memoria y MySQL): el ensayo no escribe; la importación crea 5 categorías, 13 artículos, 3 variantes, 3 recetas y 9 líneas; la repetición da 0 creados y no cambia nada; un ciclo o una unidad inválida no escriben nada y listan cada error con su fila; las variantes quedan con nombres únicos (un nombre repetido es error).
+- **CA-10 (HTTP):** 409 `ITEM_IN_ACTIVE_RECIPES` con la lista, confirmación con `recipes: 'keep'` y aviso `usesInactive` / `inactiveIngredientIds` en la API.
+- **CA-6 (HTTP):** 409 `RECIPE_VERSION_CONFLICT` con la vigente; el doble envío con la misma `Idempotency-Key` crea una sola versión; guardar sin cambios responde 200 sin versión nueva.
+- **CA-4 y CA-11 (HTTP):** 422 `RECIPE_CYCLE` con la ruta y 409 `RECIPE_NOT_ALLOWED`; los Compuestos no aparecen en `recetas/ingredientes`.
+- **CA-7, CA-8 y CA-9 (HTTP):** costo por línea con su origen (`referencia`, `receta`, `sin_costo`), «Sin costo» con los faltantes y su ruta, y la mano de obra en `hr` no inventariable costeada por referencia.
+- **RF-12:** semilla ampliada (prueba de la semilla modificada en `inventory-catalog.test.ts`).
+- CA-1 a CA-5, CA-7 a CA-9 y CA-11 en el dominio: ya cubiertos en el PR 1, sin cambios.
+- CA-14 y CA-16: sondas de QA. CA-15: PR 3.
+
+### Validaciones ejecutadas
+
+Desde `restaurante/` en el worktree, contra un MySQL 8.4 aislado (`docker compose -p restaurante-fs-050`, volumen propio; el `restaurante-mysql-dev-1` de desarrollo no se tocó y sigue `Exited`):
+
+- `npm run build:css`: 0 (el worktree nuevo no tenía el CSS generado; sin él fallaban 4 pruebas de landing-pages que leen el CSS publicado).
+- `npm run typecheck`: 0.
+- `npm run lint` (con `check-private-data`): 0; "844 archivos revisados, sin datos privados".
+- `npm test`: api 55 archivos y 1244 pruebas; landing-pages 64 y 903; inventory-manager 17 y 287. Todo en verde.
+- Pruebas nuevas: `api/tests/integration/admin-inventory-recipes-api.test.ts` (6 casos), `api/tests/unit/inventory-import.test.ts` (10 casos; los dos archivos de la api en 1.4 s) y `landing-pages/tests/integration/prisma-inventory-import.test.ts` (2 casos, 2.7 s). Modificadas: `admin-inventory-api.test.ts` (forma del artículo y DEF-001: `PUT` con espera agotada → 503 `INVENTORY_BUSY` sin escribir), `contract-types.test.ts` (orígenes del costo y tipos con receta, contrato = core) e `inventory-catalog.test.ts` (semilla ampliada).
+- **Procedimiento de `despliegue.md` §5 ejecutado en local** contra la imagen `api` construida (`docker build --target api`), con `docker run --read-only --tmpfs /tmp` en la red del MySQL aislado y la base `restaurante` migrada, leyendo por la entrada estándar una copia del fixture **sin** la marca `ficticio` (datos ficticios, en el scratchpad, ya borrada):
+  - sin `--produccion`: "Con NODE_ENV=production la importación exige --produccion.", salida 1;
+  - el fixture con `"ficticio": true` y `--produccion`: rechazado, salida 1;
+  - ensayo: "Se crearían: categorías 5, artículos 13, variantes 3, recetas 3, líneas 9", "Ensayo sin problemas", salida 0;
+  - `--escribir`: "escrita" con esos conteos, salida 0;
+  - repetición con `--escribir`: "Creados: … 0" y todo omitido, salida 0.
+  - En local por npm: `npm run inventory:import -- --archivo <ruta relativa>` y `--archivo -` con redirección (ensayo); un host no local se rechaza; `inventory:seed-dev` sobre una base con datos no hace nada.
+- **Barrera (DEF-002), sondas descartables:** con el fixture preparado en el índice, el lint pasa; un JSON de importación sin la marca, preparado con `git add -f` y después sobrescrito con `{}` o borrado en el árbol de trabajo, hace fallar `check-private-data` (salida 1, solo la ruta). Después se sacó del índice y se borró; el fixture se volvió a dejar sin preparar.
+
+### Archivos afectados
+
+- Nuevos: `packages/contracts/inventory-recipes.ts`; `packages/core/inventory/master-import.ts`; `api/src/admin/inventory-recipe-routes.ts` e `inventory-shared.ts`; `api/scripts/inventory-import.ts` y `api/scripts/support/inventory-import-cli.ts`; `api/tests/fixtures/inventory-import/ficticio.json`; `api/tests/integration/admin-inventory-recipes-api.test.ts`; `api/tests/unit/inventory-import.test.ts`; `landing-pages/tests/integration/prisma-inventory-import.test.ts`.
+- Modificados: `packages/contracts/{index,inventory}.ts`; `packages/core/inventory/{index,inventory-repository,memory-inventory-store}.ts`; `packages/db/src/prisma-inventory-store.ts`; `api/src/admin/{index,inventory-routes,router}.ts`; `api/src/server.ts`; `api/scripts/inventory-seed-dev.ts` y `api/scripts/support/inventory-dev-seed.ts`; `api/package.json` y `package.json`; `landing-pages/Dockerfile`; `scripts/check-private-data.ts`; `api/tests/support/admin.ts`; `api/tests/integration/admin-inventory-api.test.ts`; `api/tests/unit/{contract-types,inventory-catalog}.test.ts`; `inventory-manager/tests/support/api-double-inventory.ts`; `README.md`; `docs/despliegue.md`.
+- `deploy/` sin cambios.
+
+### Riesgos o pendientes
+
+- **Tamaño (PT-6).** El PR 2 suma unas 2 600 líneas (unas 2 140 en archivos nuevos), por encima del umbral de unas 1 500 del plan. Propuesta: partirlo al hacer el commit (T4) en **PR 2a** (contratos, rutas, DEF-001, semilla y la parte de la API del README; unas 1 250 líneas) y **PR 2b** (importación A5, DEF-002, Dockerfile, `despliegue.md` §5 y la parte del README del comando; unas 1 350), ambos hacia `epic/inventario` y en ese orden. El código ya está separado por archivos, así que partirlo no cambia nada. Decide el usuario; si prefiere un solo PR, se deja como está.
+- **Desviaciones del TAP:**
+  1. La forma del JSON se valida a mano en core (lista cerrada de claves y tipos), no con Zod: `core` no depende de Zod y el núcleo de la importación vive en core (TAP: "núcleo en core, puro"). El comportamiento es el pedido (claves desconocidas = error).
+  2. Un ciclo de la importación se informa con las **filas** de sus recetas (p. ej. "Rec!2 → Rec!6 → Rec!2"), no con nombres, para cumplir "sin valores" en la salida.
+  3. Además del índice, `check-private-data` revisa el árbol de trabajo (DEF-002, que estaba "sin PR asignado"); se resolvió aquí porque el PR 2 introduce el flujo del JSON real.
+  4. `--produccion` sin `NODE_ENV=production` también se rechaza (el TAP solo pedía lo contrario), para que la bandera no se use por error en local.
+  5. La respuesta de guardar devuelve el resumen de la versión (sin líneas); el admin del PR 3 redirige a la receta. El cliente HTTP de recetas en `contracts/admin-client.ts` queda para el PR 3, junto con su único consumidor.
+  6. `arquitectura.md` §4 y §6 siguen asignados al PR 3, como dice el TAP; las rutas nuevas ya están en el README.
+- **Pendientes del QA del PR 1:** DEF-001 y DEF-002 resueltos aquí. DEF-003 (caso de empate de redondeo) sigue sin PR asignado. DEF-004 y OBS-2 siguen en el PR 3; OBS-3 sin cambios.
+- **Para QA:** la imagen `api` se construyó antes del último ajuste (ruta relativa con `INIT_CWD`, que no afecta a la lectura por la entrada estándar del procedimiento): conviene repetir el procedimiento con la imagen final. El tiempo de la importación con un fixture ampliado (150 artículos y 40 recetas) y la barrera con un `.xlsx` de prueba siguen siendo sondas de QA.
+- **Limpieza:** se quitaron el proyecto `restaurante-fs-050` (contenedor, volumen y redes), la imagen `restaurante-api:fs050-sonda` y los temporales del scratchpad; volúmenes y redes de Docker iguales a la línea base; nada escucha en 3307; sin procesos de Vitest ni servidores. Queda la caché de capas de `docker build`. El repositorio principal sigue en `main` sin cambios. El worktree `req-f-050-pr2` se conserva (con `node_modules`, el cliente de Prisma y el CSS generados, todos ignorados por git).
+
+## QA Action Plan — PR 2 (T2)
+
+### Objetivo
+
+Validar con evidencia, en un MySQL 8.4 de QA aislado y con la imagen `api` final, que el árbol de trabajo del PR 2 (contratos y 7 rutas de recetas, campos nuevos del artículo, DEF-001, importación única A5, DEF-002, semilla RF-12, Dockerfile y `despliegue.md` §5) cumple los criterios de su alcance sin regresión de T1, landings, bot, productos y página, sin datos reales en el repositorio, y que el reparto aprobado en **PR 2a** y **PR 2b** es viable: 2a compila y pasa lint y pruebas por sí solo, no depende de 2b y 2a + 2b = el árbol que QA valida. Se valida una sola vez el árbol completo. El worktree no está indexado por CodeGraph: QA usa Read y Grep dirigidos.
+
+### Requisito bajo prueba
+
+Ticket aprobado (versión 1), Technical Action Plan aprobado (PT-1 a PT-7; secciones "Contratos y rutas de la API (PR 2)", "A5 — Importación única (PR 2)", "Semilla de desarrollo (PR 2)", "Seguridad" y "Testing"), "Implementation Result — PR 2", los "Pendientes del PR 1 para los PR 2 y 3" (DEF-001 y DEF-002 asignados aquí) y la decisión del usuario sobre la implementación ("Si": 2a/2b y las desviaciones 1 a 6 aceptadas).
+
+Fuera de alcance, sin tratarlo como defecto: pantallas del admin, CA-15 y la parte del admin de CA-12 (PR 3); DEF-003 (sin PR); DEF-004 y OBS-2 (PR 3); `arquitectura.md` §4 y §6 (PR 3, desviación 6); `verify-backup.sh --drill` (el usuario, tras desplegar la épica); importar el JSON real (PT-5). La migración no cambia en este PR (se comprueba en F2), así que CA-14 (vuelta atrás y respaldo) no se repite: queda como en el QA del PR 1.
+
+### Criterios de aceptación (cada uno → pruebas que lo cubren)
+
+| CA / alcance | Pruebas |
+|---|---|
+| CA-12 (API) | A1, A8, XA1, XA2 |
+| CA-13 | I1–I6, I12, XI1–XI3, XI7 |
+| CA-10 (HTTP: 409 `ITEM_IN_ACTIVE_RECIPES`, `recipes: 'keep'`, aviso) | A5, XA5 |
+| CA-6 (HTTP: 409 con `current`, doble envío) | A2, A3, A7, XA3 |
+| CA-4 y CA-11 (HTTP) | A2, A7 |
+| CA-7, CA-8 y CA-9 (HTTP: costo por línea y origen, "Sin costo", `hr`) | A4, E1 |
+| RF-10 (ficha: `referenceCost`, `inventoriable`, `hr`) | A4, G4 |
+| RF-12 (semilla) | E1–E3, XE1 |
+| DEF-001 (503 `INVENTORY_BUSY`, también en T1) | A6, XA4 |
+| DEF-002 y barrera de datos privados (A5) | P1–P8, XB1 |
+| Salvaguardas y salida de la importación (A5, Seguridad) | I7–I11, D1–D4 |
+| CA-16 (regresión en lo que toca este PR) | G1–G5 |
+| Reparto 2a / 2b | Z1–Z4 |
+| Desviaciones 1–6 aceptadas | F4 |
+
+### Riesgos identificados
+
+- Una ruta de recetas sin el orden 401 → 403 → CSRF → 404 → cuerpo, o un Editor que escribe algo antes del 403.
+- `Idempotency-Key` que no evita la segunda versión bajo envíos simultáneos, o que reutiliza la respuesta con otro cuerpo.
+- DEF-001 corregido solo en algunas rutas de T1 (alta, edición, baja, categorías).
+- Una edición de T1 desde el admin actual (que aún no envía `referenceCost` ni `inventoriable`) que los borre o los cambie.
+- Ensayo que escribe o abre una transacción de escritura; `--escribir` que deja restos al fallar a mitad; conflicto que escribe lo nuevo (contra PT-2).
+- Salvaguardas eludibles (`NODE_ENV`, `--produccion`, host, `ficticio`) o que se comprueban después de conectar a la base.
+- Salida, errores o logs con nombres, cantidades, costos, contenido del JSON, SQL o pila (también en los caminos de error inesperado: `throw err` tras `verifyDatabase`).
+- La imagen `api` probada antes del último ajuste (`INIT_CWD`); la imagen final sin el script o su soporte, o con piezas de desarrollo de más (la carpeta `scripts/support` entera entra en la imagen, incluida `inventory-dev-seed.ts`, que la importación importa por `DEV_SEED_HOSTS`).
+- Procedimiento de §5 que no funciona tal como está escrito (`exec -T` con redirección, nombre de la unidad de respaldo, `$C`).
+- Transacción de importación más larga que su `timeout` con el volumen real (pool de 5).
+- Barrera de datos privados con falsos negativos (índice frente a árbol, borrado, `.xlsx` real) o que imprime contenido.
+- El reparto 2a/2b: archivos compartidos a nivel de bloque (`core/inventory/index.ts` exporta `master-import.ts`; `inventory-repository.ts`, `prisma-inventory-store.ts`, `memory-inventory-store.ts`, `README.md`, ticket), un 2a que no compila sin 2b o un 2a + 2b distinto del árbol validado.
+- Pruebas permanentes que no son funcionales o que duplican otras (`testing.md`), o archivos que pasan de 20 s.
+
+### Revisión estática (F)
+
+- **F1.** `git status` y `git diff 0187298 --stat`: solo los archivos de "Archivos afectados" más el ticket; nada en landings (`src/`, `public/`), bot, `inventory-manager/src`, `deploy/`, `ops/`, `.github/`, `.env.example` ni `package-lock.json` (`dependencias.md`: sin dependencias nuevas). `inventory-manager/tests/support/api-double-inventory.ts` solo con los dos campos.
+- **F2.** Migración sin cambios: `git diff 0187298 -- restaurante/packages/db/prisma` vacío (también `schema.prisma`). Suma de `deploy/` con el método de `ci.yml` = `591de8e7f259073f79ff34418c8b7a3a2680d465ef3bc7378c620221455cc7f0`.
+- **F3.** Lectura del diff completo frente al TAP y las reglas: tabla de rutas (códigos, cuerpos cerrados también en `lines`, decimales como texto, `null` para el costo que falta); entradas como `unknown` validadas (`typescript.md`); sin `any`, `as` y `!` justificados; errores con el formato central y sin el `message` de Prisma (`manejo-de-errores.md`); logs solo con ids, números y acciones (`logging.md`); `INIT_CWD`; `writeTimeoutMs` solo en la importación; Dockerfile solo con el script nuevo; README y §5 coherentes con el código.
+- **F4.** Desviaciones 1 a 6 (aceptadas): se comprueba que el código hace lo que dice cada una (1: claves desconocidas = error sin Zod en core; 2: ciclo por filas; 3: índice y árbol; 4: `--produccion` sin `production` rechazado; 5: guardar devuelve el resumen; 6: `arquitectura.md` sin tocar). Una diferencia entre lo descrito y lo hecho es hallazgo; la desviación en sí no.
+- **F5.** Sin secretos ni datos reales en el diff, los archivos nuevos (fixture incluido) y el ticket: patrones de secretos y una lista de nombres característicos del libro y de costos con 4 decimales, que vive solo en el scratchpad y se borra; el informe da "N coincidencias" y la ruta, nunca el valor. El fixture es ficticio y lleva `"ficticio": true`.
+- **F6.** Pruebas permanentes nuevas y modificadas según `testing.md`: funcionales, sin duplicar otra, sin arquitectura, `listenLocal`/`startAdmin`, `makeDatabase()`, sin esperas fijas ni `retry`; la modificación de `admin-inventory-api.test.ts`, `contract-types.test.ts` e `inventory-catalog.test.ts` solo por el cambio de comportamiento. Una que no cumpla → `MINOR` con la recomendación de quitarla.
+
+### API de recetas y ficha (A), contra la `api` del worktree y el MySQL de QA
+
+`node src/server.ts` del worktree con un env propio en el scratchpad (el worktree no tiene `api/.env`), base `restaurante_test_qa050b_a` migrada, usuarios Administrador, Gerente y Editor creados con los scripts del proyecto, y datos ficticios con un marcador único en nombres, notas y costos. Cliente HTTP con sesión y CSRF como el admin.
+
+- **A1. CA-12 y acceso.** Las 7 rutas: sin sesión 401; Editor 403 `FORBIDDEN_ROLE` en lectura y escritura (también con CSRF válido); escrituras de Administrador y Gerente sin CSRF o con uno inválido → 403; tras cada rechazo, conteos y `CHECKSUM TABLE` de las tablas `inventory_*` iguales; Administrador y Gerente 200/201.
+- **A2. Códigos de cada ruta.** `GET recetas` (200; 422 con `tipo` inválido, `pagina` 0 o no numérica, `q` demasiado larga; vacío); `GET articulos/:id/recetas` (200 con vigente y versiones; 404; 409 `RECIPE_NOT_ALLOWED` en Insumo, Reventa y padre); `GET recetas/versiones/:id` (200 sin costo, PT-4; 404 `RECIPE_VERSION_NOT_FOUND`); `POST articulos/:id/recetas` (201 con `Location`; 200 sin cambios y sin fila nueva; 422 `VALIDATION_FAILED` con `fields` por línea: clave desconocida dentro de `lines`, coma decimal, decimales de más, merma 100, 0 y 41 líneas, ingrediente repetido, `pza` sin factor; 422 `RECIPE_CYCLE` con `path`; 422 `RECIPE_TOO_DEEP`; 409 `RECIPE_NOT_ALLOWED`, `RECIPE_ITEM_INACTIVE` y `RECIPE_VERSION_CONFLICT` con `current`); `POST …/cerrar` (200; 200 idempotente sin vigente; 409 con base vieja); `GET articulos/:id/usado-en` (200; 404); `GET recetas/ingredientes` (sin Compuestos, padres ni inactivos; con base y empaques). Ids `0`, `01`, `-1`, `abc` y de 11 cifras → 404; cuerpo no JSON, `Content-Type` ajeno y cuerpo grande → 400/415/413 del manejador central; `__proto__` en el cuerpo → 422 sin efecto.
+- **A3. `Idempotency-Key`.** Misma clave y mismo cuerpo, en serie y en 10 rondas simultáneas → una sola versión y la misma respuesta; misma clave con otro cuerpo → 422 `IDEMPOTENCY_KEY_REUSED` sin escribir; clave inválida → 400; la misma clave de otro usuario o de otro artículo no se confunde.
+- **A4. Costo y ficha (CA-7, CA-8, CA-9, RF-10).** Costo por línea y origen (`referencia`, `receta`, `sin_costo`) contra un cálculo a mano (CA-1, CA-3 y RN-T2-1: 166.6667/kg); "Sin costo" con `missing`, nunca 0; cambiar una referencia o una sub-receta cambia el costo sin versión nueva; Insumo `hr` no inventariable costeado. `POST`/`PUT articulos` con `referenceCost` e `inventoriable`: válidos guardados y devueltos tal cual; 422 por campo (negativo, 5 decimales, coma, texto, `inventoriable: false` fuera de Insumo, referencia en Compuesto o padre); historial RN-16 con ambos campos.
+- **A5. Baja de un artículo usado (CA-10).** Sin `recipes: 'keep'` → 409 `ITEM_IN_ACTIVE_RECIPES` con `recipes: [{ itemId, name }]` y sin escribir; con `keep` → inactivo, sus recetas vigentes intactas con `usesInactive`/`inactiveIngredientIds`, fuera de `ingredientes`; padre con variantes usadas → la lista incluye las variantes.
+- **A6. DEF-001.** Una sesión SQL retiene `SELECT … FROM inventory_lock WHERE name = 'recetas' FOR UPDATE`; entonces `PUT articulos/:id`, `POST articulos`, `POST articulos/:id/desactivar`, la escritura de categorías que tome el candado y `POST articulos/:id/recetas` → 503 `INVENTORY_BUSY` (~5 s, el `innodb_lock_wait_timeout` de pruebas), sin escribir, log `inventory_busy` en `warn` sin datos y nunca 500. Se repite el escenario exacto con el que se confirmó DEF-001 en el PR 1.
+- **A7. Concurrencia por HTTP.** 10 rondas: dos `POST` del mismo artículo desde la misma base con contenidos distintos → un 201 y un 409 con `current`; A→B y B→A simultáneos → uno 422 `RECIPE_CYCLE`; nunca 500, nunca dos vigentes.
+- **A8. Fugas.** En todas las respuestas de error de A1–A7, sin pila, SQL, nombres de tablas ni mensajes de Prisma. El log completo de la `api` durante A1–A7: 0 apariciones del marcador (nombres, notas y costos) y solo los eventos del TAP con sus campos.
+
+### Importación A5 (I), contra el MySQL de QA
+
+Por `npm run inventory:import` y por `node scripts/inventory-import.ts` del worktree, con env del scratchpad. Copias del fixture con marcadores únicos en todos los nombres, notas y filas.
+
+- **I1. Ensayo (por defecto).** Sobre una base vacía y sobre una con datos: salida 0 y los conteos esperados (5 categorías, 13 artículos, 3 variantes, 3 recetas y 9 líneas); conteos y `CHECKSUM TABLE` de todas las tablas iguales; con el `general_log` del MySQL de QA activo, ninguna sentencia `INSERT`, `UPDATE`, `DELETE` ni `SELECT … FOR UPDATE` del proceso.
+- **I2. Escritura.** `--escribir` → "escrita", los mismos conteos, recetas como versión 1 vigente, autor "Importación" en `inventory_change` y en `created_by_name`; la merma del 40 % y la neta de la carne tal como vienen en el JSON; variantes con nombre completo y únicas; `gr`→`g`, `lt`→`L`, `hr` no inventariable; correcciones aplicadas y una corrección sin usar como aviso. Lectura posterior por la API (A) con el costo calculado.
+- **I3. Idempotencia.** Repetir el ensayo y `--escribir` → "Creados: … 0", todo omitido, checksums iguales. Un artículo con número de versión cerrada previa → la importada es máximo + 1.
+- **I4. Todo o nada ante errores.** Una copia por caso, con ensayo y con `--escribir`: ciclo (filas en la ruta), unidad inválida, merma 100, rendimiento 0, costo negativo, coma decimal, nombre y SKU repetidos, referencia a un ingrediente inexistente, clave desconocida, `formato` o `version` distintos, JSON inválido, archivo vacío. Salida 1, **todos** los errores listados con fila y campo, sin valores, y checksums iguales. Un archivo con varios errores los lista todos.
+- **I5. Todo o nada ante conflictos (PT-2).** Tras I2, una copia con un campo distinto en un artículo, una categoría y una receta existentes más artículos nuevos → salida 1, conflictos por fila y campo, y con `--escribir` no se escribe **nada** (tampoco lo nuevo).
+- **I6. Fallo a mitad de la escritura.** (a) Candado retenido como en A6 → mensaje "ocupado", salida 1, sin restos. (b) Un `TRIGGER` de QA en la base de QA que hace `SIGNAL` al insertar la última línea de receta → salida 1 con el mensaje genérico, sin pila, y conteos y checksums iguales a antes. (c) Se mata el proceso (`SIGKILL`) durante la escritura del fixture ampliado → sin restos.
+- **I7. Salvaguardas.** Matriz `NODE_ENV` (`production` / otro) × `--produccion` × host (`127.0.0.1`, `localhost`, `::1`, `mysql-dev`, uno remoto como `10.255.255.1`) × `ficticio`: solo pasan producción con `--produccion` y sin `ficticio`, y fuera de producción sin la bandera contra un host local. Los rechazos ocurren **antes** de conectar (sin conexiones nuevas en `SHOW PROCESSLIST` ni espera de red con el host remoto). Sin `DATABASE_URL` o mal formada → mensaje sin la URL. Argumentos desconocidos, `--archivo` sin valor o repetido → uso.
+- **I8. Archivo y entrada estándar.** `--archivo -` con redirección y con tubería; entrada vacía; BOM; ruta relativa desde `restaurante/` y desde `restaurante/api` (`INIT_CWD`); ruta inexistente o directorio; 2 MB exactos aceptados y 2 MB + 1 byte rechazados, por archivo y por entrada estándar.
+- **I9. Base no lista.** MySQL parado o base sin migrar → mensaje de `verifyDatabase` sin la URL, salida 1, no migra (sin tablas creadas).
+- **I10. Salida sin valores.** En la salida estándar y de error de I1–I9 e I11–I12: 0 apariciones de los marcadores (nombres, notas, costos y contenido), incluido el JSON inválido y el error de base.
+- **I11. Imagen `api` final.** `docker build --target api` del árbol que se valida (etiqueta `restaurante-api:qa050b`): contiene `scripts/inventory-import.ts` y su soporte y no contiene `tests/`, el fixture, `inventory-seed-dev.ts`, `dev-server.ts` ni `bot-chat.ts` (se informa qué de `scripts/support` entra, p. ej. `inventory-dev-seed.ts`, y si al importarlo tiene efectos); `docker run --read-only --tmpfs /tmp -i` en la red del MySQL de QA con `NODE_ENV=production`, como `exec -T` del procedimiento: sin `--produccion` → rechazo; ficticio con `--produccion` → rechazo; copia sin la marca (ficticia, en el scratchpad) → ensayo 0, `--escribir` 0, repetición "0 creados"; tras la escritura, ningún archivo nuevo en el contenedor.
+- **I12. Procedimiento de `despliegue.md` §5 tal como está escrito.** Pasos 2 a 4 adaptados solo en `$C` (el compose del VPS no existe en local; se sustituye por el equivalente con la imagen de I11) y en el `scp` (copia local con `chmod 600`); se comprueba que `$C`, `restaurante-backup.service` y `exec -T` coinciden con el resto de `despliegue.md`, `ops/backup/systemd` y `deploy/compose.prod.yaml`; `shred -u` y la comprobación del paso 4 se ejecutan en la copia del scratchpad.
+- **I13. Tiempo.** Fixture ficticio ampliado generado en el scratchpad (150 artículos, 40 recetas y unas 200 líneas, con 3 niveles): duración del ensayo y de `--escribir` con el comando del worktree y con la imagen, 3 repeticiones cada uno; holgado frente a los 60 s (`timeout`) y a los 10 s de las escrituras de la app. Más de 30 s = hallazgo.
+
+### Semilla de desarrollo (E)
+
+`node scripts/inventory-seed-dev.ts` del worktree con env del scratchpad sobre bases de QA:
+
+- **E1.** Base migrada vacía → "Mano de obra ficticia" en `hr`, no inventariable y con referencia; la mayoría de los insumos con referencia y "Cebolla" sin ella; "Salsa base", "Carne cocida ficticia" (6.000 kg netos al 40 %, bruta 10.000, rendimiento 6 kg) y "Taco ficticio" (Compuesto de 2 niveles, "Sin costo" con la cebolla en `missing`). Costos por la API contra un cálculo a mano.
+- **E2.** Segunda ejecución y ejecución sobre una base con solo artículos de T1 → no hace nada, conteos y checksums iguales.
+- **E3.** Rechazo con un host no local y con `NODE_ENV=production`; la imagen `api` no la contiene (I11).
+
+### Barrera de datos privados (P; DEF-002)
+
+Archivos ficticios del momento en el worktree, sacados del índice y borrados al terminar. `Datos de entrada.xlsx` no se abre, no se mueve ni se toca.
+
+- **P1.** Un `.xlsx` válido generado al momento (libro mínimo con un marcador), más `.xlsm`, `.xls` y `.ods`: `git check-ignore -v` los ignora; con `git add -f`, `npm run lint` termina ≠ 0 y nombra solo la ruta.
+- **P2.** DEF-002, el escenario del PR 1 tal cual: JSON de importación sin `ficticio` preparado con `git add -f` y después sobrescrito con `{}` → falla; borrado del árbol → falla.
+- **P3.** El inverso: fixture ficticio preparado y el árbol de trabajo cambiado a no ficticio (lo que incluiría `git commit -a`) → falla.
+- **P4.** Ficticio fuera de `api/tests/fixtures/inventory-import/` → falla; el fixture en su sitio → pasa; un JSON que no es de importación → no cuenta; ruta con espacios y acentos preparada → se revisa.
+- **P5.** La salida solo contiene rutas y el mensaje: 0 apariciones del marcador.
+- **P6.** Sin falsos positivos: `npm run lint` sobre el árbol actual → 0 y el número de archivos revisados (844 según la implementación; se explica cualquier diferencia); un archivo solo en el árbol de trabajo sin seguimiento no lo rompe.
+- **P7.** El job `calidad` del CI corre `npm run lint` (lectura de `ci.yml`).
+- **P8.** `Datos de entrada.xlsx`: ignorado, sin seguimiento, y su tamaño y fecha iguales al inicio y al final.
+
+### Reparto en PR 2a y PR 2b (Z)
+
+- **Z1. Reparto de referencia.** QA escribe en el QA Report el reparto archivo por archivo y, donde un archivo se comparte, bloque por bloque. Partida: **2a** = `contracts/{index,inventory,inventory-recipes}.ts`, `api/src/admin/{index,router,inventory-routes,inventory-recipe-routes,inventory-shared}.ts`, `api/src/server.ts`, `memory-inventory-store.ts` (`failNext('busy')`, de la prueba de DEF-001), la semilla (`inventory-seed-dev.ts` e `inventory-dev-seed.ts`), `api/tests/support/admin.ts`, `admin-inventory-api.test.ts`, `admin-inventory-recipes-api.test.ts`, `contract-types.test.ts`, `inventory-catalog.test.ts`, `api-double-inventory.ts` y la parte de la API del README; **2b** = `master-import.ts` y su `export` en `core/inventory/index.ts`, las exportaciones del historial de `inventory-repository.ts`, `writeTimeoutMs` de `prisma-inventory-store.ts`, los dos scripts de la importación, el fixture, `inventory-import.test.ts`, `prisma-inventory-import.test.ts`, `check-private-data.ts` (DEF-002), el Dockerfile, los dos `package.json`, `despliegue.md` §5 y la parte del comando del README. Se ajusta si F3 o Z2 muestran otra dependencia.
+- **Z2. 2a por sí solo.** Copia APFS (`cp -c`) de `restaurante/` del worktree en el scratchpad (con sus `node_modules` y el cliente de Prisma), con `git init` propio para que `check-private-data` tenga índice, y quitando 2b con `git apply -R` del parche de 2b: `typecheck`, `lint` y `npm test` (3 workspaces) en 0; `grep` sin referencias a `master-import`, `inventory-import`, `writeTimeoutMs` ni `IMPORT_MAX_BYTES`; los archivos de 2a < 20 s.
+- **Z3. 2a + 2b = árbol validado.** Se vuelve a aplicar el parche de 2b en la copia y `diff -r` (sin `node_modules` ni generados) contra el worktree → sin diferencias. Se registra la huella del árbol validado: `git write-tree` con un índice temporal del scratchpad (`GIT_INDEX_FILE`, sin tocar el índice del worktree) sobre `restaurante/`; senior-fullstack la compara con el árbol del commit de 2b (`git diff --quiet <huella> <commit-2b> -- restaurante`) antes de abrir los PR.
+- **Z4.** Los parches de 2a y 2b quedan en el scratchpad solo durante el QA y se borran; el reparto queda descrito en el QA Report para que senior-fullstack lo reproduzca.
+
+### Mutaciones (X), descartables
+
+En otra copia APFS de `restaurante/` del worktree en el scratchpad, una a una, ejecutando solo los archivos afectados:
+
+- **XA1.** Recetas sin la comprobación de rol (Editor pasa). **XA2.** `POST` de recetas sin CSRF. **XA3.** `Idempotency-Key` ignorada. **XA4.** `InventoryBusyError` sin traducir en `inventory-routes.ts` (DEF-001). **XA5.** Baja sin exigir `recipes: 'keep'`.
+- **XI1.** El ensayo escribe. **XI2.** Conflictos ignorados (escribe lo nuevo). **XI3.** Errores que no abortan. **XI4.** Sin el rechazo de `production` sin `--produccion`. **XI5.** Sin el rechazo de `ficticio` con `--produccion`. **XI6.** Sin el rechazo de host remoto. **XI7.** `gr` sin normalizar a `g`. **XI8.** Escritura en varias transacciones (una por artículo).
+- **XE1.** Semilla sin la merma de la carne.
+- **XB1.** `check-private-data` que vuelve a leer solo el árbol de trabajo (sin prueba permanente por diseño; se documenta, no es defecto).
+
+Una mutación que sobrevive es hallazgo: `MAJOR` si ninguna prueba permanente cubre ese comportamiento, `MINOR` si otra lo cubre de forma indirecta.
+
+### Regresión (G)
+
+- **G1.** Desde `restaurante/` del worktree: `npm run build:css`, `npm run typecheck`, `npm run lint` y `npm test` (3 workspaces) en 0, con los totales.
+- **G2.** Duración por archivo con el reporter JSON de Vitest: todos < 20 s; los 3 nuevos y los 3 modificados, además, en 3 ejecuciones aisladas.
+- **G3.** T1 desde el admin real: `inventory-manager` del worktree contra la `api` del worktree; lista, ficha y formulario de artículo responden 200; editar desde el formulario actual (que aún no envía los campos nuevos) **conserva** `referenceCost` e `inventoriable`; alta y edición en `hr` y en `kg`.
+- **G4.** Landings, bot, productos y página: `GET /`, `/birria`, `/molotes` de `landing-pages` del worktree contra esa `api` → 200 con su contenido; rutas públicas de productos y página 200; login, producto y página del admin 2xx; el bot con su suite (dentro de G1).
+- **G5.** Arranque de la `api` del worktree sobre la base migrada sin `DATABASE_ALLOW_NEWER_SCHEMA` y sin advertencias nuevas en el log.
+
+### Pruebas automatizadas
+
+Existentes: G1/G2 y Z2. Sondas temporales (A, I, E, P, Z, X) solo en el scratchpad; nada nuevo en `restaurante/landing-pages/tests/` ni en otro directorio del worktree, salvo los archivos temporales de P (con `git add -f`, retirados y borrados).
+
+### Pruebas en navegador
+
+No aplica: el PR 2 no tiene pantallas. G3 y G4 se validan con el HTML renderizado por HTTP.
+
+### Responsive, accesibilidad, UX/UI, performance y SEO
+
+No aplican (sin pantallas ni cambios en las landings). Performance: I13 y la duración de G2.
+
+### Evidencia requerida
+
+Código de salida y totales de cada comando; `git diff --stat`; diff vacío de la migración; suma de `deploy/`; tablas de A1–A8 (ruta, rol, código, conteos antes y después); latencias de A6; salidas resumidas de I1–I13 (solo conteos y mensajes, sin valores) y los recuentos de marcadores; extracto del `general_log` de I1 (solo los tipos de sentencia); `docker image inspect` y el listado de `scripts/` de la imagen; resultados de E1–E3 con los costos calculados; salidas de P1–P8; reparto Z1, resultados de Z2 y Z3 y la huella del árbol; tabla X; duraciones de G2; F5 en conteos; comprobación de limpieza.
+
+### Limpieza (comprobada, no supuesta)
+
+`docker compose -p restaurante-qa-050b down -v`; `docker rmi restaurante-api:qa050b` (queda la caché de capas, como en la implementación); `docker ps -a`, `docker volume ls` y `docker network ls` iguales a la línea base; `restaurante-mysql-dev-1` como estaba (apagado); sin procesos `server.ts`, `vitest`, de la importación ni de carga, y nada escuchando en 3307 ni en los puertos de QA; 0 bases `restaurante_test*` (el `TRIGGER` de I6 desaparece con su base); copias APFS, parches, fixtures ampliados, sondas, env, listas de F5, logs y marcadores del scratchpad borrados; archivos de P retirados del índice y borrados; `git status` del worktree igual al inicial más el ticket; árbol principal en `main` sin cambios; `git worktree list` sin worktrees nuevos (QA no crea ninguno); `Datos de entrada.xlsx` intacto (P8).
+
+### Criterios de aprobación
+
+`QA_APPROVED` solo si: F1–F6 sin desviaciones relevantes, migración sin cambios, suma de `deploy/` igual y sin datos reales; CA-12, CA-13 y los criterios HTTP de CA-4, CA-6, CA-7 a CA-11 en PASS (A1–A8, I1–I6); DEF-001 y DEF-002 corregidos con su escenario original (A6, P2); salvaguardas, salida sin valores, imagen final y §5 en PASS (I7–I12); I13 holgado; E1–E3 en PASS; P1–P8 en PASS; Z2 y Z3 en PASS; `typecheck`, `lint` y `npm test` en 0 y archivos < 20 s; G3–G5 sin regresión; sin `BLOCKER` ni `CRITICAL` y cada `MAJOR` aceptado por el usuario.
+
+Escala por impacto observable: Editor que lee o escribe recetas, ensayo que escribe, escritura parcial, importación que pasa una salvaguarda, archivo ficticio importado con `--produccion`, datos reales en el repositorio o en la salida, costo incorrecto o un faltante como 0 = `CRITICAL`; dos versiones por un doble envío, 500 ante el candado, edición de T1 que borra `referenceCost` o `inventoriable`, procedimiento de §5 que no funciona tal como está escrito, imagen sin el comando, falso negativo de la barrera, 2a que no compila o no pasa sus pruebas sin 2b = `MAJOR` o superior; mutación no detectada = `MAJOR`/`MINOR` (arriba); desviación documental o de mensaje sin impacto = `MINOR`.
+
+### Autorizaciones que se piden al usuario
+
+1. Docker local: `docker compose -p restaurante-qa-050b up -d --wait mysql-dev` con el `compose.yaml` del worktree (volumen propio, `127.0.0.1:3307`), bases `restaurante_test_qa050b_*`, `general_log` activado solo en ese contenedor y un `TRIGGER` solo en una base de QA (I6). Si `restaurante-mysql-dev-1` está encendido o 3307 ocupado, QA se detiene y pregunta. Nunca se usa `restaurante-mysql-dev-1` ni datos reales.
+2. `docker build --target api` con la etiqueta `restaurante-api:qa050b` y `docker run` de esa imagen en la red del proyecto de QA; la imagen se borra al terminar.
+3. Ejecutar `api`, `landing-pages` e `inventory-manager` del worktree, la importación y la semilla con env propios en el scratchpad (nunca un `.env` de desarrollo), en puertos libres.
+4. Copias APFS de `restaurante/` del worktree en el scratchpad para Z y X (con `git init` propio en la de Z); parches, fixtures ampliados, listas de F5 y sondas solo en el scratchpad; archivos temporales de P en el worktree (`git add -f`, retirados y borrados).
+5. Escribir en el ticket del worktree solo `## Estado`, este plan, el QA Report y el Historial.
+
+### Preguntas abiertas (con recomendación)
+
+1. **Reparto 2a/2b:** ¿se acepta que QA valide su reparto de referencia (Z1) y registre la huella del árbol (Z3), y que senior-fullstack reproduzca ese reparto y compruebe la huella antes de abrir los PR, con el CI de cada PR como validación final? Recomendado: sí. Si al commitear el reparto cambia de bloque, solo se repite Z2 (no el QA completo).
+2. **I11/E3:** la imagen `api` incluye toda la carpeta `scripts/support`, también `inventory-dev-seed.ts` (sin su comando), porque la importación importa `DEV_SEED_HOSTS` de ahí. ¿Se acepta si QA comprueba que importarla no tiene efectos y que la semilla no se puede lanzar desde la imagen? Recomendado: sí; si tuviera efectos, sería un hallazgo.
+3. **I13:** ¿basta con el tamaño del TAP (150 artículos y 40 recetas)? Recomendado: sí, más el límite de 2 MB solo para la lectura (I8).
+4. **I6 (c):** matar el proceso durante la escritura requiere una ventana medible; si con el fixture ampliado dura menos de 1 s, ¿se acepta sustituirlo por (a) y (b)? Recomendado: sí.
+
+Pendientes del PR 1 que siguen siendo del usuario y QA no toca: la consulta de empaques "hr" en desarrollo, `verify-backup.sh --drill` y el borrado del scratchpad de la sesión de QA interrumpida con la copia del libro.
+
+## QA Report — PR 2 (T2)
+
+### Ronda
+
+1 (2026-11-20). Plan aprobado por el usuario ("Si"), con las 5 autorizaciones y las recomendaciones a las 4 preguntas. Árbol de trabajo del worktree `req-f-050-pr2`, sin commit. MySQL 8.4 de QA aislado (`docker compose -p restaurante-qa-050b`, volumen propio, `127.0.0.1:3307`); el `restaurante-mysql-dev-1` de desarrollo siguió `Exited` y no se tocó. Sin datos reales: todo con el fixture ficticio y copias marcadas en el scratchpad.
+
+### Pruebas ejecutadas
+
+- **G1.** Desde `restaurante/` del worktree: `npm run build:css` 0; `npm run typecheck` 0; `npm run lint` 0 ("844 archivos revisados, sin datos privados"); `npm test`: api 55 archivos / 1244 pruebas, landing-pages 64 / 903, inventory-manager 17 / 287, todo en verde.
+- **G2.** Duración por archivo (reporter JSON): los nuevos y modificados, `admin-inventory-api` 1.59 s, `admin-inventory-recipes-api` 0.93 s, `inventory-import` 0.03 s, `contract-types` 0.02 s, `inventory-catalog` 0.03 s y `prisma-inventory-import` 1.40 s. Tres ejecuciones aisladas: 57 pruebas en 1.38–1.39 s (api) y 2 en 2.50–2.58 s (landing-pages). Ver OBS-7 sobre 3 archivos ajenos.
+- **F1–F6.** `git diff 0187298 --stat`: 24 modificados (con el ticket) y 10 nuevos, los de "Archivos afectados"; nada en `landing-pages/src`, `landing-pages/public`, `inventory-manager/src`, `deploy/`, `ops/`, `.github/`, `.env.example` ni `package-lock.json`; `api-double-inventory.ts` solo con los 2 campos. Migración: `git diff 0187298 -- restaurante/packages/db/prisma` vacío. Suma de `deploy/` = `591de8e7f259073f79ff34418c8b7a3a2680d465ef3bc7378c620221455cc7f0` (igual). Revisión del diff frente al TAP y las reglas, sin hallazgos de tipos, errores ni logs. Desviaciones 1 a 6: el código hace lo descrito (1: clave desconocida = error sin Zod, I4; 2: ciclo por filas "Rec!2 → Rec!6 → Rec!2", I4; 3: índice y árbol, P2/P3; 4: `--produccion` sin `production` rechazado, I7; 5: guardar devuelve el resumen, A2; 6: `arquitectura.md` sin tocar). F5: 0 coincidencias de patrones de secretos (claves, tokens, URL con credenciales, IP del VPS) y 0 de los términos característicos del libro citados en el ticket; las 3 apariciones de nombres de platillos y refrescos están en la semilla de T1 ya existente. El fixture es ficticio y lleva `"ficticio": true`. F6: las 3 pruebas nuevas son funcionales (acceso y reglas de recetas por HTTP, importación en memoria y en MySQL), usan `startAdmin`/`makeDatabase()`, sin esperas fijas ni `retry`; las modificaciones solo siguen el cambio de comportamiento.
+- **A (API de recetas)**: `api` del worktree con env del scratchpad sobre `restaurante_test_qa050b_a`, usuarios Administrador, Gerente y Editor creados por la API y datos con marcador. 130 comprobaciones en PASS (A1–A5: 98 + 21; A6: 7; A7: 4), 0 FAIL.
+- **I (importación A5)**: `node scripts/inventory-import.ts` y `npm run inventory:import` del worktree sobre bases `restaurante_test_qa050b_{i,e,f,g,d}`, con 27 copias marcadas del fixture.
+- **I11/I12 (imagen)**: `docker build --target api` → `restaurante-api:qa050b` (borrada al terminar); `docker run --read-only --tmpfs /tmp -i` y un contenedor de larga vida con `docker exec -i` (equivalente local de `$C exec -T api`).
+- **E (semilla)**, **P (barrera)**, **Z (reparto)**, **X (mutaciones)** y **G3–G5 (regresión)**: abajo.
+
+### Criterios de aceptación
+
+| CA / alcance | Resultado | Evidencia |
+|---|---|---|
+| CA-12 (API) | PASS | A1: en las 7 rutas, sin sesión 401 y Editor 403 `FORBIDDEN_ROLE` (también en escrituras con CSRF válido y antes de 404/422); Administrador y Gerente, sin CSRF o con uno inválido, 403 en `POST recetas` y `POST cerrar`; checksums y conteos de las tablas `inventory_*` iguales tras todos los rechazos; Administrador y Gerente 200 en las 5 lecturas. XA1 y XA2 muertas. |
+| CA-13 | PASS | I1: ensayo sobre base vacía y con datos, salida 0, "Se crearían: categorías 5, artículos 13, variantes 3, recetas 3, líneas 9", checksums iguales y, con `general_log`, solo `SELECT` (14), `BEGIN` y `COMMIT` del proceso: 0 `INSERT`, `UPDATE`, `DELETE`, `FOR UPDATE` o `inventory_lock`. I2: "escrita" con esos conteos; 16 filas de artículo (13 + 3 variantes, 1 padre); recetas versión 1 vigentes con `created_by_name` "Importación"; historial: 5 `category/create`, 16 `item/create`, 3 `recipe/new_version` con autor "Importación"; `gr`→`g`, `lt`→`L`, `hr` no inventariable; corrección aplicada (nombre recortado y corregido); carne 6.000 kg netos, merma 40.00, bruta 10.000. I3: repetición en ensayo y con `--escribir` → "Creados … 0", todo omitido, checksums iguales; tras cerrar una receta, la reimportación crea la versión 2 (máximo + 1). I4: 18 archivos con errores (ciclo, unidad, merma 100, rendimiento 0, costo negativo, coma, 4 decimales, nombre, variante y SKU repetidos, ingrediente inexistente, Compuesto como ingrediente, clave desconocida, formato, versión, JSON inválido, vacío, varios a la vez), en ensayo y con `--escribir`: salida 1 y checksums iguales en los 36 casos; cada error con fila y campo. Variantes con nombres únicos (repetida = error). XI1, XI2, XI3 y XI7 muertas. |
+| CA-10 (HTTP) | PASS | A5: baja sin `recipes: 'keep'` → 409 `ITEM_IN_ACTIVE_RECIPES` con `recipes: [{ itemId, name }]` sin escribir; `recipes` inválido → 422; con `keep` → inactivo, la receta conserva su versión con `inactiveIngredientIds`, la lista marca `usesInactive`, sale de `ingredientes` y una versión nueva con él → 422 por línea; padre con variante usada → 409 con la receta. Cambiar la unidad base de un usado → 409 (RN-4). XA5 muerta. |
+| CA-6 (HTTP) | PASS | A2: base vieja → 409 `RECIPE_VERSION_CONFLICT` con `current` y sin escribir. A3: misma `Idempotency-Key` y cuerpo en serie y en 10 rondas de 5 envíos simultáneos → una sola versión y respuestas idénticas (10/10); otro cuerpo → 422 `IDEMPOTENCY_KEY_REUSED` sin escribir; clave inválida → 400; otro usuario u otro artículo no se confunden. A7: 10/10 rondas de dos `POST` simultáneos desde la misma base → 201 + 409 con `current`. XA3 muerta. |
+| CA-4 y CA-11 (HTTP) | PASS | A2: B usa A con A usando B → 422 `RECIPE_CYCLE` con `path` y sin escribir; A usa A → 422 `RECIPE_CYCLE`; cadena de 9 niveles → 422 `RECIPE_TOO_DEEP` ("9 niveles; el máximo es 8"); A7: 10/10 rondas A→B / B→A simultáneos → 201 + 422 `RECIPE_CYCLE`, nunca dos vigentes ni intervalos solapados. Compuesto y padre como ingrediente → 422; Insumo, Reventa y padre → 409 `RECIPE_NOT_ALLOWED` en `GET` y `POST`; receta de un Intermedio inactivo → 409 `RECIPE_ITEM_INACTIVE`; `ingredientes` sin Compuestos ni padres, con la variante y sus empaques. |
+| CA-7, CA-8 y CA-9 (HTTP) | PASS | A4, contra cálculo a mano: carne 6.000 kg netos al 40 % → bruta 10.000, costo 1000.0000, 166.6667/kg (RN-T2-1); 500 g de un ingrediente en kg a 10/kg → 5.0000 (CA-3); 0.5 hr de mano de obra no inventariable a 80 → 40.0000 por referencia (CA-9); total 45 con rendimiento 2 → 22.5000/L (CA-1). Plato con un ingrediente sin costo → `total` y `unitCost` `null` (nunca 0), la línea con `cost` `null`, orígenes `receta`, `receta`, `sin_costo`, `referencia` y la cebolla en `missing` con ruta (CA-7). Al poner referencia a la cebolla → 25.7630; al cambiar el rendimiento de la sub-receta → 29.0963; en ambos casos sin versión nueva del plato (CA-8). |
+| RF-10 (ficha) | PASS | A4: `referenceCost` "20" → "20.0000"; 422 por campo con negativo, 5 decimales, coma, texto, número JSON, `inventoriable` "no" o `false` en un Intermedio, referencia en Compuesto o padre; referencia en Intermedio aceptada (PT-7); alta en `hr` no inventariable; pasar a inventariable sin movimientos → 200; `PUT` sin los campos nuevos los conserva; historial con `referenceCost` e `inventoriable` (RN-16). |
+| RF-12 (semilla) | PASS | E1: "22 artículos y 3 recetas"; mano de obra `hr`, no inventariable, 80.0000; cebolla sin referencia; costos por la API iguales al cálculo a mano: carne 1600.0000 → 266.6667/kg (6.000 netos, 40.00, bruta 10.000), salsa 42.2400, taco "Sin costo" con la cebolla en `missing` (líneas 21.3333, 0.8448, 0.8000). E2: segunda ejecución y base con solo una categoría de T1 → "ya tiene datos", checksums iguales. E3: host remoto y `NODE_ENV=production` rechazados; la imagen no trae el comando (I11). XE1 muerta. |
+| DEF-001 (503) | PASS | A6, escenario del PR 1 (otra sesión retiene `inventory_lock` 'recetas' `FOR UPDATE`): `PUT articulos/:id`, `POST …/desactivar`, `POST …/recetas` y `POST …/recetas/cerrar` → 503 `INVENTORY_BUSY` en ~5.05 s, sin escribir, log `inventory_busy` en `warn` solo con método y ruta; nunca 500. Las altas de artículo y categoría no toman el candado y responden 201. XA4 muerta. |
+| DEF-002 y barrera (A5) | PASS | P1: `.xlsx` válido generado al momento, `.xlsm`, `.xls` y `.ods` ignorados por `.gitignore`; con `git add -f`, `npm run lint` sale 1 y lista solo las 4 rutas. P2 (escenario del PR 1): JSON sin `ficticio` preparado y luego sobrescrito con `{}` → 1; borrado del árbol → 1. P3: ficticio preparado y árbol cambiado a no ficticio → 1 (control preparado ficticio → 0). P4: ficticio fuera de fixtures → 1; JSON que no es de importación → 0; ruta con espacios y acentos → 1; JSON inválido con la marca → 1. P5: 0 apariciones del marcador en todas las salidas. P6: un archivo solo en el árbol sin seguimiento → 0; árbol actual → 0 con 844 archivos. P7: `npm run lint` corre en el CI (OBS-8). P8: `Datos de entrada.xlsx` ignorado (`.git/info/exclude`), sin seguimiento, tamaño y fecha iguales al inicio y al final; no se abrió. XB1 sobrevive, como estaba previsto (sin prueba permanente por diseño). |
+| Salvaguardas y salida (A5, Seguridad) | PASS | I7: matriz de 5 hosts × `NODE_ENV` × `--produccion` × `ficticio`: solo pasan desarrollo sin la bandera contra un host local y producción con `--produccion` sin `ficticio`; los rechazos tardan ~0.15 s (también con el host remoto `10.255.255.1`) y 5 rechazos seguidos abren 0 conexiones nuevas en MySQL (`Connections`). Argumentos: sin `--archivo`, sin valor, desconocido → uso; ruta inexistente o directorio → "No se encontró". Sin `DATABASE_URL` o mal formada → mensaje sin la URL ni la contraseña. I8: entrada estándar por redirección y tubería, vacía (JSON inválido), BOM por archivo y por entrada estándar; 2 MB exactos aceptados y 2 MB + 1 rechazados, por archivo y por entrada estándar; ruta relativa por npm desde `restaurante/` y desde `restaurante/api` (`INIT_CWD`). I9: base sin migrar → `MIGRATIONS_PENDING`, 0 tablas creadas; MySQL inalcanzable → `DATABASE_UNREACHABLE`; sin URL en la salida. I10: 301 líneas de salida de todos los casos con 0 apariciones de los marcadores de nombres, notas y costos. I6: (a) candado retenido → "ocupado", salida 1, sin restos; (b) `TRIGGER` con `SIGNAL` en la última línea de receta → mensaje genérico, sin pila ni texto del trigger, checksums iguales; (c) `SIGKILL` del proceso a 0.7, 0.9, 1.1 y 1.3 s del fixture ampliado → 0 filas; a 1.1 s el `general_log` muestra 504 `INSERT` ejecutados y 0 `COMMIT`. XI4, XI5 y XI6 muertas. |
+| Imagen y §5 | PASS | I11: la imagen trae `scripts/inventory-import.ts` y `scripts/support/{inventory-import-cli,inventory-dev-seed,read-hidden}.ts`; no trae `tests/`, el fixture, `inventory-seed-dev.ts`, `dev-server.ts` ni `bot-chat.ts`. Importar `inventory-dev-seed.ts` en la imagen (sin red, solo lectura) no tiene efectos: solo exporta `DEV_SEED_AUTHOR`, `DEV_SEED_HOSTS`, `devSeedRefusal` y `seedInventoryDev`; `npm run inventory:seed-dev` falla por módulo inexistente (pregunta 2 resuelta). Con `NODE_ENV=production`: sin `--produccion` → rechazo; ficticio con `--produccion` → rechazo; copia sin la marca → ensayo 0, `--escribir` 0, repetición "0 creados". I12: pasos 2 a 4 tal como están escritos, con `$C exec -T api` sustituido por `docker exec -i` sobre un contenedor de la imagen: ensayo 0, escritura 0, repetición "Creados … 0"; `docker diff` del contenedor vacío y `/tmp` vacío; `chmod 600` y `shred -u` + `ls` (en un contenedor Linux sobre la copia; macOS no trae `shred`) → el archivo deja de existir. `$C` coincide con `despliegue.md` (línea 560), `restaurante-backup.service` existe en `ops/backup/systemd` y `exec` sobre el servicio `api` coincide con el resto del documento. |
+| I13 (tiempo) | PASS | Fixture ficticio ampliado (150 artículos, 40 recetas, 200 líneas, 3 niveles). Comando del worktree, 3 ejecuciones: ensayo 0.33–0.34 s, `--escribir` 1.50–1.51 s (con el arranque de Node). Imagen: ensayo 0.64–0.68 s, `--escribir` 1.27–1.30 s. Muy por debajo de los 60 s de la transacción. |
+| CA-16 (regresión de lo que toca) | PASS | G3–G5 (abajo). |
+| Reparto 2a / 2b | PASS | Z1–Z4 (abajo). |
+| Desviaciones 1–6 | PASS | F4. |
+
+### Defectos encontrados
+
+Sin defectos `BLOCKER`, `CRITICAL` ni `MAJOR`. Se numeran a continuación de los del PR 1.
+
+#### DEF-005
+
+- Severidad: MINOR.
+- Criterio de aceptación afectado: CA-13 / A5 (listar cada conflicto con su fila y su campo).
+- Descripción: un conflicto de receta se informa siempre con el campo `lineas`, aunque lo distinto sea el rendimiento o la nota.
+- Pasos para reproducir: importar el fixture; repetir el ensayo con una copia donde solo cambia el `rendimiento` de una receta (`"2.000"` → `"3.000"`).
+- Resultado esperado: el conflicto señala `rendimiento` (o los campos que difieren), como ya hacen los conflictos de artículos ("Ing!6 [costoReferencia]").
+- Resultado actual: `Rec!2 [lineas]: El artículo ya tiene una receta vigente distinta: no se sobrescribe (crea una versión nueva en el admin).`
+- Evidencia: I5, salida del ensayo de `conflicto.json` (salida 1, nada escrito).
+- Impacto: quien revisa el JSON busca la diferencia en las líneas y no en el rendimiento. No afecta a los datos: el conflicto aborta todo igual.
+- Recomendación: que el campo del conflicto de receta refleje qué difiere (rendimiento, nota o líneas).
+
+#### DEF-006
+
+- Severidad: TRIVIAL.
+- Criterio de aceptación afectado: ninguno del requisito (salvaguarda de uso esperada por el plan de QA, I7).
+- Descripción: `--archivo` repetido se acepta y se usa el último.
+- Pasos para reproducir: `node scripts/inventory-import.ts --archivo a.json --archivo b.json`.
+- Resultado esperado: mensaje de uso, como con un argumento desconocido.
+- Resultado actual: importa (o ensaya) `b.json` con salida 0.
+- Evidencia: I7.
+- Impacto: mínimo; el ensayo es el modo por defecto y muestra los conteos antes de escribir.
+- Recomendación: rechazar un `--archivo` repetido con el mensaje de uso.
+
+#### Observaciones (no son defectos)
+
+- **OBS-4.** La validación tiene dos fases: con errores de forma (claves desconocidas, formato, versión) no se llega a validar el contenido. Dentro de cada fase se listan todos (4 errores de forma en un archivo; 5 de contenido en otro). Además, un artículo rechazado deja como "no está en el archivo" las líneas que lo usan, y esa receta no se valida más.
+- **OBS-5.** Un ensayo con errores sigue mostrando "Se crearían: …" con los conteos parciales, seguido de "No se escribió nada".
+- **OBS-6.** Si existe un artículo **inactivo** con el mismo nombre, la importación crea uno activo nuevo. Es coherente con T1: la API también lo permite (alta con el nombre de un inactivo → 201).
+- **OBS-7.** Tres archivos de landing-pages que este PR no toca (`product-repository-contract-prisma-{actualizar,importacion,crear}.test.ts`) tardaron 30.3, 28.9 y 24.4 s en la ejecución local en paralelo. Son anteriores a este PR. Ninguno de los archivos nuevos o modificados pasa de 2 s.
+- **OBS-8.** `npm run lint` (con la barrera) corre en el CI en el job `verificacion`, del que depende `calidad`, no dentro de `calidad` como decía P7. No cambia la protección.
+- **OBS-9.** Inspección estática: en `inventory-import.ts`, un error inesperado de `loadDatabaseConfig` o de `verifyDatabase` que no sea `ApiConfigError` ni `DatabaseInitError` se relanza (`throw err`) e imprime la pila de Node. No se pudo provocar; todos los caminos probados (I7–I10) dan mensajes sin URL ni contenido.
+- **XI8** (escritura en varias transacciones) no se ejecutó: no se puede expresar como una mutación pequeña. La atomicidad queda demostrada con I6 (b) (trigger a mitad de la escritura) e I6 (c) (504 `INSERT` sin `COMMIT` y 0 filas tras `SIGKILL`) y la cubre `prisma-inventory-import.test.ts` ("un rechazo a mitad de la escritura … no deja nada escrito").
+
+### Mutaciones (X)
+
+En una copia APFS del árbol validado, ejecutando solo los archivos afectados. Todas restauradas; `git diff` de la copia vacío al terminar.
+
+| Mutación | Resultado |
+|---|---|
+| XA1 recetas sin la comprobación de rol | muerta (`admin-inventory-recipes-api`, 1 de 6) |
+| XA2 `POST` de recetas sin CSRF | muerta (1 de 6) |
+| XA3 `Idempotency-Key` ignorada | muerta (1 de 6) |
+| XA4 `InventoryBusyError` sin traducir en T1 | muerta (`admin-inventory-api`, 1 de 13) |
+| XA5 baja sin exigir `recipes: 'keep'` | muerta (3 de 958) |
+| XI1 el ensayo escribe | muerta (memoria 2 de 10; MySQL 1 de 2) |
+| XI2 conflictos ignorados | muerta (1 de 10) |
+| XI3 errores que no abortan | muerta (1 de 10) |
+| XI4 sin rechazo de `production` sin `--produccion` | muerta (1 de 10) |
+| XI5 sin rechazo de `ficticio` con `--produccion` | muerta (1 de 10) |
+| XI6 sin rechazo de host remoto | muerta (1 de 10) |
+| XI7 `gr` sin normalizar | muerta (6 de 10) |
+| XE1 semilla sin la merma de la carne | muerta (`inventory-catalog`, 1 de 20) |
+| XB1 barrera que solo lee el árbol | sobrevive (previsto: sin prueba permanente por diseño; P2 lo cubre en QA) |
+| XI8 | no ejecutada (OBS de arriba) |
+
+### Reparto en PR 2a y PR 2b (Z)
+
+- **Z1. Reparto de referencia** (validado):
+  - **PR 2b** (15 archivos):
+    - `packages/core/inventory/master-import.ts` (nuevo);
+    - `packages/core/inventory/index.ts` (sus 2 bloques: el comentario "importación única" y `export * from './master-import.ts'`);
+    - `packages/core/inventory/inventory-repository.ts` (el bloque final de exportaciones del historial);
+    - `packages/db/src/prisma-inventory-store.ts` (`writeTimeoutMs`);
+    - `api/scripts/inventory-import.ts` y `api/scripts/support/inventory-import-cli.ts`;
+    - `api/tests/fixtures/inventory-import/ficticio.json`;
+    - `api/tests/unit/inventory-import.test.ts` y `landing-pages/tests/integration/prisma-inventory-import.test.ts`;
+    - `scripts/check-private-data.ts` (DEF-002);
+    - `landing-pages/Dockerfile`;
+    - `package.json` y `api/package.json` (`inventory:import`);
+    - `docs/despliegue.md` §5;
+    - del `README.md`, **solo** la fila nueva de la tabla `npm run inventory:import -- --archivo <ruta\|-> [--escribir]`.
+  - **PR 2a**: todo lo demás del árbol, incluidos, del `README.md`, la fila modificada de `inventory:seed-dev` (RF-12) y el bloque de la API (campos del artículo y rutas de recetas).
+  - Entre 2a y 2b, `check-private-data.ts` queda como en la base: DEF-002 se corrige en 2b.
+  - Dependencias comprobadas: 2b usa `DEV_SEED_HOSTS` de la semilla, que está en 2a. 2a no referencia `master-import`, `inventory-import`, `inventory:import`, `writeTimeoutMs`, `IMPORT_MAX_BYTES`, `runMasterImport` ni las exportaciones del historial. Su única mención de `inventory-import` es `FIXTURES_DIR`, de la base del PR 1.
+- **Z2. 2a por sí solo** (copia APFS con `git init` propio, sin 2b):
+  - `npm run typecheck` 0 y `npm run lint` 0 ("740 archivos revisados, sin datos privados": la copia no incluye `.claude/`);
+  - `npm test`: api 54 / 1234, landing-pages 63 / 901 e inventory-manager 17 / 287, en verde. Son el total del árbol menos los 10 y los 2 casos de las pruebas de 2b;
+  - los archivos de 2a, de 0.03 a 6.02 s.
+- **Z3. 2a + 2b = árbol validado:**
+  - el parche de 2b (1 598 líneas, 15 archivos, +1 419/−19) se aplica sobre 2a y el resultado es idéntico al commit completo de la copia;
+  - `diff -r` contra `restaurante/` del worktree, sin `node_modules` ni generados, no da diferencias.
+- **Huella** (calculada con un índice temporal del scratchpad, sin tocar el índice del worktree):
+  - subárbol `restaurante` del árbol validado (2a + 2b): **`d385d63b05d0c3b340fa43139f4ef0183d359a67`**;
+  - subárbol `restaurante` de 2a: **`59c7cc064a14daded1235e99001cf0221441a404`**;
+  - árbol completo (base `0187298` con `restaurante/` del worktree): `480a9dbb7596f900d030d491cd7d70479d911b54`.
+  - Para comprobarla, senior-fullstack ejecuta, antes de abrir los PR, `git rev-parse <commit-2a>:restaurante` y `git rev-parse <commit-2b>:restaurante`, y deben coincidir con esos valores. O bien `git diff --quiet d385d63b05d0c3b340fa43139f4ef0183d359a67 <commit-2b>:restaurante`. Si el reparto cambia de bloque, solo se repite Z2.
+- **Z4.** Los parches y la copia se borraron. El reparto queda descrito aquí.
+
+### Regresión
+
+- **G1/G2:** todo en verde (arriba).
+- **G3** (`inventory-manager` del worktree contra la `api` del worktree):
+  - acceso 303; lista, ficha, edición, alta y categorías del inventario → 200;
+  - al editar desde el formulario actual, que no envía `referenceCost` ni `inventoriable`, un artículo en `kg` con referencia y uno en `hr` no inventariable → 303 y versión + 1, con `referenceCost` (10.0000 y 80.0000) e `inventoriable` (true y false) **conservados**;
+  - alta desde el formulario en `hr` y en `kg` → 303 y creadas.
+- **G4:**
+  - `landing-pages` del worktree contra esa `api`: `/` y `/birria` → 200 "Birria El Muñeco", `/molotes` → 200 "Moloteando", cada una con un `h1` y enlaces de WhatsApp;
+  - rutas públicas de productos y página de los dos negocios → 200;
+  - API del admin: productos, página, usuarios y bot → 200;
+  - el bot, con su suite (G1).
+- **G5:** la `api` arrancó sobre la base migrada con `allowNewerSchema: false`, sin advertencias nuevas (solo `products_notify_disabled`, de antes, por no configurar `LANDING_INTERNAL_URL`).
+- **Logs:** 0 respuestas 500 y 0 líneas `error` en los logs de las 5 apps.
+- **A8 (fugas):** las 101 respuestas de error de A1–A5 no contienen `prisma`, SQL, nombres de tablas, pila, `P\d{4}`, `mysql` ni `node_modules`. En los logs de la `api` (796 líneas) y de las demás apps, 0 apariciones de los marcadores de nombres y notas y 0 de los costos de prueba. Solo aparecen los eventos del TAP con ids, números y acciones.
+
+### Responsive, accesibilidad, UX/UI, performance y SEO
+
+No aplican: el PR 2 no tiene pantallas ni cambios en las landings. Performance: I13 y G2.
+
+### Pendientes de revisión manual
+
+- Ninguno de QA.
+- Siguen siendo del usuario, sin cambios: la consulta de empaques "hr" en desarrollo, `verify-backup.sh --drill` tras desplegar la épica y el borrado del scratchpad de la sesión interrumpida del PR 1.
+- DEF-003 sigue sin PR asignado. DEF-004 y OBS-2 siguen en el PR 3.
+
+### Limpieza
+
+- Se quitaron el proyecto `restaurante-qa-050b` (contenedor, volumen `restaurante-qa-050b_mysql-dev-data` y redes `_default` y `_db-test`) y, con él, las 8 bases `restaurante_test_qa050b_*` y el `TRIGGER` de I6. También se borraron la imagen `restaurante-api:qa050b` y los contenedores `qa050b-api` y `qa050b-imp`. Queda la caché de capas de `docker build`.
+- `docker ps -a`, `docker volume ls` y `docker network ls` son iguales a la línea base. `restaurante-mysql-dev-1` sigue `Exited`.
+- Procesos detenidos: 3 `api`, `inventory-manager` y `landing-pages`, y la sesión SQL que retenía el candado (`KILL`). No hay procesos de servidor, Vitest, importación ni semilla. Nada escucha en 3101–3104, 3111, 3114, 3121, 3124 ni 3307.
+- Se borró del scratchpad lo que QA creó: la copia APFS de Z y X (525 MB), los parches, los fixtures marcados y ampliados, los env, los logs, las sondas y los libros de P.
+- Los archivos de P se sacaron del índice y se borraron. El `git status` del worktree es igual al inicial más este ticket.
+- El índice temporal de la huella se borró. Quedan, como objetos sueltos inalcanzables en el almacén de git del repositorio, los blobs y árboles que escribió `git write-tree`: inofensivos, los quita `git gc`.
+- El repositorio principal sigue en `main` sin cambios. `git worktree list` no tiene worktrees nuevos. `Datos de entrada.xlsx` está intacto.
+
+### Resultado final
+
+QA_APPROVED
+
+## Pendientes del PR 2 para el PR 3 y seguimientos
+
+Hallazgos del QA del PR 2 que no bloquean el merge, con su PR asignado:
+
+- **PR 3 (pantallas y documentación), propuesta:** los dos son cambios pequeños en el comando de importación, que el PR 3 no toca por lo demás; si el PR 3 crece demasiado, pasan a un seguimiento menor propio hacia `epic/inventario` (`fix:` de la importación) antes de llevar la épica a `main`.
+  - **DEF-005 (MINOR):** que el conflicto de una receta en la importación señale el campo que difiere (`rendimiento`, `nota` o `lineas`), como ya hacen los conflictos de artículos.
+  - **DEF-006 (TRIVIAL):** rechazar un `--archivo` repetido con el mensaje de uso.
+- **Observaciones (sin cambio previsto; se revisan al planificar el PR 3):**
+  - **OBS-4:** validación en dos fases (forma, luego contenido); un artículo rechazado deja sus líneas como "no está en el archivo". Documentarlo en `despliegue.md` §5 si confunde.
+  - **OBS-5:** un ensayo con errores sigue mostrando "Se crearían: …" con conteos parciales. Candidato a acompañar a DEF-005 en el mismo cambio.
+  - **OBS-6:** con un artículo inactivo del mismo nombre, la importación crea uno activo nuevo (coherente con T1). Sin cambio.
+  - **OBS-7 (vigilar en el CI):** tres archivos de `landing-pages` que este PR no toca (`product-repository-contract-prisma-{actualizar,importacion,crear}.test.ts`) tardaron 30.3, 28.9 y 24.4 s en la ejecución local en paralelo, por encima de los 20 s por archivo de `.claude/rules/testing.md`. Son anteriores a este PR. Se vigila su duración en el CI de los PR 2a y 2b; si en el CI también pasan de 20 s, se avisa al usuario y se propone partirlos por sus `describe` en un cambio aparte. No se cambia nada sin avisar.
+  - **OBS-8:** la barrera de datos privados corre en el job `verificacion` (del que depende `calidad`). Sin cambio.
+  - **OBS-9:** un error inesperado de `loadDatabaseConfig` o `verifyDatabase` en `inventory-import.ts` se relanza con la pila de Node. Candidato a acompañar a DEF-005 (mensaje genérico y salida 1).
+- **Siguen igual:** DEF-003 sin PR asignado; DEF-004 y OBS-2 en el PR 3.
+
+## Commit y Pull Requests — PR 2a y PR 2b
+
+El PR 2 se parte en dos PR hacia `epic/inventario`, con el reparto validado por QA (sección "Reparto en PR 2a y PR 2b (Z)"):
+
+- **PR 2a** (contratos y rutas de recetas, campos nuevos del artículo, DEF-001 y semilla de desarrollo): rama `feature/REQ-F-050-recetas-api-importacion`.
+- **PR 2b** (importación única A5, DEF-002, `Dockerfile` y `despliegue.md` §5): rama `feature/REQ-F-050-recetas-importacion`, salida del commit de 2a con un solo commit encima. Se publica la rama, pero el PR 2b (en borrador) se abre solo después de que el usuario haga merge del PR 2a, para que su diff contra `epic/inventario` sea solo 2b.
+
 ## Historial de cambios
+
+### QA Report PR 2, ronda 1 (senior-qa, 2026-11-20)
+
+QA Action Plan del PR 2 aprobado por el usuario ("Si", con las 5 autorizaciones y las recomendaciones a las 4 preguntas). Ejecutado completo: F, A, I, E, P, Z, X y G, contra un MySQL 8.4 de QA aislado y la imagen `api` final. CA-12, CA-13 y los criterios HTTP de CA-4, CA-6 y CA-7 a CA-11 en PASS; DEF-001 y DEF-002 corregidos con su escenario original; reparto 2a/2b validado, con huella (`restaurante` = `d385d63b…`, 2a = `59c7cc06…`). Sin defectos BLOCKER, CRITICAL ni MAJOR; DEF-005 (MINOR) y DEF-006 (TRIVIAL), y observaciones OBS-4 a OBS-9. Estado `QA_APPROVED`. Limpieza comprobada.
+
+### QA Action Plan PR 2 (senior-qa, 2026-11-20)
+
+Implementación del PR 2 aprobada por el usuario ("Si": partir en 2a y 2b al commitear y aceptar las 6 desviaciones). QA Action Plan del PR 2 escrito (F, A, I, E, P, Z, X y G), con la validación del reparto en 2a/2b, sin ejecutar pruebas ni levantar procesos. Estado `NEEDS_QA_PLAN_APPROVAL`.
+
+### Implementación PR 2 (senior-fullstack, 2026-11-20)
+
+Plan técnico aprobado ("Si", PT-1 a PT-7). Rama `feature/REQ-F-050-recetas-api-importacion` desde `origin/epic/inventario` (`0187298`), en un worktree. Implementados los contratos y las rutas de recetas, los campos nuevos del artículo en la API, DEF-001 (503 `INVENTORY_BUSY` también en las rutas de T1), la importación única A5 (núcleo en core, comando con salvaguardas, fixture ficticio y procedimiento de `despliegue.md` §5 ejecutado en local contra la imagen `api`), la semilla ampliada y DEF-002. `typecheck`, `lint` y `test` en verde. Se propone partir el PR en 2a y 2b (PT-6). Estado `NEEDS_IMPLEMENTATION_APPROVAL`; sin commit.
 
 ### Integración de epic/inventario y CI del PR 1 (senior-fullstack, 2026-11-20)
 

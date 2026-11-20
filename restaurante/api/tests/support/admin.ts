@@ -11,7 +11,14 @@ import {
 } from '@restaurante/core/bot-control';
 import { createMemoryPageStore, createPageRepository, createProductRepository, type MemoryPageStore, type MemoryProductStore, type ProductRepository } from '@restaurante/core/catalog';
 import type { QuoteCatalogSource } from '@restaurante/core/cotizador';
-import { createInventoryRepository, createMemoryInventoryStore, type InventoryRepository, type MemoryInventoryStore } from '@restaurante/core/inventory';
+import {
+  createInventoryRepository,
+  createMemoryInventoryStore,
+  createRecipeRepository,
+  type InventoryRepository,
+  type MemoryInventoryStore,
+  type RecipeRepository,
+} from '@restaurante/core/inventory';
 import {
   LastAdminError,
   SCRYPT_DEFAULTS,
@@ -210,6 +217,7 @@ export interface AdminHarness {
   botStore: BotControlStore;
   /** Catálogo de inventario (REQ-F-049) sobre el store en memoria. */
   inventory: InventoryRepository;
+  recipes: RecipeRepository;
   inventoryStore: MemoryInventoryStore;
 }
 
@@ -272,6 +280,7 @@ export async function startAdmin({
   }
   const inventoryStore = createMemoryInventoryStore();
   const inventory = createInventoryRepository({ store: inventoryStore, now });
+  const recipes = createRecipeRepository({ store: inventoryStore, now });
   const admin = createAdminRoutes({
     users,
     products,
@@ -281,13 +290,14 @@ export async function startAdmin({
     botProvider: provider,
     quotes: quoteSource,
     inventory,
+    recipes,
     timeZone: 'America/Mexico_City',
     hashParams: TEST_HASH_PARAMS,
     now,
     logger,
   });
   const { url } = await listenLocal(createApiApp({ store, pages, admin, logger }));
-  return { url, store, pageStore, products, calls, change, audit, hashes, failNext, notified, notifier, logger, clock, botControl, botStore, inventory, inventoryStore, ids: Object.fromEntries(records.map((user) => [user.username, user.id])) };
+  return { url, store, pageStore, products, calls, change, audit, hashes, failNext, notified, notifier, logger, clock, botControl, botStore, inventory, recipes, inventoryStore, ids: Object.fromEntries(records.map((user) => [user.username, user.id])) };
 }
 
 export interface Session {

@@ -1,6 +1,6 @@
 import { DatabaseUnavailableError } from '../shared/index.ts';
 import type { InventoryCategory } from './category-schema.ts';
-import { CategoryNameTakenError, ItemNameTakenError, SkuTakenError } from './errors.ts';
+import { CategoryNameTakenError, InventoryBusyError, ItemNameTakenError, SkuTakenError } from './errors.ts';
 import type { InventoryItem } from './item-schema.ts';
 import type {
   CategoryWithUsage,
@@ -39,8 +39,11 @@ export interface MemoryInventoryState {
 
 export interface MemoryInventoryStore extends InventoryStore {
   readonly state: MemoryInventoryState;
-  /** Las próximas `times` operaciones (lectura o transacción) fallan como si la base no respondiera. */
-  failNext(times?: number): void;
+  /**
+   * Las próximas `times` operaciones (lectura o transacción) fallan como si la base no respondiera
+   * (`unavailable`) o como una espera del candado agotada (`busy`, MySQL 1205; REQ-F-050).
+   */
+  failNext(times?: number, kind?: 'unavailable' | 'busy'): void;
   /** RN-4: el artículo pasa a estar en uso (T3 lo hará con los movimientos). */
   markInUse(itemId: number): void;
 }
@@ -88,11 +91,13 @@ function matches(data: MemoryInventoryState, item: InventoryItem, query: ItemQue
 export function createMemoryInventoryStore(): MemoryInventoryStore {
   const state = emptyState();
   let failures = 0;
+  let failureKind: 'unavailable' | 'busy' = 'unavailable';
   let queue: Promise<unknown> = Promise.resolve();
 
   function maybeFail(): void {
     if (failures > 0) {
       failures -= 1;
+      if (failureKind === 'busy') throw new InventoryBusyError();
       throw new DatabaseUnavailableError({ name: 'SimulatedFailure', code: undefined, originalCode: undefined });
     }
   }
@@ -248,8 +253,9 @@ export function createMemoryInventoryStore(): MemoryInventoryStore {
 
   return {
     state,
-    failNext(times = 1) {
+    failNext(times = 1, kind = 'unavailable') {
       failures = times;
+      failureKind = kind;
     },
     markInUse(itemId) {
       state.inUse.add(itemId);

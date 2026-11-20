@@ -211,7 +211,7 @@ export function handleInventory(ctx: Context, double: InventoryDouble, user: Adm
     }
     const fields = fieldsOf(kind, null);
     if (!fields) return undefined;
-    const item: InventoryItem = { id: ++sequence, kind, type, parentId, categoryId, ...fields, active: true, version: 1, createdAt: AT, updatedAt: AT, updatedBy: author };
+    const item: InventoryItem = { id: ++sequence, kind, type, parentId, categoryId, ...fields, active: true, version: 1, createdAt: AT, updatedAt: AT, updatedBy: author, referenceCost: null, inventoriable: true };
     double.items.push(item);
     if (key) idempotency.set(`i:${key}`, item.id);
     record_(item.id, 'create', [{ field: 'name', before: null, after: item.name }]);

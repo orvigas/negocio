@@ -12,6 +12,7 @@ import {
   ParentInactiveError,
   createInventoryRepository,
   createMemoryInventoryStore,
+  createRecipeRepository,
   formatDecimal,
   type CreateItemInput,
 } from '@restaurante/core/inventory';
@@ -312,16 +313,30 @@ describe('categorías (RF-6, CA-13)', () => {
   });
 });
 
-describe('semilla de desarrollo (RF-10, CA-12, PV-5)', () => {
+describe('semilla de desarrollo (RF-10, CA-12, PV-5; REQ-F-050, RF-12)', () => {
   it('carga los artículos de RF-10 con sus tipos, unidades y variantes, y una segunda vez no hace nada', async () => {
-    const inventory = createInventoryRepository({ store: createMemoryInventoryStore(), now: () => NOW });
-    expect(await seedInventoryDev(inventory)).toEqual({ created: 18 });
+    const store = createMemoryInventoryStore();
+    const inventory = createInventoryRepository({ store, now: () => NOW });
+    const recipes = createRecipeRepository({ store, now: () => NOW });
+    expect(await seedInventoryDev({ inventory, recipes })).toEqual({ created: 22, recipes: 3 });
     const { items } = await inventory.listItems({ status: 'all' });
     const byName = new Map(items.map((item) => [item.name, item]));
     expect(byName.get('Masa de maíz')).toMatchObject({ type: 'insumo', baseUnit: 'kg', categoryName: 'Abarrotes' });
-    expect(items.filter((item) => item.type === 'insumo')).toHaveLength(6);
-    expect(items.filter((item) => item.type === 'intermedio').map((item) => item.baseUnit).sort()).toEqual(['L', 'L', 'pza']);
-    expect(items.filter((item) => item.type === 'compuesto').map((item) => item.name).sort()).toEqual(['Molote', 'Quesabirria', 'Taco de birria']);
+    expect(items.filter((item) => item.type === 'insumo')).toHaveLength(7);
+    expect(items.filter((item) => item.type === 'intermedio').map((item) => item.baseUnit).sort()).toEqual(['L', 'L', 'L', 'kg', 'pza']);
+    expect(items.filter((item) => item.type === 'compuesto').map((item) => item.name).sort()).toEqual(['Molote', 'Quesabirria', 'Taco de birria', 'Taco ficticio']);
+    expect(byName.get('Mano de obra ficticia')).toMatchObject({ baseUnit: 'hr', inventoriable: false, referenceCost: 800_000n });
+    expect(byName.get('Cebolla')?.referenceCost).toBeNull();
+
+    // RF-12: 2 niveles, la merma de cocción en la línea (RN-T2-1), la mano de obra en hr y un ingrediente sin costo.
+    const carne = await recipes.getRecipe(byName.get('Carne cocida ficticia')?.id ?? 0);
+    expect(carne.current?.cost.unitCost).toBe(2_666_667n);
+    expect(carne.current?.version.lines.map((line) => formatDecimal(line.grossBaseQuantity))).toEqual(['10.000']);
+    const taco = await recipes.getRecipe(byName.get('Taco ficticio')?.id ?? 0);
+    expect(taco.current?.cost.unitCost).toBeNull();
+    expect(taco.current?.cost.missing.map((entry) => entry.name)).toEqual(['Cebolla']);
+    expect(taco.current?.cost.lines.map((line) => line.source)).toEqual(['receta', 'receta', 'sin_costo', 'referencia']);
+    expect(taco.current?.version.createdByName).toBe('Semilla de desarrollo');
     expect(byName.get('Refresco 600 ml')).toMatchObject({ kind: 'parent', type: 'reventa', baseUnit: null, variantCount: 2 });
     expect(byName.get('Agua fresca')).toMatchObject({ kind: 'parent', variantCount: 2 });
     const coca = await inventory.getItem(byName.get('Refresco Coca-Cola 600 ml')?.id ?? 0);
@@ -331,8 +346,9 @@ describe('semilla de desarrollo (RF-10, CA-12, PV-5)', () => {
     const masa = await inventory.getItem(byName.get('Masa de maíz')?.id ?? 0);
     expect(masa.equivalences.map(({ unit, quantity }) => [unit, formatDecimal(quantity)])).toContainEqual(['bulto', '25.000']);
 
-    expect(await seedInventoryDev(inventory)).toEqual({ created: 0 });
-    expect((await inventory.listItems({ status: 'all' })).page.total).toBe(18);
+    expect(await seedInventoryDev({ inventory, recipes })).toEqual({ created: 0, recipes: 0 });
+    expect((await inventory.listItems({ status: 'all' })).page.total).toBe(22);
+    expect(store.state.recipeVersions).toHaveLength(3);
   });
 
   it('se niega a correr en producción o contra una base que no es local', () => {

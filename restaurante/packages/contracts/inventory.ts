@@ -39,6 +39,10 @@ export const INVENTORY_ERROR_CODES = Object.freeze({
   CATEGORY_IN_USE: 'CATEGORY_IN_USE',
   CATEGORY_NAME_TAKEN: 'CATEGORY_NAME_TAKEN',
   UNIT_CONVERSION_UNAVAILABLE: 'UNIT_CONVERSION_UNAVAILABLE',
+  /** REQ-F-050, RF-7: el artículo se usa en recetas vigentes; se confirma con `recipes: 'keep'`. */
+  ITEM_IN_ACTIVE_RECIPES: 'ITEM_IN_ACTIVE_RECIPES',
+  /** REQ-F-050: otra escritura retiene el candado del inventario más de lo que se espera (503). */
+  INVENTORY_BUSY: 'INVENTORY_BUSY',
 } as const);
 
 const INVENTORY_PREFIX = `${ADMIN_API_PREFIX}/inventario`;
@@ -58,6 +62,8 @@ const id = z.number().int().positive();
 const isoDate = z.string().min(1);
 /** Decimal con exactamente 3 decimales («24.000»). */
 const decimalText = z.string().regex(/^-?\d+\.\d{3}$/);
+/** Costo con exactamente 4 decimales («18.4000»), en MXN con IVA (REQ-F-050). */
+export const costText = z.string().regex(/^\d+\.\d{4}$/);
 
 export const packagingUnitSchema = z.object({ name: z.string(), factor: decimalText });
 
@@ -100,6 +106,10 @@ export const inventoryItemSchema = z.object({
   createdAt: isoDate,
   updatedAt: isoDate,
   updatedBy: z.string().nullable(),
+  /** Costo de referencia por unidad base (REQ-F-050, C-1); null: sin costo de referencia. */
+  referenceCost: costText.nullable(),
+  /** false: no lleva existencias y se costea por su referencia (REQ-F-050, C-3). */
+  inventoriable: z.boolean(),
 });
 export type InventoryItem = z.infer<typeof inventoryItemSchema>;
 
@@ -173,6 +183,10 @@ interface ItemFieldsRequest {
   sku?: string | null;
   baseUnit?: string | null;
   units?: PackagingUnitRequest[];
+  /** REQ-F-050: texto decimal (≥ 0, 4 decimales) o null para quitarlo. Ausente en una edición: no cambia. */
+  referenceCost?: string | null;
+  /** REQ-F-050: solo un Insumo puede ser false. Ausente en una edición: no cambia. */
+  inventoriable?: boolean;
 }
 /** Alta (`Idempotency-Key` recomendada). Una variante lleva `parentId` y hereda tipo y categoría. */
 export interface InventoryItemCreateRequest extends ItemFieldsRequest {
@@ -188,11 +202,25 @@ export interface InventoryItemUpdateRequest extends ItemFieldsRequest {
   type?: string;
   categoryId?: number | string;
 }
-/** Baja: `variants: 'deactivate'` confirma que también se inactivan las variantes activas de un padre. */
+/**
+ * Baja: `variants: 'deactivate'` confirma que también se inactivan las variantes activas de un padre;
+ * `recipes: 'keep'` confirma inactivar aunque se use en recetas vigentes, que no cambian (REQ-F-050, RF-7).
+ */
 export interface InventoryItemDeactivateRequest {
   version: number;
   variants?: 'deactivate';
+  recipes?: 'keep';
 }
+
+/** 409 `ITEM_IN_ACTIVE_RECIPES` (REQ-F-050, RF-7 y CA-10): recetas vigentes que usan el artículo (o sus variantes). */
+export const itemInActiveRecipesErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('ITEM_IN_ACTIVE_RECIPES'),
+    message: z.string(),
+    recipes: z.array(z.object({ itemId: id, name: z.string() })),
+  }),
+});
+export type ItemInActiveRecipesErrorBody = z.infer<typeof itemInActiveRecipesErrorSchema>;
 export interface InventoryItemReactivateRequest {
   version: number;
 }

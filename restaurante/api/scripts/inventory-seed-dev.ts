@@ -3,7 +3,7 @@
  *
  *   npm run inventory:seed-dev
  *
- * Carga los artículos y categorías ficticios de `support/inventory-dev-seed.ts` en la base de
+ * Carga los artículos, categorías y recetas ficticios de `support/inventory-dev-seed.ts` en la base de
  * DATABASE_URL, solo si es local (127.0.0.1, localhost, ::1 o mysql-dev) y NODE_ENV no es
  * production. Es idempotente: si ya hay artículos o categorías, no hace nada. No migra: antes
  * verifica que la base esté lista. La `api` nunca la ejecuta al arrancar, así que una instalación de
@@ -11,7 +11,7 @@
  */
 import { stderr, stdout } from 'node:process';
 
-import { createInventoryRepository } from '@restaurante/core/inventory';
+import { createInventoryRepository, createRecipeRepository } from '@restaurante/core/inventory';
 import { createPrismaClient } from '@restaurante/db/client';
 import type { DatabaseConfig } from '@restaurante/db/database-config';
 import { createPrismaInventoryStore } from '@restaurante/db/prisma-inventory-store';
@@ -48,8 +48,9 @@ try {
 }
 
 try {
-  const { created } = await seedInventoryDev(createInventoryRepository({ store: createPrismaInventoryStore({ prisma }) }));
-  stdout.write(created > 0 ? `Semilla de desarrollo cargada: ${created} artículos.\n` : 'El inventario ya tiene datos: no se cargó la semilla.\n');
+  const store = createPrismaInventoryStore({ prisma });
+  const { created, recipes } = await seedInventoryDev({ inventory: createInventoryRepository({ store }), recipes: createRecipeRepository({ store }) });
+  stdout.write(created > 0 ? `Semilla de desarrollo cargada: ${created} artículos y ${recipes} recetas.\n` : 'El inventario ya tiene datos: no se cargó la semilla.\n');
 } catch {
   // Sin detalles técnicos (los errores de Prisma incluyen rutas e invocaciones).
   stderr.write('No se pudo cargar la semilla: la base de datos no respondió o rechazó los datos.\n');

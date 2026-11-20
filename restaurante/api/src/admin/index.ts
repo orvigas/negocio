@@ -2,7 +2,7 @@ import type { Freshness } from '@restaurante/contracts';
 import type { BotControl, BotProvider } from '@restaurante/core/bot-control';
 import type { PageRepository, ProductRepository, ProductView } from '@restaurante/core/catalog';
 import type { QuoteCatalogSource } from '@restaurante/core/cotizador';
-import type { InventoryCategory, InventoryItem, InventoryRepository } from '@restaurante/core/inventory';
+import type { InventoryCategory, InventoryItem, InventoryRepository, RecipeRepository, SaveRecipeResult } from '@restaurante/core/inventory';
 import {
   createLoginThrottle,
   createSessionStore,
@@ -17,6 +17,7 @@ import { createAccountRoutes, type AccountRoutes } from './account-routes.ts';
 import { createAdminAccess } from './access.ts';
 import { createBotRoutes, type BotRoutes } from './bot-routes.ts';
 import { createIdempotencyStore } from './idempotency.ts';
+import { createInventoryRecipeRoutes, type InventoryRecipeRoutes } from './inventory-recipe-routes.ts';
 import { createInventoryRoutes, type InventoryRoutes } from './inventory-routes.ts';
 import { createPageRoutes, type PageRoutes } from './page-routes.ts';
 import { createProductRoutes, type ProductRoutes } from './product-routes.ts';
@@ -31,6 +32,7 @@ import { createUserRoutes, type UserRoutes } from './user-routes.ts';
  * Desde REQ-F-043, el control del bot (solo administradores), con la misma instancia que usa el bot.
  * Desde REQ-F-046, el cotizador de taquizas (solo administradores), con el catálogo de `quotes`.
  * Desde REQ-F-049, el catálogo de inventario (administradores y gerentes), con su repositorio de core.
+ * Desde REQ-F-050, las recetas del inventario y su costo teórico (los mismos roles), con el suyo.
  */
 export function createAdminRoutes({
   users,
@@ -41,6 +43,7 @@ export function createAdminRoutes({
   botProvider,
   quotes,
   inventory,
+  recipes,
   timeZone,
   hashParams,
   now = () => new Date(),
@@ -58,12 +61,14 @@ export function createAdminRoutes({
   quotes: QuoteCatalogSource;
   /** Catálogo de inventario (REQ-F-049). */
   inventory: InventoryRepository;
+  /** Recetas del inventario (REQ-F-050). */
+  recipes: RecipeRepository;
   timeZone: string;
   /** Costo de scrypt del hash ficticio y de las contraseñas nuevas (las pruebas lo bajan). */
   hashParams?: PasswordHashParams;
   now?: () => Date;
   logger?: Logger;
-}): { session: SessionRoutes; products: ProductRoutes; pages: PageRoutes; users: UserRoutes; account: AccountRoutes; bot: BotRoutes; quotes: QuoteRoutes; inventory: InventoryRoutes } {
+}): { session: SessionRoutes; products: ProductRoutes; pages: PageRoutes; users: UserRoutes; account: AccountRoutes; bot: BotRoutes; quotes: QuoteRoutes; inventory: InventoryRoutes; recipes: InventoryRecipeRoutes } {
   const sessions = createSessionStore({ now });
   const access = createAdminAccess({ sessions, users, logger });
   return {
@@ -96,6 +101,13 @@ export function createAdminRoutes({
         items: createIdempotencyStore<InventoryItem>({ now: () => now().getTime() }),
         categories: createIdempotencyStore<InventoryCategory>({ now: () => now().getTime() }),
       },
+      timeZone,
+      logger,
+    }),
+    recipes: createInventoryRecipeRoutes({
+      access,
+      recipes,
+      idempotency: createIdempotencyStore<SaveRecipeResult>({ now: () => now().getTime() }),
       timeZone,
       logger,
     }),

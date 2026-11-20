@@ -145,7 +145,7 @@ describe('catálogo en la API', () => {
     expect(created.status).toBe(201);
     const { item } = inventoryItemResponseSchema.parse(await created.json());
     expect(created.headers.get('location')).toBe(`${I}/articulos/${item.id}`);
-    expect(item).toMatchObject({ kind: 'simple', type: 'insumo', baseUnit: 'kg', units: [{ name: 'bulto', factor: '25.000' }], version: 1, updatedBy: 'Gema Gerente' });
+    expect(item).toMatchObject({ kind: 'simple', type: 'insumo', baseUnit: 'kg', units: [{ name: 'bulto', factor: '25.000' }], version: 1, updatedBy: 'Gema Gerente', referenceCost: null, inventoriable: true });
 
     const detail = inventoryItemDetailResponseSchema.parse(await (await call(h.url, `${I}/articulos/${item.id}`, gema)).json());
     expect(detail.item.category).toEqual({ id: categoryId, name: 'Abarrotes', active: true });
@@ -267,5 +267,17 @@ describe('catálogo en la API', () => {
     const res = await call(h.url, `${I}/articulos`, gema);
     expect(res.status).toBe(503);
     expect((await res.json()).error.code).toBe('DATABASE_UNAVAILABLE');
+  });
+
+  it('espera del candado agotada al editar un artículo: 503 INVENTORY_BUSY, no 500, y no se escribe nada (DEF-001 de REQ-F-050)', async () => {
+    const h = await startAdmin({ users: [MANAGER] });
+    const gema = await session(h.url, MANAGER);
+    const categoryId = await category(h, gema);
+    const id = await createItem(h, gema, masa(categoryId));
+    h.inventoryStore.failNext(1, 'busy');
+    const res = await call(h.url, `${I}/articulos/${id}`, gema, { method: 'PUT', body: { ...masa(categoryId), description: 'Cambio', version: 1 } });
+    expect(res.status).toBe(503);
+    expect((await res.json()).error.code).toBe('INVENTORY_BUSY');
+    expect(h.inventoryStore.state.items.find((entry) => entry.id === id)).toMatchObject({ description: null, version: 1 });
   });
 });

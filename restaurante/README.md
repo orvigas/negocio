@@ -160,7 +160,7 @@ apruebe con `npm install-scripts approve <paquete>`.
 | `npm run watch:css`  | Compilación de CSS en modo observación                      |
 | `npm run admin:hash-password` | Pide la contraseña de administración (sin mostrarla) e imprime el valor de `ADMIN_PASSWORD_HASH`; delega en el workspace `api` |
 | `npm run admin:recover -- --usuario <nombre>` | Recupera el acceso de administración por consola con el `DATABASE_URL` de `api/.env`; delega en el workspace `api` (ver [Recuperar el acceso](#recuperar-el-acceso)) |
-| `npm run inventory:seed-dev` | Carga el inventario ficticio de desarrollo (REQ-F-049, RF-10: insumos, intermedios, compuestos y reventa con variantes) en la base de `api/.env`. Se niega a correr con `NODE_ENV=production` o si el host de `DATABASE_URL` no es local (`127.0.0.1`, `localhost`, `::1` o `mysql-dev`); idempotente (con artículos o categorías ya guardados, no hace nada). La `api` nunca siembra el inventario al arrancar: producción queda vacía |
+| `npm run inventory:seed-dev` | Carga el inventario ficticio de desarrollo (REQ-F-049, RF-10: insumos, intermedios, compuestos y reventa con variantes; REQ-F-050, RF-12: costos de referencia, una mano de obra no inventariable en `hr`, un insumo sin costo y tres recetas ficticias, una de 2 niveles y una carne con merma de cocción) en la base de `api/.env`. Se niega a correr con `NODE_ENV=production` o si el host de `DATABASE_URL` no es local (`127.0.0.1`, `localhost`, `::1` o `mysql-dev`); idempotente (con artículos o categorías ya guardados, no hace nada). La `api` nunca siembra el inventario al arrancar: producción queda vacía |
 | `npm run bot:chat [-- --ahora AAAA-MM-DDTHH:MM]` | Conversación con el bot de WhatsApp en la terminal contra el simulador de la Cloud API, sin Meta; delega en el workspace `api` (ver [Probar el bot en local](#probar-el-bot-en-local)) |
 | `npm run db:generate` | Genera el cliente de Prisma en `packages/db/src/generated/prisma` (necesario antes de `typecheck`, `lint`, `test` y `dev`) |
 | `npm run db:up` / `npm run db:down` | Levanta / detiene el MySQL 8.4 local de `compose.yaml` (solo en `127.0.0.1:3307`; datos en el volumen `mysql-dev-data`) |
@@ -386,7 +386,22 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
     `GET|POST /inventario/categorias`, `PUT /inventario/categorias/<id>` y
     `POST …/<id>/desactivar|reactivar` (409 `CATEGORY_IN_USE` con el número de artículos). Las
     cantidades y los factores viajan como texto decimal (`"24.000"`); el contrato está en
-    `packages/contracts/inventory.ts`;
+    `packages/contracts/inventory.ts`. Desde REQ-F-050 el artículo lleva `referenceCost` (texto con
+    4 decimales, por unidad base, en MXN con IVA, o `null`) e `inventoriable` (solo un Insumo puede
+    ser `false`), la unidad `hr`, y `POST …/<id>/desactivar` responde 409 `ITEM_IN_ACTIVE_RECIPES`
+    con `recipes` si el artículo se usa en recetas vigentes, hasta confirmar con `recipes: "keep"`;
+    una espera agotada del candado del inventario responde 503 `INVENTORY_BUSY`;
+  - recetas (REQ-F-050, T2; en la rama `epic/inventario`), mismos roles: `GET /inventario/recetas`
+    (filtros `tipo`, `q` y `pagina`; costo por unidad o `null` con `missingCount`),
+    `GET /inventario/recetas/ingredientes`, `GET /inventario/recetas/versiones/<id>` (historial, sin
+    costo), `GET|POST /inventario/articulos/<id>/recetas` (vigente con su costo teórico por línea y
+    su origen, los ingredientes sin costo e historial; guardar con `baseVersionId` e
+    `Idempotency-Key`: 201 con la versión nueva, 200 si no hubo cambios, 409
+    `RECIPE_VERSION_CONFLICT` con `current`, 422 `RECIPE_CYCLE` con `path` y `RECIPE_TOO_DEEP`, 409
+    `RECIPE_NOT_ALLOWED` y `RECIPE_ITEM_INACTIVE`), `POST …/<id>/recetas/cerrar` y
+    `GET …/<id>/usado-en`. Cantidades con 3 decimales, merma con 2 y costos con 4, siempre como
+    texto; un costo que falta es `null`, nunca 0. El contrato está en
+    `packages/contracts/inventory-recipes.ts`;
   - los cuerpos tienen una lista cerrada de campos (otro campo: 422);
   - las escrituras exigen el token CSRF de la sesión en `X-CSRF-Token`; el límite de intentos cuenta
     el último valor de `X-Forwarded-For`, que escribe el admin.

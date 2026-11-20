@@ -2,7 +2,7 @@ import { once } from 'node:events';
 
 import { createBotControl } from '@restaurante/core/bot-control';
 import { createPageRepository, createProductRepository } from '@restaurante/core/catalog';
-import { createInventoryRepository } from '@restaurante/core/inventory';
+import { createInventoryRepository, createRecipeRepository } from '@restaurante/core/inventory';
 import { errorProp } from '@restaurante/core/shared';
 import { createPrismaClient } from '@restaurante/db/client';
 import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
@@ -109,7 +109,10 @@ const pages = createPageRepository({ store: pageStore, timeZone: config.timezone
 const quotes = createFileQuoteCatalogSource({ logger });
 await quotes.init();
 // Catálogo de inventario (REQ-F-049): de MySQL, sin caché ni semilla (una instalación nueva queda vacía).
-const inventory = createInventoryRepository({ store: createPrismaInventoryStore({ prisma }) });
+// Recetas y costo teórico (REQ-F-050): mismo store; el costo se calcula al consultar, sin caché.
+const inventoryStore = createPrismaInventoryStore({ prisma });
+const inventory = createInventoryRepository({ store: inventoryStore });
+const recipes = createRecipeRepository({ store: inventoryStore });
 const admin = createAdminRoutes({
   users,
   products,
@@ -119,6 +122,7 @@ const admin = createAdminRoutes({
   botProvider: bot?.chatBot.provider ?? null,
   quotes,
   inventory,
+  recipes,
   timeZone: config.timezone,
   logger,
 });

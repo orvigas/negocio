@@ -19,7 +19,7 @@ export type InventoryItemType = (typeof INVENTORY_ITEM_TYPES)[number];
 /** simple: artículo normal; parent: agrupa variantes; variant: hija de un padre. */
 export const INVENTORY_ITEM_KINDS = Object.freeze(['simple', 'parent', 'variant'] as const);
 export type InventoryItemKind = (typeof INVENTORY_ITEM_KINDS)[number];
-export const INVENTORY_UNITS = Object.freeze(['kg', 'g', 'L', 'ml', 'pza'] as const);
+export const INVENTORY_UNITS = Object.freeze(['kg', 'g', 'L', 'ml', 'pza', 'hr'] as const);
 export type InventoryUnit = (typeof INVENTORY_UNITS)[number];
 /** Filtro de estado de la lista (por defecto, `active`). */
 export const INVENTORY_ITEM_STATUSES = Object.freeze(['active', 'inactive', 'all'] as const);

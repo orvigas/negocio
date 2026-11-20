@@ -27,3 +27,12 @@ Imagenes/
 
 # Hoja de cálculo de trabajo del usuario (cotizador de taquizas): se queda en local, no se versiona.
 /Cotizador_Taquiza_Birria.xlsx
+
+# Datos reales del negocio (REQ-F-050, A5): ninguna hoja de cálculo ni el JSON de importación real
+# entran al repositorio. `npm run lint` (scripts/check-private-data.ts) lo comprueba también en el CI.
+*.xlsx
+*.xlsm
+*.xls
+*.ods
+~$*
+/datos-privados/

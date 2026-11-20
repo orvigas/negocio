@@ -2,7 +2,7 @@
 
 ## Estado
 
-QA_APPROVED — PR 1 de 3 (modelo, dominio y persistencia): implementación aprobada por el usuario ("Apruebo", 2026-11-19); QA Action Plan aprobado ("Si", 2026-11-19); QA ejecutado, ronda 1, sin defectos BLOCKER, CRITICAL ni MAJOR (4 MINOR). Ver "QA Report — PR 1 (T2)". Commit y PR hacia `epic/inventario` en curso (senior-fullstack); `READY_FOR_MERGE` se registra cuando el CI del PR esté en verde.
+QA_APPROVED — PR 1 de 3 (modelo, dominio y persistencia): implementación aprobada por el usuario ("Apruebo", 2026-11-19); QA Action Plan aprobado ("Si", 2026-11-19); QA ejecutado, ronda 1, sin defectos BLOCKER, CRITICAL ni MAJOR (4 MINOR). Ver "QA Report — PR 1 (T2)". Commit `cb9bc4d` y Pull Request #185 hacia `epic/inventario`: https://github.com/orvigas/negocio/pull/185 (abierto en borrador; se marca listo tras este registro y `READY_FOR_MERGE` se confirma cuando `calidad`, `docker`, `auditoria` y `pruebas` estén en `pass`).
 
 Technical Action Plan aprobado por el usuario el 2026-11-19: "Si" (en respuesta a "¿Apruebas el plan técnico de T2 con mis recomendaciones a PT-1 a PT-7?"). Decisiones, tal como se recomendaron:
 
@@ -1299,7 +1299,7 @@ Pendientes del usuario:
 
 ### Commit y Pull Request PR 1 (senior-fullstack, 2026-11-19)
 
-`epic/inventario` sin cambios desde la salida de la rama (`0c3c293`): no hizo falta integrarla. `npm run typecheck` y `npm run lint` en verde (barrera: 835 archivos, sin datos privados); índice revisado sin hojas de cálculo, JSON de importación real ni temporales. Pendientes del QA asignados a los PR 2 y 3 ("Pendientes del PR 1 para los PR 2 y 3"). Commit `feat` y PR en borrador hacia `epic/inventario`.
+`epic/inventario` sin cambios desde la salida de la rama (`0c3c293`): no hizo falta integrarla. `npm run typecheck` y `npm run lint` en verde (barrera: 835 archivos, sin datos privados); índice revisado sin hojas de cálculo, JSON de importación real ni temporales. Pendientes del QA asignados a los PR 2 y 3 ("Pendientes del PR 1 para los PR 2 y 3"). Commit `feat` (`cb9bc4d`) y PR #185 en borrador hacia `epic/inventario` (https://github.com/orvigas/negocio/pull/185); se marca listo tras el commit de este registro.
 
 ### QA Report PR 1, ronda 1 (senior-qa, 2026-11-19)
 

@@ -2,7 +2,9 @@
 
 ## Estado
 
-READY_FOR_MERGE — QA ronda 1 `QA_APPROVED` (CA-1 a CA-11 en PASS, sin defectos). Commit y Pull Request hacia `epic/inventario` en "Commit y Pull Request". Este registro se hace antes de marcar el PR listo: el estado `READY_FOR_MERGE` queda sujeto a que su CI termine en verde (ver el informe de senior-fullstack).
+DONE — Pull Request #192 (https://github.com/orvigas/negocio/pull/192) mergeado en `epic/inventario` el 2026-11-25: commit `017d84d`, merge `88209c4`. Ver "Cierre".
+
+Antecedente: READY_FOR_MERGE — QA ronda 1 `QA_APPROVED` (CA-1 a CA-11 en PASS, sin defectos).
 
 Antecedente (QA): QA_APPROVED — ronda 1 sin defectos; OBS-1 MINOR aceptada por el usuario y OBS-2 a OBS-4 anteriores o triviales. Pendiente manual: teclado móvil y `datalist` en un dispositivo real.
 
@@ -420,7 +422,7 @@ Desde `restaurante/` del worktree, con un MySQL de pruebas propio (`docker compo
   - `restaurante/inventory-manager/tests/integration/inventory-recipes.test.ts`
 - Soporte: `restaurante/inventory-manager/tests/support/api-double-recipes.ts`
 - Documentación: `restaurante/docs/arquitectura.md` y `restaurante/README.md`
-- Ticket: `.claude/docs/in-progress/REQ-F-054-editor-recetas-ciclo-y-foco.md`
+- Ticket: `.claude/docs/done/REQ-F-054-editor-recetas-ciclo-y-foco.md` (en `in-progress/` durante la implementación)
 
 ### Riesgos o pendientes
 
@@ -737,6 +739,18 @@ QA_APPROVED
 - Pull Request hacia `epic/inventario` (`gh pr create --base epic/inventario`), abierto en borrador y marcado como listo cuando termina el CI del commit. El número, la URL y el resultado de los checks quedan en el PR y en el informe de senior-fullstack, para no subir commits después de `gh pr ready`.
 - OBS-11 de REQ-F-050 (foco de `field-password`) queda como ajuste aparte, fuera de este PR.
 
+## Cierre
+
+- Pull Request: #192 (https://github.com/orvigas/negocio/pull/192), hacia `epic/inventario`. Commit `017d84d`; merge `88209c4` (2026-11-25). El usuario confirmó el merge ("192 mergeado").
+- CI del PR en verde: `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)`, `verificacion`, `cambios` y GitGuardian en `pass`. `publish`, `deploy`, `validado` y `vigente` omitidos, como corresponde a un PR hacia `epic/inventario` (sin publicar ni desplegar).
+- Observaciones del QA que siguen abiertas, sin ticket:
+  - OBS-1 (MINOR, aceptada por el usuario): en un rechazo por profundidad con varias causas, la línea marcada puede no bastar por sí sola; el siguiente guardado orienta bien. Ajuste aparte si se quiere mejorar.
+  - OBS-2 (TRIVIAL, patrón existente del admin): el enlace del resumen deja la leyenda y la etiqueta del campo fuera de la vista.
+  - OBS-3 (anterior): `action=rows` con un `_csrf` inválido responde 200 y repinta, sin escribir nada.
+  - OBS-4 (anterior): la CSP bloquea el `preconnect` a `fonts.googleapis.com` del `layout.html` del admin.
+- Revisión manual pendiente (no bloquea, decisión 5 del usuario): teclado móvil y `datalist` en un dispositivo iOS o Android real.
+- OBS-11 de REQ-F-050 (foco de `field-password`): ajuste pequeño aparte, todavía sin abrir.
+
 ## Historial de cambios
 
 ### Versión 1
@@ -766,3 +780,7 @@ El usuario aprueba el QA Action Plan con "Sí, apruebo el plan", con las cinco r
 ### Commit y Pull Request (2026-11-25)
 
 `senior-fullstack` hace el commit del cambio y abre el Pull Request hacia `epic/inventario`. Estado: `READY_FOR_MERGE`, sujeto a que el CI del PR termine en verde.
+
+### Cierre (2026-11-25)
+
+El usuario confirma el merge del PR #192 en `epic/inventario` ("192 mergeado"; commit `017d84d`, merge `88209c4`), con el CI en verde. El ticket pasa de `in-progress/` a `done/`. Quedan abiertas OBS-1 a OBS-4, la revisión manual en dispositivo real y OBS-11 de REQ-F-050 como ajuste aparte. Estado: `DONE`.

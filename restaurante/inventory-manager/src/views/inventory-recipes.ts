@@ -38,6 +38,8 @@ export const RECIPE_TYPES: readonly InventoryItemType[] = INVENTORY_RECIPE_ITEM_
 /** Filas del editor: bloques de 10 hasta el máximo de core (40 líneas). */
 export const RECIPE_ROWS_STEP = 10;
 export const RECIPE_MAX_ROWS = 40;
+/** Niveles máximos de recetas anidadas (el de core; la API lo impone). */
+export const RECIPE_MAX_DEPTH = 8;
 export const RECIPE_LINE_PARTS = Object.freeze(['ingredient', 'quantity', 'unit', 'wastePercent', 'note'] as const);
 export type RecipeLinePart = (typeof RECIPE_LINE_PARTS)[number];
 export const recipeLineField = (slot: number, part: RecipeLinePart): string => `lines.${slot}.${part}`;
@@ -125,6 +127,10 @@ export interface RecipeEditorView {
   notices?: SafeHtml[];
   /** Tras un 409: "Guardar mis cambios sobre la versión vigente" (H-5). */
   conflict?: boolean;
+  /** Título y párrafos propios del resumen de errores (ciclo o profundidad en su línea; REQ-F-054, RF-1). */
+  errorHeading?: { title: string; paragraphs: string[] };
+  /** Fila cuyo ingrediente recibe el foco al cargar: la primera de las añadidas (REQ-F-054, RF-3). */
+  focusSlot?: number;
 }
 
 interface RecipeViewHelpers {
@@ -133,7 +139,7 @@ interface RecipeViewHelpers {
   attrs: (entries: [string, string | number | boolean | undefined][]) => SafeHtml;
   page: (options: PageOptions) => SafeHtml;
   notice: (options: NoticeOptions) => SafeHtml;
-  errorSummary: (errors: Record<string, string>, fields: readonly { name: string; label: string }[]) => SafeHtml | null;
+  errorSummary: (errors: Record<string, string>, fields: readonly { name: string; label: string }[], heading?: { title: string; paragraphs?: string[] }) => SafeHtml | null;
   fieldId: (name: string) => string;
   displayDate: (iso: string | null) => string;
 }
@@ -245,7 +251,7 @@ export function createRecipeViews({ render, join, attrs, page, notice, errorSumm
     return `Como en la versión vigente: bruta ${quantityText(match.grossBaseQuantity, match.ingredient.baseUnit)}; ${match.cost === null ? 'sin costo' : `costo ${money(match.cost)}`}.`;
   }
 
-  function lineFieldset(slot: number, line: RecipeLineValues, errors: Record<string, string>, current: CurrentRecipe | null): SafeHtml {
+  function lineFieldset(slot: number, line: RecipeLineValues, errors: Record<string, string>, current: CurrentRecipe | null, focus: boolean): SafeHtml {
     const name = (part: RecipeLinePart) => recipeLineField(slot, part);
     const error = (part: RecipeLinePart) => errors[name(part)];
     const saved = isEmptyLine(line) ? null : savedLineText(line, current);
@@ -254,7 +260,7 @@ export function createRecipeViews({ render, join, attrs, page, notice, errorSumm
       id: fieldId(`lines.${slot}`),
       legend: `Línea ${slot + 1}`,
       fields: join([
-        input(name('ingredient'), 'Ingrediente', line.ingredient, error('ingredient') ?? rowError, { span: 'sm:col-span-2 lg:col-span-1', extra: [['list', INGREDIENTS_LIST_ID], ['maxlength', 80], ['autocomplete', 'off']] }),
+        input(name('ingredient'), 'Ingrediente', line.ingredient, error('ingredient') ?? rowError, { span: 'sm:col-span-2 lg:col-span-1', extra: [['list', INGREDIENTS_LIST_ID], ['maxlength', 80], ['autocomplete', 'off'], ['autofocus', focus]] }),
         input(name('quantity'), 'Cantidad neta', line.quantity, error('quantity'), { describedBy: [HELP_ID], extra: [['inputmode', 'decimal'], ['autocomplete', 'off'], ['maxlength', 20]] }),
         input(name('unit'), 'Unidad', line.unit, error('unit'), { extra: [['list', UNITS_LIST_ID], ['maxlength', 30], ['autocomplete', 'off']] }),
         input(name('wastePercent'), 'Merma %', line.wastePercent, error('wastePercent'), { extra: [['placeholder', '0'], ['inputmode', 'decimal'], ['autocomplete', 'off'], ['maxlength', 6]] }),
@@ -428,11 +434,11 @@ export function createRecipeViews({ render, join, attrs, page, notice, errorSumm
       }));
     },
 
-    inventoryRecipeEditor({ context, csrfToken, item, values, rows, hidden, ingredients, current, errors = {}, notices = [], conflict = false }: RecipeEditorView): SafeHtml {
+    inventoryRecipeEditor({ context, csrfToken, item, values, rows, hidden, ingredients, current, errors = {}, notices = [], conflict = false, errorHeading, focusSlot }: RecipeEditorView): SafeHtml {
       const title = current ? `Nueva versión de la receta de ${item.name}` : `Receta de ${item.name}`;
-      const summary = errorSummary(errors, summaryFields(errors));
+      const summary = errorSummary(errors, summaryFields(errors), errorHeading);
       const count = visibleRows(values, rows);
-      const lines = Array.from({ length: count }, (_, slot) => lineFieldset(slot, values.lines[slot] ?? EMPTY_LINE, errors, current));
+      const lines = Array.from({ length: count }, (_, slot) => lineFieldset(slot, values.lines[slot] ?? EMPTY_LINE, errors, current, slot === focusSlot));
       const unitNames = [...new Set([...INVENTORY_UNITS, ...(ingredients ?? []).flatMap((ingredient) => ingredient.units.map((unit) => unit.name))])];
       const header = join([
         input('yieldQuantity', `Rendimiento (en ${item.baseUnit ?? 'la unidad base'})`, values.yieldQuantity, errors.yieldQuantity, {

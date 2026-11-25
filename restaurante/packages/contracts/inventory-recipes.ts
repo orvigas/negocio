@@ -193,6 +193,16 @@ export const recipeCycleErrorSchema = z.object({
 });
 export type RecipeCycleErrorBody = z.infer<typeof recipeCycleErrorSchema>;
 
+/**
+ * 422 `RECIPE_TOO_DEEP` (RF-5; REQ-F-054, RF-2): la cadena más larga, por nombre. `path` empieza en el
+ * artículo que se guarda y baja por sus subrecetas (como la del ciclo: `path[1]` es el ingrediente de una
+ * línea suya, si lo hay); `usedBy`, las recetas que lo usan, de la más cercana hacia arriba.
+ */
+export const recipeTooDeepErrorSchema = z.object({
+  error: z.object({ code: z.literal('RECIPE_TOO_DEEP'), message: z.string(), path: z.array(z.string()), usedBy: z.array(z.string()) }),
+});
+export type RecipeTooDeepErrorBody = z.infer<typeof recipeTooDeepErrorSchema>;
+
 /** Línea de una versión nueva (forma; las reglas las aplica la API con core). */
 export interface RecipeLineRequest {
   ingredientId: number;

@@ -8,9 +8,10 @@ import type { InventoryDouble } from './api-double-inventory.ts';
  * Doble de las recetas de `/api/v1/admin/inventario` (REQ-F-050, T2) para las pantallas del admin. Reglas
  * mínimas para la interfaz (las reales y el costo exacto están en core y se prueban en api/tests): quién
  * lleva receta (409 `RECIPE_NOT_ALLOWED`), artículo inactivo (409 `RECIPE_ITEM_INACTIVE`), 422 por línea y
- * campo, ciclo directo (422 `RECIPE_CYCLE` con la ruta), conflicto de la versión de partida (409 con la
- * vigente), guardar sin cambios (200 sin versión), clave de idempotencia y el costo por referencia o receta
- * (con `number`: aquí basta con 2 decimales). Datos ficticios.
+ * campo, ciclo directo (422 `RECIPE_CYCLE` con la ruta), profundidad (422 `RECIPE_TOO_DEEP` con la cadena;
+ * REQ-F-054), conflicto de la versión de partida (409 con la vigente), guardar sin cambios (200 sin
+ * versión), clave de idempotencia y el costo por referencia o receta (con `number`: aquí basta con 2
+ * decimales). Datos ficticios.
  */
 
 interface Line {
@@ -247,6 +248,18 @@ export function handleRecipes(ctx: Context, double: InventoryDouble, user: Admin
       const cycle = line.ingredientId === item.id ? [item.name, item.name] : [item.name, ingredient.name, item.name];
       return fail(ctx, 422, 'RECIPE_CYCLE', `La receta se contendría a sí misma: ${cycle.join(' → ')}.`, { path: cycle });
     }
+  }
+  // Profundidad (422 `RECIPE_TOO_DEEP` con la cadena más larga, como core; REQ-F-054): `path` baja desde la
+  // receta que se guarda y `usedBy` sube por las vigentes que la usan.
+  const longest = (chains: number[][]): number[] => chains.reduce<number[]>((best, chain) => (chain.length > best.length ? chain : best), []);
+  const below = (ids: number[]): number[] => longest(ids.filter((id) => currentOf(double, id)).map((id) => [id, ...below((currentOf(double, id) as Version).lines.map((sub) => sub.ingredientId))]));
+  const above = (id: number): number[] =>
+    longest(double.recipes.versions.filter((version) => version.validTo === null && version.itemId !== item.id && version.lines.some((sub) => sub.ingredientId === id)).map((version) => [version.itemId, ...above(version.itemId)]));
+  const chain = [item.id, ...below(lines.map((line) => line.ingredientId))];
+  const usedBy = above(item.id);
+  if (chain.length + usedBy.length > 8) {
+    const nameOf = (id: number) => itemOf(id)?.name ?? `#${id}`;
+    return fail(ctx, 422, 'RECIPE_TOO_DEEP', `Las recetas quedarían anidadas en ${chain.length + usedBy.length} niveles; el máximo es 8.`, { path: chain.map(nameOf), usedBy: usedBy.map(nameOf) });
   }
   const yieldQuantity = Number(record.yieldQuantity);
   const note = typeof record.note === 'string' && record.note !== '' ? record.note : null;

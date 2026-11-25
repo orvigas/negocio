@@ -6,6 +6,7 @@ import { displayDate, type Views } from '../views/index.ts';
 import {
   RECIPES_PATH,
   RECIPE_LINE_PARTS,
+  RECIPE_MAX_DEPTH,
   RECIPE_MAX_ROWS,
   RECIPE_ROWS_STEP,
   isEmptyLine,
@@ -15,6 +16,7 @@ import {
   recipeFormValues,
   recipeLineField,
   recipePath,
+  visibleRows,
   type RecipeEditorItem,
   type RecipeFormValues,
 } from '../views/inventory-recipes.ts';
@@ -30,8 +32,9 @@ import { UNAVAILABLE, createInventoryAccess, httpFailure, newRequestId, queryTex
  * - GET: sesión (303 al acceso) -> rol (403 sin pedir nada a la API) -> datos.
  * - POST: mismo origen (403) -> lista cerrada de campos (400) -> sesión -> rol -> la API. Después, 303 (PRG).
  * - "Añadir 10 filas" (`action=rows`, H-3) vuelve a pintar el editor con lo escrito, sin guardar.
- * - 422 por línea y campo, ciclo con su ruta, 409 de conflicto con lo escrito y la nueva versión de
- *   partida (RF-9), y 503 con lo escrito si la API no responde.
+ * - 422 por línea y campo; ciclo y profundidad con su ruta y, si se identifica, su línea (REQ-F-054);
+ *   409 de conflicto con lo escrito y la nueva versión de partida (RF-9), y 503 con lo escrito si la API
+ *   no responde.
  *
  * Nunca se registran nombres, cantidades, costos ni tokens: solo la ruta, ids y códigos.
  */
@@ -63,6 +66,9 @@ const SUCCESS: Readonly<Record<string, string>> = Object.freeze({
 });
 const NOT_ALLOWED = 'Este artículo no lleva receta: solo los Intermedios y los Compuestos (no un artículo con variantes).';
 const UNKNOWN_INGREDIENT = 'No hay un ingrediente activo con ese nombre: elige uno de la lista.';
+const CYCLE_LINE = 'Este ingrediente cierra el ciclo: quítalo o elige otro.';
+const TOO_DEEP_LINE = `Con este ingrediente las recetas pasan de ${RECIPE_MAX_DEPTH} niveles: quítalo o elige otro.`;
+const KEPT = 'No se guardó nada. Lo que escribiste sigue en el formulario.';
 
 const invalidForm = (ctx: Ctx): never => ctx.throw(400, 'El formulario tiene valores imposibles.', { code: 'INVALID_FORM' });
 const nameKey = (name: string): string => name.trim().normalize('NFC').toLocaleLowerCase('es');
@@ -71,6 +77,18 @@ const nameKey = (name: string): string => name.trim().normalize('NFC').toLocaleL
 function rowsOf(raw: string | undefined): number {
   const value = Number(raw);
   return Number.isInteger(value) && value >= RECIPE_ROWS_STEP && value <= RECIPE_MAX_ROWS && value % RECIPE_ROWS_STEP === 0 ? value : RECIPE_ROWS_STEP;
+}
+
+/**
+ * Fila del formulario que provoca un ciclo o un exceso de niveles (REQ-F-054, RF-1 y RF-2): la ruta de la
+ * API empieza en la receta que se guarda, así que `path[1]` es el ingrediente de una de sus líneas. null si
+ * la ruta no lo dice o ninguna fila escrita lo tiene (se queda el aviso sin enlace; CA-6).
+ */
+function culpritSlot(path: readonly string[], values: RecipeFormValues): number | null {
+  const name = path[1];
+  if (name === undefined) return null;
+  const slot = values.lines.findIndex((line) => !isEmptyLine(line) && nameKey(line.ingredient) === nameKey(name));
+  return slot === -1 ? null : slot;
 }
 
 /** `lines.<i>…` de la API (lista compacta) -> `lines.<fila>…` del formulario. */
@@ -115,6 +133,8 @@ export function createRecipeController({ config, api, views, logger }: { config:
     errors?: Record<string, string>;
     notices?: SafeHtml[];
     conflict?: boolean;
+    errorHeading?: { title: string; paragraphs: string[] };
+    focusSlot?: number;
     /** Ya leídos (para no volver a pedirlos). */
     detail?: RecipeDetailResponse | null;
     ingredients?: RecipeIngredientsResponse['ingredients'] | null;
@@ -132,7 +152,7 @@ export function createRecipeController({ config, api, views, logger }: { config:
       if (readIngredients?.ok) ingredients = readIngredients.data.ingredients;
     }
     const item = detail ? { id: detail.item.id, name: detail.item.name, baseUnit: detail.item.baseUnit } : state.item;
-    send(ctx, status, views.inventoryRecipeEditor({ context: auth, csrfToken: auth?.csrfToken ?? csrf, item, values: state.values, rows: state.rows, hidden: state.hidden, ingredients, current: detail?.current ?? null, errors: state.errors ?? {}, notices: state.notices ?? [], conflict: state.conflict ?? false }));
+    send(ctx, status, views.inventoryRecipeEditor({ context: auth, csrfToken: auth?.csrfToken ?? csrf, item, values: state.values, rows: state.rows, hidden: state.hidden, ingredients, current: detail?.current ?? null, errors: state.errors ?? {}, notices: state.notices ?? [], conflict: state.conflict ?? false, errorHeading: state.errorHeading, focusSlot: state.focusSlot }));
   }
 
   const inactiveNotice = (current: CurrentRecipe) => {
@@ -227,8 +247,9 @@ export function createRecipeController({ config, api, views, logger }: { config:
       if (!auth) return;
       if (id === null) return notFound(ctx, auth, 'inventory-recipes');
 
-      // H-3: "Añadir 10 filas" vuelve a pintar lo escrito con 10 filas más, sin guardar.
-      if (action === 'rows') return editorPage(ctx, 200, auth, csrf, { ...state, rows: Math.min(RECIPE_MAX_ROWS, state.rows + RECIPE_ROWS_STEP) });
+      // H-3: "Añadir 10 filas" vuelve a pintar lo escrito con 10 filas más, sin guardar, con el foco en el
+      // ingrediente de la primera fila nueva (REQ-F-054, RF-3; sin fila nueva, ningún foco).
+      if (action === 'rows') return editorPage(ctx, 200, auth, csrf, { ...state, rows: Math.min(RECIPE_MAX_ROWS, state.rows + RECIPE_ROWS_STEP), focusSlot: visibleRows(values, state.rows) });
 
       const options = await api.inventoryRecipeIngredients(credentials(auth));
       if (!options.ok) {
@@ -258,12 +279,31 @@ export function createRecipeController({ config, api, views, logger }: { config:
         return seeOther(ctx, `${recipePath(id)}?ok=${result.data.created ? 'saved' : 'unchanged'}`);
       }
       const repaint = (status: number, extra: Partial<EditorState>) => editorPage(ctx, status, auth, csrf, { ...state, ingredients, ...extra });
+      // Ciclo o profundidad: una sola alerta con la explicación y, si se identifica la línea, su enlace y la
+      // marca en el campo (REQ-F-054, RF-1 y RF-2).
+      const rejectLine = (title: string, paragraphs: string[], slot: number | null, message: string) =>
+        slot === null
+          ? repaint(422, { notices: [views.notice({ tone: 'error', title, paragraphs })] })
+          : repaint(422, { errors: { [recipeLineField(slot, 'ingredient')]: message }, errorHeading: { title, paragraphs } });
       if (httpFailure(result, 422) && result.error.code === 'RECIPE_CYCLE') {
         const path = result.error.path ?? [];
-        return repaint(422, { notices: [views.notice({ tone: 'error', title: 'La receta se contendría a sí misma: no se guardó nada.', paragraphs: [...(path.length > 0 ? [`Ruta del ciclo: ${path.join(' → ')}.`] : []), 'Quita el ingrediente que cierra el ciclo. Lo que escribiste sigue en el formulario.'] })] });
+        return rejectLine(
+          'La receta se contendría a sí misma: no se guardó nada.',
+          [...(path.length > 0 ? [`Ruta del ciclo: ${path.join(' → ')}.`] : []), 'Quita el ingrediente que cierra el ciclo. Lo que escribiste sigue en el formulario.'],
+          culpritSlot(path, values),
+          CYCLE_LINE,
+        );
       }
       if (httpFailure(result, 422) && result.error.code === 'RECIPE_TOO_DEEP') {
-        return repaint(422, { notices: [views.notice({ tone: 'error', title: result.error.message, paragraphs: ['No se guardó nada. Lo que escribiste sigue en el formulario.'] })] });
+        const path = result.error.path ?? [];
+        const usedBy = result.error.usedBy ?? [];
+        const chain = [...usedBy].reverse().concat(path);
+        // Sin subreceta propia en la cadena (solo la receta que se guarda), el exceso viene de quienes la usan.
+        const external = path.length === 1 && usedBy.length > 0;
+        const paragraphs = external
+          ? [`Las recetas que usan este artículo ya llegan al límite: ${chain.join(' → ')}. Ninguna línea de esta receta lo provoca. No se guardó nada; lo que escribiste sigue en el formulario.`]
+          : [...(chain.length > 0 ? [`Cadena más larga: ${chain.join(' → ')}.`] : []), KEPT];
+        return rejectLine(result.error.message, paragraphs, external ? null : culpritSlot(path, values), TOO_DEEP_LINE);
       }
       const errors = fieldErrors(result);
       if (errors) {

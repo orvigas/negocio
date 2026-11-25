@@ -178,7 +178,9 @@ export function createInventoryRecipeRoutes({
       }
       if (err instanceof RecipeTooDeepError) {
         logger.info('inventory_recipe_too_deep', { itemId, depth: err.depth });
-        throw new ApiHttpError(422, CODES.RECIPE_TOO_DEEP, err.message);
+        ctx.status = 422;
+        ctx.body = { error: { code: CODES.RECIPE_TOO_DEEP, message: err.message, path: err.path, usedBy: err.usedBy } };
+        return;
       }
       if (err instanceof InventoryBusyError) throw inventoryBusy(ctx, logger);
       throw err;

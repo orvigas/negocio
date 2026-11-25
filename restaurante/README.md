@@ -398,7 +398,8 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
     costo), `GET|POST /inventario/articulos/<id>/recetas` (vigente con su costo teórico por línea y
     su origen, los ingredientes sin costo e historial; guardar con `baseVersionId` e
     `Idempotency-Key`: 201 con la versión nueva, 200 si no hubo cambios, 409
-    `RECIPE_VERSION_CONFLICT` con `current`, 422 `RECIPE_CYCLE` con `path` y `RECIPE_TOO_DEEP`, 409
+    `RECIPE_VERSION_CONFLICT` con `current`, 422 `RECIPE_CYCLE` con `path` y `RECIPE_TOO_DEEP` con
+    `path` y `usedBy`, la cadena más larga, 409
     `RECIPE_NOT_ALLOWED` y `RECIPE_ITEM_INACTIVE`), `POST …/<id>/recetas/cerrar` y
     `GET …/<id>/usado-en`. Cantidades con 3 decimales, merma con 2 y costos con 4, siempre como
     texto; un costo que falta es `null`, nunca 0. El contrato está en
@@ -483,8 +484,9 @@ El admin nuevo de REQ-F-039, REQ-F-040 y REQ-F-043 (paso 4 de [Arquitectura](doc
   lista de vigentes con su costo por unidad, filtro por tipo y búsqueda; receta del artículo en
   `/inventario/articulos/<id>/receta`, con el costo y el origen de cada línea, los ingredientes sin
   costo y los inactivos, «Nueva versión», «Cerrar receta» con confirmación e historial en solo
-  lectura; editor de versión con 10 filas por bloque hasta 40, «Añadir 10 filas» sin guardar, un
-  único `datalist` de ingredientes, errores por línea y conflicto 409 que conserva lo escrito). Un gerente entra directo a «Inventario». Todo funciona sin JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el
+  lectura; editor de versión con 10 filas por bloque hasta 40, «Añadir 10 filas» sin guardar y con el
+  foco en la primera fila nueva, un único `datalist` de ingredientes, errores por línea (también el
+  ciclo y el exceso de niveles, en su línea cuando se puede identificar) y conflicto 409 que conserva lo escrito). Un gerente entra directo a «Inventario». Todo funciona sin JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el
   doble envío y reordena sin recargar.
 - **Cambio de la propia contraseña:** la API devuelve una sesión nueva y el admin reescribe su cookie;
   las demás sesiones del usuario se cierran. Si un administrador

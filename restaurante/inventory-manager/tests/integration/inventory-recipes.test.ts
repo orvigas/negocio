@@ -63,6 +63,8 @@ describe('editor sin JavaScript (RF-3, RF-13)', () => {
       expect(shown.querySelectorAll('fieldset.recipe-line')).toHaveLength(rows);
       expect(shown.querySelector('#f-lines-0-ingredient')?.getAttribute('value')).toBe('Chile ficticio');
       expect(shown.querySelector('#f-yieldQuantity')?.getAttribute('value')).toBe('2');
+      // REQ-F-054, RF-3: el foco va al ingrediente de la primera fila añadida (Línea 11, 21 y 31).
+      expect([...shown.querySelectorAll('[autofocus]')].map((element) => element.id)).toEqual([`f-lines-${rows - 10}-ingredient`]);
     }
     expect(dom(current).querySelector('button[value="rows"]')).toBeNull();
     expect(h.api.inventory.recipes.versions).toHaveLength(0);
@@ -107,16 +109,74 @@ describe('editor sin JavaScript (RF-3, RF-13)', () => {
     ]);
   });
 
-  it('un ciclo se rechaza con su ruta y conserva lo escrito (CA-4)', async () => {
+  it('un ciclo o un exceso de niveles se rechaza en una sola alerta con su ruta, marca y enlaza su línea y conserva lo escrito (CA-4; REQ-F-054)', async () => {
     const { h, browser, chile, salsa } = await as(GEMA);
+    const uses = (itemId: number, ingredientId: number) => h.api.inventory.recipes.saveFrom(itemId, 'Ana Admin', 1, [{ ingredientId, quantity: 1, unit: 'kg', wastePercent: 0, note: null }]);
+    const line = (slot: number, ingredient: string) => ({ [`lines.${slot}.ingredient`]: ingredient, [`lines.${slot}.quantity`]: '1', [`lines.${slot}.unit`]: 'kg' });
+    /** Alertas, enlaces del resumen y campos marcados de la respuesta. */
+    const rejection = (html: string) => {
+      const page = dom(html);
+      return {
+        alerts: [...page.querySelectorAll('[role="alert"]')].map((alert) => alert.hasAttribute('autofocus')),
+        links: [...page.querySelectorAll('[role="alert"] a')].map((link) => [link.getAttribute('href'), link.textContent?.replace(/\s+/g, ' ').trim()]),
+        invalid: [...page.querySelectorAll('[aria-invalid="true"]')].map((field) => [field.id, field.getAttribute('aria-describedby')]),
+      };
+    };
     const carne = addItem(h, 'Carne cocida ficticia', 'intermedio');
-    h.api.inventory.recipes.saveFrom(carne.id, 'Ana Admin', 1, [{ ingredientId: salsa.id, quantity: 1, unit: 'kg', wastePercent: 0, note: null }]);
+    uses(carne.id, salsa.id);
     const html = await (await browser.get(editorOf(salsa.id))).text();
-    const res = await post(browser, html, salsa.id, { yieldQuantity: '1', 'lines.0.ingredient': 'Carne cocida ficticia', 'lines.0.quantity': '1', 'lines.0.unit': 'kg', 'lines.1.ingredient': chile.name, 'lines.1.quantity': '1', 'lines.1.unit': 'kg' });
+
+    // Ciclo indirecto: la línea culpable es la del ingrediente que sigue a la receta en la ruta (Línea 3).
+    const res = await post(browser, html, salsa.id, { yieldQuantity: '1', ...line(0, chile.name), ...line(2, 'carne cocida ficticia ') });
     expect(res.status).toBe(422);
     const page = await res.text();
     expect(text(page)).toContain('Ruta del ciclo: Salsa ficticia → Carne cocida ficticia → Salsa ficticia.');
-    expect(dom(page).querySelector('#f-lines-1-ingredient')?.getAttribute('value')).toBe('Chile ficticio');
+    expect(rejection(page)).toEqual({
+      alerts: [true],
+      links: [['#f-lines-2-ingredient', 'Línea 3, ingrediente: Este ingrediente cierra el ciclo: quítalo o elige otro.']],
+      invalid: [['f-lines-2-ingredient', 'f-lines-2-ingredient-error']],
+    });
+    expect(dom(page).querySelector('#f-lines-0-ingredient')?.getAttribute('value')).toBe('Chile ficticio');
+    expect(h.api.inventory.recipes.versions.filter((version) => version.itemId === salsa.id)).toHaveLength(0);
+
+    // Ciclo directo: la propia receta en la Línea 1.
+    const direct = rejection(await (await post(browser, html, salsa.id, { yieldQuantity: '1', ...line(0, salsa.name) })).text());
+    expect(direct.links).toEqual([['#f-lines-0-ingredient', 'Línea 1, ingrediente: Este ingrediente cierra el ciclo: quítalo o elige otro.']]);
+
+    // Profundidad por una línea: Nivel 8 (8 niveles) en la Línea 2 de Adobo añade el noveno.
+    const adobo = addItem(h, 'Adobo ficticio', 'intermedio');
+    let below = chile;
+    for (let level = 1; level <= 8; level += 1) {
+      const nextLevel = addItem(h, `Nivel ${level} ficticio`, 'intermedio');
+      uses(nextLevel.id, below.id);
+      below = nextLevel;
+    }
+    const adoboHtml = await (await browser.get(editorOf(adobo.id))).text();
+    const deep = await post(browser, adoboHtml, adobo.id, { yieldQuantity: '1', ...line(0, chile.name), ...line(1, below.name) });
+    expect(deep.status).toBe(422);
+    const deepPage = await deep.text();
+    expect(text(deepPage)).toContain('Las recetas quedarían anidadas en 9 niveles; el máximo es 8.');
+    expect(text(deepPage)).toContain('Cadena más larga: Adobo ficticio → Nivel 8 ficticio → Nivel 7 ficticio');
+    expect(rejection(deepPage)).toEqual({
+      alerts: [true],
+      links: [['#f-lines-1-ingredient', 'Línea 2, ingrediente: Con este ingrediente las recetas pasan de 8 niveles: quítalo o elige otro.']],
+      invalid: [['f-lines-1-ingredient', 'f-lines-1-ingredient-error']],
+    });
+
+    // Profundidad por quien usa el artículo: ninguna línea marcada y la causa en el aviso.
+    let above = adobo;
+    for (let level = 1; level <= 8; level += 1) {
+      const user = addItem(h, `Uso ${level} ficticio`, 'intermedio');
+      uses(user.id, above.id);
+      above = user;
+    }
+    const external = await post(browser, adoboHtml, adobo.id, { yieldQuantity: '1', ...line(0, chile.name) });
+    expect(external.status).toBe(422);
+    const externalPage = await external.text();
+    expect(text(externalPage)).toContain('Las recetas que usan este artículo ya llegan al límite: Uso 8 ficticio → Uso 7 ficticio');
+    expect(text(externalPage)).toContain('Ninguna línea de esta receta lo provoca.');
+    expect(rejection(externalPage)).toEqual({ alerts: [true], links: [], invalid: [] });
+    expect(h.api.inventory.recipes.versions.filter((version) => version.itemId === adobo.id)).toHaveLength(0);
   });
 });
 
@@ -172,6 +232,12 @@ describe('receta, conflicto y API caída (RF-2, RF-6, RF-9, CA-6 y CA-7)', () =>
     expect(page.body.textContent).toContain('Servicio no disponible.');
     expect(page.querySelector('#f-yieldQuantity')?.getAttribute('value')).toBe('3');
     expect(page.querySelector('#f-lines-0-ingredient')?.getAttribute('value')).toBe('Chile ficticio');
+
+    // REQ-F-054, RF-4: con la API caída, "Añadir 10 filas" lleva el foco al aviso y no a las filas nuevas.
+    h.api.mode = 'down';
+    const rows = await post(browser, html, salsa.id, { 'lines.0.ingredient': 'Chile ficticio' }, 'rows');
+    expect(rows.status).toBe(503);
+    expect([...dom(await rows.text()).querySelectorAll('[autofocus]')].map((element) => element.getAttribute('role'))).toEqual(['alert']);
   });
 
   it('cerrar la receta pide confirmación y deja el artículo sin vigente; el historial queda en solo lectura', async () => {

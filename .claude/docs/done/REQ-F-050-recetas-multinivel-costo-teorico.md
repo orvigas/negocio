@@ -2,7 +2,25 @@
 
 ## Estado
 
-READY_FOR_MERGE — PR 3 de 3 (pantallas de recetas): QA ronda 1 `QA_APPROVED`, sin defectos BLOCKER, CRITICAL ni MAJOR. DEF-007 y DEF-008 (MINOR) quedan como seguimiento aparte, aprobado por el usuario ("DEF-007 y DEF-008 como seguimiento aparte"); no se corrigen en este PR. Commit y Pull Request hacia `epic/inventario` en "Commit y Pull Request — PR 3". Este registro se hace antes de marcar el PR listo: el estado `READY_FOR_MERGE` queda sujeto a que su CI termine en verde (ver el informe de senior-fullstack).
+DONE — T2 completo en `epic/inventario` (2026-11-25). El usuario confirmó el merge del PR 3 ("mergeado") y aprobó el cierre ("Sí, empieza por el punto 1"). Pull Requests de T2, todos mergeados en `epic/inventario`:
+
+- PR 1 (modelo, dominio y persistencia): #185 (https://github.com/orvigas/negocio/pull/185).
+- PR 2a (contratos y rutas de la API de recetas): #188 (https://github.com/orvigas/negocio/pull/188), merge `1c18060`.
+- PR 2b (importación única A5 y semilla de desarrollo): #189 (https://github.com/orvigas/negocio/pull/189), merge `9371772`.
+- PR 3 (pantallas de recetas): #190 (https://github.com/orvigas/negocio/pull/190), commit `831fe9e`, merge `906290b` (2026-11-25T14:46:24Z).
+
+CI de #190 (ejecución 45636199119): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)`, `verificacion` y `cambios` en `pass`; `deploy`, `publish`, `vigente` y `validado` omitidos (*skipped*) por ir a `epic/inventario`, que no publica ni despliega.
+
+Seguimientos aprobados, fuera de este ticket:
+
+- DEF-007 (MINOR): el error de ciclo y de profundidad no se marca en la línea que cierra el ciclo.
+- DEF-008 (MINOR): tras "Añadir 10 filas" sin JS, el foco vuelve al inicio del documento.
+- DEF-007 y DEF-008 van a un ticket aparte, aprobado por el usuario ("DEF-007 y DEF-008 como seguimiento aparte"), aún sin abrir.
+- Observaciones OBS-10 a OBS-14 (ver "QA Report — PR 3 (T2)"), sin corregir.
+- Revisión manual con VoiceOver (Y3 del QA del PR 3) pendiente: no se pudo ejecutar desde el entorno de QA.
+- La importación A5 en producción sigue sujeta a PT-5: solo cuando la épica llegue a `main`, tras T3.
+
+Antecedente (PR 3, commit y PR): READY_FOR_MERGE — PR 3 de 3 (pantallas de recetas): QA ronda 1 `QA_APPROVED`, sin defectos BLOCKER, CRITICAL ni MAJOR. DEF-007 y DEF-008 (MINOR) quedan como seguimiento aparte, aprobado por el usuario ("DEF-007 y DEF-008 como seguimiento aparte"); no se corrigen en este PR. Commit y Pull Request hacia `epic/inventario` en "Commit y Pull Request — PR 3". Este registro se hace antes de marcar el PR listo: el estado `READY_FOR_MERGE` queda sujeto a que su CI termine en verde (ver el informe de senior-fullstack).
 
 Antecedente (QA del PR 3): QA_APPROVED — PR 3 de 3: QA ronda 1 sin defectos BLOCKER, CRITICAL ni MAJOR (2 MINOR: DEF-007 y DEF-008). Ver "QA Report — PR 3 (T2)".
 
@@ -2191,6 +2209,10 @@ Todos los CA del alcance del PR 3 están en PASS con evidencia contra la `api` r
 - Pull Request en borrador hacia `epic/inventario`; se marca listo tras el último push, cuando haya terminado su ejecución del CI. El número, la URL y el resultado del CI están en el informe de senior-fullstack (sin más commits después de marcarlo listo).
 
 ## Historial de cambios
+
+### Cierre (senior-fullstack, 2026-11-25)
+
+El usuario confirmó el merge de #190 en `epic/inventario` ("mergeado"; merge `906290b`, commit `831fe9e`) y aprobó el cierre ("Sí, empieza por el punto 1"). CI de #190 en verde (`calidad`, `docker`, `auditoria`, `pruebas (1/2)` y `pruebas (2/2)` en `pass`; `deploy`, `publish`, `vigente` y `validado` omitidos por ir a `epic/inventario`). Ticket movido con `git mv` de `in-progress/` a `done/`. Quedan DEF-007 y DEF-008 (ticket aparte, sin abrir), OBS-10 a OBS-14 y la revisión manual con VoiceOver. Estado `DONE`.
 
 ### Commit y Pull Request PR 3 (senior-fullstack, 2026-11-25)
 

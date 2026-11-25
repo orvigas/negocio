@@ -107,9 +107,12 @@ describe('importación única (A5, CA-13)', () => {
     changed.articulos.push({ nombre: 'Orégano ficticio', tipo: 'insumo', categoria: 'Abarrotes ficticios', unidadBase: 'gr', fila: 'Ing!15' });
     const firstLine = changed.recetas[0]?.lineas[0];
     if (firstLine) firstLine.cantidad = '600';
+    // DEF-005: el conflicto de una receta señala el campo que difiere, no siempre las líneas.
+    const second = changed.recetas[1];
+    if (second) second.rendimiento = '9.000';
     const conflicted = await run(changed, true);
     expect(conflicted.written).toBe(false);
-    expect(conflicted.conflicts.map(({ fila, campo }) => `${fila} ${campo}`)).toEqual(['Ing!10 costoReferencia', 'Rec!2 lineas']);
+    expect(conflicted.conflicts.map(({ fila, campo }) => `${fila} ${campo}`)).toEqual(['Ing!10 costoReferencia', 'Rec!2 lineas', `${String(second?.fila)} rendimiento`]);
     expect(conflicted.created.articulos).toBe(1);
     expect(snapshot()).toBe(after);
   });
@@ -162,6 +165,8 @@ describe('comando inventory:import: argumentos, salvaguardas e informe', () => {
     expect(parseImportArgs(['--escribir']).ok).toBe(false);
     expect(parseImportArgs(['--archivo']).ok).toBe(false);
     expect(parseImportArgs(['--archivo', 'a.json', '--forzar']).ok).toBe(false);
+    // DEF-006: un --archivo repetido no elige uno en silencio.
+    expect(parseImportArgs(['--archivo', 'a.json', '--archivo', 'b.json'])).toMatchObject({ ok: false, message: expect.stringContaining('Uso:') as unknown });
   });
 
   it('salvaguardas: production exige --produccion; fuera de producción, solo base local; nunca el archivo ficticio en producción', () => {

@@ -1,12 +1,7 @@
-import { randomBytes } from 'node:crypto';
-
 import {
   IDEMPOTENCY_KEY_PATTERN,
   INVENTORY_ITEM_KINDS,
-  INVENTORY_ROLES,
   type AdminApiClient,
-  type AdminApiError,
-  type AdminApiResult,
   type InventoryItemDetail,
   type InventoryItemKind,
   type PackagingUnitRequest,
@@ -14,8 +9,7 @@ import {
 import type { Logger, SafeHtml } from '@restaurante/web';
 
 import type { InventoryConfig } from '../config.ts';
-import { clearSessionId } from '../session.ts';
-import { displayDate, type HeaderSection, type PageContext, type Views } from '../views/index.ts';
+import { displayDate, type Views } from '../views/index.ts';
 import {
   CATEGORIES_PATH,
   EMPTY_ITEM_FORM,
@@ -23,6 +17,7 @@ import {
   NEW_ITEM_PATH,
   UNIT_SLOTS,
   categoryEditPath,
+  costFields,
   itemDeactivatePath,
   itemEditPath,
   itemFormValues,
@@ -36,6 +31,7 @@ import {
   type ParentInfo,
 } from '../views/inventory.ts';
 import { createControllerKit, type Ctx, type Session } from './common.ts';
+import { UNAVAILABLE, createInventoryAccess, httpFailure, newRequestId, queryText } from './inventory-common.ts';
 
 /**
  * Inventario del admin nuevo (REQ-F-049, T1: RF-1 a RF-9 y RF-11), solo para administradores y
@@ -74,15 +70,14 @@ export interface InventoryController {
 const ITEM_BODY_LIMIT = 16 * 1024;
 const SMALL_LIMIT = 4 * 1024;
 const UNIT_FIELDS = Array.from({ length: UNIT_SLOTS }, (_, slot) => [unitField(slot, 'name'), unitField(slot, 'factor')]).flat();
-const ITEM_DATA_FIELDS = ['_csrf', 'action', 'kind', 'name', 'description', 'type', 'categoryId', 'sku', 'baseUnit', ...UNIT_FIELDS];
+const ITEM_DATA_FIELDS = ['_csrf', 'action', 'kind', 'name', 'description', 'type', 'categoryId', 'sku', 'baseUnit', 'referenceCost', 'inventoriable', ...UNIT_FIELDS];
 const ITEM_CREATE_FIELDS = Object.freeze([...ITEM_DATA_FIELDS, 'requestId', 'parentId']);
 const ITEM_UPDATE_FIELDS = Object.freeze([...ITEM_DATA_FIELDS, 'version']);
-const STATUS_FIELDS = Object.freeze(['_csrf', 'version', 'variants']);
+const STATUS_FIELDS = Object.freeze(['_csrf', 'version', 'variants', 'recipes']);
 const CATEGORY_CREATE_FIELDS = Object.freeze(['_csrf', 'requestId', 'name']);
 const CATEGORY_RENAME_FIELDS = Object.freeze(['_csrf', 'name']);
 const CATEGORY_STATUS_FIELDS = Object.freeze(['_csrf', 'version']);
 
-const FORBIDDEN = 'No tienes permiso para gestionar el inventario.';
 /** Mensajes de éxito (`?ok=`, lista cerrada). */
 const SUCCESS: Readonly<Record<string, string>> = Object.freeze({
   created: 'Artículo creado.',
@@ -94,17 +89,10 @@ const SUCCESS: Readonly<Record<string, string>> = Object.freeze({
   category_deactivated: 'Categoría inactivada.',
   category_reactivated: 'Categoría reactivada.',
 });
-const UNAVAILABLE = { tone: 'error' as const, title: 'Servicio no disponible.', paragraphs: ['No se pudo conectar con el sistema: no se guardó nada. Lo que escribiste sigue en el formulario; inténtalo de nuevo en unos minutos.'] };
-
-const queryText = (value: unknown): string => (typeof value === 'string' ? value : '');
-const newRequestId = (): string => randomBytes(18).toString('base64url');
 const isKind = (value: string | undefined): value is InventoryItemKind => (INVENTORY_ITEM_KINDS as readonly string[]).includes(value ?? '');
 const invalidForm = (ctx: Ctx): never => ctx.throw(400, 'El formulario tiene valores imposibles.', { code: 'INVALID_FORM' });
 /** Clase del artículo del campo oculto `kind` (otro valor: 400). */
 const formKind = (ctx: Ctx, value: string | undefined): InventoryItemKind => (isKind(value) ? value : invalidForm(ctx));
-
-type HttpFailure = { ok: false; kind: 'http'; status: number; error: AdminApiError };
-const httpFailure = (result: AdminApiResult<unknown>, status: number): result is HttpFailure => !result.ok && result.kind === 'http' && result.status === status;
 
 /** Empaques escritos (sin las filas vacías) y la fila del formulario de cada uno, para devolver los errores a su sitio. */
 function packagingUnits(values: ItemFormValues): { units: PackagingUnitRequest[]; slots: number[] } {
@@ -131,37 +119,8 @@ function unitErrorsToSlots(errors: Record<string, string>, slots: readonly numbe
 
 export function createInventoryController({ config, api, views, logger }: { config: InventoryConfig; api: AdminApiClient; views: Views; logger: Logger }): InventoryController {
   const kit = createControllerKit({ config, api, views, logger });
-  const { send, seeOther, toLogin, unavailable, failureReason, isUnavailable, readClosedForm, fieldErrors, idOf, credentials } = kit;
-
-  const notFound = (ctx: Ctx, context?: PageContext, section: HeaderSection = 'inventory') =>
-    kit.notFound(ctx, { context, section, ...(section === 'inventory' ? { backHref: ITEMS_PATH, backLabel: 'Volver a artículos' } : { backHref: CATEGORIES_PATH, backLabel: 'Volver a categorías' }) });
-
-  /** Sesión y rol administrador o gerente (RF-9). null si ya respondió. */
-  async function inventorySession(ctx: Ctx, returnTo: string, onUnavailable?: () => boolean): Promise<Session | null> {
-    const auth = await kit.session(ctx, returnTo, onUnavailable);
-    if (!auth) return null;
-    if (!INVENTORY_ROLES.includes(auth.user.role)) {
-      kit.forbidden(ctx, auth, FORBIDDEN);
-      return null;
-    }
-    return auth;
-  }
-
-  /** Respuestas de la API que no son de dominio: 401 -> acceso, 403, 404 y el resto -> 503. */
-  function apiFailure(ctx: Ctx, result: AdminApiResult<unknown>, auth: Session, returnTo: string, section: HeaderSection = 'inventory'): void {
-    if (!result.ok && result.kind === 'http') {
-      if (result.status === 401) {
-        clearSessionId(ctx, config.isProduction);
-        return toLogin(ctx, returnTo);
-      }
-      if (result.status === 403 && result.error.code === 'FORBIDDEN_ROLE') return kit.forbidden(ctx, auth, FORBIDDEN);
-      if (result.status === 403) {
-        return send(ctx, 403, views.message({ title: 'Petición no válida', notice: { tone: 'error', title: result.error.message }, context: auth, section, backHref: section === 'inventory' ? ITEMS_PATH : CATEGORIES_PATH, backLabel: 'Volver' }));
-      }
-      if (result.status === 404) return notFound(ctx, auth, section);
-    }
-    return unavailable(ctx, failureReason(result), auth, undefined, section);
-  }
+  const { send, seeOther, failureReason, isUnavailable, readClosedForm, fieldErrors, idOf, credentials } = kit;
+  const { notFound, inventorySession, apiFailure } = createInventoryAccess({ config, kit, views });
 
   function successNotices(ctx: Ctx): SafeHtml[] {
     const { ok } = ctx.query;
@@ -208,23 +167,36 @@ export function createInventoryController({ config, api, views, logger }: { conf
     send(ctx, status, views.inventoryItemForm({ context: auth, csrfToken: auth?.csrfToken ?? csrf, parent, categories, ...state }));
   }
 
-  /** Cuerpo para la API según la clase del artículo (un padre no lleva unidad, SKU ni empaques; una variante hereda la categoría). */
-  function itemInput(kind: InventoryItemKind, values: ItemFormValues) {
+  /**
+   * Cuerpo para la API según la clase del artículo (un padre no lleva unidad, SKU ni empaques; una variante
+   * hereda la categoría). El costo de referencia y el inventariable (REQ-F-050) solo van si el formulario
+   * los mostró (`shown`): en un alta, el costo solo si se escribió.
+   */
+  function itemInput(kind: InventoryItemKind, values: ItemFormValues, shown: { referenceCost: boolean; inventoriable: boolean }, mode: 'create' | 'edit') {
     const { units, slots } = packagingUnits(values);
     const common = { name: values.name, description: values.description };
     const stock = kind === 'parent' ? {} : { sku: values.sku, baseUnit: values.baseUnit, units };
     const category = kind === 'variant' ? {} : { categoryId: values.categoryId };
-    return { input: { ...common, ...stock, ...category }, slots };
+    const cost = values.referenceCost.trim();
+    const referenceCost = mode === 'create' ? (cost === '' ? {} : { referenceCost: cost }) : shown.referenceCost ? { referenceCost: cost === '' ? null : cost } : {};
+    const inventoriable = shown.inventoriable ? { inventoriable: values.inventoriable } : {};
+    return { input: { ...common, ...stock, ...category, ...referenceCost, ...inventoriable }, slots };
   }
 
   function domainNotice(message: string): SafeHtml {
     return views.notice({ tone: 'warning', urgent: true, title: message, paragraphs: ['No se guardó nada. Lo que escribiste sigue en el formulario.'] });
   }
 
+  /** Recetas vigentes que usan el artículo (REQ-F-050, RF-8); null si la API no las dio. */
+  async function usedIn(auth: Session, id: number) {
+    const result = await api.inventoryRecipeUsedIn(credentials(auth), id);
+    return result.ok ? result.data.recipes : null;
+  }
+
   async function detailPage(ctx: Ctx, auth: Session, id: number, status: number, notices: SafeHtml[], conversion?: ConversionView): Promise<void> {
-    const [found, categories] = await Promise.all([api.getInventoryItem(credentials(auth), id), categoryOptions(auth)]);
+    const [found, categories, recipes] = await Promise.all([api.getInventoryItem(credentials(auth), id), categoryOptions(auth), usedIn(auth, id)]);
     if (!found.ok) return apiFailure(ctx, found, auth, itemPath(id));
-    send(ctx, status, views.inventoryItem({ context: auth, item: found.data.item, history: found.data.history, categories: categories ?? [], conversion, notices }));
+    send(ctx, status, views.inventoryItem({ context: auth, item: found.data.item, history: found.data.history, categories: categories ?? [], usedIn: recipes, conversion, notices }));
   }
 
   async function categoriesPage(ctx: Ctx, auth: Session, status: number, extra: { name?: string; requestId?: string; errors?: Record<string, string>; notices?: SafeHtml[] } = {}): Promise<void> {
@@ -305,7 +277,7 @@ export function createInventoryController({ config, api, views, logger }: { conf
       });
       await Promise.all(pending);
       if (!auth) return;
-      const { input, slots } = itemInput(kind, values);
+      const { input, slots } = itemInput(kind, values, costFields('create', kind, values.type), 'create');
       const result = await api.createInventoryItem(credentials(auth, fields), { ...input, kind, ...(kind === 'variant' ? { parentId: parentId ?? 0 } : { type: values.type }) }, hidden.requestId);
       if (result.ok) {
         logger.info('inventory_item_created', { itemId: result.data.item.id });
@@ -383,7 +355,7 @@ export function createInventoryController({ config, api, views, logger }: { conf
       const realKind = known?.kind ?? kind;
       const rendered = { ...state, kind: realKind, parentId: known?.parentId ?? null, locked: known?.locked ?? false, values: { ...values, type: known?.type ?? values.type } };
       const version = Number(fields.get('version'));
-      const { input, slots } = itemInput(realKind, values);
+      const { input, slots } = itemInput(realKind, values, costFields('edit', realKind, known?.type ?? values.type), 'edit');
       const result = await api.updateInventoryItem(credentials(auth, fields), id, { ...input, version: Number.isSafeInteger(version) ? version : 0, ...(action === 'overwrite' ? { overwrite: true } : {}) });
       if (result.ok) {
         logger.info('inventory_item_saved', { itemId: id, overwrite: action === 'overwrite' });
@@ -418,10 +390,10 @@ export function createInventoryController({ config, api, views, logger }: { conf
       if (!auth) return;
       const id = idOf(ctx);
       if (id === null) return notFound(ctx, auth);
-      const found = await api.getInventoryItem(credentials(auth), id);
+      const [found, recipes] = await Promise.all([api.getInventoryItem(credentials(auth), id), usedIn(auth, id)]);
       if (!found.ok) return apiFailure(ctx, found, auth, ctx.path);
       if (!found.data.item.active) return seeOther(ctx, itemPath(id));
-      send(ctx, 200, views.inventoryItemDeactivate({ context: auth, item: found.data.item }));
+      send(ctx, 200, views.inventoryItemDeactivate({ context: auth, item: found.data.item, recipes: recipes ?? [] }));
     },
 
     async deactivateItem(ctx) {
@@ -431,15 +403,23 @@ export function createInventoryController({ config, api, views, logger }: { conf
       if (!auth) return;
       if (id === null) return notFound(ctx, auth);
       const version = Number(fields.get('version'));
-      const result = await api.deactivateInventoryItem(credentials(auth, fields), id, { version: Number.isSafeInteger(version) ? version : 0, ...(fields.get('variants') === 'deactivate' ? { variants: 'deactivate' as const } : {}) });
+      const result = await api.deactivateInventoryItem(credentials(auth, fields), id, {
+        version: Number.isSafeInteger(version) ? version : 0,
+        ...(fields.get('variants') === 'deactivate' ? { variants: 'deactivate' as const } : {}),
+        ...(fields.get('recipes') === 'keep' ? { recipes: 'keep' as const } : {}),
+      });
       if (result.ok) return seeOther(ctx, `${itemPath(id)}?ok=deactivated`);
       if (httpFailure(result, 409)) {
-        // Cambió mientras se confirmaba (otra versión o una variante nueva): se vuelve a confirmar con los datos vigentes.
+        // Cambió mientras se confirmaba (otra versión, una variante nueva o una receta que lo usa, REQ-F-050
+        // RF-7): se vuelve a confirmar con los datos vigentes y, si las hay, la lista de recetas afectadas.
         const found = await api.getInventoryItem(credentials(auth), id);
         if (!found.ok) return apiFailure(ctx, found, auth, itemPath(id));
         if (!found.data.item.active) return seeOther(ctx, itemPath(id));
-        const title = result.error.code === 'VERSION_CONFLICT' ? 'El artículo cambió mientras lo revisabas: no se inactivó. Revisa los datos e inténtalo de nuevo.' : result.error.message;
-        return send(ctx, 409, views.inventoryItemDeactivate({ context: auth, item: found.data.item, notices: [views.notice({ tone: 'warning', urgent: true, title })] }));
+        const inRecipes = result.error.code === 'ITEM_IN_ACTIVE_RECIPES';
+        const recipes = inRecipes ? (result.error.recipes ?? []) : ((await usedIn(auth, id)) ?? []);
+        logger.info('inventory_item_deactivate_rejected', { itemId: id, code: result.error.code });
+        const title = result.error.code === 'VERSION_CONFLICT' ? 'El artículo cambió mientras lo revisabas: no se inactivó. Revisa los datos e inténtalo de nuevo.' : inRecipes ? 'Se usa en recetas vigentes: no se inactivó. Revisa la lista y confirma.' : result.error.message;
+        return send(ctx, 409, views.inventoryItemDeactivate({ context: auth, item: found.data.item, recipes, notices: [views.notice({ tone: 'warning', urgent: true, title })] }));
       }
       return apiFailure(ctx, result, auth, itemPath(id));
     },

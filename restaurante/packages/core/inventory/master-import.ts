@@ -623,7 +623,15 @@ export async function planImport(reader: InventoryStoreReader, file: ImportFile,
     const existingCurrent = currentByItem.get(target.id);
     if (existingCurrent) {
       if (sameRecipeContent(existingCurrent, yieldQuantity, note, resolved)) report.omitted.recetas += 1;
-      else conflict(recipe.fila, 'lineas', 'El artículo ya tiene una receta vigente distinta: no se sobrescribe (crea una versión nueva en el admin).');
+      else {
+        // DEF-005: el conflicto señala qué difiere (rendimiento, nota o líneas), como los de artículos.
+        const differing = [
+          ...(existingCurrent.yieldQuantity === yieldQuantity ? [] : ['rendimiento']),
+          ...(existingCurrent.note === note ? [] : ['nota']),
+          ...(sameRecipeContent(existingCurrent, existingCurrent.yieldQuantity, existingCurrent.note, resolved) ? [] : ['lineas']),
+        ];
+        conflict(recipe.fila, differing.join(', '), 'El artículo ya tiene una receta vigente distinta: no se sobrescribe (crea una versión nueva en el admin).');
+      }
       continue;
     }
     const ref = itemRefByKey.get(target.nameKey);

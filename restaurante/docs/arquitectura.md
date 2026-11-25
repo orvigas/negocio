@@ -110,7 +110,7 @@ restaurante/
 │   │   ├── shared/          (ids de negocio, logger, errores comunes; desde el paso 2)
 │   │   ├── catalog/         (productos y menú visible)
 │   │   ├── schedule/        (horarios y aviso del día)
-│   │   ├── inventory/       (catálogo de artículos, unidades y variantes; REQ-F-049, en epic/inventario)
+│   │   ├── inventory/       (catálogo de artículos, unidades y variantes, REQ-F-049; recetas y costo teórico, REQ-F-050; en epic/inventario)
 │   │   ├── sales/           (pedidos, ventas y cobros)            ← nuevo
 │   │   ├── customers/       (CRM: clientes e historial)           ← nuevo
 │   │   ├── identity/        (usuarios, roles y permisos por negocio)
@@ -130,6 +130,9 @@ Cada módulo de `core` sigue la misma forma (ejemplo real: el catálogo de inven
 packages/core/inventory/
 ├── item-schema.ts, category-schema.ts, units.ts, decimal.ts ← reglas (validación, conversiones, punto fijo)
 ├── inventory-repository.ts  ← casos de uso: alta, edición con conflicto, baja, variantes, categorías…
+├── recipe-schema.ts, recipe-graph.ts, recipe-cost.ts ← recetas (REQ-F-050): líneas con merma, ciclos y profundidad, costo teórico
+├── recipe-repository.ts     ← versiones (crear, cerrar, historial), «usado en» y opciones de ingrediente
+├── master-import.ts         ← importación única de datos maestros (A5): forma, plan y escritura todo o nada
 ├── inventory-store.ts       ← interfaz que implementa packages/db (prisma-inventory-store.ts)
 ├── memory-inventory-store.ts ← la implementación en memoria para las pruebas
 └── index.ts                 ← lo único que se importa desde fuera del módulo
@@ -137,6 +140,13 @@ packages/core/inventory/
 
 Las landings no importan `core/identity`, `core/bot-control` ni `core/inventory` (regla de lint
 `LANDING_ADMIN_PATTERN` de `eslint.config.ts`).
+
+**Recetas (REQ-F-050, T2).** Versiones inmutables con intervalos `[valid_from, valid_to)` contiguos y una
+sola vigente por artículo (`current_item_id` único). Las escrituras de recetas toman primero el candado
+`inventory_lock('recetas')` en una transacción `ReadCommitted`, así que dos guardados simultáneos A→B y
+B→A no forman un ciclo; `updateItem` y `deactivateItem` también lo toman antes que las filas de
+artículos. El costo teórico se calcula al consultar (sin caché, DT-7), en memoria y con decimales en
+`bigint`: CPP (desde T3) → costo de referencia → «Sin costo», nunca 0.
 
 ### Regla de dependencias
 
@@ -277,6 +287,23 @@ texto decimal. `inventory-manager` lo muestra en la sección "Inventario" (`/inv
 directo a esa sección. La `api` nunca siembra el inventario al arrancar: en desarrollo,
 `npm run inventory:seed-dev` carga datos ficticios.
 
+**Recetas (REQ-F-050, T2; en `epic/inventario`).** Bajo el mismo prefijo y con el mismo acceso:
+`GET recetas` (lista con el costo por unidad), `GET recetas/ingredientes`, `GET recetas/versiones/:id`
+(historial sin costo), `GET|POST articulos/:id/recetas` (vigente con su costo e historial; versión
+nueva con `baseVersionId` e `Idempotency-Key`: 201, o 200 sin cambios), `POST articulos/:id/recetas/cerrar`
+y `GET articulos/:id/usado-en`. Errores propios: 422 `RECIPE_CYCLE` (con `path`) y `RECIPE_TOO_DEEP`,
+409 `RECIPE_NOT_ALLOWED`, `RECIPE_ITEM_INACTIVE`, `RECIPE_VERSION_CONFLICT` (con la vigente en
+`current`) e `ITEM_IN_ACTIVE_RECIPES` (al inactivar, con `recipes`; se confirma con `recipes: 'keep'`),
+y 503 `INVENTORY_BUSY`. El artículo lleva además `referenceCost` e `inventoriable`. El cliente tipado
+de `contracts/admin-client.ts` expone esas rutas (el 409 de receta llega como `recipeCurrent`).
+`inventory-manager` las muestra en "Inventario → Recetas" (`/inventario/recetas`): la receta del
+artículo (`/inventario/articulos/:id/receta`), el editor de versión (`…/receta/nueva`, sin JavaScript:
+un `fieldset` por línea, bloques de 10 filas hasta 40 con "Añadir 10 filas", un único `datalist` de
+ingredientes cuyo nombre resuelve el admin con la lista de la API), la confirmación de cierre
+(`…/receta/cerrar`) y cada versión del historial (`/inventario/recetas/versiones/:id`). La ficha del
+artículo muestra el costo de referencia, el inventariable y "Usado en"; inactivar un artículo usado en
+recetas vigentes lista esas recetas y pide confirmarlo.
+
 **El bot de WhatsApp es un cliente más de `core`** (REQ-F-042). Vive dentro de `api` (`api/src/bot/`)
 y su webhook es otra entrada HTTP, en un puerto propio. Cuando exista `sales`, sus pedidos
 confirmados se guardan como ventas en lugar de solo avisar al personal.
@@ -383,6 +410,10 @@ Decisiones del usuario (REQ-F-049, D-4 y PV-12; plan técnico DT-1 a DT-4):
   `inventario_catalogo`, dominio y persistencia; PR 2 (#182) rol Gerente (migración `rol_gerente`),
   contratos y API de inventario; PR 3 pantallas de `inventory-manager`, redirección del gerente,
   semilla de desarrollo (`npm run inventory:seed-dev`) y documentación.
+- **T2 (REQ-F-050) en tres PR** hacia `epic/inventario`: PR 1 (#185) migración `inventario_recetas`
+  (unidad `hr`, inventariable, costo de referencia y tablas de recetas), dominio y persistencia; PR 2
+  (#188 y #189) contratos y API de recetas, semilla ampliada e importación única de datos maestros
+  (`npm run inventory:import`); PR 3 pantallas de recetas en `inventory-manager` y documentación.
 - **Rol Gerente:** gestiona el inventario; no accede a productos, página, usuarios, bot ni
   cotizador. Antes de una vuelta atrás manual a una imagen anterior a la épica con gerentes
   creados, se sigue el procedimiento de [Despliegue](despliegue.md) §6.

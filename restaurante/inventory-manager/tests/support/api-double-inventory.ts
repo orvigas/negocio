@@ -1,6 +1,8 @@
 import type { Context } from 'koa';
 
-import { IDEMPOTENCY_HEADER, type AdminUser, type InventoryHistoryEntry, type InventoryItem, type InventoryItemKind, type InventoryItemType, type InventoryUnit } from '@restaurante/contracts';
+import { IDEMPOTENCY_HEADER, INVENTORY_UNITS, type AdminUser, type InventoryHistoryEntry, type InventoryItem, type InventoryItemKind, type InventoryItemType, type InventoryUnit } from '@restaurante/contracts';
+
+import { createRecipeState, handleRecipes, recipesUsing, type RecipeState } from './api-double-recipes.ts';
 
 /**
  * Doble de `/api/v1/admin/inventario` (REQ-F-049, T1) para las pruebas de las pantallas. Mismo orden
@@ -8,7 +10,8 @@ import { IDEMPOTENCY_HEADER, type AdminUser, type InventoryHistoryEntry, type In
  * `FORBIDDEN_ROLE`) -> datos. Reglas mínimas para la interfaz (las reales están en core y se prueban
  * en api/tests): 422 por campo (nombre vacío o repetido entre los activos, factor no válido, filtro
  * desconocido), 409 de versión con `current`, padre con variantes activas, categoría en uso y nombre
- * ocupado al reactivar, alta idempotente y la conversión por empaque o por factor fijo.
+ * ocupado al reactivar, alta idempotente y la conversión por empaque o por factor fijo. Recetas
+ * (REQ-F-050): `api-double-recipes.ts`; la baja de un artículo usado en recetas vigentes pide `recipes: 'keep'`.
  */
 
 interface Category {
@@ -23,6 +26,7 @@ export interface InventoryDouble {
   items: InventoryItem[];
   categories: Category[];
   history: Map<number, InventoryHistoryEntry[]>;
+  recipes: RecipeState;
   /** Cambia un artículo "desde otra sesión" (para el 409). */
   touch(id: number, by: string): void;
 }
@@ -35,6 +39,7 @@ const FIXED: Readonly<Record<string, { magnitude: string; factor: number }>> = O
   L: { magnitude: 'volumen', factor: 1000 },
   ml: { magnitude: 'volumen', factor: 1 },
   pza: { magnitude: 'pieza', factor: 1 },
+  hr: { magnitude: 'tiempo', factor: 1 },
 });
 const PAGE_SIZE = 50;
 const FORBIDDEN_MESSAGE = 'No tienes permiso para gestionar el inventario.';
@@ -44,6 +49,7 @@ export function createInventoryDouble(): InventoryDouble {
     items: [],
     categories: [],
     history: new Map(),
+    recipes: createRecipeState(),
     touch(id, by) {
       const found = double.items.find((item) => item.id === id);
       if (found) Object.assign(found, { version: found.version + 1, updatedAt: LATER, updatedBy: by });
@@ -57,6 +63,7 @@ const idempotency = new Map<string, number>();
 
 const decimal = (value: number): string => value.toFixed(3);
 const isDecimal = (value: unknown): value is string => typeof value === 'string' && /^\d{1,10}(\.\d{1,3})?$/.test(value.trim());
+const isCost = (value: unknown): value is string => typeof value === 'string' && /^\d{1,11}(\.\d{1,4})?$/.test(value.trim());
 
 function fail(ctx: Context, status: number, code: string, message: string, more: Record<string, unknown> = {}): void {
   ctx.status = status;
@@ -66,6 +73,7 @@ const invalid = (ctx: Context, fields: Record<string, string>) => fail(ctx, 422,
 
 export function handleInventory(ctx: Context, double: InventoryDouble, user: AdminUser, path: string, record: Record<string, unknown>): void {
   if (user.role !== 'admin' && user.role !== 'gerente') return fail(ctx, 403, 'FORBIDDEN_ROLE', FORBIDDEN_MESSAGE);
+  if (path.startsWith('/recetas') || /^\/articulos\/\d+\/(recetas|usado-en)(\/|$)/.test(path)) return handleRecipes(ctx, double, user, path, record);
   const author = user.name;
   const categoryOf = (id: number) => double.categories.find((category) => category.id === id);
   const activeCount = (categoryId: number) => double.items.filter((item) => item.active && item.categoryId === categoryId).length;
@@ -74,7 +82,7 @@ export function handleInventory(ctx: Context, double: InventoryDouble, user: Adm
   const nameTaken = (name: string, except: number | null) => double.items.some((item) => item.active && item.id !== except && item.name.toLowerCase() === name.trim().toLowerCase());
 
   /** Campos comunes del alta y la edición; null si ya respondió 422. */
-  function fieldsOf(kind: InventoryItemKind, except: number | null) {
+  function fieldsOf(kind: InventoryItemKind, except: number | null, type: InventoryItemType, current: InventoryItem | null) {
     const errors: Record<string, string> = {};
     const name = typeof record.name === 'string' ? record.name.trim() : '';
     if (name === '') errors.name = 'Escribe el nombre.';
@@ -82,13 +90,28 @@ export function handleInventory(ctx: Context, double: InventoryDouble, user: Adm
     const units: { name: string; factor: string }[] = [];
     let baseUnit: InventoryUnit | null = null;
     if (kind !== 'parent') {
-      if (typeof record.baseUnit === 'string' && record.baseUnit in FIXED) baseUnit = record.baseUnit as InventoryUnit;
-      else errors.baseUnit = 'Elige la unidad base (kg, g, L, ml, pza).';
+      // DEF-004: las unidades del contrato (también `hr`).
+      if (typeof record.baseUnit === 'string' && (INVENTORY_UNITS as readonly string[]).includes(record.baseUnit)) baseUnit = record.baseUnit as InventoryUnit;
+      else errors.baseUnit = `Elige la unidad base (${INVENTORY_UNITS.join(', ')}).`;
       for (const [index, unit] of ((record.units ?? []) as { name?: unknown; factor?: unknown }[]).entries()) {
         if (typeof unit.name !== 'string' || unit.name.trim() === '') errors[`units.${index}.name`] = 'Escribe el nombre del empaque.';
         if (!isDecimal(unit.factor) || Number(unit.factor) <= 0) errors[`units.${index}.factor`] = 'El factor debe ser un número mayor que 0, con punto decimal.';
         else units.push({ name: String(unit.name).trim(), factor: decimal(Number(unit.factor)) });
       }
+    }
+    // REQ-F-050 (PT-7): costo de referencia en Insumo, Intermedio y Reventa; no inventariable, solo un Insumo.
+    let referenceCost = current?.referenceCost ?? null;
+    if (record.referenceCost !== undefined) {
+      if (record.referenceCost === null || record.referenceCost === '') referenceCost = null;
+      else if (!isCost(record.referenceCost)) errors.referenceCost = 'Escribe un costo mayor o igual que 0, con punto decimal y hasta 4 decimales.';
+      else if (kind === 'parent' || type === 'compuesto') errors.referenceCost = 'Un Compuesto o un artículo con variantes no lleva costo de referencia.';
+      else referenceCost = Number(record.referenceCost).toFixed(4);
+    }
+    let inventoriable = current?.inventoriable ?? true;
+    if (record.inventoriable !== undefined) {
+      if (typeof record.inventoriable !== 'boolean') errors.inventoriable = 'Valor no válido.';
+      else if (!record.inventoriable && (kind === 'parent' || type !== 'insumo')) errors.inventoriable = 'Solo un Insumo puede ser no inventariable.';
+      else inventoriable = record.inventoriable;
     }
     if (Object.keys(errors).length > 0) {
       invalid(ctx, errors);
@@ -96,7 +119,7 @@ export function handleInventory(ctx: Context, double: InventoryDouble, user: Adm
     }
     const sku = kind === 'parent' || typeof record.sku !== 'string' || record.sku.trim() === '' ? null : record.sku.trim();
     const description = typeof record.description === 'string' && record.description.trim() !== '' ? record.description.trim() : null;
-    return { name, baseUnit, units, sku, description };
+    return { name, baseUnit, units, sku, description, referenceCost, inventoriable };
   }
 
   function detail(item: InventoryItem) {
@@ -209,9 +232,9 @@ export function handleInventory(ctx: Context, double: InventoryDouble, user: Adm
       if (!categoryOf(categoryId)) errors.categoryId = 'Elige la categoría.';
       if (Object.keys(errors).length > 0) return invalid(ctx, errors);
     }
-    const fields = fieldsOf(kind, null);
+    const fields = fieldsOf(kind, null, type, null);
     if (!fields) return undefined;
-    const item: InventoryItem = { id: ++sequence, kind, type, parentId, categoryId, ...fields, active: true, version: 1, createdAt: AT, updatedAt: AT, updatedBy: author, referenceCost: null, inventoriable: true };
+    const item: InventoryItem = { id: ++sequence, kind, type, parentId, categoryId, ...fields, active: true, version: 1, createdAt: AT, updatedAt: AT, updatedBy: author };
     double.items.push(item);
     if (key) idempotency.set(`i:${key}`, item.id);
     record_(item.id, 'create', [{ field: 'name', before: null, after: item.name }]);
@@ -246,6 +269,8 @@ export function handleInventory(ctx: Context, double: InventoryDouble, user: Adm
     if (version !== item.version) return conflict();
     const active = double.items.filter((candidate) => candidate.parentId === item.id && candidate.active);
     if (active.length > 0 && record.variants !== 'deactivate') return fail(ctx, 409, 'ITEM_HAS_ACTIVE_VARIANTS', `Tiene ${active.length} variantes activas: confirma que también se inactivan.`);
+    const using = recipesUsing(double, [item.id, ...active.map((variant) => variant.id)]);
+    if (using.length > 0 && record.recipes !== 'keep') return fail(ctx, 409, 'ITEM_IN_ACTIVE_RECIPES', 'Se usa en recetas vigentes: confirma que se inactiva.', { recipes: using });
     for (const variant of active) {
       Object.assign(variant, { active: false, version: variant.version + 1 });
       record_(variant.id, 'deactivate', [{ field: 'active', before: true, after: false }]);
@@ -265,7 +290,7 @@ export function handleInventory(ctx: Context, double: InventoryDouble, user: Adm
   }
   // Edición.
   if (version !== item.version && record.overwrite !== true) return conflict();
-  const fields = fieldsOf(item.kind, item.id);
+  const fields = fieldsOf(item.kind, item.id, item.type, item);
   if (!fields) return undefined;
   const before = item.name;
   bump({ ...fields, ...(item.kind === 'variant' ? {} : { categoryId: Number(record.categoryId) }) });

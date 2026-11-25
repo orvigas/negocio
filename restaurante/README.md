@@ -477,7 +477,14 @@ El admin nuevo de REQ-F-039, REQ-F-040 y REQ-F-043 (paso 4 de [Arquitectura](doc
   filtros por tipo, categoría, estado y búsqueda; alta, también con variantes; ficha con datos,
   empaques, equivalencias, conversión, variantes e historial; edición con conflicto; inactivar con
   confirmación y reactivar) y «Categorías» (`/inventario/categorias`: alta, renombrar, inactivar y
-  reactivar). Un gerente entra directo a «Inventario». Todo funciona sin JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el
+  reactivar). Desde REQ-F-050, la ficha muestra el costo de referencia, el inventariable (solo
+  Insumo) y «Usado en», el formulario los admite (y la unidad `hr`), e inactivar un artículo usado en
+  recetas vigentes lista esas recetas y pide confirmarlo; además, «Recetas» (`/inventario/recetas`:
+  lista de vigentes con su costo por unidad, filtro por tipo y búsqueda; receta del artículo en
+  `/inventario/articulos/<id>/receta`, con el costo y el origen de cada línea, los ingredientes sin
+  costo y los inactivos, «Nueva versión», «Cerrar receta» con confirmación e historial en solo
+  lectura; editor de versión con 10 filas por bloque hasta 40, «Añadir 10 filas» sin guardar, un
+  único `datalist` de ingredientes, errores por línea y conflicto 409 que conserva lo escrito). Un gerente entra directo a «Inventario». Todo funciona sin JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el
   doble envío y reordena sin recargar.
 - **Cambio de la propia contraseña:** la API devuelve una sesión nueva y el admin reescribe su cookie;
   las demás sesiones del usuario se cierran. Si un administrador
@@ -1720,14 +1727,23 @@ cambiar.
 - **Inventario (REQ-F-049, rama `epic/inventario`):** tablas `inventory_category`,
   `inventory_item`, `inventory_item_unit`, `inventory_sku` (todo SKU asignado alguna vez: no se
   reutiliza) e `inventory_change` (historial), y el valor `gerente` en `user.role` (migraciones
-  `inventario_catalogo` y `rol_gerente`). Entran en el volcado y la restauración sin cambiar los
-  scripts.
+  `inventario_catalogo` y `rol_gerente`). Desde REQ-F-050, `inventory_recipe_version`,
+  `inventory_recipe_line` e `inventory_lock`, la unidad `hr` al final del ENUM de
+  `inventory_item.base_unit` y las columnas `reference_cost` e `inventoriable` (migración
+  `inventario_recetas`). Entran en el volcado y la restauración sin cambiar los scripts.
 - **Alternar en local entre la épica y `main`:** una base de desarrollo migrada con
   `epic/inventario` tiene migraciones que `main` no conoce, y la `api` de `main` no arranca sobre
   ella (`DATABASE_NEWER_THAN_CODE`). Mientras trabajes en `main`, pon
   `DATABASE_ALLOW_NEWER_SCHEMA=true` en tu `api/.env` local (nunca en producción) y quítalo al
   volver a la épica. Las migraciones de la épica son aditivas, así que `main` funciona sobre esa
   base; si creaste gerentes, `main` no los reconoce (la lista de usuarios da 503).
+- **Alternar en local entre T1 y T2 de la épica (REQ-F-050, C-2):** una imagen o un commit de T1 no
+  conoce la unidad `hr`: con un artículo en `hr` guardado, la lista y la ficha del inventario dan 503.
+  Para volver a T1, cambia la unidad de esos artículos o bórralos; si un artículo en `hr` ya se usa
+  en una receta, la app no deja cambiar su unidad base (RN-4): corrígelo por SQL en tu base local
+  (por ejemplo, `UPDATE inventory_item SET base_unit = 'pza' WHERE base_unit = 'hr';`) o recrea la
+  base local (`npm run db:down`, borra el volumen `mysql-dev-data` del proyecto de Compose, `npm run db:up` y
+  `npm run db:migrate`). Producción no se ve afectada: nunca corre la imagen de T1.
 
 ## Estructura
 

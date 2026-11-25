@@ -29,6 +29,8 @@ export function parseImportArgs(argv: readonly string[]): { ok: true; args: Impo
     if (arg === '--escribir') write = true;
     else if (arg === '--produccion') production = true;
     else if (arg === '--archivo') {
+      // DEF-006: un segundo --archivo es ambiguo (¿cuál se importa?): se rechaza con el uso.
+      if (file !== null) return { ok: false, message: `--archivo repetido: indica un solo archivo. ${IMPORT_USAGE}` };
       const value = argv[index + 1];
       if (value === undefined || value === '' || (value.startsWith('--') && value !== '-')) return { ok: false, message: `Falta la ruta de --archivo. ${IMPORT_USAGE}` };
       file = value;

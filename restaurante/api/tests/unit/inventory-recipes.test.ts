@@ -93,6 +93,17 @@ describe('costo teórico (RF-6, RN-T2-4)', () => {
     expect(await fieldsOf(save(mezcla, '1', [line(sal, '1', 'kg', '12.345')]))).toEqual({ 'lines.0.wastePercent': 'Máximo 2 decimales.' });
   });
 
+  it('un empate exacto redondea la mitad hacia arriba, en la bruta y en el costo por unidad (DEF-003)', async () => {
+    const { item, save, line, unitCostOf } = await setup();
+    const sal = await item('Sal ficticia', 'insumo', { referenceCost: '0.0001' });
+    const mezcla = await item('Mezcla ficticia', 'intermedio');
+    // 0.001 kg al 60 %: 0.0025 kg brutos -> 0.003. 1 kg a 0.0001 con rendimiento de 2 kg: 0.00005 -> 0.0001.
+    const { version } = await save(mezcla, '1', [line(sal, '0.001', 'kg', '60')]);
+    expect(version.lines[0]?.grossBaseQuantity).toBe(3n);
+    await save(mezcla, '2', [line(sal, '1')]);
+    expect(await unitCostOf(mezcla)).toBe('0.0001');
+  });
+
   it('CA-3: 500 g de un ingrediente en kg a 10/kg cuestan 5.0000; pza sin factor se rechaza con un mensaje claro', async () => {
     const { item, save, line, recipes } = await setup();
     const harina = await item('Harina ficticia', 'insumo', { referenceCost: '10' });

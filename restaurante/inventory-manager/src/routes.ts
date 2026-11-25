@@ -3,6 +3,7 @@ import Router from '@koa/router';
 import type { AccountController } from './controllers/account.ts';
 import type { AdminController } from './controllers/admin.ts';
 import type { BotController } from './controllers/bot.ts';
+import type { RecipeController } from './controllers/inventory-recipes.ts';
 import type { InventoryController } from './controllers/inventory.ts';
 import type { PageController } from './controllers/page.ts';
 import type { QuoteController } from './controllers/quote.ts';
@@ -54,6 +55,14 @@ import type { UsersController } from './controllers/users.ts';
  * GET  /inventario/categorias | POST /inventario/categorias -> lista y alta
  * GET  /inventario/categorias/:id/editar | POST /inventario/categorias/:id -> renombrar
  * POST /inventario/categorias/:id/desactivar | …/reactivar -> estado
+ *
+ * Recetas (REQ-F-050, T2; solo administradores y gerentes):
+ * GET  /inventario/recetas[?tipo=&q=&pagina=]   -> lista de vigentes con su costo teórico
+ * GET  /inventario/articulos/:id/receta         -> vigente con su costo, faltantes e historial
+ * GET  /inventario/articulos/:id/receta/nueva | POST /inventario/articulos/:id/receta -> editor de versión
+ *      (`action=rows`: 10 filas más sin guardar; 409: guardar sobre la vigente)
+ * GET|POST /inventario/articulos/:id/receta/cerrar -> confirmar y cerrar la receta
+ * GET  /inventario/recetas/versiones/:id        -> versión del historial (solo lectura, sin costo)
  */
 export function createRouter({
   admin: controller,
@@ -63,6 +72,7 @@ export function createRouter({
   page,
   quote,
   inventory,
+  recipes,
 }: {
   admin: AdminController;
   users: UsersController;
@@ -71,6 +81,7 @@ export function createRouter({
   page: PageController;
   quote: QuoteController;
   inventory: InventoryController;
+  recipes: RecipeController;
 }): Router {
   const router = new Router();
   router.get('/salud', (ctx) => {
@@ -106,6 +117,13 @@ export function createRouter({
   router.get('/inventario/articulos/:id/desactivar', inventory.deactivatePage);
   router.post('/inventario/articulos/:id/desactivar', inventory.deactivateItem);
   router.post('/inventario/articulos/:id/reactivar', inventory.reactivateItem);
+  router.get('/inventario/articulos/:id/receta', recipes.recipe);
+  router.post('/inventario/articulos/:id/receta', recipes.save);
+  router.get('/inventario/articulos/:id/receta/nueva', recipes.editor);
+  router.get('/inventario/articulos/:id/receta/cerrar', recipes.closePage);
+  router.post('/inventario/articulos/:id/receta/cerrar', recipes.close);
+  router.get('/inventario/recetas', recipes.list);
+  router.get('/inventario/recetas/versiones/:id', recipes.version);
   router.get('/inventario/categorias', inventory.categories);
   router.post('/inventario/categorias', inventory.createCategory);
   router.get('/inventario/categorias/:id/editar', inventory.editCategory);

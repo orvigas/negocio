@@ -9,10 +9,12 @@ import {
   type InventoryItemKind,
   type InventoryItemListResponse,
   type InventoryItemType,
+  type RecipeUsedInResponse,
 } from '@restaurante/contracts';
 import type { Renderer, SafeHtml } from '@restaurante/web';
 
 import type { HeaderSection, NoticeOptions, PageContext, PageOptions } from './index.ts';
+import { RECIPE_TYPES, recipePath } from './inventory-recipes.ts';
 
 /**
  * Inventario del admin nuevo (REQ-F-049, T1: RF-1 a RF-7 y RF-11), con el sistema visual del admin
@@ -61,6 +63,8 @@ const CHANGE_LABELS: Readonly<Record<string, string>> = Object.freeze({
   baseUnit: 'Unidad base',
   units: 'Empaques',
   active: 'Estado',
+  referenceCost: 'Costo de referencia',
+  inventoriable: 'Inventariable',
 });
 const KIND_LABELS: Readonly<Record<InventoryItemKind, string>> = Object.freeze({ simple: 'Artículo', parent: 'Con variantes', variant: 'Variante' });
 
@@ -72,7 +76,26 @@ const FIELD_LABELS: Readonly<Record<string, string>> = Object.freeze({
   sku: 'SKU o código de barras',
   baseUnit: 'Unidad base',
   units: 'Unidades de empaque',
+  referenceCost: 'Costo de referencia',
+  inventoriable: 'Inventariable',
 });
+
+/** Tipos que admiten costo de referencia (REQ-F-050, PT-7): no un Compuesto ni un padre. */
+const REFERENCE_COST_TYPES: readonly string[] = Object.freeze(['insumo', 'intermedio', 'reventa']);
+
+/**
+ * Qué campos de costo muestra el formulario (REQ-F-050, RF-10 y PT-7): el costo de referencia en Insumo,
+ * Intermedio y Reventa, y la casilla inventariable solo en un Insumo. En un alta simple el tipo aún no
+ * está elegido: se muestran los dos con su ayuda y la API rechaza lo que no corresponde.
+ */
+export function costFields(mode: 'create' | 'edit', kind: InventoryItemKind, type: string): { referenceCost: boolean; inventoriable: boolean } {
+  if (kind === 'parent') return { referenceCost: false, inventoriable: false };
+  if (mode === 'create' && kind === 'simple') return { referenceCost: true, inventoriable: true };
+  return { referenceCost: REFERENCE_COST_TYPES.includes(type), inventoriable: type === 'insumo' };
+}
+
+/** «18.4000» -> «$18.4000» (costo de referencia, 4 decimales, MXN con IVA). */
+const referenceCostText = (value: string, baseUnit: string | null): string => `$${value}${baseUnit ? ` por ${baseUnit}` : ''} (con IVA)`;
 
 /** «24.000» -> «24»; «0.500» -> «0.5» (las respuestas llevan siempre 3 decimales). */
 export const trimDecimal = (value: string): string => (value.includes('.') ? value.replace(/\.?0+$/, '') : value);
@@ -84,6 +107,9 @@ export interface ItemFormValues {
   categoryId: string;
   sku: string;
   baseUnit: string;
+  /** REQ-F-050: costo de referencia tal como se escribió ('' = sin costo) y la casilla inventariable. */
+  referenceCost: string;
+  inventoriable: boolean;
   /** Filas de empaque en su posición del formulario (las vacías, como ''). */
   units: { name: string; factor: string }[];
 }
@@ -97,6 +123,8 @@ export function readItemForm(fields: Map<string, string>): ItemFormValues {
     categoryId: fields.get('categoryId') ?? '',
     sku: fields.get('sku') ?? '',
     baseUnit: fields.get('baseUnit') ?? '',
+    referenceCost: fields.get('referenceCost') ?? '',
+    inventoriable: fields.get('inventoriable') === 'on',
     units,
   };
 }
@@ -108,10 +136,12 @@ export const itemFormValues = (item: InventoryItem): ItemFormValues => ({
   categoryId: String(item.categoryId),
   sku: item.sku ?? '',
   baseUnit: item.baseUnit ?? '',
+  referenceCost: item.referenceCost ?? '',
+  inventoriable: item.inventoriable,
   units: item.units.map((unit) => ({ name: unit.name, factor: trimDecimal(unit.factor) })),
 });
 
-export const EMPTY_ITEM_FORM: ItemFormValues = Object.freeze({ name: '', description: '', type: '', categoryId: '', sku: '', baseUnit: '', units: [] });
+export const EMPTY_ITEM_FORM: ItemFormValues = Object.freeze({ name: '', description: '', type: '', categoryId: '', sku: '', baseUnit: '', referenceCost: '', inventoriable: true, units: [] });
 
 /** Padre de una variante (tipo y categoría heredados, de solo lectura). */
 export interface ParentInfo {
@@ -273,6 +303,8 @@ export function createInventoryViews({ render, join, attrs, page, notice, errorS
   function historyValue(field: string, value: unknown, categories: ReadonlyMap<number, string>): string {
     if (value === null || value === undefined || value === '') return '—';
     if (field === 'active') return value === true ? 'Activo' : 'Inactivo';
+    if (field === 'inventoriable') return value === true ? 'Sí' : 'No';
+    if (field === 'referenceCost' && typeof value === 'string') return `$${value}`;
     if (field === 'type' && typeof value === 'string' && value in TYPE_LABELS) return TYPE_LABELS[value as InventoryItemType];
     if (field === 'kind' && typeof value === 'string' && value in KIND_LABELS) return KIND_LABELS[value as InventoryItemKind];
     if (field === 'categoryId' && typeof value === 'number') return categories.get(value) ?? `Categoría ${value}`;
@@ -394,9 +426,20 @@ export function createInventoryViews({ render, join, attrs, page, notice, errorS
       }
       if (kind !== 'parent') {
         main.push(
-          select('baseUnit', FIELD_LABELS.baseUnit ?? 'Unidad base', [option('', 'Elige la unidad', values.baseUnit), ...INVENTORY_UNITS.map((unit) => option(unit, unit, values.baseUnit))], errors.baseUnit, 'kg, g, L, ml o pza. Las existencias y las recetas se cuentan en ella.'),
+          select('baseUnit', FIELD_LABELS.baseUnit ?? 'Unidad base', [option('', 'Elige la unidad', values.baseUnit), ...INVENTORY_UNITS.map((unit) => option(unit, unit, values.baseUnit))], errors.baseUnit, 'kg, g, L, ml, pza u hr (horas, sin conversión a otras). Las existencias y las recetas se cuentan en ella.'),
           input('sku', FIELD_LABELS.sku ?? 'SKU', values.sku, errors.sku, { optional: true, help: 'Letras sin acento, dígitos, punto, guion y guion bajo; máximo 40. Un SKU usado no se repite nunca.', extra: [['maxlength', 40], ['autocomplete', 'off'], ['spellcheck', 'false']] }),
         );
+      }
+      const shown = costFields(mode, kind, kind === 'variant' && parent ? parent.type : values.type);
+      if (shown.referenceCost) {
+        const help = mode === 'create' && kind === 'simple'
+          ? 'Por unidad base, en pesos con IVA; hasta 4 decimales, con punto. Solo Insumo, Intermedio y Reventa: un Compuesto se costea por su receta. Se usa mientras no haya costo promedio (CPP).'
+          : 'Por unidad base, en pesos con IVA; hasta 4 decimales, con punto. Se usa mientras no haya costo promedio (CPP). Déjalo vacío si no lo conoces.';
+        main.push(input('referenceCost', FIELD_LABELS.referenceCost ?? 'Costo de referencia', values.referenceCost, errors.referenceCost, { optional: true, help, extra: [['inputmode', 'decimal'], ['autocomplete', 'off'], ['maxlength', 20]] }));
+      }
+      if (shown.inventoriable) {
+        const field = describe('inventoriable', mode === 'create' ? 'Desmárcala solo en un Insumo que no lleva existencias (p. ej. mano de obra o gas): se costea por su costo de referencia. Solo se cambia mientras no tenga movimientos.' : 'Desmárcala si no lleva existencias (p. ej. mano de obra o gas): se costea por su costo de referencia. Solo se cambia mientras no tenga movimientos.', errors.inventoriable);
+        main.push(render('partials/field-checkbox', { ...field, label: 'Inventariable (lleva existencias)', span: 'md:col-span-2', checked: values.inventoriable ? render('partials/checked') : none(), attrs: attrs(field.aria) }));
       }
       const description = describe('description', 'Máximo 400 caracteres.', errors.description);
       main.push(render('partials/field-textarea', { ...description, label: FIELD_LABELS.description ?? 'Descripción', optional: ' (opcional)', value: values.description, attrs: attrs([['maxlength', 400], ...description.aria]) }));
@@ -419,7 +462,24 @@ export function createInventoryViews({ render, join, attrs, page, notice, errorS
       }));
     },
 
-    inventoryItem({ context, item, history, categories, conversion, notices = [] }: { context: PageContext; item: InventoryItemDetail; history: InventoryHistoryEntry[]; categories: readonly CategoryOption[]; conversion?: ConversionView | undefined; notices?: SafeHtml[] }): SafeHtml {
+    inventoryItem({
+      context,
+      item,
+      history,
+      categories,
+      usedIn = null,
+      conversion,
+      notices = [],
+    }: {
+      context: PageContext;
+      item: InventoryItemDetail;
+      history: InventoryHistoryEntry[];
+      categories: readonly CategoryOption[];
+      /** REQ-F-050 (RF-8): recetas vigentes que lo usan; null si no se pudieron consultar. */
+      usedIn?: RecipeUsedInResponse['recipes'] | null;
+      conversion?: ConversionView | undefined;
+      notices?: SafeHtml[];
+    }): SafeHtml {
       const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
       const isParent = item.kind === 'parent';
       const data = [
@@ -428,10 +488,19 @@ export function createInventoryViews({ render, join, attrs, page, notice, errorS
         dataRow('Categoría', item.category.active ? item.category.name : `${item.category.name} (inactiva)`),
         ...(isParent
           ? [dataRow('Existencias', 'No tiene: se controlan en cada variante.')]
-          : [dataRow('Unidad base', item.baseUnit ?? '—'), dataRow('SKU', item.sku ?? '—'), dataRow('Último costo', 'Sin costo'), dataRow('Costo promedio (CPP)', 'Sin costo')]),
+          : [
+              dataRow('Unidad base', item.baseUnit ?? '—'),
+              dataRow('SKU', item.sku ?? '—'),
+              ...(item.type === 'insumo' ? [dataRow('Inventariable', item.inventoriable ? 'Sí' : 'No: no lleva existencias; se costea por su costo de referencia')] : []),
+              ...(item.type === 'compuesto' ? [] : [dataRow('Costo de referencia', item.referenceCost === null ? 'Sin costo de referencia' : referenceCostText(item.referenceCost, item.baseUnit))]),
+              dataRow('Último costo', 'Sin costo'),
+              dataRow('Costo promedio (CPP)', 'Sin costo'),
+            ]),
         dataRow('Descripción', item.description ?? '—'),
       ];
       const actions: SafeHtml[] = [];
+      const hasRecipe = !isParent && RECIPE_TYPES.includes(item.type);
+      if (hasRecipe) actions.push(render('partials/action-link', { href: recipePath(item.id), label: 'Receta' }));
       if (item.active) {
         actions.push(render('partials/action-link', { href: itemEditPath(item.id), label: 'Editar' }));
         if (isParent) actions.push(render('partials/action-link', { href: `${NEW_ITEM_PATH}?padre=${item.id}`, label: 'Añadir variante' }));
@@ -478,6 +547,18 @@ export function createInventoryViews({ render, join, attrs, page, notice, errorS
         units: isParent ? none() : render('partials/inventory-section', { id: 'empaques', title: 'Unidades de empaque', content: units }),
         equivalences: isParent ? none() : render('partials/inventory-section', { id: 'conversion', title: 'Equivalencias y conversión', content: join([equivalences, convert]) }),
         variants: isParent ? render('partials/inventory-section', { id: 'variantes', title: 'Variantes', content: variants }) : none(),
+        usedIn: isParent
+          ? none()
+          : render('partials/inventory-section', {
+              id: 'usado-en',
+              title: 'Usado en',
+              content:
+                usedIn === null
+                  ? render('partials/empty', { text: 'No se pudieron consultar las recetas que lo usan. Inténtalo de nuevo en unos minutos.' })
+                  : usedIn.length > 0
+                    ? render('partials/inventory-plain-list', { items: join(usedIn.map((recipe) => render('partials/inventory-link-item', { href: recipePath(recipe.itemId), text: `${recipe.name} (versión ${recipe.versionNumber})${recipe.active ? '' : ' · inactivo'}` }))) })
+                    : render('partials/empty', { text: 'No se usa en ninguna receta vigente.' }),
+            }),
         history: render('partials/inventory-section', {
           id: 'historial',
           title: 'Historial de cambios',
@@ -486,19 +567,29 @@ export function createInventoryViews({ render, join, attrs, page, notice, errorS
       }));
     },
 
-    inventoryItemDeactivate({ context, item, notices = [] }: { context: PageContext; item: InventoryItemDetail; notices?: SafeHtml[] }): SafeHtml {
+    inventoryItemDeactivate({ context, item, recipes = [], notices = [] }: { context: PageContext; item: InventoryItemDetail; recipes?: readonly { itemId: number; name: string }[]; notices?: SafeHtml[] }): SafeHtml {
       const active = item.kind === 'parent' ? item.variants.filter((variant) => variant.active) : [];
       const intro =
         active.length > 0
           ? `Tiene ${active.length === 1 ? '1 variante activa' : `${active.length} variantes activas`}: se inactivarán también. Puedes reactivarlas una por una después.`
           : 'Deja de aparecer en la lista de activos. Conserva su historial y puedes reactivarlo después.';
+      // REQ-F-050 (RF-7, CA-10): las recetas vigentes que lo usan no cambian; se confirma con recipes=keep.
+      const inRecipes =
+        recipes.length > 0
+          ? join([
+              render('partials/inventory-paragraph', { text: `Se usa en ${recipes.length === 1 ? '1 receta vigente' : `${recipes.length} recetas vigentes`}. Esas recetas no cambian: mostrarán un aviso de ingrediente inactivo, y el artículo ya no se ofrecerá en versiones nuevas.` }),
+              render('partials/inventory-plain-list', { items: join(recipes.map((recipe) => render('partials/inventory-link-item', { href: recipePath(recipe.itemId), text: recipe.name }))) }),
+            ])
+          : none();
+      const hidden = { ...(active.length > 0 ? { variants: 'deactivate' } : {}), ...(recipes.length > 0 ? { recipes: 'keep' } : {}) };
+      const label = active.length > 0 ? 'Inactivar con sus variantes' : recipes.length > 0 ? 'Inactivar de todos modos' : 'Inactivar';
       return inventoryPage(`Inactivar ${item.name}`, context, 'inventory', render('pages/inventory-item-deactivate', {
         backHref: itemPath(item.id),
         name: item.name,
         notices: join(notices),
         intro,
-        variants: active.length > 0 ? render('partials/inventory-plain-list', { items: join(active.map((variant) => render('partials/inventory-plain-item', { text: variant.name }))) }) : none(),
-        button: postButton(itemDeactivatePath(item.id), context.csrfToken, item.version, active.length > 0 ? 'Inactivar con sus variantes' : 'Inactivar', item.name, 'danger', active.length > 0 ? { variants: 'deactivate' } : {}),
+        variants: join([active.length > 0 ? render('partials/inventory-plain-list', { items: join(active.map((variant) => render('partials/inventory-plain-item', { text: variant.name }))) }) : none(), inRecipes]),
+        button: postButton(itemDeactivatePath(item.id), context.csrfToken, item.version, label, item.name, 'danger', hidden),
       }));
     },
 

@@ -61,6 +61,26 @@ import {
   type InventoryItemUpdateRequest,
 } from './inventory.ts';
 import {
+  inventoryRecipePaths,
+  recipeCloseResponseSchema,
+  recipeDetailResponseSchema,
+  recipeIngredientsResponseSchema,
+  recipeListResponseSchema,
+  recipeSaveResponseSchema,
+  recipeUsedInResponseSchema,
+  recipeVersionResponseSchema,
+  type RecipeCloseRequest,
+  type RecipeCloseResponse,
+  type RecipeDetailResponse,
+  type RecipeIngredientsResponse,
+  type RecipeListFilter,
+  type RecipeListResponse,
+  type RecipeSaveRequest,
+  type RecipeSaveResponse,
+  type RecipeUsedInResponse,
+  type RecipeVersionResponse,
+} from './inventory-recipes.ts';
+import {
   pageConflictSchema,
   pageStateResponseSchema,
   pageWriteResponseSchema,
@@ -92,17 +112,35 @@ import {
 
 export const ADMIN_CLIENT_MAX_BYTES = 1024 * 1024;
 
+const itemCurrentSchema = z.object({ id: z.number(), version: z.number(), updatedAt: z.string(), updatedBy: z.string().nullable() });
+/** 409 `RECIPE_VERSION_CONFLICT` (REQ-F-050, RF-9): la vigente, o null si ya no hay. */
+const recipeCurrentSchema = z.object({ id: z.number(), number: z.number(), validFrom: z.string(), createdBy: z.string() });
+
 const apiErrorBodySchema = z.object({
-  error: z.object({
-    code: z.string(),
-    message: z.string(),
-    fields: z.record(z.string(), z.string()).optional(),
-    current: z.object({ id: z.number(), version: z.number(), updatedAt: z.string(), updatedBy: z.string().nullable() }).optional(),
-    /** 409 `PAGE_CONFLICT`: la versión vigente de la página (REQ-F-044). */
-    currentPage: pageConflictSchema.optional(),
-  }),
+  error: z
+    .object({
+      code: z.string(),
+      message: z.string(),
+      fields: z.record(z.string(), z.string()).optional(),
+      current: z.union([itemCurrentSchema, recipeCurrentSchema, z.null()]).optional(),
+      /** 409 `PAGE_CONFLICT`: la versión vigente de la página (REQ-F-044). */
+      currentPage: pageConflictSchema.optional(),
+      /** 422 `RECIPE_CYCLE` (REQ-F-050, RF-5): la ruta del ciclo, por nombre. */
+      path: z.array(z.string()).optional(),
+      /** 409 `ITEM_IN_ACTIVE_RECIPES` (REQ-F-050, RF-7): recetas vigentes que lo usan. */
+      recipes: z.array(z.object({ itemId: z.number(), name: z.string() })).optional(),
+    })
+    // `current` cambia de forma según el código: el de un artículo o producto (versión) o el de una receta.
+    .transform(({ current, ...rest }) => {
+      const item = itemCurrentSchema.safeParse(current);
+      const recipe = recipeCurrentSchema.safeParse(current);
+      const isRecipe = rest.code === 'RECIPE_VERSION_CONFLICT';
+      const fromItem: { current?: z.infer<typeof itemCurrentSchema> } = !isRecipe && item.success ? { current: item.data } : {};
+      const fromRecipe: { recipeCurrent?: z.infer<typeof recipeCurrentSchema> } = isRecipe && recipe.success ? { recipeCurrent: recipe.data } : {};
+      return { ...rest, ...fromItem, ...fromRecipe };
+    }),
 });
-export type AdminApiError = z.infer<typeof apiErrorBodySchema>['error'];
+export type AdminApiError = z.output<typeof apiErrorBodySchema>['error'];
 
 export type AdminApiFailure = 'timeout' | 'network' | 'invalid_response';
 
@@ -174,6 +212,15 @@ export interface AdminApiClient {
   createInventoryCategory(auth: AdminCredentials, input: InventoryCategoryRequest, idempotencyKey?: string): Promise<AdminApiResult<InventoryCategoryResponse>>;
   renameInventoryCategory(auth: AdminCredentials, id: number, input: InventoryCategoryRequest): Promise<AdminApiResult<InventoryCategoryResponse>>;
   setInventoryCategoryActive(auth: AdminCredentials, id: number, active: boolean): Promise<AdminApiResult<InventoryCategoryResponse>>;
+  // Recetas del inventario (administradores y gerentes; REQ-F-050).
+  listInventoryRecipes(auth: AdminCredentials, filter?: RecipeListFilter): Promise<AdminApiResult<RecipeListResponse>>;
+  getInventoryRecipe(auth: AdminCredentials, itemId: number): Promise<AdminApiResult<RecipeDetailResponse>>;
+  getInventoryRecipeVersion(auth: AdminCredentials, versionId: number): Promise<AdminApiResult<RecipeVersionResponse>>;
+  inventoryRecipeIngredients(auth: AdminCredentials): Promise<AdminApiResult<RecipeIngredientsResponse>>;
+  inventoryRecipeUsedIn(auth: AdminCredentials, itemId: number): Promise<AdminApiResult<RecipeUsedInResponse>>;
+  /** 201 versión nueva o 200 sin cambios (`created: false`). */
+  saveInventoryRecipe(auth: AdminCredentials, itemId: number, input: RecipeSaveRequest, idempotencyKey?: string): Promise<AdminApiResult<RecipeSaveResponse>>;
+  closeInventoryRecipe(auth: AdminCredentials, itemId: number, input: RecipeCloseRequest): Promise<AdminApiResult<RecipeCloseResponse>>;
 }
 
 /** Query de la lista de artículos (claves en español, como la ruta). */
@@ -190,6 +237,17 @@ function inventoryQuery({ status, type, categoryId, q, page }: InventoryItemFilt
   return text === '' ? '' : `?${text}`;
 }
 
+/** Query de la lista de recetas (`tipo`, `q`, `pagina`). */
+function recipeQuery({ type, q, page }: RecipeListFilter = {}): string {
+  const entries: [string, string | undefined][] = [
+    ['tipo', type],
+    ['q', q],
+    ['pagina', page],
+  ];
+  const text = new URLSearchParams(entries.filter((entry): entry is [string, string] => entry[1] !== undefined && entry[1] !== '')).toString();
+  return text === '' ? '' : `?${text}`;
+}
+
 interface Schema<T> {
   safeParse(value: unknown): { success: true; data: T } | { success: false };
 }
@@ -201,8 +259,9 @@ export function createAdminApiClient({ baseUrl, timeoutMs, fetch: fetchFn = (inp
   async function request<T>(
     method: string,
     path: string,
-    { auth, body, headers = {}, schema, expect = 200 }: { auth?: AdminCredentials; body?: unknown; headers?: Record<string, string>; schema: Schema<T> | null; expect?: number },
+    { auth, body, headers = {}, schema, expect = 200 }: { auth?: AdminCredentials; body?: unknown; headers?: Record<string, string>; schema: Schema<T> | null; expect?: number | readonly number[] },
   ): Promise<AdminApiResult<T>> {
+    const expected = (status: number) => (typeof expect === 'number' ? status === expect : expect.includes(status));
     const all: Record<string, string> = { accept: 'application/json', ...headers };
     if (auth) all.authorization = `Bearer ${auth.sessionId}`;
     if (auth?.csrfToken && method !== 'GET') all[CSRF_HEADER] = auth.csrfToken;
@@ -216,7 +275,7 @@ export function createAdminApiClient({ baseUrl, timeoutMs, fetch: fetchFn = (inp
         signal,
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
-      if (response.status === expect && schema === null) {
+      if (expected(response.status) && schema === null) {
         await response.body?.cancel();
         return { ok: true, status: response.status, data: null as T };
       }
@@ -232,7 +291,7 @@ export function createAdminApiClient({ baseUrl, timeoutMs, fetch: fetchFn = (inp
       } catch {
         return { ok: false, kind: 'invalid_response', status: response.status };
       }
-      if (response.status === expect && schema) {
+      if (expected(response.status) && schema) {
         const parsed = schema.safeParse(parsedBody);
         return parsed.success ? { ok: true, status: response.status, data: parsed.data } : { ok: false, kind: 'invalid_response', status: response.status };
       }
@@ -301,5 +360,13 @@ export function createAdminApiClient({ baseUrl, timeoutMs, fetch: fetchFn = (inp
     renameInventoryCategory: (auth, id, input) => request('PUT', inventoryPaths.category(id), { auth, body: input, schema: inventoryCategoryResponseSchema }),
     setInventoryCategoryActive: (auth, id, active) =>
       request('POST', inventoryPaths.categoryStatus(id, active ? 'reactivar' : 'desactivar'), { auth, body: {}, schema: inventoryCategoryResponseSchema }),
+    listInventoryRecipes: (auth, filter) => request('GET', `${inventoryRecipePaths.list}${recipeQuery(filter)}`, { auth, schema: recipeListResponseSchema }),
+    getInventoryRecipe: (auth, itemId) => request('GET', inventoryRecipePaths.item(itemId), { auth, schema: recipeDetailResponseSchema }),
+    getInventoryRecipeVersion: (auth, versionId) => request('GET', inventoryRecipePaths.version(versionId), { auth, schema: recipeVersionResponseSchema }),
+    inventoryRecipeIngredients: (auth) => request('GET', inventoryRecipePaths.ingredients, { auth, schema: recipeIngredientsResponseSchema }),
+    inventoryRecipeUsedIn: (auth, itemId) => request('GET', inventoryRecipePaths.usedIn(itemId), { auth, schema: recipeUsedInResponseSchema }),
+    saveInventoryRecipe: (auth, itemId, input, idempotencyKey) =>
+      request('POST', inventoryRecipePaths.item(itemId), { auth, body: input, headers: idempotencyKey ? { [IDEMPOTENCY_HEADER]: idempotencyKey } : {}, schema: recipeSaveResponseSchema, expect: [200, 201] }),
+    closeInventoryRecipe: (auth, itemId, input) => request('POST', inventoryRecipePaths.close(itemId), { auth, body: input, schema: recipeCloseResponseSchema }),
   });
 }

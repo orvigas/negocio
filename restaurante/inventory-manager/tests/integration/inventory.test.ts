@@ -72,7 +72,7 @@ describe('acceso por rol (RF-9, CA-10 y CA-11)', () => {
     const list = await (await browser.get('/inventario/articulos')).text();
     expect(navLabels(list)).toEqual(['Inventario']);
     expect(dom(list).querySelector('.admin-header__nav a[aria-current="page"]')?.textContent).toBe('Inventario');
-    expect([...dom(list).querySelectorAll('.admin-header__subnav a')].map((link) => link.textContent)).toEqual(['Artículos', 'Categorías']);
+    expect([...dom(list).querySelectorAll('.admin-header__subnav a')].map((link) => link.textContent)).toEqual(['Artículos', 'Categorías', 'Recetas']);
     for (const path of ['/usuarios', '/bot', '/birria/cotizador', '/molotes/productos', '/birria/pagina']) expect((await browser.get(path)).status, path).toBe(403);
   });
 });
@@ -105,6 +105,30 @@ describe('alta, ficha y conversión (RF-2 a RF-4, CA-1 y CA-4)', () => {
     const list = text(await (await browser.get('/inventario/articulos')).text());
     expect(list).toContain('Masa de maíz');
     expect(list).toContain('1 artículo.');
+  });
+
+  it('el alta lleva el costo de referencia, el inventariable desmarcado y la unidad hr (REQ-F-050, RF-10); la ficha los muestra', async () => {
+    const { h, browser } = await as(GEMA);
+    await category(browser, 'Servicios');
+    const html = await (await browser.get('/inventario/articulos/nuevo')).text();
+    expect(dom(html).querySelector('#f-inventoriable')?.hasAttribute('checked')).toBe(true);
+    expect([...dom(html).querySelectorAll('#f-baseUnit option')].map((option) => option.getAttribute('value'))).toContain('hr');
+    const fields = formFields(html, '#inventory-item-form');
+    delete fields.inventoriable;
+    const categoryId = [...dom(html).querySelectorAll('#f-categoryId option')].find((option) => option.getAttribute('value') !== '')?.getAttribute('value') ?? '';
+    const res = await browser.post('/inventario/articulos', { ...fields, categoryId, action: 'create', name: 'Mano de obra ficticia', type: 'insumo', baseUnit: 'hr', referenceCost: '62.5' });
+    expect(res.status).toBe(303);
+    const create = h.api.requests.find((request) => request.method === 'POST' && request.path.endsWith('/inventario/articulos'));
+    expect(create?.body).toMatchObject({ baseUnit: 'hr', referenceCost: '62.5', inventoriable: false });
+    const page = text(await (await browser.get(res.headers.get('location') ?? '')).text());
+    expect(page).toContain('Costo de referencia $62.5000 por hr (con IVA)');
+    expect(page).toContain('Inventariable No: no lleva existencias');
+
+    // Un Compuesto no lleva costo de referencia: el error vuelve a su campo.
+    const again = await (await browser.get('/inventario/articulos/nuevo')).text();
+    const rejected = await browser.post('/inventario/articulos', { ...formFields(again, '#inventory-item-form'), categoryId, action: 'create', name: 'Taco ficticio', type: 'compuesto', baseUnit: 'pza', referenceCost: '10' });
+    expect(rejected.status).toBe(422);
+    expect(dom(await rejected.text()).querySelector('#f-referenceCost-error')?.textContent).toContain('Un Compuesto');
   });
 
   it('un 422 conserva lo escrito y marca cada campo con texto, enlace del resumen y aria-invalid, también en la fila de empaque correcta', async () => {

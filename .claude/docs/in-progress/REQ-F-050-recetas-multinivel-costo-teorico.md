@@ -2,7 +2,15 @@
 
 ## Estado
 
-READY_FOR_MERGE (pendiente del CI del PR 2b) — PR 2 de 3 (contratos y rutas de la API de recetas, importación única A5 y semilla de desarrollo), partido en PR 2a y PR 2b hacia `epic/inventario`. Implementación aprobada por el usuario ("Si": partir al commitear en PR 2a y PR 2b y aceptar las 6 desviaciones). QA Action Plan del PR 2 aprobado ("Si", 2026-11-20). QA ejecutado, ronda 1: `QA_APPROVED`, sin defectos BLOCKER, CRITICAL ni MAJOR (1 MINOR y 1 TRIVIAL). Reparto 2a/2b validado, con su huella. Ver "QA Report — PR 2 (T2)". PR 2a: commit `ade09f1`, PR #188 (https://github.com/orvigas/negocio/pull/188) con el CI en verde (ejecución 44750303792: `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion` en `pass`) y mergeado por el usuario en `epic/inventario` (merge `1c18060`, 2026-11-20). PR 2b: commit `05a4c4e` más el merge de `origin/epic/inventario` (`139c9df`) en `feature/REQ-F-050-recetas-importacion`, PR #189 hacia `epic/inventario` (https://github.com/orvigas/negocio/pull/189). Este registro se hace antes de marcar el PR listo: el estado `READY_FOR_MERGE` del PR 2b queda sujeto a que su CI termine en verde (ver el informe de senior-fullstack). Ver "Commit y Pull Requests — PR 2a y PR 2b".
+READY_FOR_MERGE — PR 3 de 3 (pantallas de recetas): QA ronda 1 `QA_APPROVED`, sin defectos BLOCKER, CRITICAL ni MAJOR. DEF-007 y DEF-008 (MINOR) quedan como seguimiento aparte, aprobado por el usuario ("DEF-007 y DEF-008 como seguimiento aparte"); no se corrigen en este PR. Commit y Pull Request hacia `epic/inventario` en "Commit y Pull Request — PR 3". Este registro se hace antes de marcar el PR listo: el estado `READY_FOR_MERGE` queda sujeto a que su CI termine en verde (ver el informe de senior-fullstack).
+
+Antecedente (QA del PR 3): QA_APPROVED — PR 3 de 3: QA ronda 1 sin defectos BLOCKER, CRITICAL ni MAJOR (2 MINOR: DEF-007 y DEF-008). Ver "QA Report — PR 3 (T2)".
+
+Antecedente (QA Action Plan del PR 3, aprobado: "Sí, apruebo"): NEEDS_QA_PLAN_APPROVAL — PR 3 de 3: implementación aprobada por el usuario ("Sí, apruebo con las tres decisiones": sin vista previa de bruta y costo en el editor; tablas con desplazamiento horizontal en región con foco a 360 px y editor en tarjetas; `datalist` de unidades común con rechazo por línea en la API). QA Action Plan del PR 3 escrito; pendiente de aprobación. Ver "QA Action Plan — PR 3 (T2)".
+
+Antecedente (implementación del PR 3): NEEDS_IMPLEMENTATION_APPROVAL — PR 3 de 3 (pantallas de recetas, campos nuevos de la ficha de T1, cliente HTTP de recetas, DEF-003 a DEF-006, OBS-2 y documentación) implementado en `feature/REQ-F-050-recetas-pantallas`, sin commit, con las decisiones de diseño H-1 a H-5 aprobadas por el usuario ("Si" a la propuesta móvil). Ver "Implementation Result — PR 3".
+
+Antecedente (PR 2, mergeado en `epic/inventario` con #188 y #189, CI en verde): READY_FOR_MERGE — PR 2 de 3 (contratos y rutas de la API de recetas, importación única A5 y semilla de desarrollo), partido en PR 2a y PR 2b hacia `epic/inventario`. Implementación aprobada por el usuario ("Si": partir al commitear en PR 2a y PR 2b y aceptar las 6 desviaciones). QA Action Plan del PR 2 aprobado ("Si", 2026-11-20). QA ejecutado, ronda 1: `QA_APPROVED`, sin defectos BLOCKER, CRITICAL ni MAJOR (1 MINOR y 1 TRIVIAL). Reparto 2a/2b validado, con su huella. Ver "QA Report — PR 2 (T2)". PR 2a: commit `ade09f1`, PR #188 (https://github.com/orvigas/negocio/pull/188) con el CI en verde (ejecución 44750303792: `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion` en `pass`) y mergeado por el usuario en `epic/inventario` (merge `1c18060`, 2026-11-20). PR 2b: commit `05a4c4e` más el merge de `origin/epic/inventario` (`139c9df`) en `feature/REQ-F-050-recetas-importacion`, PR #189 hacia `epic/inventario` (https://github.com/orvigas/negocio/pull/189). Este registro se hace antes de marcar el PR listo: el estado `READY_FOR_MERGE` del PR 2b queda sujeto a que su CI termine en verde (ver el informe de senior-fullstack). Ver "Commit y Pull Requests — PR 2a y PR 2b".
 
 Antecedente (PR 1, mergeado en `epic/inventario` con #185): READY_FOR_MERGE — PR 1 de 3 (modelo, dominio y persistencia): implementación aprobada por el usuario ("Apruebo", 2026-11-19); QA Action Plan aprobado ("Si", 2026-11-19); QA ejecutado, ronda 1, sin defectos BLOCKER, CRITICAL ni MAJOR (4 MINOR). Ver "QA Report — PR 1 (T2)". Commit `cb9bc4d` y Pull Request #185 hacia `epic/inventario`: https://github.com/orvigas/negocio/pull/185. Integrada `epic/inventario` (`d3a78be`, con el override de `effect` 3.22.5 de #186) en el merge commit `5df99c5`; CI del PR en verde (ejecución 44720216193): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion` en `pass`.
 
@@ -1754,7 +1762,451 @@ Resultado:
 - **Integración tras el merge del PR 2a (2026-11-20):** el PR 2a se mergeó como #188 (merge `1c18060`), con su CI en `pass` (`calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)` y `verificacion`). En `feature/REQ-F-050-recetas-importacion` se integró `origin/epic/inventario` con el merge commit `139c9df` (solo trae el ticket; `a772289` no toca `restaurante`). Huella `139c9df:restaurante` = `d385d63b05d0c3b340fa43139f4ef0183d359a67` (igual a la de QA). `git diff --name-only origin/epic/inventario...HEAD` = los 15 archivos del reparto 2b, sin hojas de cálculo, `~$`, `datos-privados` ni JSON de importación real.
 - **PR 2b:** Pull Request #189 hacia `epic/inventario`: https://github.com/orvigas/negocio/pull/189 (abierto en borrador; se marca listo tras este registro, sin más commits después).
 
+## Implementation Result — PR 3
+
+### Rama
+
+`feature/REQ-F-050-recetas-pantallas`, desde la punta de `origin/epic/inventario` (`9371772`, con los PR 1, 2a y 2b mergeados), en el worktree `.claude/worktrees/req-f-050-pr3`. Sin commit (pendiente de aprobación y QA). PR futuro hacia `epic/inventario`.
+
+Decisiones de diseño aplicadas (aprobadas por el usuario, "Si" a la propuesta móvil): H-1 (contorno de foco `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maiz` en `field-input`, `field-select` y `field-textarea`), H-2 opción B (parcial de línea `recipe-line`: un `fieldset` por línea con `legend` "Línea N"; tarjeta en móvil y fila compacta `lg:grid-cols-[…]` en escritorio; sin JavaScript), H-3 (`name=action value=rows` en "Añadir 10 filas"), H-4 (página larga en móvil) y H-5 (el botón de conflicto es el de T1, "Guardar mis cambios sobre la versión vigente"). Referencias de Stitch no consultadas de nuevo (no son fuente de verdad; `_stich_source_/` no tiene diseño del admin y no se modificó).
+
+### Cambios realizados
+
+- **Cliente HTTP** (`packages/contracts/admin-client.ts`): `listInventoryRecipes`, `getInventoryRecipe`, `getInventoryRecipeVersion`, `inventoryRecipeIngredients`, `inventoryRecipeUsedIn`, `saveInventoryRecipe` (201 o 200, con `Idempotency-Key`) y `closeInventoryRecipe`, contra las rutas ya mergeadas. El cuerpo de error admite `path` (422 `RECIPE_CYCLE`), `recipes` (409 `ITEM_IN_ACTIVE_RECIPES`) y la vigente de un 409 `RECIPE_VERSION_CONFLICT`, que se entrega como `recipeCurrent` (el `current` de artículos y productos no cambia de forma). `request` acepta varios códigos esperados.
+- **Pantallas de recetas** (`inventory-manager`; controlador `controllers/inventory-recipes.ts`, vistas `views/inventory-recipes.ts`, 5 páginas y 18 parciales `recipe-*`/`inventory-*` nuevos):
+  - Lista `/inventario/recetas`: filtro GET por tipo y búsqueda, tabla con `caption` (artículo, tipo, rendimiento, costo por unidad o "Sin costo (faltan N)", vigente desde y aviso "Usa artículos inactivos" con icono y texto), estado vacío y páginas.
+  - Receta del artículo `/inventario/articulos/:id/receta`: versión vigente (vigencia, autor, rendimiento, costo total y por unidad, nota), aviso "Sin costo" con cada faltante, su ruta y un enlace a su ficha, aviso de ingredientes inactivos, tabla de líneas (neta, merma, bruta, costo y origen), "Nueva versión"/"Crear receta", "Cerrar receta" e historial de versiones con enlace a cada una. 409 `RECIPE_NOT_ALLOWED` -> aviso con la vuelta a la ficha.
+  - Editor `…/receta/nueva` (POST a `…/receta`): rendimiento con la unidad base (solo lectura) y nota; 10 filas por bloque hasta 40; "Añadir 10 filas" vuelve a pintar lo escrito sin guardar; ingrediente con `<input list>` y un único `<datalist>` (el admin resuelve el nombre con la lista de la API); unidad con un `<datalist>` de las unidades del sistema y los empaques; ayuda fija de neta y merma (asociada a cada cantidad con `aria-describedby`); `error-summary` con un enlace por línea y campo ("Línea 3, ingrediente: …"); ciclo con su ruta; conflicto 409 con lo escrito y la nueva versión de partida; 409 de artículo inactivo; 503 con lo escrito.
+  - Historial `/inventario/recetas/versiones/:id` en solo lectura, sin costo (PT-4), y confirmación de cierre `…/receta/cerrar`.
+  - Subnavegación "Recetas" en la sección Inventario.
+- **T1** (`controllers/inventory.ts`, `views/inventory.ts`): el formulario admite el costo de referencia (alta simple; en edición, solo Insumo, Intermedio y Reventa) y la casilla inventariable (alta simple y Insumo), con su ayuda y la unidad `hr`; la ficha muestra el costo de referencia, el inventariable (Insumo), "Usado en" con enlaces y el enlace "Receta" (Intermedio y Compuesto); el historial nombra los dos campos nuevos; la página de inactivar lista las recetas vigentes que lo usan y envía `recipes=keep`, y un 409 `ITEM_IN_ACTIVE_RECIPES` vuelve a pedir la confirmación con la lista.
+- **Refactor sin cambio de comportamiento:** `controllers/inventory-common.ts` reúne la sesión con rol, las respuestas de la API que no son de dominio y los textos comunes, compartidos por artículos y recetas (antes duplicados dentro de `inventory.ts`).
+- **H-1:** contorno de foco visible en `field-input`, `field-select` y `field-textarea` (antes el plugin de formularios lo anulaba).
+- **DEF-004:** el doble de la API de `inventory-manager` acepta las unidades del contrato (`INVENTORY_UNITS`, con `hr`) y su mensaje las lista; además admite el costo de referencia y el inventariable con las reglas de PT-7, la baja con `recipes: 'keep'` y las rutas de recetas (`tests/support/api-double-recipes.ts`, nuevo).
+- **DEF-005:** el conflicto de una receta en la importación señala los campos que difieren (`rendimiento`, `nota` y/o `lineas`), como los de artículos.
+- **DEF-006:** `--archivo` repetido se rechaza con el mensaje de uso.
+- **DEF-003:** caso de empate exacto (mitad hacia arriba) en la bruta y en el costo por unidad, en `api/tests/unit/inventory-recipes.test.ts`.
+- **OBS-2:** el README explica cómo volver de T2 a T1 en local con un artículo en `hr` usado en una receta (SQL o recrear la base local).
+- **Documentación:** `docs/arquitectura.md` §4 (módulos de recetas e importación en `core/inventory`, candado y costo teórico) y §6 (rutas de recetas, cliente y pantallas), y §8 (T2 en tres PR); `README.md` (pantallas de recetas, campos nuevos de la ficha, tablas de T2 y nota de C-2).
+
+### Criterios de aceptación (alcance del PR 3)
+
+- **CA-15:** pantallas utilizables a 360 px y 1280 px, con teclado, foco visible y sin JavaScript (evidencia en "Validaciones ejecutadas"; QA lo repite en navegador real).
+- **CA-12 (admin):** un Editor recibe 403 en las 5 pantallas y en los 2 POST de recetas sin que el admin pida nada del inventario a la API (`inventory-recipes.test.ts`).
+- **CA-4, CA-5, CA-6, CA-7 y CA-10 en pantalla:** ciclo con su ruta y lo escrito conservado; nueva versión, sin cambios y cierre con confirmación; conflicto 409 que conserva lo escrito y guarda encima solo si se pide; "Sin costo" con faltantes en la receta y en la lista; inactivar con la lista de recetas y confirmación, y aviso de inactivos después.
+- **RF-1 a RF-3, RF-8, RF-10 y RF-13:** cubiertos por las pantallas descritas; el resto ya estaba en la API (PR 1 y PR 2).
+- **CA-16:** la suite completa de las tres apps sigue en verde; las pantallas de T1 cambian solo en los campos nuevos (prueba modificada en `inventory.test.ts`).
+
+### Validaciones ejecutadas
+
+Desde `restaurante/` en el worktree, contra un MySQL 8.4 aislado (`docker compose -p restaurante-fs-050pr3`, volumen propio; `restaurante-mysql-dev-1` no se tocó y sigue `Exited`):
+
+- `npm run build:css`: 0.
+- `npm run typecheck`: 0.
+- `npm run lint` (con `check-private-data`): 0; "854 archivos revisados, sin datos privados".
+- `npm test`: api 55 archivos y 1245 pruebas; landing-pages 64 y 903; inventory-manager 18 y 297. Todo en verde.
+- Pruebas permanentes: nueva `inventory-manager/tests/integration/inventory-recipes.test.ts` (9 casos funcionales: editor sin JS con bloques de 10 hasta 40 y guardado; 422 por línea; ciclo; "Sin costo"; conflicto; API caída; cierre e historial; 403 del Editor; "Usado en" e inactivación con lista). Modificadas: `inventory.test.ts` (subnavegación con "Recetas" y un caso del alta con costo de referencia, inventariable desmarcado y `hr`), `api/tests/unit/inventory-import.test.ts` (DEF-005 y DEF-006) y `api/tests/unit/inventory-recipes.test.ts` (DEF-003). Los archivos de `inventory-manager` tardan menos de 2 s.
+- Evidencia de accesibilidad y responsive (descartable, fuera del repositorio; no se commitea): 14 pantallas renderizadas contra el doble de la API (lista, lista vacía, receta con "Sin costo", receta con merma, editor, editor con 422, con ciclo, con 409 y con 20 filas, versión del historial, cierre, ficha de un insumo, inactivar un artículo usado y alta de T1), con estado HTTP esperado (200, 422 y 409). Comprobación estática con jsdom en las 14: un solo `h1`, sin ids repetidos, todo control con su `label`, sin saltos de encabezado, tablas con `caption` y `th` con `scope`, cada `fieldset` con `legend`, todos los `aria-describedby` resuelven y un único `datalist` de ingredientes en el editor. Capturas con Chrome sin interfaz a 1280 px: el editor muestra las líneas como filas compactas (H-2) y el aviso de conflicto con lo escrito. A 360 px el Chrome sin interfaz pinta con un ancho mínimo mayor que la ventana y recorta por la derecha, también en las pantallas de T1 sin cambios: no sirve como evidencia de 360 px; las tarjetas por línea se ven en una sola columna. La prueba a 360 px, con teclado y axe queda para QA en un navegador real.
+- Ajuste tras la evidencia: la etiqueta de la merma pasó a "Merma %" (con `placeholder` 0), porque "Merma (%) (opcional)" partía en dos renglones y desalineaba la fila en escritorio.
+
+### Archivos afectados
+
+- Nuevos: `inventory-manager/src/controllers/{inventory-common,inventory-recipes}.ts`; `inventory-manager/src/views/inventory-recipes.ts`; `inventory-manager/src/views/pages/inventory-recipe{s,,-form,-version,-close}.html`; parciales `recipe-{table,th,row,cell,cell-html,cell-head,link,flag,ingredient,summary,history-entry,current-mark,line,line-saved,datalist,datalist-option,rows-button}.html`, `inventory-link-item.html` e `inventory-paragraph.html`; `inventory-manager/tests/integration/inventory-recipes.test.ts`; `inventory-manager/tests/support/api-double-recipes.ts`.
+- Modificados: `packages/contracts/admin-client.ts`; `packages/core/inventory/master-import.ts`; `api/scripts/support/inventory-import-cli.ts`; `api/tests/unit/{inventory-import,inventory-recipes}.test.ts`; `inventory-manager/src/{app,routes}.ts`; `inventory-manager/src/controllers/inventory.ts`; `inventory-manager/src/views/{index,inventory}.ts`; `inventory-manager/src/views/pages/inventory-item.html`; `inventory-manager/src/views/partials/field-{input,select,textarea}.html`; `inventory-manager/tests/integration/inventory.test.ts`; `inventory-manager/tests/support/api-double-inventory.ts`; `docs/arquitectura.md`; `README.md`.
+- `deploy/`, migraciones, `.env.example` y `_stich_source_/` sin cambios.
+
+### Riesgos o pendientes
+
+- **Desviación (bruta y costo tras errores):** el TAP pedía mostrar, tras guardar o previsualizar con errores, la bruta y el costo por línea. La API no tiene una ruta de vista previa y `inventory-manager` no puede importar `core` (regla de dependencias), así que repetir aquí la conversión y el redondeo duplicaría reglas del dominio. Se resolvió así: la receta muestra la neta, la bruta y el costo de cada línea tras guardar; en el editor, cada línea igual a una de la vigente muestra "Como en la versión vigente: bruta …; costo …"; la ayuda fija dice que la bruta y el costo se calculan al guardar. Si el usuario quiere la bruta y el costo de las líneas nuevas antes de guardar, haría falta una ruta de vista previa en la API (cambio de alcance).
+- **Unidad con `datalist` común:** sin JavaScript no se puede filtrar por ingrediente, así que la lista de unidades reúne las del sistema y los empaques de todos los ingredientes; una unidad sin factor para ese ingrediente la rechaza la API en su línea (CA-3).
+- **Lista con tabla en móvil:** las tablas de la lista y de las líneas se desplazan en horizontal dentro de una región con foco (`tabindex="0"`, `role="region"` y `aria-labelledby` del `caption`) a 360 px, en lugar de pasar a tarjetas; el editor sí usa tarjetas (H-2). QA lo valora.
+- **Para QA:** navegador real a 360 px y 1280 px, solo teclado, sin JavaScript y axe; regresión de T1 con el contorno de foco de H-1; las pantallas contra la `api` real con la semilla de desarrollo (aquí se probaron contra el doble).
+- **README (C-2/OBS-2):** el `UPDATE` de ejemplo se revisó pero no se ejecutó contra una base con artículos en `hr`; los demás comandos (`db:down`, `db:up`, `db:migrate`) ya estaban documentados.
+- **Limpieza:** proyecto Docker `restaurante-fs-050pr3` retirado con su volumen y su red; sin bases `restaurante_test*`, procesos de Vitest ni Chrome sin interfaz; la prueba temporal de evidencia se borró del worktree. Docker Desktop no estaba encendido al empezar y se encendió para las pruebas.
+- Sin dependencias nuevas.
+
+## QA Action Plan — PR 3 (T2)
+
+### Objetivo
+
+Validar con evidencia que el árbol de trabajo de `feature/REQ-F-050-recetas-pantallas` (sin commit, base `origin/epic/inventario` `9371772`) cumple el alcance del PR 3: pantallas de recetas del admin, campos nuevos de la ficha de T1, cliente HTTP de recetas, DEF-003 a DEF-006, OBS-2 y documentación; que funciona contra la `api` real y MySQL con la semilla de desarrollo (no solo contra el doble), a 360 px y en escritorio, con teclado, foco visible, sin JavaScript y sin errores de axe relevantes; y que T1, las landings, el bot y el resto del admin no cambian.
+
+### Requisito bajo prueba
+
+Ticket aprobado (versión 1), Technical Action Plan aprobado (PT-1 a PT-7), H-1 a H-5 ("Si" a la propuesta móvil), "Implementation Result — PR 3" y la aprobación de la implementación con tres decisiones (cita: "Sí, apruebo con las tres decisiones"):
+
+1. El editor no calcula bruta ni costo de líneas nuevas antes de guardar (sin vista previa). **No es defecto**; QA solo comprueba que la ayuda lo dice y que la receta guardada sí los muestra (RF-3 queda satisfecho así por decisión del usuario).
+2. A 360 px la lista y las líneas de la receta se desplazan en horizontal dentro de una región con foco; el editor usa tarjetas. **No es defecto** el desplazamiento horizontal dentro de esa región; sí lo es el desbordamiento de la página fuera de ella.
+3. El `datalist` de unidades mezcla las del sistema y todos los empaques; la API rechaza en su línea una unidad sin factor. **No es defecto** ver unidades ajenas; sí lo es que el rechazo no llegue a su línea y campo.
+
+Fuera de alcance (sin tratarlo como defecto): vista previa de costos, importación del JSON real (PT-5), CA-13/CA-14 (validados en PR 2 y PR 1; la migración no cambia aquí, se comprueba en F2), kardex/CPP (T3), `_stich_source_/` (no tiene diseño del admin).
+
+### Criterios de aceptación (cada uno → pruebas que lo cubren)
+
+| CA / alcance | Pruebas |
+|---|---|
+| CA-15 / RF-13 (360 px, escritorio, teclado, foco, sin JS) | B1–B9, K1–K4, N1–N3 |
+| CA-12 (admin) | S1–S4 |
+| CA-4 en pantalla (ciclo con ruta, lo escrito conservado; > 8 niveles) | R6, R7 |
+| CA-5 en pantalla (nueva versión, sin cambios, cerrar) | R3, R4, R5, R10 |
+| CA-6 en pantalla (409 conserva lo escrito; guarda encima solo si se pide; doble envío) | R8, R9 |
+| CA-2, CA-3 en pantalla (merma 100 rechazada; unidad sin factor en su línea; 500 g a 10/kg = 5.00) | R11, R12, R2 |
+| CA-7, CA-8, CA-9 en pantalla ("Sin costo" con faltantes y ruta; origen; `hr`) | R1, R2, R13 |
+| CA-10 / RF-7 / RF-8 en pantalla (Usado en, inactivar con lista y `recipes=keep`, aviso, no ofrecido) | T4, T5, R14 |
+| CA-11 en pantalla (Compuesto/padre no ofrecido; Insumo/Reventa sin receta) | R15 |
+| RF-1, RF-2 (lista, filtro, vacío, páginas, historial solo lectura sin costo) | L1–L4, R1, R5 |
+| RF-10 (costo de referencia, inventariable, `hr`, historial) | T1–T3 |
+| CA-16 (T1, landings, bot, menú público sin cambios) | G1–G5, T6 |
+| DEF-003 a DEF-006, OBS-2 | D1–D4, O1 |
+
+### Riesgos identificados
+
+- Probado solo contra el doble: contrato real (formato de decimales, `recipeCurrent` en 409, `fields` con índices de línea, `path` de ciclo) puede no casar con lo que pinta el admin.
+- Mapeo de errores por posición: con filas vacías intercaladas, el índice de la API (líneas compactadas) puede apuntar a la fila equivocada del formulario.
+- "Añadir 10 filas" (`action=rows`) sin JS: pérdida de lo escrito, superar 40, o que guarde por accidente; idempotencia (`requestId`) al reenviar el mismo formulario o tras volver atrás.
+- 409/503 que no conservan lo escrito o que, con la API caída, regeneran `requestId` y duplican al reintentar.
+- Escapado de nombres, notas y la ruta del ciclo (XSS almacenado vía nombre de artículo).
+- H-1 (contorno de foco en `field-*`) cambia todos los formularios del admin: regresión visual en productos, página, usuarios, cotizador.
+- Refactor `inventory-common.ts`: cambio de comportamiento en 401/403/404/503 de T1.
+- Rol: un Editor o una sesión sin rol que llegue a pedir algo a la API; CSRF ausente o ajeno aceptado en los 2 POST.
+- Suite corrida antes del cambio "Merma %": hay que repetirla entera.
+
+### Entorno
+
+- Worktree `/Users/orvigas/Desktop/Negocio/.claude/worktrees/req-f-050-pr3`, rama `feature/REQ-F-050-recetas-pantallas`, sin tocar código de producción.
+- MySQL 8.4 propio: `docker compose -p restaurante-qa-050c up -d --wait mysql-dev` con el `compose.yaml` del worktree (volumen y red propios, `127.0.0.1:3307`). Antes, línea base de `docker ps -a`, `docker volume ls`, `docker network ls` y puertos; si `restaurante-mysql-dev-1` está encendido o 3307 ocupado, QA se detiene y lo informa. `restaurante-mysql-dev-1` no se enciende.
+- Base de pantallas: `restaurante_qa050c` (no `restaurante_test*`, porque la semilla y la `api` la usan como base de desarrollo local de ese contenedor), migrada con `npm run db:migrate` y sembrada con `npm run inventory:seed-dev`. Base desechable para OBS-2: `restaurante_qa050c_obs2`.
+- `api` e `inventory-manager` del worktree con env propios en el scratchpad (nunca un `.env` de desarrollo), en puertos libres (p. ej. API 3210, admin 3211). Usuarios creados en esa base: un administrador, un gerente y un editor (por el arranque/alta del propio admin o el script existente de usuarios; sin contraseñas en el ticket).
+- `npm test` con `TEST_DATABASE_URL`/`TEST_ADMIN_DATABASE_URL` hacia ese contenedor (bases `restaurante_test*`).
+- Navegador real: Claude in Chrome (pestaña nueva; ventana a 360×800, 768×1024 y 1280×900). axe-core inyectado por `javascript_tool` desde un archivo local del scratchpad si está disponible en `node_modules`; si no está instalado, no se añade dependencia: QA lo informa y sustituye axe por la comprobación con jsdom (A11Y) más la revisión manual, y pide decisión si CA-15 dependiera solo de axe.
+- Sin JS: Chrome con JavaScript deshabilitado para el origen del admin (ajustes del sitio) o, si la extensión no lo permite, `curl` + envíos de formulario sin JS (el admin no carga JS en estas pantallas; se comprueba).
+
+### Revisión estática (F)
+
+- **F1.** `git status`/`git diff origin/epic/inventario --stat`: solo los archivos listados; sin migraciones, `deploy/`, `.env.example` ni `_stich_source_/`; sin hojas de cálculo, `~$`, JSON de importación real ni `datos-privados`.
+- **F2.** Diff vacío de `packages/db/prisma/migrations`.
+- **F3.** `npm run typecheck`, `npm run lint` (incluye `check-private-data`) y `npm run build:css`: 0, sin avisos.
+- **F4.** Lectura de `docs/arquitectura.md` §4, §6, §8 y del README (pantallas, campos nuevos, C-2): coherentes con lo observado, sin funcionalidades inexistentes.
+
+### Suite (A)
+
+- **A1.** `npm test` completo desde `restaurante/` (las 3 apps), tras el cambio "Merma %": 0 fallos; totales por app y duración por archivo; ninguno de los archivos nuevos/modificados > 20 s. OBS-7 se informa si reaparece, sin bloquear.
+- **A2.** Revisión de las pruebas permanentes nuevas o modificadas contra `testing.md`: funcionales, sin duplicar otra existente, sin reproducir la implementación, sin sufijos `qa-req-f-*`.
+
+### Lista de recetas (L), contra `api` real y semilla
+
+- **L1.** `/inventario/recetas` con administrador y gerente: columnas de RF-1; "Taco ficticio" con "Sin costo (faltan 1)"; costos con 2 decimales iguales a los de `GET` de la API.
+- **L2.** Filtro por tipo (intermedio/compuesto) y búsqueda por nombre (con acentos y mayúsculas); búsqueda sin resultados → mensaje de vacío; `tipo` inválido → 422 con su campo, sin 500.
+- **L3.** Paginación: `pagina` fuera de rango, `0`, `abc` → respuesta controlada.
+- **L4.** "Usa artículos inactivos" con icono **y** texto tras inactivar un ingrediente (enlaza con T5).
+
+### Receta y editor (R), contra `api` real y semilla
+
+- **R1.** Receta del Compuesto de 2 niveles: aviso "Sin costo" con el faltante, su ruta y enlace a su ficha; origen de cada línea (Referencia/Receta/Sin costo).
+- **R2.** "Carne cocida ficticia": neta 6.000, merma 40.00, bruta 10.000; costos contra cálculo a mano; CA-3: crear una receta con 500 g de un insumo a 10/kg → línea 5.00.
+- **R3.** Nueva versión con cambios → v2 vigente, v1 en historial con intervalo contiguo; aviso de éxito.
+- **R4.** Guardar sin cambios → no crea versión (historial igual, mensaje de "sin cambios").
+- **R5.** Historial `/inventario/recetas/versiones/:id`: solo lectura, sin costo (PT-4); id inexistente, `abc` y de otra cosa → 404 controlado.
+- **R6.** Ciclo directo (A en A) e indirecto (B usa A; añadir B a A): 422 con la ruta en el `error-summary` y en su línea, lo escrito conservado, nada escrito en la base (conteo de versiones antes/después).
+- **R7.** Profundidad > 8 (cadena de Intermedios creada por pantalla o por la API): rechazo con mensaje claro.
+- **R8.** Conflicto: dos pestañas sobre la v1; la segunda guarda → 409 con lo escrito y la vigente nueva; "Guardar mis cambios sobre la versión vigente" crea la versión solo al pulsarlo.
+- **R9.** Idempotencia: reenviar exactamente el mismo POST (mismo `requestId`) dos veces (curl con la cookie y el CSRF de la sesión, y "Atrás" + reenviar en el navegador) → una sola versión; 503 simulado (API detenida) y reintento con la API arriba → una sola versión y lo escrito conservado en el 503.
+- **R10.** Cerrar receta: página de confirmación, POST con CSRF → sin vigente; la lista ya no la muestra; "Crear receta" disponible; conflicto de cierre (cerrar desde una versión ya no vigente) controlado.
+- **R11.** Validación por línea: merma 100, -1, 99.999, coma decimal, cantidad 0, cantidad que redondea a 0, rendimiento 0/vacío, ingrediente inexistente o escrito a medias, ingrediente repetido, ninguna línea, nota > límite. Cada error en el `error-summary` con enlace a su campo ("Línea N, campo: …"), el campo con `aria-invalid` y texto (no solo color).
+- **R12.** Filas vacías intercaladas (líneas 1, 5 y 23 llenas) con un error en la 23: el error aparece en la fila 23, no en la 3; unidad sin factor (decisión 3) en su línea.
+- **R13.** Línea con "Mano de obra ficticia" en `hr` costeada por referencia; la ficha no muestra existencias.
+- **R14.** Un ingrediente inactivo no aparece en el `datalist` del editor; escribirlo a mano → rechazo en su línea; la vigente que lo usa muestra el aviso de inactivos en receta y editor.
+- **R15.** Insumo y Reventa: sin enlace "Receta"; `/inventario/articulos/<insumo>/receta` y `/nueva` → aviso `RECIPE_NOT_ALLOWED` con vuelta a la ficha; Compuestos y padres no aparecen en el `datalist`.
+- **R16.** Bloques de filas: 10 iniciales, "Añadir 10 filas" ×3 → 40 sin perder lo escrito ni guardar nada (conteo de versiones igual); en 40 el botón desaparece o se ignora; POST manipulado con `rows=1000` o `lines.40.*` → no pasa de 40 ni da 500.
+- **R17.** Datos manipulados: `baseVersionId` ajeno o de otro artículo, `requestId` inválido, campos desconocidos, cuerpo > límite, ids no numéricos en la ruta → respuestas controladas sin 500 ni pila.
+
+### Ficha y formulario de T1 (T)
+
+- **T1.** Alta simple con costo de referencia (4 decimales, ≥ 0; rechazos de -1, 5 decimales, coma) y casilla inventariable; alta con `hr`.
+- **T2.** Edición: costo de referencia solo en Insumo, Intermedio y Reventa; inventariable solo en Insumo y solo sin movimientos (según PT-7); Compuesto/padre sin esos campos y un POST manipulado rechazado.
+- **T3.** Historial de la ficha nombra los dos campos nuevos.
+- **T4.** "Usado en" en la ficha de un insumo usado, con enlaces correctos; uno no usado sin la sección o con su vacío.
+- **T5.** Inactivar un Intermedio usado: la página lista las recetas vigentes y envía `recipes=keep`; un 409 `ITEM_IN_ACTIVE_RECIPES` (receta creada entre la carga y el envío, con otra pestaña) vuelve a pedir la confirmación con la lista; tras confirmar, la receta del Intermedio no se cierra (RF-7).
+- **T6.** Regresión de T1 sin cambios funcionales: lista, búsqueda, alta, edición con conflicto 409 (H-5), inactivar un artículo **no** usado, reactivar, 401/403/404/503 tras el refactor de `inventory-common.ts`.
+
+### Permisos, CSRF y seguridad (S)
+
+- **S1.** Editor: 403 en las 5 pantallas GET y en los 2 POST de recetas, y "Recetas" ausente de la navegación; el log de la `api` real confirma que el admin no le pidió nada del inventario. Sin sesión → redirección al login con `returnTo` correcto.
+- **S2.** CSRF: POST de guardar y de cerrar sin `_csrf`, con uno de otra sesión y con uno alterado → rechazo sin escribir (conteo antes/después).
+- **S3.** Escapado: artículo y nota con `<script>`, `"><img onerror>` y comillas, guardados por pantalla; se muestran como texto en lista, receta, editor, `datalist`, historial, ruta del ciclo, "Usado en" y la lista de inactivar.
+- **S4.** Privacidad y errores: respuestas sin pila, SQL ni configuración (500 forzado con API caída o respuesta inválida); los logs del admin y de la `api` no llevan costos, cantidades, nombres ni contraseñas (`grep` de los logs del proceso); cabeceras de seguridad y `Cache-Control` de las pantallas iguales a las de T1.
+
+### Navegador real (B), Claude in Chrome contra la `api` real
+
+- **B1.** 360×800: lista, receta, editor (tarjetas), historial, cierre, ficha y alta de T1: sin desbordamiento horizontal de la página (`document.documentElement.scrollWidth <= innerWidth`); las tablas se desplazan solo dentro de su región (decisión 2); textos sin cortes; botones de al menos 44 px de alto o con área equivalente.
+- **B2.** 768×1024 y 1280×900: las mismas pantallas; el editor en filas compactas (H-2) con "Merma %" en un renglón y las columnas alineadas.
+- **B3.** Editor con 409 y con 422 a 360 y 1280: el aviso y el `error-summary` visibles y legibles.
+- **B4.** Consola sin errores ni avisos de CSP; peticiones de red: solo CSS propio, sin JS en estas pantallas (o el JS ya existente del admin), sin 404.
+- **B5.** Capturas de cada pantalla y viewport como evidencia (fuera del repositorio).
+
+### Teclado y foco (K)
+
+- **K1.** Recorrido solo con Tab/Shift+Tab/Enter/Espacio: crear una receta de 2 líneas, añadir 10 filas, guardar con un error, saltar desde el enlace del `error-summary` al campo, corregir y guardar; cerrar una receta.
+- **K2.** Foco visible en cada parada (H-1: contorno `maiz` en `field-input`, `field-select`, `field-textarea`; enlaces, botones y la región desplazable con `tabindex="0"`), con contraste suficiente sobre su fondo.
+- **K3.** Orden de tabulación lógico en tarjetas (móvil) y filas (escritorio); sin trampas de foco.
+- **K4.** Región desplazable: con foco, las flechas la desplazan; su nombre accesible es el `caption`.
+
+### Sin JavaScript (N)
+
+- **N1.** Con JS deshabilitado: todo el flujo de R3, R6, R8, R10 y R16 funciona igual.
+- **N2.** `datalist` de ingredientes y unidades usable sin JS (o escritura libre resuelta por el admin).
+- **N3.** El error-summary y los avisos aparecen sin JS.
+
+### Accesibilidad (Y)
+
+- **Y1.** axe-core (por la vía que decida el usuario en la pregunta 2) en las 7 pantallas de recetas, el editor con 422 y con 409, la ficha y el formulario de T1, a 360 y 1280: 0 violaciones `serious`/`critical`; las `moderate`/`minor` se listan y clasifican.
+- **Y2.** Estructura: un solo `h1`, sin saltos de encabezado; landmarks; tablas con `caption` y `th scope`; cada línea un `fieldset` con `legend` "Línea N"; etiquetas en todos los controles; `aria-describedby` de la ayuda y de los errores resolviendo a ids existentes; ids únicos; idioma `es`.
+- **Y3.** Lector de pantalla (VoiceOver, muestreo): el `error-summary` recibe el foco o se anuncia al cargar; la región de la tabla se anuncia con su nombre; "Sin costo" y "Usa artículos inactivos" no dependen solo del color.
+- **Y4.** Contraste de textos de ayuda, avisos y el contorno de foco medido (≥ 4.5:1 texto; ≥ 3:1 contorno).
+
+### Documentación y defectos previos (D, O)
+
+- **D1.** DEF-003: el caso de empate en `api/tests/unit/inventory-recipes.test.ts` comprueba la mitad hacia arriba (y falla si se invierte: mutación local descartable, revertida y comprobada con `git diff`).
+- **D2.** DEF-004: el doble acepta `hr` y su mensaje lista `INVENTORY_UNITS`.
+- **D3.** DEF-005: importación con un JSON ficticio de conflicto (fixture existente o copia en el scratchpad) → el mensaje nombra `rendimiento`, `nota` o `lineas`, sin valores.
+- **D4.** DEF-006: `--archivo` repetido → mensaje de uso, salida distinta de 0, nada escrito.
+- **O1.** OBS-2 en base desechable `restaurante_qa050c_obs2`: migrar, sembrar, comprobar que "Mano de obra ficticia" en `hr` está usada en una receta; ejecutar el `UPDATE` del README tal como está escrito; comprobar que no quedan artículos en `hr`, que la receta sigue legible por SQL y que la `api` de `origin/epic/inventario` en el commit de T1 (`git worktree` temporal de solo lectura en el scratchpad, o la imagen ya construida si existe) arranca y lista el inventario sin 503. Si arrancar T1 no es viable en tiempo razonable, se valida solo la parte SQL y se informa. También se comprueba que el procedimiento alternativo (borrar el volumen) se describe con los nombres reales del proyecto de Compose.
+
+### Regresión (G)
+
+- **G1.** `npm test` (A1) cubre landings, bot, menú, productos, página, usuarios y cotizador.
+- **G2.** Admin: con JS, smoke de productos, página, usuarios y cotizador en el navegador (foco H-1 visible y sin desalineación a 360 y 1280).
+- **G3.** Landings `/birria` y `/molotes` arrancadas contra la misma `api`: 200 y sin cambios (diff vacío de `landing-pages/src` y `public`).
+- **G4.** Diff de `api/src`: vacío (este PR no toca rutas de la API) o justificado.
+- **G5.** CodeGraph blast radius de `inventory-common.ts`, `field-*` y `admin-client.ts` para confirmar que todos sus consumidores quedan cubiertos por A1, T6 y G2.
+
+### Pruebas automatizadas
+
+Existentes: la suite completa (A1). Sondas temporales (no se commitean; en el scratchpad o borradas al terminar): script de jsdom para Y2 sobre el HTML real servido, comprobación de `scrollWidth` vía `javascript_tool`, `curl` para S1, S2, R9, R16 y R17, y la mutación de D1. No se escribe en `restaurante/landing-pages/tests/`. No se añaden dependencias.
+
+### Evidencia requerida
+
+En el QA Report: código de salida y totales de F3 y A1 (con duraciones > 10 s); `git diff --stat` y diff vacío de migraciones; tabla de S1/S2 (ruta, rol, código, conteo de versiones antes/después y líneas de log de la `api`); tablas de R y T con resultado y el dato observado; costos de R2 contra cálculo a mano; resultado de axe por pantalla/viewport (o motivo de sustitución); `scrollWidth` vs `innerWidth` por pantalla y viewport; descripción del recorrido K1; salidas de D3, D4 y O1 (solo conteos y mensajes, sin valores de costo de datos reales; aquí todo es ficticio); capturas referidas por ruta del scratchpad (no se adjuntan al repo). Ningún dato real ni credencial en el ticket.
+
+### Limpieza (comprobada, no supuesta)
+
+Al terminar, también si algo falla: detener `api`, `inventory-manager` y landings del QA (comprobar con `lsof` que los puertos quedan libres); cerrar la pestaña de Chrome y reactivar JS si se deshabilitó para el origen; `docker compose -p restaurante-qa-050c down -v` y comparar `docker ps -a`, `docker volume ls` y `docker network ls` con la línea base; `restaurante-mysql-dev-1` sigue `Exited`; 0 bases `restaurante_test*` (desaparecen con el volumen; se comprueba antes de bajarlo que ninguna ejecución sigue en curso); `git worktree list` sin el worktree temporal de O1; `git status` del worktree igual al inicial salvo el ticket (la mutación de D1 revertida); sin procesos `vitest`, `node server.ts`, Chrome headless; scratchpad sin env, cookies, sondas ni capturas que ya no hagan falta (las capturas se borran tras redactar el informe salvo que el usuario pida conservarlas).
+
+### Criterios de aprobación
+
+`QA_APPROVED` solo si: F1–F3 en 0 y F2 vacío; A1 en verde completo; CA-15, CA-12 (admin) y los criterios en pantalla de CA-2 a CA-11 en PASS con evidencia de la `api` real; S1–S4 sin hallazgos de seguridad; T1–T6 sin regresión; D1–D4 y O1 en PASS (o O1 parcial justificado); axe sin `serious`/`critical` en lo afectado; sin `BLOCKER` ni `CRITICAL`; `MAJOR` solo si el usuario los acepta. Las tres decisiones del usuario no se reportan como defecto. Si la extensión de Chrome no responde, CA-15 depende de ella: se devolverá `NEEDS_USER_DECISION` (revisión manual del usuario) en lugar de aprobar.
+
+### Autorizaciones que se piden al usuario
+
+1. Docker local: levantar `restaurante-qa-050c` (MySQL 8.4 con volumen propio en `127.0.0.1:3307`) y bajarlo con `-v` al terminar. Nunca `restaurante-mysql-dev-1` ni datos reales.
+2. Ejecutar `api`, `inventory-manager` y landings del worktree con env propios en el scratchpad, y crear en esa base usuarios ficticios (administrador, gerente, editor).
+3. Usar Claude in Chrome contra `127.0.0.1`, incluido deshabilitar JavaScript solo para ese origen y restaurarlo.
+4. axe-core según la pregunta abierta 2 (no está instalado; no se añade como dependencia).
+5. Crear un `git worktree` temporal de solo lectura de T1 para O1 y borrarlo al terminar.
+6. Una mutación local descartable para D1, revertida en el acto.
+
+### Preguntas abiertas (con recomendación)
+
+1. **O1 completo o parcial:** ¿basta con ejecutar el `UPDATE` y comprobar el estado por SQL y con la `api` del worktree, o se exige además arrancar la `api` de T1? Recomendado: intentar T1 con el worktree temporal; si no arranca por motivos ajenos (dependencias, migraciones), aceptar la parte SQL y dejarlo como observación.
+2. **axe:** `axe-core` **no** está en `node_modules` (comprobado). Opciones: (a) cargar `axe.min.js` en la pestaña de prueba desde un CDN público con `javascript_tool` (solo descarga el script; no envía datos de la página ni se añade al proyecto); (b) `npx axe-core` en caché temporal fuera del repo, borrada al terminar; (c) sustituir axe por Y2 (jsdom) + revisión manual. Recomendado: (a), con (c) como respaldo si el CDN o la CSP lo impiden.
+
+## QA Report — PR 3 (T2)
+
+### Ronda
+
+1 (2026-11-25). QA Action Plan del PR 3 aprobado por el usuario ("Sí, apruebo"), con sus recomendaciones: O1 con la `api` de T1 y, si no arranca por causas ajenas, solo la parte SQL; axe por la opción (a), cargado desde un CDN público solo en la pestaña de prueba, y como respaldo (c) jsdom con revisión manual. Árbol validado: `feature/REQ-F-050-recetas-pantallas` sin commit, sobre `9371772`. `git status` era igual antes y después del QA: 48 entradas y ningún cambio de QA fuera de este ticket.
+
+### Entorno y desviaciones del plan
+
+- MySQL 8.4 en el proyecto Docker propio `restaurante-qa-050c`, en `127.0.0.1:3307`. `restaurante-mysql-dev-1` siguió `Exited`.
+- **Base de las pantallas:** se usó `restaurante`, la base de ese contenedor desechable, en lugar de `restaurante_qa050c`, porque el usuario de la app ya tiene permisos sobre ella. No cambia nada del resultado.
+- **Base desechable de O1, D3 y D4:** `restaurante_qa050c_obs2`.
+- `api` (3210 y webhook 3212), `inventory-manager` (3211) y `landing-pages` (3213) del worktree, con su entorno en el scratchpad. Usuarios ficticios: `qa-admin` (arranque), `qa-gerente` y `qa-editor` (Birria).
+- **Navegador:**
+  - La ventana de Claude in Chrome está maximizada a 2560 px y `resize_window` no la cambió: `innerWidth` siguió en 2560 tras dos intentos. Tampoco se pudo abrir una ventana emergente (bloqueada).
+  - Por eso los anchos de 360, 768 y 1280 px, el teclado, el modo sin JS y axe se validaron en el mismo motor (Chrome 158) sin interfaz, con emulación de dispositivo por CDP (`Emulation.setDeviceMetricsOverride`). Es emulación real del viewport, no la captura recortada que dio el desarrollador.
+  - En Claude in Chrome se validó la vista de escritorio: receta y editor sin errores de consola y todas las peticiones en 200 (CSS, `main.js`, `reorder.js`, `submit-guard.js` y fuentes).
+- **axe:** la CSP del admin (`script-src 'self'`, `default-src 'self'`) bloquea scripts externos, como debe. axe-core 4.10.2 se cargó desde cdnjs solo en la pestaña sin interfaz de prueba, con `Page.setBypassCSP`. Sin enviar datos de la página. Comprobación de que funciona: detecta `image-alt` en una imagen inyectada.
+
+### Pruebas ejecutadas
+
+| Id | Comando o acción | Resultado |
+|---|---|---|
+| F1/F2 | `git diff origin/epic/inventario --stat` de `packages/db`, `deploy`, `landing-pages`, `api/src`, `.env.example` y `_stich_source_` | Vacío (migraciones, `deploy/`, `landing-pages` y `api/src` sin cambios). Los cambios coinciden con "Archivos afectados". |
+| F3 | `npm run build:css`, `npm run typecheck`, `npm run lint` | 0, 0 y 0. Lint: "854 archivos revisados, sin datos privados", 0 avisos. |
+| A1 | `npm test` completo, tras "Merma %" | 0. api 55 archivos / 1245 pruebas en 6.0 s; landing-pages 64 / 903 en 31.8 s; inventory-manager 18 / 297 en 4.0 s. |
+| A2 | Revisión de las pruebas permanentes nuevas o modificadas | `inventory-recipes.test.ts` (9 casos) y los cambios en `inventory.test.ts`, `inventory-import.test.ts` e `inventory-recipes.test.ts` protegen comportamiento (pantallas, 403, conflicto, DEF-003, DEF-005 y DEF-006). Sin sufijos `qa-req-f-*`. |
+| S1 | Editor: GET de las 5 pantallas y los 2 POST de recetas | 403 en las 7. Log de la `api` durante el bloque: solo `/admin/sesion` y `/admin/birria/productos`, ninguna petición de inventario. "Recetas" no aparece en su navegación. Sin sesión: 303 a `/acceso`. Un POST de cierre con campos desconocidos da 400 antes de la sesión (formulario cerrado, igual que en T1). |
+| S2 | CSRF en guardar y cerrar: ausente, de otra sesión, aleatorio y alterado | 403 "Petición no válida" en los 6 casos. Versiones antes y después: 6 y 6. La `api` registra `admin_csrf_rejected` (doble barrera). |
+| S3 | Nombre de artículo, nota de versión y nota de línea con `<script>alert(1)</script>"><img src=x onerror=alert(2)> O'Neil & co` | Escapado en la lista, la receta, el editor y el `datalist`, el cierre, el historial, la ruta del ciclo, "Usado en", la página de inactivar y la ficha. Ningún `<script>alert` ni `<img src=x` sin escapar. |
+| S4 | `grep` de los logs de `api` (1092 líneas) e `inventory-manager` (509) | Sin nombres, cantidades, costos, contraseñas ni contenido de formularios: solo ids, acciones y conteos. Cabeceras de seguridad idénticas entre T1 y las 4 pantallas de recetas (mismo hash): CSP, `Cache-Control: no-store`, `frame-ancestors 'none'`. |
+| L1 | Lista como gerente | 3 recetas de la semilla. Carne cocida $266.67/kg, Salsa base $42.24/L, Taco ficticio "Sin costo (falta 1)". Fecha en hora del negocio (08:20 CST, 14:20Z). |
+| L2/L3 | `tipo=intermedio` (2), `compuesto` (1), `q=SALSA` (1), `q=zzz` (vacío con mensaje); `tipo=padre`, `tipo=<script>`, `pagina=0` y `pagina=abc` | 422 con el error en su campo (`aria-invalid` y `role=alert`). `pagina=99`: 200 sin filas. |
+| R1/R2 | Costos frente al cálculo a mano | Salsa base 1.5×28 + 0.02×12 = 42.24 ✓. Carne 10×160 = 1600, /6 = 266.67 ✓ (neta 6, merma 40 %, bruta 10). Taco: 0.08×266.6667 = 21.33, 0.02×42.24 = 0.84, 0.01 hr × 80 = 0.80, Cebolla "Sin costo" con la ruta "Taco ficticio → Cebolla" y el enlace "Completar el costo" ✓. CA-3: 500 g de Queso a 10/kg = $5.00 ✓. |
+| R3/R4/CA-8 | Guardar sin cambios, con cambios y con cambio del costo de referencia | Sin cambios: `ok=unchanged`, 1 versión. Con cambios: v2 vigente y v1 con intervalo contiguo. Queso de 10 a 20: el costo de Salsa pasa de 4.00 a 8.00 sin crear versión ✓. |
+| R5 | Historial `/versiones/:id` | Solo lectura, sin formularios ni importes (PT-4). `9999`, `abc` y `0`, y artículos o rutas inexistentes: 404 controlado. |
+| R6 | Ciclo directo (Salsa base en sí misma) e indirecto (Salsa base → Salsa → Salsa base) | 422 con "Ruta del ciclo: Salsa base → Salsa → Salsa base", lo escrito conservado y versiones sin cambio. Ver DEF-007. |
+| R7 | Cadena de Intermedios QA Nivel 1 a 10 | Hasta 8 niveles se guarda; la que haría 9 da 422 "quedarían anidadas en 9 niveles; el máximo es 8". |
+| R8 | Dos sesiones (gerente y administrador) sobre la misma versión | La segunda recibe 409 con la vigente (número, autor y fecha) y lo escrito, y conserva la `baseVersionId` antigua. Reenviar el guardado normal: 409 otra vez. "Guardar mis cambios sobre la versión vigente" ×2: una sola versión nueva (v4). |
+| R9 | Doble envío idéntico, y 503 con reintento | Doble POST con el mismo `requestId`: 303 y 303, versiones de 4 a 5 (+1). Con la `api` detenida: 503 "no se guardó nada", lo escrito y el mismo `requestId` conservados, y la lista también da 503 controlado. Con la `api` de vuelta (sesión nueva, porque las sesiones de la `api` están en memoria) y reenvío ×2: versiones de 5 a 6 (+1). |
+| R10 | Cerrar | Confirmación, luego `ok=closed`. Sin vigente, desaparece de la lista y aparece "Crear receta". `baseVersionId` antigua: 409 "La receta cambió mientras lo revisabas: no se cerró". |
+| R11 | 17 casos de validación | Todos dan 422 con el error en su campo (`aria-invalid`) y un enlace del `error-summary` a `#f-lines-N-campo` con el texto "Línea N, campo: …". Casos: merma 100, -1 y 9.999; coma; cantidad 0; 0.001 g ("se redondea a 0"); rendimiento 0 o vacío; ingrediente inexistente o repetido; `bulto` y `tazas` (no existen); `pza` sin factor; nota de 201 y de 401 caracteres; sin unidad; sin cantidad; ninguna línea (enlace a `#f-lines`). |
+| R12 | Filas 1, 5 y 23 llenas, y error en la 23 | El error cae en `lines.22.unit` ("Línea 23, unidad: …"), no en la 3. Corregido, se guardan 3 líneas en orden. Decisión 3: una unidad sin factor se rechaza en su línea ✓. |
+| R13 | Mano de obra en `hr` | Se costea por referencia en el Taco ($0.80). Alta de "QA Hora técnico" en `hr`, no inventariable y con $55.1234: la ficha dice "no lleva existencias; se costea por su costo de referencia". |
+| R14/L4 | Ingrediente inactivo | No aparece en el `datalist`. Escrito a mano: 422 en su línea. La receta y el editor de Molote muestran el aviso de ingredientes inactivos, y la lista "⚠ Usa artículos inactivos" (icono y texto). |
+| R15 | Tipos sin receta | Insumo, Reventa y padre sin enlace "Receta". GET de `/receta`, `/nueva` y `/cerrar` y POST a un Insumo: 409 "Sin receta" con la vuelta a la ficha. El `datalist` excluye los Compuestos (Molote, Quesabirria, Taco de birria y Taco ficticio) y los padres (Agua fresca y Refresco 600 ml). |
+| R16 | "Añadir 10 filas" | 10, 20, 30 y 40, sin perder lo escrito. En 40 el botón desaparece. `rows=1000` vuelve a 20, sin 500. `lines.40.*`: 400 "campos desconocidos". Ninguna versión creada (0 → 0). |
+| R17 | Datos manipulados | `baseVersionId=abc` y `action=otra`: 400 "valores imposibles". Campos desconocidos: 400. Cuerpo de 70 kB: 413. `requestId` inválido: se regenera. Nunca 500. |
+| T1/T2 | Formulario de T1 | El costo de referencia rechaza -1, 5 decimales, coma y texto (422 en su campo). Un Intermedio no inventariable: 422 (PT-7). Alta de un Compuesto con costo: 422. Campos del formulario de edición: Insumo con costo e inventariable; Intermedio solo costo; Compuesto y padre sin ninguno; Reventa variante con costo. Un `referenceCost` añadido por POST a un Compuesto se ignora (no se guarda ni entra en el historial). |
+| T3 | Historial de la ficha | "Costo de referencia: $140.0000 → pasa a $10.0000" ✓. |
+| T4/T5 | "Usado en" e inactivar | La ficha de Sal lista Consomé, QA Nivel 10 y Salsa base con enlaces. La página de inactivar los lista y envía `recipes=keep`. Si se crea una receta entre la carga y el envío (QA Hora técnico usado por Molote en otra petición): 409 con "Se usa en recetas vigentes: no se inactivó" y la lista, y al confirmar, `ok=deactivated`. Inactivar Salsa base (Intermedio con receta) no cierra su receta: aviso "su receta se puede consultar o cerrar, pero no admite versiones nuevas". Reactivar: `ok=reactivated`. |
+| T6 | Regresión de T1 | Lista, filtros, alta, edición, inactivar y reactivar en 200 o 303. 403 del Editor, 404 y 503 controlados. `inventorySession` y `apiFailure` son idénticos antes y después del refactor (diff de `inventory-common.ts` contra el bloque de `inventory.ts` de la épica). |
+| B1/B2 | 13 pantallas × 360, 768 y 1280 (emulación CDP) | `scrollWidth == innerWidth` en las 39 combinaciones, sin ningún elemento fuera del viewport salvo dentro de su región desplazable. A 360 px las tablas de la lista y de las líneas desplazan 672 px dentro de su región (decisión 2). A 360 px el editor va en tarjetas y a 1280 en filas compactas con "Merma %" en un renglón (capturas revisadas). |
+| B3 | Editor con 409 y con 422 a 360 y 1280 | Aviso y `error-summary` visibles y legibles (capturas revisadas). |
+| B4 | Consola y red (Claude in Chrome, escritorio) | Sin mensajes de consola ni 404. Solo CSS y JS propios y las fuentes de Google ya existentes. |
+| K1 | Recorrido solo con teclado (Tab y Enter) | Rendimiento, línea 1 y línea 2 con unidad errónea, "Añadir 10 filas" (20 filas, lo escrito conservado), "Guardar versión", y el foco va al aviso (`role=alert`, `autofocus`). Tab al enlace del resumen y Enter: el foco cae en `lines.1.unit` con `aria-invalid` y `aria-describedby` hacia su error. Corregir y guardar: `ok=saved`. Cerrar receta con teclado: `ok=closed`. |
+| K2 | Foco visible | En las 30 primeras paradas del editor (enlaces, botones, campos), los botones de filas y guardar, la región y los enlaces del resumen: contorno sólido de 2 px `rgb(234,179,8)` (maíz) con `:focus-visible`. La casilla "inventariable" muestra un anillo blanco de 2 px (captura ampliada). |
+| K3 | Orden de tabulación | Cabecera → subnavegación → volver → rendimiento → nota → línea 1 (ingrediente, cantidad, unidad, merma, nota) → línea 2…, sin trampas. |
+| K4 | Región desplazable (360 px) | Recibe el foco con Tab (`role=region` y `aria-labelledby=recipe-list-caption`), y 5 × flecha derecha llevan `scrollLeft` de 0 a 200. |
+| N1–N3 | JavaScript desactivado (`Emulation.setScriptExecutionDisabled`) | Funcionan añadir filas (20, con lo escrito), el error de la línea 16 con su resumen y `role=alert`, guardar, el conflicto 409 (lo escrito, "4", conservado) y el guardado encima, cerrar y el ciclo con su ruta. |
+| Y1 | axe-core 4.10.2 en 15 pantallas × 360 y 1280, más el editor con 422 y con 409 a 360 y 1280 | 0 violaciones de cualquier gravedad en las 34 ejecuciones. |
+| Y2 | Estructura con el DOM real | En todas: `lang=es`, un `h1`, sin saltos de encabezado, sin ids repetidos, todos los controles con etiqueta, todos los `aria-describedby` resueltos, tablas con `caption` y `th scope`, todos los `fieldset` con `legend` y los landmarks `header`, `nav` ×2 y `main`. |
+| D1 | DEF-003, mutación descartable de `divideRounded` (mitad hacia abajo) | La prueba DEF-003 falla con la mutación y pasa al revertirla. `git diff` de `decimal.ts` vacío. |
+| D2 | DEF-004 | El doble usa `INVENTORY_UNITS` (con `hr`) y su mensaje las lista (diff revisado; la suite pasa). |
+| D3 | DEF-005, CLI real con el fixture ficticio | Escritura: 13 artículos, 3 recetas y 9 líneas. Ensayo con una copia alterada: "Rec!2 [rendimiento]" y "Rec!6 [nota]", sin valores, "No se escribió nada". |
+| D4 | DEF-006 | `--archivo a --archivo b`: "--archivo repetido: indica un solo archivo. Uso: …" y salida 1. |
+| O1 | OBS-2 en la base desechable con la semilla | "Mano de obra ficticia" en `hr` usada en 1 línea. El `UPDATE` del README, ejecutado tal cual, deja 0 artículos en `hr`. La `api` y el admin de T1 (`d3a78be`, en un worktree temporal con `DATABASE_ALLOW_NEWER_SCHEMA=true`, como indica el README) muestran la lista y las fichas en 200. Contraprueba: con un artículo de nuevo en `hr`, la lista de T1 da 503, y tras el `UPDATE`, 200. |
+| G2 | Resto del admin a 360 y 1280 (administrador) | Negocios, productos ×2, página ×2, cotizador, usuarios, alta de usuario, bot y cuenta sin desbordamiento horizontal. Con Tab, los `field-input`, `field-select` y `field-textarea` muestran el contorno maíz (H-1). |
+| G3 | `landing-pages` del worktree contra la misma `api` | `/` y `/birria` 200 (Birria, 5 enlaces `wa.me`), `/molotes` 200 (4), ruta inexistente 404. |
+| G4 | Diff de `api/src` | Vacío. |
+| G5 | Blast radius de CodeGraph (`createInventoryAccess`, `createControllerKit` y `saveInventoryRecipe`) y consumidores de los parciales `field-*` | Consumidores: `inventory.ts`, `inventory-recipes.ts`, `users`, `admin`, `bot`, `page` y `quote`, cubiertos por A1, T6 y G2. |
+
+### Criterios de aceptación
+
+| CA | Resultado | Evidencia |
+|---|---|---|
+| CA-15 / RF-13 | PASS | B1–B4, K1–K4, N1–N3, Y1–Y2. Defecto menor de usabilidad DEF-008. |
+| CA-12 (admin) | PASS | S1 |
+| CA-4 en pantalla | PASS | R6 y R7. El error no se marca en su línea: DEF-007, MINOR. |
+| CA-5 en pantalla | PASS | R3, R4 y R10 |
+| CA-6 en pantalla | PASS | R8 y R9 |
+| CA-2 y CA-3 en pantalla | PASS | R11, R12 y R2 |
+| CA-7, CA-8 y CA-9 en pantalla | PASS | R1, R2, R3 y R13 |
+| CA-10 / RF-7 / RF-8 | PASS | T4, T5 y R14 |
+| CA-11 | PASS | R15 |
+| RF-1, RF-2 y RF-3 (con la decisión 1) | PASS | L1–L4, R1, R5. La ayuda fija dice que la bruta y el costo se calculan al guardar, y las líneas iguales a la vigente muestran "Como en la versión vigente: bruta …; costo …". |
+| RF-10 | PASS | T1–T3 y R13 |
+| CA-16 | PASS | A1, T6 y G2–G4 |
+| DEF-003 a DEF-006 y OBS-2 | PASS | D1–D4 y O1 |
+
+### Defectos encontrados
+
+#### DEF-007
+- Severidad: MINOR
+- Criterio de aceptación afectado: RF-13 ("errores junto a su línea y campo"). CA-4 se cumple.
+- Descripción: el rechazo por ciclo (`RECIPE_CYCLE`) y por profundidad (`RECIPE_TOO_DEEP`) solo aparece en el aviso superior, con la ruta. La línea que cierra el ciclo no se marca (`aria-invalid` sin marcar y sin enlace en el resumen).
+- Pasos para reproducir: Salsa usa Salsa base. En el editor de Salsa base, añadir "Salsa" en la línea 3 y guardar.
+- Resultado esperado: el error también junto a la línea 3, en su campo ingrediente, o un enlace a ella.
+- Resultado actual: solo "Ruta del ciclo: Salsa base → Salsa → Salsa base. Quita el ingrediente que cierra el ciclo." arriba. `invalid=[]` y ningún enlace en el resumen.
+- Evidencia: R6 y R7, y `/tmp/…/cyc.html` (borrado al limpiar).
+- Impacto: bajo. La ruta nombra el ingrediente y lo escrito se conserva, pero con 40 filas hay que buscarlo a mano.
+- Recomendación: asociar el error de ciclo a la línea del ingrediente que lo cierra (el penúltimo nombre de la ruta), si la información disponible lo permite.
+
+#### DEF-008
+- Severidad: MINOR
+- Criterio de aceptación afectado: RF-13 / CA-15 (teclado). La funcionalidad se cumple.
+- Descripción: tras "Añadir 10 filas" (POST sin JS que vuelve a pintar la página), el foco vuelve al inicio del documento (`BODY`). Quien usa teclado debe tabular otra vez por la cabecera y todas las filas ya escritas (hasta unas 150 paradas) para llegar a las filas nuevas.
+- Pasos para reproducir: en el editor, con teclado, escribir dos líneas, tabular hasta "Añadir 10 filas" y pulsar Enter.
+- Resultado esperado: el foco o la vista en la primera fila nueva (o en el botón), sin depender de JS.
+- Resultado actual: `document.activeElement` es `BODY` y la vista está al principio.
+- Evidencia: K1 ("after rows … BODY#").
+- Impacto: bajo o medio para quien solo usa teclado o lector de pantalla con recetas largas. Es utilizable.
+- Recomendación: devolver la página con un ancla o `autofocus` en la primera fila nueva.
+
+### Observaciones (sin defecto del PR 3)
+
+- **OBS-10 (TRIVIAL, decisión 2):** a 360 px el `caption` de la lista ("Recetas vigentes con su costo teórico por unidad") va dentro de la región desplazable y se ve cortado hasta desplazarla. Su nombre accesible está completo.
+- **OBS-11 (anterior al PR, fuera de H-1):** en `field-password` (alta de usuario y cuenta), el foco solo cambia el color del borde (`outline` transparente). H-1 cubrió `field-input`, `field-select` y `field-textarea`. Candidato a un ajuste aparte.
+- **OBS-12 (anterior, igual en T1):** sin sesión, las rutas de `/inventario/*` redirigen a `/acceso` sin `next` (`/usuarios/nuevo` sí lo lleva). La búsqueda no ignora acentos ("cárne" no encuentra "Carne"). `pagina` fuera de rango dice "N resultados" y "No hay … que coincidan". En los tres casos T1 se comporta igual.
+- **OBS-13:** tras reiniciar la `api`, las sesiones del admin caducan (`/acceso?expirada=1`), porque las sesiones están en memoria. Comportamiento existente; el reintento del 503 funciona tras volver a entrar.
+- **OBS-14:** volver a cerrar una receta ya cerrada redirige con `ok=closed` y el aviso "cerrada" otra vez. Es idempotente, sin efectos.
+- **Objetivos de área táctil:** los enlaces de texto en línea miden 14–17 px de alto (excepción de WCAG 2.5.8 para enlaces en línea). La casilla "inventariable" mide 20×20 con su etiqueta clicable. No son defectos.
+
+### Regresión
+
+`npm test` completo en verde (A1). T1 sin cambios funcionales (T6). Landings (G3). Resto del admin y foco H-1 (G2). `api/src`, `landing-pages`, migraciones y `deploy/` sin diff (F1 y G4).
+
+### Responsive
+
+39 combinaciones de pantalla y ancho sin desbordamiento de página (B1). Las tablas se desplazan dentro de su región a 360 px, como en la decisión aprobada. Editor en tarjetas a 360 px y en filas a 1280 (capturas).
+
+### Accesibilidad
+
+axe: 0 violaciones en 34 ejecuciones (Y1). Estructura correcta en todas (Y2). Teclado y foco visibles (K1–K4). Los errores tienen icono, texto, `aria-invalid` y `role=alert`, y no dependen del color. DEF-007 y DEF-008 son MINOR.
+
+### UX/UI
+
+`_stich_source_/` no tiene diseño del admin. Se respetan H-1 a H-5 y las tres decisiones del usuario. "Merma %" cabe en un renglón a 1280 px.
+
+### Performance
+
+Las pantallas de recetas cargan solo `main.css`, `main.js` y sus 2 módulos existentes, más las fuentes ya usadas. Sin 404 ni errores de consola. El costo se calcula al consultar (DT-7) y no se observaron latencias anómalas en los logs (decenas de ms).
+
+### SEO
+
+No aplica: el admin es interno. Cada pantalla tiene `title` propio.
+
+### Pendientes de revisión manual
+
+- Muestra con VoiceOver (Y3) no ejecutada: no hay forma de manejar el lector de pantalla desde este entorno. La sustituyen la estructura (Y2), axe (Y1), el foco en el aviso con `role=alert` y `autofocus`, y el nombre accesible de la región (K4). Ningún CA depende solo de ella.
+- Si el usuario quiere ver el comportamiento a 360 px en su propia ventana, puede reducirla o usar el modo dispositivo de DevTools: la ventana del agente estaba maximizada y no se pudo redimensionar.
+
+### Limpieza
+
+Comprobada, no supuesta:
+
+- `api`, `inventory-manager`, `landing-pages`, la `api` y el admin de T1 y Chrome sin interfaz detenidos. Puertos 3210–3213, 3220–3222, 3307 y 9333 libres. Sin procesos `vitest`, `server.ts` ni `inventory-import`.
+- `docker compose -p restaurante-qa-050c down -v`: contenedor, volumen y redes eliminados. `docker ps -a`, `docker volume ls` y `docker network ls` iguales a la línea base. `restaurante-mysql-dev-1` sigue `Exited`.
+- 0 bases `restaurante_test*` antes de bajar el contenedor. `restaurante`, `restaurante_qa050c_obs2` y `restaurante_shadow` desaparecieron con su volumen.
+- Worktree temporal de T1 eliminado (`git worktree list` solo muestra `main` y el del PR 3).
+- La mutación de `decimal.ts` se revirtió (diff vacío). `git status` del worktree igual al inicial salvo este ticket.
+- Pestañas de Claude in Chrome cerradas (grupo vacío). No hizo falta desactivar JS en Chrome: el modo sin JS se probó en la pestaña sin interfaz.
+- Scratchpad vaciado: entornos, cookies, sondas, capturas, logs y el perfil de Chrome.
+
+### Resultado final
+
+QA_APPROVED
+
+Todos los CA del alcance del PR 3 están en PASS con evidencia contra la `api` real y la semilla. No hay defectos BLOCKER, CRITICAL ni MAJOR. Hay 2 MINOR (DEF-007 y DEF-008), que no bloquean y se proponen como seguimiento. `npm test` completo en verde.
+
+## Commit y Pull Request — PR 3
+
+- Rama `feature/REQ-F-050-recetas-pantallas`, salida de `origin/epic/inventario` (`9371772`). La épica no cambió desde entonces (`git fetch` el 2026-11-25): no hizo falta integrarla.
+- Antes del commit: `npm run typecheck` y `npm run lint` en 0. Índice revisado: solo los archivos del PR 3 y este ticket, añadidos por nombre, sin capturas, scratchpad, `.codegraph`, CSS generado ni temporales.
+- Pruebas permanentes: las de "QA Report — PR 3" (A2), todas funcionales (pantallas, 403, conflicto, DEF-003, DEF-005 y DEF-006).
+- **Seguimiento aparte, aprobado por el usuario** ("DEF-007 y DEF-008 como seguimiento aparte"):
+  - DEF-007 (MINOR): el error de ciclo y de profundidad no se marca en la línea que cierra el ciclo.
+  - DEF-008 (MINOR): tras "Añadir 10 filas" sin JS, el foco vuelve al inicio del documento.
+  - No se corrigen en este PR. Las observaciones OBS-10 a OBS-14 tampoco.
+- Pull Request en borrador hacia `epic/inventario`; se marca listo tras el último push, cuando haya terminado su ejecución del CI. El número, la URL y el resultado del CI están en el informe de senior-fullstack (sin más commits después de marcarlo listo).
+
 ## Historial de cambios
+
+### Commit y Pull Request PR 3 (senior-fullstack, 2026-11-25)
+
+`epic/inventario` sin cambios (`9371772`). `typecheck` y `lint` en 0. DEF-007 y DEF-008 quedan como seguimiento aparte, aprobado por el usuario. Commit `feat` y PR en borrador hacia `epic/inventario`; se marca listo tras su CI. Estado `READY_FOR_MERGE`, sujeto al CI del PR.
+
+### QA Report PR 3, ronda 1 (senior-qa, 2026-11-25)
+
+QA Action Plan aprobado ("Sí, apruebo"). Ejecución completa contra la `api` real, MySQL `restaurante-qa-050c` y la semilla: `build:css`, `typecheck`, `lint` y `npm test` en 0; permisos, CSRF, escapado, idempotencia, 409/503, límite de 40 filas, ciclos y profundidad, T1, OBS-2 con la `api` de T1, DEF-003 a DEF-006; 360/768/1280 px con emulación CDP, teclado, sin JS y axe (0 violaciones). 2 defectos MINOR (DEF-007 y DEF-008). Limpieza comprobada. Estado `QA_APPROVED`.
+
+### QA Action Plan PR 3 (senior-qa, 2026-11-25)
+
+Plan de QA del PR 3 (pantallas de recetas contra la `api` real y la semilla, navegador real a 360/768/1280 px, teclado, sin JS y axe, permisos, CSRF, idempotencia, 409/503, límite de 40 filas, escapado, regresión de T1 y del admin, DEF-003 a DEF-006 y OBS-2 en base desechable, `npm test` completo). Estado `NEEDS_QA_PLAN_APPROVAL`.
+
+### Implementación PR 3 (senior-fullstack, 2026-11-25)
+
+Pantallas de recetas, campos nuevos de la ficha de T1, cliente HTTP de recetas, DEF-003 a DEF-006, OBS-2 y documentación, en `feature/REQ-F-050-recetas-pantallas` (sin commit). `build:css`, `typecheck`, `lint` y `npm test` en verde. Estado `NEEDS_IMPLEMENTATION_APPROVAL`.
 
 ### PR 2b abierto (senior-fullstack, 2026-11-20)
 

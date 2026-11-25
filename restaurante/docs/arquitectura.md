@@ -291,15 +291,18 @@ directo a esa sección. La `api` nunca siembra el inventario al arrancar: en des
 `GET recetas` (lista con el costo por unidad), `GET recetas/ingredientes`, `GET recetas/versiones/:id`
 (historial sin costo), `GET|POST articulos/:id/recetas` (vigente con su costo e historial; versión
 nueva con `baseVersionId` e `Idempotency-Key`: 201, o 200 sin cambios), `POST articulos/:id/recetas/cerrar`
-y `GET articulos/:id/usado-en`. Errores propios: 422 `RECIPE_CYCLE` (con `path`) y `RECIPE_TOO_DEEP`,
-409 `RECIPE_NOT_ALLOWED`, `RECIPE_ITEM_INACTIVE`, `RECIPE_VERSION_CONFLICT` (con la vigente en
+y `GET articulos/:id/usado-en`. Errores propios: 422 `RECIPE_CYCLE` (con `path`) y `RECIPE_TOO_DEEP`
+(con la cadena más larga: `path` y `usedBy`; REQ-F-054), los dos con `path` desde la receta que se
+guarda, de modo que `path[1]` es el ingrediente de una de sus líneas, 409 `RECIPE_NOT_ALLOWED`, `RECIPE_ITEM_INACTIVE`, `RECIPE_VERSION_CONFLICT` (con la vigente en
 `current`) e `ITEM_IN_ACTIVE_RECIPES` (al inactivar, con `recipes`; se confirma con `recipes: 'keep'`),
 y 503 `INVENTORY_BUSY`. El artículo lleva además `referenceCost` e `inventoriable`. El cliente tipado
 de `contracts/admin-client.ts` expone esas rutas (el 409 de receta llega como `recipeCurrent`).
 `inventory-manager` las muestra en "Inventario → Recetas" (`/inventario/recetas`): la receta del
 artículo (`/inventario/articulos/:id/receta`), el editor de versión (`…/receta/nueva`, sin JavaScript:
-un `fieldset` por línea, bloques de 10 filas hasta 40 con "Añadir 10 filas", un único `datalist` de
-ingredientes cuyo nombre resuelve el admin con la lista de la API), la confirmación de cierre
+un `fieldset` por línea, bloques de 10 filas hasta 40 con "Añadir 10 filas", que deja el foco en la
+primera fila nueva, un único `datalist` de ingredientes cuyo nombre resuelve el admin con la lista de
+la API, y el ciclo o el exceso de niveles marcados en su línea, con su enlace en una sola alerta;
+REQ-F-054), la confirmación de cierre
 (`…/receta/cerrar`) y cada versión del historial (`/inventario/recetas/versiones/:id`). La ficha del
 artículo muestra el costo de referencia, el inventariable y "Usado en"; inactivar un artículo usado en
 recetas vigentes lista esas recetas y pide confirmarlo.

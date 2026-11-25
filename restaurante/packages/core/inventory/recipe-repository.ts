@@ -14,7 +14,7 @@ import { ITEM_PAGE_SIZE, QUERY_MAX, normalizeAuthor, type InventoryAuthor } from
 import { RECIPE_ACTIONS, type InventoryStore, type InventoryStoreReader, type InventoryStoreTx } from './inventory-store.ts';
 import { isItemType, type InventoryItem, type ItemType } from './item-schema.ts';
 import { createCostCalculator, type RecipeCost } from './recipe-cost.ts';
-import { buildAdjacency, findCycle, recipeDepth } from './recipe-graph.ts';
+import { buildAdjacency, deepestChain, findCycle, recipeDepth } from './recipe-graph.ts';
 import {
   INGREDIENT_TYPES,
   RECIPE_ITEM_TYPES,
@@ -229,15 +229,21 @@ export function createRecipeRepository({ store, now = () => new Date() }: { stor
         if (baseVersionId !== (current?.id ?? null)) throw new RecipeVersionConflictError(current ? versionInfo(current) : null);
 
         const adjacency = buildAdjacency(await tx.currentRecipes(), { itemId, ingredientIds: lines.map((line) => line.ingredientId) });
-        const cycle = findCycle(adjacency, itemId);
-        if (cycle) {
+        // Nombres de una ruta de rechazo: los ya leídos y, en una consulta, los que falten (`#id` si no está).
+        const namesOf = async (ids: readonly number[]): Promise<string[]> => {
           const names = new Map([...ingredients.values(), item].map((entry) => [entry.id, entry.name]));
-          const missing = cycle.filter((id) => !names.has(id));
-          for (const other of await tx.itemsByIds(missing)) names.set(other.id, other.name);
-          throw new RecipeCycleError(cycle.map((id) => names.get(id) ?? `#${id}`));
-        }
+          const missing = [...new Set(ids.filter((id) => !names.has(id)))];
+          if (missing.length > 0) for (const other of await tx.itemsByIds(missing)) names.set(other.id, other.name);
+          return ids.map((id) => names.get(id) ?? `#${id}`);
+        };
+        const cycle = findCycle(adjacency, itemId);
+        if (cycle) throw new RecipeCycleError(await namesOf(cycle));
         const depth = recipeDepth(adjacency, itemId);
-        if (depth > RECIPE_LIMITS.MAX_DEPTH) throw new RecipeTooDeepError(depth, RECIPE_LIMITS.MAX_DEPTH);
+        if (depth > RECIPE_LIMITS.MAX_DEPTH) {
+          const chain = deepestChain(adjacency, itemId);
+          const names = await namesOf([...chain.path, ...chain.usedBy]);
+          throw new RecipeTooDeepError(depth, RECIPE_LIMITS.MAX_DEPTH, names.slice(0, chain.path.length), names.slice(chain.path.length));
+        }
 
         const at = changeInstant(now(), current);
         if (current && !(await tx.closeRecipeVersion(current.id, at))) throw new RecipeVersionConflictError(null);

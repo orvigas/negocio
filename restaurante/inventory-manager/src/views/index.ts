@@ -147,14 +147,19 @@ export function createViews(renderer: Renderer) {
     });
   }
 
-  /** Resumen de errores (RF-16): enlaces a cada campo con error y, sin campo, el texto. */
-  function errorSummary(errors: Record<string, string>, fields: readonly { name: string; label: string }[]): SafeHtml | null {
+  /**
+   * Resumen de errores (RF-16): enlaces a cada campo con error y, sin campo, el texto. `heading` cambia el
+   * título y añade párrafos cuando el rechazo tiene su propia explicación (ciclo o profundidad de una
+   * receta; REQ-F-054, RF-1 d): así hay una sola alerta con el foco.
+   */
+  function errorSummary(errors: Record<string, string>, fields: readonly { name: string; label: string }[], heading?: { title: string; paragraphs?: string[] }): SafeHtml | null {
     const entries = Object.entries(errors);
     if (entries.length === 0) return null;
     const labelOf = new Map(fields.map((field) => [field.name, field.label]));
     return notice({
       tone: 'error',
-      title: 'No se guardó nada: revisa los campos marcados.',
+      title: heading?.title ?? 'No se guardó nada: revisa los campos marcados.',
+      paragraphs: heading?.paragraphs ?? [],
       extra: render('partials/error-summary', {
         items: join(
           entries.map(([name, message]) => {

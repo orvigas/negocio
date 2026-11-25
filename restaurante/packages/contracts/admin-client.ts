@@ -125,8 +125,10 @@ const apiErrorBodySchema = z.object({
       current: z.union([itemCurrentSchema, recipeCurrentSchema, z.null()]).optional(),
       /** 409 `PAGE_CONFLICT`: la versión vigente de la página (REQ-F-044). */
       currentPage: pageConflictSchema.optional(),
-      /** 422 `RECIPE_CYCLE` (REQ-F-050, RF-5): la ruta del ciclo, por nombre. */
+      /** 422 `RECIPE_CYCLE` (REQ-F-050, RF-5) y `RECIPE_TOO_DEEP` (REQ-F-054, RF-2): la ruta, por nombre, desde la receta que se guarda. */
       path: z.array(z.string()).optional(),
+      /** 422 `RECIPE_TOO_DEEP` (REQ-F-054, RF-2): las recetas que usan la que se guarda, de la más cercana hacia arriba. */
+      usedBy: z.array(z.string()).optional(),
       /** 409 `ITEM_IN_ACTIVE_RECIPES` (REQ-F-050, RF-7): recetas vigentes que lo usan. */
       recipes: z.array(z.object({ itemId: z.number(), name: z.string() })).optional(),
     })

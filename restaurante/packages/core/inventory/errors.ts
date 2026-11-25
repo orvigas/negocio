@@ -177,16 +177,24 @@ export class RecipeCycleError extends InventoryError {
   }
 }
 
-/** RF-5: más niveles de recetas anidadas de los permitidos (422 RECIPE_TOO_DEEP). */
+/**
+ * RF-5: más niveles de recetas anidadas de los permitidos (422 RECIPE_TOO_DEEP). Con la cadena más
+ * larga, por nombre (REQ-F-054, RF-2): `path` desde el artículo hacia abajo (como el ciclo) y `usedBy`
+ * desde quien lo usa directamente hacia arriba.
+ */
 export class RecipeTooDeepError extends InventoryError {
   readonly depth: number;
   readonly max: number;
+  readonly path: string[];
+  readonly usedBy: string[];
 
-  constructor(depth: number, max: number) {
+  constructor(depth: number, max: number, path: string[], usedBy: string[]) {
     super(`Las recetas quedarían anidadas en ${depth} niveles; el máximo es ${max}.`);
     this.name = 'RecipeTooDeepError';
     this.depth = depth;
     this.max = max;
+    this.path = path;
+    this.usedBy = usedBy;
   }
 }
 

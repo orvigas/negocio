@@ -192,19 +192,31 @@ describe('ciclos y profundidad (RF-5, CA-4)', () => {
     expect(store.state.recipeVersions).toEqual(before);
   });
 
-  it('admite 8 niveles de recetas anidadas y rechaza el noveno', async () => {
-    const { item, save, line } = await setup();
+  it('admite 8 niveles de recetas anidadas y rechaza el noveno con la cadena más larga, por una línea o por quien lo usa', async () => {
+    const { store, item, save, line } = await setup();
     const sal = await item('Sal ficticia', 'insumo');
+    const levels: InventoryItem[] = [];
     let previous = sal;
     for (let level = 1; level <= 8; level += 1) {
       const next = await item(`Nivel ${level}`, 'intermedio');
       await save(next, '1', [line(previous, '1')]);
+      levels.push(next);
       previous = next;
     }
     const ninth = await item('Nivel 9', 'intermedio');
-    const error = await rejectionOf(save(ninth, '1', [line(previous, '1')]));
+    const error = await rejectionOf(save(ninth, '1', [line(sal, '1'), line(previous, '1')]));
     expect(error).toBeInstanceOf(RecipeTooDeepError);
-    expect(error).toMatchObject({ depth: 9, max: 8 });
+    // REQ-F-054, RF-2: `path` baja desde la receta que se guarda (path[1]: el ingrediente de su línea).
+    expect(error).toMatchObject({ depth: 9, max: 8, path: ['Nivel 9', 'Nivel 8', 'Nivel 7', 'Nivel 6', 'Nivel 5', 'Nivel 4', 'Nivel 3', 'Nivel 2', 'Nivel 1'], usedBy: [] });
+
+    // El exceso por quien lo usa: Base usada por Nivel 1 (que ya tiene 8 niveles encima) y sin subrecetas propias.
+    const base = await item('Base ficticia', 'intermedio');
+    const first = levels[0];
+    if (!first) throw new Error('falta el Nivel 1');
+    await save(first, '1', [line(sal, '1'), line(base, '1')]);
+    const external = await rejectionOf(save(base, '1', [line(sal, '1')]));
+    expect(external).toMatchObject({ depth: 9, path: ['Base ficticia'], usedBy: ['Nivel 1', 'Nivel 2', 'Nivel 3', 'Nivel 4', 'Nivel 5', 'Nivel 6', 'Nivel 7', 'Nivel 8'] });
+    expect(store.state.recipeVersions.filter((version) => version.itemId === ninth.id || version.itemId === base.id)).toEqual([]);
   });
 });
 

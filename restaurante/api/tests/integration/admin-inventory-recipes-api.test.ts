@@ -12,6 +12,7 @@ import {
   recipeIngredientsResponseSchema,
   recipeListResponseSchema,
   recipeSaveResponseSchema,
+  recipeTooDeepErrorSchema,
   recipeUsedInResponseSchema,
   recipeVersionResponseSchema,
   validationErrorSchema,
@@ -175,7 +176,7 @@ describe('recetas en la API', () => {
     expect(detail.versions.map((entry) => entry.number)).toEqual([2, 1]);
   });
 
-  it('errores: 422 por línea y cuerpo cerrado, 422 RECIPE_CYCLE con la ruta, 409 RECIPE_NOT_ALLOWED y 404', async () => {
+  it('errores: 422 por línea y cuerpo cerrado, 422 RECIPE_CYCLE con la ruta, 422 RECIPE_TOO_DEEP con la cadena, 409 RECIPE_NOT_ALLOWED y 404', async () => {
     const h = await startAdmin({ users: [MANAGER] });
     const gema = await session(h.url, MANAGER);
     const { carne, cocida, categoryId } = await catalog(h, gema);
@@ -194,6 +195,21 @@ describe('recetas en la API', () => {
     expect(cycle.status).toBe(422);
     expect(recipeCycleErrorSchema.parse(await cycle.json()).error.path).toEqual(['Salsa ficticia', 'Carne cocida ficticia', 'Salsa ficticia']);
 
+    // REQ-F-054, RF-2: 8 niveles valen; el noveno se rechaza con la cadena, desde la receta que se guarda.
+    let below = carne;
+    const names: string[] = [];
+    for (let level = 1; level <= 9; level += 1) {
+      const created = await call(h.url, `${I}/articulos`, gema, { method: 'POST', body: { type: 'intermedio', categoryId, name: `Nivel ${level} ficticio`, baseUnit: 'kg' } });
+      const next = inventoryItemResponseSchema.parse(await created.json()).item;
+      const saved = await post(next.id, { baseVersionId: null, yieldQuantity: '1', lines: [line(below.id, '1')] });
+      names.unshift(next.name);
+      if (level === 9) {
+        expect(saved.status).toBe(422);
+        expect(recipeTooDeepErrorSchema.parse(await saved.json()).error).toMatchObject({ message: 'Las recetas quedarían anidadas en 9 niveles; el máximo es 8.', path: names, usedBy: [] });
+      } else expect(saved.status).toBe(201);
+      below = next;
+    }
+
     const notAllowed = await post(carne.id, { baseVersionId: null, yieldQuantity: '1', lines: [line(cocida.id, '1')] });
     expect(notAllowed.status).toBe(409);
     expect((await notAllowed.json()).error.code).toBe('RECIPE_NOT_ALLOWED');
@@ -202,7 +218,8 @@ describe('recetas en la API', () => {
       expect(res.status, path).toBe(404);
       expect((await res.json()).error.code).toBe('ITEM_NOT_FOUND');
     }
-    expect(h.inventoryStore.state.recipeVersions).toHaveLength(1);
+    // La de Carne cocida y los 8 niveles: ningún rechazo escribe.
+    expect(h.inventoryStore.state.recipeVersions).toHaveLength(1 + 8);
   });
 
   it('inactivar un ingrediente de una receta vigente: 409 ITEM_IN_ACTIVE_RECIPES con la lista; con recipes=keep se inactiva y la receta lo avisa (CA-10)', async () => {

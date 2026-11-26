@@ -6,6 +6,7 @@ import type { InventoryConfig } from '../config.ts';
 import { clearSessionId } from '../session.ts';
 import type { HeaderSection, PageContext, Views } from '../views/index.ts';
 import { CATEGORIES_PATH, ITEMS_PATH } from '../views/inventory.ts';
+import { DOCUMENTS_PATH, STOCK_PATH, SUPPLIERS_PATH } from '../views/inventory-kardex.ts';
 import { RECIPES_PATH } from '../views/inventory-recipes.ts';
 import type { ControllerKit, Ctx, Session } from './common.ts';
 
@@ -28,15 +29,25 @@ const BACK: Readonly<Partial<Record<HeaderSection, { backHref: string; backLabel
   inventory: { backHref: ITEMS_PATH, backLabel: 'Volver a artículos' },
   'inventory-categories': { backHref: CATEGORIES_PATH, backLabel: 'Volver a categorías' },
   'inventory-recipes': { backHref: RECIPES_PATH, backLabel: 'Volver a recetas' },
+  'inventory-stock': { backHref: STOCK_PATH, backLabel: 'Volver a existencias' },
+  'inventory-documents': { backHref: DOCUMENTS_PATH, backLabel: 'Volver a documentos' },
+  'inventory-suppliers': { backHref: SUPPLIERS_PATH, backLabel: 'Volver a proveedores' },
 });
 const backOf = (section: HeaderSection) => BACK[section] ?? { backHref: ITEMS_PATH, backLabel: 'Volver a artículos' };
+
+/** Vuelta tras el acceso: la pantalla actual con su query en un GET; en un POST, la del formulario. */
+const backTo = (ctx: Ctx, returnTo: string): string => (ctx.method === 'GET' ? (ctx.querystring === '' ? ctx.path : `${ctx.path}?${ctx.querystring}`) : returnTo);
 
 export function createInventoryAccess({ config, kit, views }: { config: InventoryConfig; kit: ControllerKit; views: Views }) {
   const notFound = (ctx: Ctx, context?: PageContext, section: HeaderSection = 'inventory') => kit.notFound(ctx, { context, section, ...backOf(section) });
 
-  /** Sesión y rol administrador o gerente (RF-9 de REQ-F-049). null si ya respondió. */
+  /**
+   * Sesión y rol administrador o gerente (RF-9 de REQ-F-049). null si ya respondió. Sin sesión, una
+   * pantalla (GET) vuelve a sí misma con su query tras el acceso (OBS-12 a de REQ-F-050); un envío
+   * (POST) vuelve a `returnTo`, la pantalla del formulario.
+   */
   async function inventorySession(ctx: Ctx, returnTo: string, onUnavailable?: () => boolean): Promise<Session | null> {
-    const auth = await kit.session(ctx, returnTo, onUnavailable);
+    const auth = await kit.session(ctx, backTo(ctx, returnTo), onUnavailable);
     if (!auth) return null;
     if (!INVENTORY_ROLES.includes(auth.user.role)) {
       kit.forbidden(ctx, auth, FORBIDDEN);
@@ -50,7 +61,7 @@ export function createInventoryAccess({ config, kit, views }: { config: Inventor
     if (!result.ok && result.kind === 'http') {
       if (result.status === 401) {
         clearSessionId(ctx, config.isProduction);
-        return kit.toLogin(ctx, returnTo);
+        return kit.toLogin(ctx, backTo(ctx, returnTo));
       }
       if (result.status === 403 && result.error.code === 'FORBIDDEN_ROLE') return kit.forbidden(ctx, auth, FORBIDDEN);
       if (result.status === 403) {

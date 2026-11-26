@@ -6,7 +6,10 @@
 # Los respaldos nuevos son de formato 2 (sin app-data, REQ-F-045); restore.sh y verify-backup.sh se
 # prueban también con uno de formato 1 (con app-data), como los que siguen en R2.
 #
-#   ops/backup/ci/smoke.sh <imagen production> <imagen migrate>
+#   ops/backup/ci/smoke.sh <imagen production> <imagen migrate> [<imagen api>]
+#
+# Con la imagen api (REQ-F-051, DT-T3-6 A), el respaldo lleva `api_image` y el simulacro ejecuta
+# `inventory:verify` contra la base restaurada.
 #
 # Requiere Docker con compose, bash, curl, age, gzip, tar, flock y GNU coreutils (Linux).
 # Lo que no se puede probar aquí (bucket locks y ciclo de vida de R2, el timer real, Healthchecks
@@ -17,6 +20,7 @@ set -euo pipefail
 
 APP_SRC=${1:?uso: smoke.sh <imagen production> <imagen migrate>}
 MIGRATE_SRC=${2:?uso: smoke.sh <imagen production> <imagen migrate>}
+API_SRC=${3:-}
 
 OPS_SRC=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 DEPLOY_SRC=$(cd -- "$OPS_SRC/../../deploy" && pwd -P)
@@ -170,6 +174,7 @@ USERS=$(mysql_root 'SELECT COUNT(*) FROM user')
 PRODUCTS=$(mysql_root 'SELECT COUNT(*) FROM product')
 check "hay datos de prueba (usuarios $USERS, productos $PRODUCTS)" test "$USERS" -ge 1 -a "$PRODUCTS" -ge 1
 printf 'RESTAURANTE_APP_IMAGE=%s\nRESTAURANTE_MIGRATE_IMAGE=%s\nRESTAURANTE_COMMIT=%s\n' "$APP_SRC" "$MIGRATE_SRC" "$(printf '1%.0s' {1..40})" >"$BASE/state/release.env"
+if [[ -n "$API_SRC" ]]; then printf 'RESTAURANTE_API_IMAGE=%s\n' "$API_SRC" >>"$BASE/state/release.env"; fi
 APP_VOLUME="${COMPOSE_PROJECT_NAME}_app-data"
 # REQ-F-045 (RN-5): ningún servicio monta app-data.
 check 'ningún contenedor monta app-data' test -z "$(docker ps -aq --filter "volume=$APP_VOLUME")"
@@ -210,6 +215,7 @@ tar -C "$WORK/plain" -xf "$WORK/plain/bundle.tar"
 check 'el paquete descifrado pasa la verificación de sumas' verify_parts "$WORK/plain"
 check 'el manifiesto trae los conteos de producción' test "$(manifest_value "$WORK/plain/manifest.txt" users)" = "$USERS" -a "$(manifest_value "$WORK/plain/manifest.txt" products)" = "$PRODUCTS"
 check 'el manifiesto trae la imagen de la app' test "$(manifest_value "$WORK/plain/manifest.txt" app_image)" = "$APP_SRC"
+check 'el manifiesto trae la imagen de la api (vacía si release.env no la tiene)' test "$(manifest_value "$WORK/plain/manifest.txt" api_image)" = "$API_SRC"
 check 'el volcado está completo' sh -c "gzip -dc '$WORK/plain/dump.sql.gz' | tail -n 1 | grep -q '^-- Dump completed'"
 check 'el respaldo es de formato 2' test "$(manifest_value "$WORK/plain/manifest.txt" format)" = 2
 check 'el paquete solo trae el manifiesto y el volcado (sin app-data)' test "$(tar -tf "$WORK/plain/bundle.tar" | sort | tr '\n' ' ')" = 'dump.sql.gz manifest.txt '
@@ -366,6 +372,11 @@ check 'verify-backup.sh y lib.sh no usan chmod/chown con --' sh -c "! grep -nE '
 install -m 600 "$ETC/backup.env" "$WORK/r2-readonly.conf"
 check 'verify-backup.sh --drill termina con 0' run verify RESTAURANTE_BACKUP_CONFIG="$WORK/r2-readonly.conf" RESTAURANTE_BACKUP_LOG="$WORK/pruebas.log" sh -c "printf '%s\n' '$IDENTITY' | '$OPS_SRC/verify-backup.sh' --drill"
 check 'el resultado queda registrado' grep -q 'resultado=ok' "$WORK/pruebas.log"
+if [[ -n "$API_SRC" ]]; then
+  check 'el simulacro ejecuta inventory:verify y da 0 (REQ-F-051)' grep -q 'inventory:verify da 0' "$WORK/logs/verify.log"
+else
+  check 'sin imagen api, el simulacro lo anota y no falla' grep -q 'no trae la imagen de la api' "$WORK/logs/verify.log"
+fi
 check 'sin contenedores ni redes del simulacro' test -z "$(docker ps -aq --filter name=restaurante-verify-)"
 check 'verify-backup.sh --drill con un respaldo de formato 1 termina con 0' run verify-old RESTAURANTE_BACKUP_CONFIG="$WORK/r2-readonly.conf" RESTAURANTE_BACKUP_LOG="$WORK/pruebas.log" sh -c "printf '%s\n' '$IDENTITY' | '$OPS_SRC/verify-backup.sh' --drill --file '$WORK/antiguo.tar.age'"
 check 'comprueba los JSON de app-data' grep -q 'app-data: JSON de molotes/ y birria/ presentes' "$WORK/logs/verify-old.log"

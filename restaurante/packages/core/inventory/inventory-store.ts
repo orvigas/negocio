@@ -134,6 +134,8 @@ export interface InventoryStoreReader {
   allStock(): Promise<StockRow[]>;
   documentById(id: number): Promise<KardexDocument | null>;
   documentByIdempotencyKey(key: string): Promise<KardexDocument | null>;
+  /** Documentos con esos ids (los que no existen se omiten). Una consulta: Kardex del artículo (RF-8). */
+  documentsByIds(ids: readonly number[]): Promise<KardexDocument[]>;
   /** Movimientos del documento, por línea. */
   documentMovements(documentId: number): Promise<KardexMovement[]>;
   /** Devoluciones de una compra, de la más antigua a la más reciente. */

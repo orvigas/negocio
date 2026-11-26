@@ -138,6 +138,8 @@ export interface ItemKardex {
   item: InventoryItem;
   stock: StockRow | null;
   movements: KardexMovement[];
+  /** Fecha del hecho (`AAAA-MM-DD`) de cada documento de la página, por id (RF-8). */
+  occurredOn: Map<number, string>;
   page: { number: number; size: number; total: number };
 }
 
@@ -889,7 +891,14 @@ export function createKardexRepository({ store, timeZone, now = () => new Date()
         const item = await reader.getItem(itemId);
         if (!item) throw new ItemNotFoundError();
         const [stocks, result] = await Promise.all([reader.stockRows([itemId]), reader.itemMovements(itemId, page, KARDEX_PAGE_SIZE)]);
-        return { item, stock: stocks.get(itemId) ?? null, movements: result.movements, page: { number: page, size: KARDEX_PAGE_SIZE, total: result.total } };
+        const documents = await reader.documentsByIds([...new Set(result.movements.map((movement) => movement.documentId))]);
+        return {
+          item,
+          stock: stocks.get(itemId) ?? null,
+          movements: result.movements,
+          occurredOn: new Map(documents.map((document) => [document.id, document.occurredOn])),
+          page: { number: page, size: KARDEX_PAGE_SIZE, total: result.total },
+        };
       });
     },
 

@@ -1,7 +1,8 @@
 import type { Context } from 'koa';
 
-import { IDEMPOTENCY_HEADER, INVENTORY_UNITS, type AdminUser, type InventoryHistoryEntry, type InventoryItem, type InventoryItemKind, type InventoryItemType, type InventoryUnit } from '@restaurante/contracts';
+import { IDEMPOTENCY_HEADER, INVENTORY_UNITS, type AdminUser, type ItemStock, type InventoryHistoryEntry, type InventoryItem, type InventoryItemKind, type InventoryItemType, type InventoryUnit } from '@restaurante/contracts';
 
+import { createKardexDouble, handleKardex, isKardexPath, type KardexDouble } from './api-double-kardex.ts';
 import { createRecipeState, handleRecipes, recipesUsing, type RecipeState } from './api-double-recipes.ts';
 
 /**
@@ -27,6 +28,8 @@ export interface InventoryDouble {
   categories: Category[];
   history: Map<number, InventoryHistoryEntry[]>;
   recipes: RecipeState;
+  /** Kardex, existencias y proveedores (REQ-F-051). */
+  kardex: KardexDouble;
   /** Cambia un artículo "desde otra sesión" (para el 409). */
   touch(id: number, by: string): void;
 }
@@ -50,6 +53,7 @@ export function createInventoryDouble(): InventoryDouble {
     categories: [],
     history: new Map(),
     recipes: createRecipeState(),
+    kardex: createKardexDouble(),
     touch(id, by) {
       const found = double.items.find((item) => item.id === id);
       if (found) Object.assign(found, { version: found.version + 1, updatedAt: LATER, updatedBy: by });
@@ -73,6 +77,7 @@ const invalid = (ctx: Context, fields: Record<string, string>) => fail(ctx, 422,
 
 export function handleInventory(ctx: Context, double: InventoryDouble, user: AdminUser, path: string, record: Record<string, unknown>): void {
   if (user.role !== 'admin' && user.role !== 'gerente') return fail(ctx, 403, 'FORBIDDEN_ROLE', FORBIDDEN_MESSAGE);
+  if (isKardexPath(path)) return handleKardex(ctx, double.kardex, double.items, user, path, record);
   if (path.startsWith('/recetas') || /^\/articulos\/\d+\/(recetas|usado-en)(\/|$)/.test(path)) return handleRecipes(ctx, double, user, path, record);
   const author = user.name;
   const categoryOf = (id: number) => double.categories.find((category) => category.id === id);
@@ -140,7 +145,8 @@ export function handleInventory(ctx: Context, double: InventoryDouble, user: Adm
       parent: parent ? { id: parent.id, name: parent.name, active: parent.active } : null,
       variants: double.items.filter((candidate) => candidate.parentId === item.id).map(({ id, name, sku, baseUnit, active }) => ({ id, name, sku, baseUnit, active })),
       locked: false,
-      stock: null,
+      // REQ-F-051 (RF-10): la existencia que la prueba haya puesto en el artículo; si no, sin existencias.
+      stock: (item as InventoryItem & { stock?: ItemStock | null }).stock ?? null,
       equivalences,
     };
   }

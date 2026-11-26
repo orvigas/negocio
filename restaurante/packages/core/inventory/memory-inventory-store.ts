@@ -235,6 +235,9 @@ export function createMemoryInventoryStore(): MemoryInventoryStore {
         const document = data.documents.find((other) => other.idempotencyKey === key);
         return document ? withReversal(document) : null;
       },
+      async documentsByIds(ids) {
+        return data.documents.filter((document) => ids.includes(document.id)).map(withReversal);
+      },
       async documentMovements(documentId) {
         return structuredClone(data.movements.filter((movement) => movement.documentId === documentId).sort((a, b) => a.line - b.line));
       },

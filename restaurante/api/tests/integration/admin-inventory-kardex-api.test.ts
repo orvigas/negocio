@@ -230,7 +230,8 @@ describe('lecturas (RF-7, RF-8, RF-9)', () => {
     const h = await startAdmin({ users: [MANAGER] });
     const gema = await session(h.url, MANAGER);
     const { masa, taco, categoryId } = await catalog(h, gema);
-    await post(h, gema, `${I}/documentos/compras`, purchaseBody(masa.id));
+    // OBS-27: la compra lleva una fecha del hecho distinta de la de registro (2026-10-26).
+    await post(h, gema, `${I}/documentos/compras`, { ...purchaseBody(masa.id), occurredOn: '2026-10-20' });
     await post(h, gema, `${I}/documentos/ajustes`, { occurredOn: TODAY, reason: 'error_captura', lines: [{ itemId: masa.id, direction: 'salida', quantity: '60', unit: 'kg' }] });
 
     const stock = stockResponseSchema.parse(await (await call(h.url, `${I}/existencias?estado=negativos`, gema)).json());
@@ -254,6 +255,8 @@ describe('lecturas (RF-7, RF-8, RF-9)', () => {
     }
 
     const kardex = itemKardexResponseSchema.parse(await (await call(h.url, `${I}/articulos/${masa.id}/kardex`, gema)).json());
+    // OBS-21 y OBS-27: cada movimiento lleva la fecha del hecho de su documento (RF-8), no la de registro.
+    expect(kardex.movements.map((m) => m.occurredOn)).toEqual([TODAY, '2026-10-20']);
     expect(kardex.movements.map((m) => [m.seq, m.typeLabel, m.balanceAfter])).toEqual([
       [2, 'Ajuste', '-10.000'],
       [1, 'Compra', '50.000'],

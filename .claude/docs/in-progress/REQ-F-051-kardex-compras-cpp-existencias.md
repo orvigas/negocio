@@ -2,7 +2,19 @@
 
 ## Estado
 
-READY_FOR_MERGE
+QA_APPROVED
+
+QA del PR 3a aprobado por senior-qa el 2026-11-26 (ver "QA Report — PR 3a", ronda 2). El usuario aprobó la implementación de la ronda 2 con "Si" y eligió la opción A en REQUIREMENT_AMBIGUITY-1. DEF-005 y DEF-006 quedan corregidos y verificados, y los costos unitarios se muestran con 4 decimales. Quedan dos observaciones nuevas de cobertura (OBS-27 y OBS-28) y el seguimiento de los decimales de las recetas de T2. Siguiente paso: senior-fullstack hace el commit y abre el PR hacia `epic/inventario` (T4).
+
+PR 3a, ronda 2: corregidos DEF-005 y DEF-006, aplicada la opción A de REQUIREMENT_AMBIGUITY-1 (decisión del usuario: "si, con tus recomendaciones") y atendidas OBS-20, OBS-21, OBS-22 y OBS-26. Sin commit (ver "Implementation Result — PR 3a", "Ronda 2").
+
+QA del PR 3a ejecutado por senior-qa el 2026-11-26 (ver "QA Report — PR 3a", ronda 1). El usuario aprobó el plan con "Lo apruebo" (las cuatro recomendaciones). Hay dos defectos `MINOR`: DEF-005 (la reversión con la `api` caída pierde el motivo) y DEF-006 (desbordamiento horizontal de la lista de proveedores a 360 px). Hay además una ambigüedad del requisito sobre con cuántos decimales se muestran los costos unitarios (REQUIREMENT_AMBIGUITY-1), que necesita la decisión del usuario antes de devolverlo a senior-fullstack. La prueba de humo de respaldos se ejecutó en local y pasa.
+
+QA Action Plan del PR 3a redactado por senior-qa el 2026-11-26 (ver "QA Action Plan — PR 3a"), sin ejecutar ninguna prueba. El usuario aprobó la implementación del 3a y partir el PR 3 en 3a y 3b con "Si". Quedan 4 decisiones para la aprobación del plan.
+
+PR 3a de T3 (pantallas de lectura, proveedores, reversión, OBS-12 a y c, `ops/backup` con DT-T3-6 A y `despliegue.md`) implementado en `feature/REQ-F-051-kardex-pantallas`, desde `origin/epic/inventario` (`c4c2ad6`, con el PR 2 mergeado en #197), sin commit (ver "Implementation Result — PR 3a"). El PR 3 completo pasaba de 1 500 líneas, así que se propone partirlo: el **3b** trae los formularios con líneas (saldo inicial, compra, ajuste y devolución). Se pide confirmar la partición.
+
+PR 2 mergeado en `epic/inventario` (#197, merge `c4c2ad6`). Historial del PR 2:
 
 PR 2: commit `f02c5f1` en `feature/REQ-F-051-kardex-api` y PR #197 (https://github.com/orvigas/negocio/pull/197) hacia `epic/inventario` (no se despliega). El CI de `76df742`, con el PR listo (ejecución 45827311555), pasó `calidad`, `docker`, `auditoria` y `pruebas` (1/2 y 2/2). Siguiente paso: el usuario revisa y hace merge del PR #197. Después viene el PR 3 (pantallas, OBS-12 a y c, `ops/backup`, `despliegue.md` y OBS-13 a OBS-18).
 
@@ -2841,6 +2853,711 @@ OBS-13 a OBS-18 siguen registradas para el PR 3 o el cierre. OBS-19 queda resuel
 
 QA_APPROVED
 
+## Implementation Result — PR 3a
+
+### Rama
+
+`feature/REQ-F-051-kardex-pantallas` (worktree `.claude/worktrees/req-f-051-pr3`), creada desde `origin/epic/inventario` (`c4c2ad6`) y sin upstream. Destino: `epic/inventario`. Sin commit.
+
+### Partición propuesta del PR 3
+
+El PR 3 completo (todas las pantallas, OBS-12, `ops/backup` y la documentación) pasa con holgura de las ~1 500 líneas: solo este 3a añade 1 594. Se propone:
+
+- **3a (implementado):**
+  - existencias valorizadas, Kardex y costo real en la ficha;
+  - proveedores;
+  - lista y detalle de documentos, y reversión con confirmación;
+  - OBS-12 (a) y (c);
+  - `ops/backup` y CI (DT-T3-6 A);
+  - `docs/despliegue.md`.
+- **3b (pendiente):** los cuatro formularios con líneas (saldo inicial, compra, ajuste y devolución), con el patrón de bloques de 10 filas hasta 50 y `autofocus` en la primera fila nueva (PV-T3-4).
+  - Cada uno con su `Idempotency-Key` (OBS-16) y el mapeo de `lines.N.item` y `lines.N.sourceMovement` a sus campos (OBS-15).
+  - Las acciones "Nueva compra", "Saldo inicial", "Ajuste" y "Devolver" en Documentos y en el detalle de una compra.
+  - CA-25 para esos formularios.
+
+Hasta el 3b, la épica tiene la API de esos documentos pero no sus formularios en el admin.
+
+### Cambios realizados
+
+- **Diseño.** `_stich_source_/` solo tiene diseños de las landings; no hay ninguno del admin. Se reutiliza el sistema visual del admin y los parciales de T1 y T2 (PV-8 y PV-T3-10), sin Stitch.
+- **Pantallas** (`inventory-manager`, SSR, sin JavaScript obligatorio). Todas las tablas tienen `caption` y van en una región desplazable con foco, y los estados llevan texto («Negativo», «Sin costo», «Inactivo», «Revertido por #N», «Reversión de #N»).
+  - **Existencias** (`/inventario/existencias`, RF-7):
+    - filtros por GET: búsqueda, categoría, tipo y estado (`todos`, `negativos` o `sin_costo`);
+    - columnas: artículo (enlace a la ficha), categoría, tipo, existencia, CPP, último costo y valor;
+    - totales de todos los resultados en un `dl`;
+    - paginación.
+  - **Ficha del artículo** (RF-8, RF-10):
+    - existencia, CPP y último costo, en lugar del «Sin costo» de T2. Un artículo sin existencias muestra que no las lleva;
+    - sección "Kardex" con las fechas de registro y del hecho, el tipo, el enlace al documento, la cantidad capturada y en unidad base, las existencias anterior y nueva, el costo, el CPP posterior y el usuario;
+    - el Kardex se pagina con `?kardex=N#kardex`.
+  - **Proveedores** (RF-1):
+    - lista con estado, búsqueda e inactivar o reactivar (POST con versión);
+    - alta y edición con errores por campo;
+    - conflicto de versión como en T1: lo escrito se conserva y se puede "Guardar mis cambios sobre la versión vigente";
+    - historial en la edición.
+  - **Documentos** (RF-9): lista con filtro por tipo y proveedor; detalle con datos, líneas (y "Por devolver" en una compra), devoluciones, estado y la acción "Revertir".
+  - **Reversión** (RF-4):
+    - confirmación con la tabla de movimientos contrarios y aviso si alguna existencia quedará negativa;
+    - motivo obligatorio (422 en el campo);
+    - un 409 con el mensaje (`DOCUMENT_HAS_RETURNS` nombra las devoluciones);
+    - con la API caída, se conserva lo escrito.
+    - OBS-14: un error de las líneas se muestra como aviso, porque el formulario no tiene ese campo.
+  - **Subnavegación de Inventario:** se añaden "Existencias", "Documentos" y "Proveedores".
+  - **OBS-16:** cada escritura envía `Idempotency-Key` (el `requestId` del formulario, que se conserva al repintar).
+- **OBS-12 (a).**
+  - `RETURN_PATTERNS` (`session.ts`) acepta `/inventario/…` con su query, solo con segmentos de minúsculas, dígitos y guiones, y caracteres de una query codificada: sin redirección abierta.
+  - `inventorySession` y el 401 de la API vuelven a la pantalla actual con su query en un GET, y en un POST a la del formulario.
+- **OBS-12 (c).** En las listas de artículos, recetas, existencias, proveedores, documentos y Kardex, una página fuera de rango dice «Esta página no existe: hay N … en M páginas» con un enlace a la última, y nunca «N resultados» junto a «No hay…».
+- **API y core (pequeño):** el Kardex del artículo devuelve la fecha del hecho de cada movimiento (`occurredOn`; RF-8). Para eso, `itemKardexMovementSchema` en el contrato, `documentsByIds` en el store (una consulta) y el campo `occurredOn` en `itemKardex`.
+- **`ops/backup` (DT-T3-6 A):**
+  - `backup.sh` escribe `api_image=` en el manifiesto (opcional; vacía si `release.env` no la trae; inválida → código 3).
+  - `verify-backup.sh --drill`, paso 5: si la base restaurada tiene `inventory_movement` y el manifiesto trae `api_image`, ejecuta `node scripts/inventory-verify.ts` con esa imagen en la red efímera, con el usuario de la app y contenedor `--read-only`. Si el resultado no es 0, el simulacro falla. Sin Kardex o sin imagen, solo lo anota.
+  - `ops/backup/ci/smoke.sh` recibe la imagen `api` como tercer argumento, comprueba `api_image` en el manifiesto y que el simulacro diga «inventory:verify da 0».
+  - `.github/workflows/ci.yml` le pasa `restaurante:api`. Esa prueba solo corre en el PR hacia `main`.
+- **`docs/despliegue.md`:**
+  - §5: nuevo "Arranque del inventario en producción": desplegar, reinstalar `ops/backup`, importación A5, saldo inicial en pantalla y compras, más el comando `inventory:verify` en el contenedor;
+  - §6: la migración no requiere pasos de vuelta atrás;
+  - §9 y §11.1: las tablas del Kardex y `api_image`;
+  - §11.7: `inventory:verify` tras restaurar;
+  - §11.8: paso 7 del simulacro.
+- **Pruebas** (funcionales):
+  - `inventory-manager/tests/integration/inventory-kardex-views.test.ts`, nuevo, 7 pruebas: Editor 403 y sin secciones (CA-21); vuelta tras el acceso con la query y destino externo ignorado (OBS-12 a); existencias con caption, estados, totales y fuera de rango, también en artículos (CA-16, OBS-12 c); ficha con CPP, último costo y Kardex, y un Compuesto sin Kardex (CA-17, RF-10); proveedores con clave de envío, 422, conflicto con «guardar encima» e inactivación (CA-22, OBS-16); documento, reversión con aviso de negativo, motivo obligatorio y clave, y el 409 de devoluciones (CA-6).
+  - `tests/support/api-double-kardex.ts`, nuevo: doble de las rutas del Kardex.
+  - `inventory.test.ts` (se modifica): la subnavegación tiene 6 enlaces.
+
+### Criterios de aceptación (alcance del 3a)
+
+| CA | Estado | Evidencia |
+|---|---|---|
+| CA-6 (pantalla) | PASS | Reversión con confirmación, "Revertido por #N" y sin "Revertir" en el original ni en la reversión |
+| CA-16 | PASS (admin) | Columnas, totales y estados con texto |
+| CA-17 | PASS | Kardex en la ficha con enlace al documento y paginación |
+| CA-18 (ficha) | PASS | CPP y último costo en la ficha; las recetas ya mostraban el origen "CPP" (T2) |
+| CA-21 (admin) | PASS | Editor 403 sin las secciones |
+| CA-22 (admin) | PASS | Nombre repetido, conflicto y reactivar |
+| CA-23 | Implementado; prueba en el PR hacia `main` | `inventory:verify` en el simulacro; la prueba de humo de respaldos solo corre allí (`ci.yml`) |
+| CA-25 | Parcial | 3a: 360 px, teclado, foco y axe son sondas de QA. Los formularios con líneas, en el 3b |
+| CA-26 | Pendiente de QA | `npm test` en verde en las tres apps |
+| CA-31 | PASS | (a) vuelta con la query y destino externo ignorado; (b) del PR 1a; (c) página fuera de rango |
+| CA-1 a CA-5, CA-29 y CA-30 (pantalla) | 3b | Formularios con líneas |
+
+### Validaciones ejecutadas
+
+Todo desde `restaurante/` en el worktree.
+
+- `npm run build:css`: 0.
+- `npm run typecheck`: 0.
+- `npm run lint`: 0, con `check-private-data`.
+- `npm test`: `api` 1281, `landing-pages` 917 e `inventory-manager` 304, todas en verde.
+- **Scripts de respaldo:**
+  - `bash -n` de `backup.sh`, `verify-backup.sh` y `ci/smoke.sh`: correcto;
+  - `shellcheck -x` como en el CI (`lib.sh backup.sh env-backup.sh restore.sh verify-backup.sh ci/smoke.sh`, con la imagen `koalaman/shellcheck:stable`, borrada después): 0.
+  - **No se pudo ejecutar** la prueba de humo de respaldos en local: necesita Linux con GNU coreutils. Corre en el PR de la épica hacia `main`. Se pide a QA que la ejecute o que lo acepte como riesgo.
+- **Limpieza:** sin bases `restaurante_test*`, sin procesos de Vitest y sin temporales. Borré la imagen de shellcheck. El worktree se conserva.
+
+### Archivos afectados
+
+- **Nuevos:**
+  - en `restaurante/inventory-manager/src/`: `controllers/inventory-kardex.ts` y `views/inventory-kardex.ts`;
+  - `views/pages/inventory-{list,detail,simple-form}.html`;
+  - `views/partials/kardex-{state,totals,totals-list}.html`;
+  - en `restaurante/inventory-manager/tests/`: `integration/inventory-kardex-views.test.ts` y `support/api-double-kardex.ts`.
+- **Modificados:**
+  - en `restaurante/inventory-manager/src/`: `{app,routes,session}.ts`, `controllers/{inventory,inventory-common}.ts`, `views/{index,inventory,inventory-recipes}.ts` y `views/pages/inventory-item.html`;
+  - en `restaurante/inventory-manager/tests/`: `integration/inventory.test.ts` y `support/api-double-inventory.ts`;
+  - `restaurante/packages/contracts/inventory-kardex.ts`;
+  - `restaurante/packages/core/inventory/{inventory-store,kardex-repository,memory-inventory-store}.ts`;
+  - `restaurante/packages/db/src/prisma-kardex.ts`;
+  - `restaurante/api/src/admin/inventory-kardex-routes.ts`;
+  - `restaurante/ops/backup/{backup,verify-backup}.sh` y `restaurante/ops/backup/ci/smoke.sh`;
+  - `.github/workflows/ci.yml`;
+  - `restaurante/docs/despliegue.md`;
+  - este ticket.
+- **Sin cambios en `deploy/`.** `ops/` no entra en su suma.
+
+### Riesgos o pendientes
+
+- **Prueba de humo de respaldos:** el cambio de `verify-backup.sh` y de `smoke.sh` solo se valida en el PR de la épica hacia `main`. Si fallara allí, bloquearía ese PR.
+- **Tablas reutilizadas:** las tablas de las pantallas reutilizan los parciales `recipe-table` de T2 (el bloque BEM lleva el nombre de recetas). Se podría renombrar a un bloque genérico en un ajuste aparte.
+- **Observaciones del QA del PR 2:**
+  - OBS-14, OBS-15 y OBS-16: atendidas en la reversión (OBS-14 y OBS-16) y en proveedores (OBS-16); en los formularios, con el 3b.
+  - OBS-13 (un solo error de filtro a la vez), OBS-17 (`estado` en español en Existencias y con valores de core en proveedores) y OBS-18 (semilla no atómica): sin cambios, como se registraron.
+- **Pendiente del 3b:** los formularios con líneas, CA-25 de esos formularios, OBS-15 en esos formularios y las acciones que los abren.
+- **Cierre de T3 (sin autorización todavía):** se propondrá editar `.claude/CLAUDE.md` §8 y la sección "Persistencia y API" de `senior-fullstack.md`.
+
+### Ronda 2 (correcciones del QA del PR 3a)
+
+**Decisión del usuario sobre REQUIREMENT_AMBIGUITY-1.** El usuario respondió "si, con tus recomendaciones" (vía la sesión principal). Elige la **opción A**: en las pantallas de T3, los costos unitarios se muestran con **4 decimales**, según RN-T3-10 y PV-13. Los importes y valores siguen con 2.
+- Con 4 decimales: CPP, último costo y costo unitario en existencias, ficha, Kardex, líneas de documento y vista previa de la reversión.
+- Con 2 decimales: totales, importes de línea y valores.
+
+El resultado de la ronda 1 equivale a `QA_REJECTED`.
+
+**Recetas de T2: no se alinean en este PR.**
+- Su presentación (costos con 2 decimales mediante `money()`) se aprobó y pasó QA en REQ-F-050, y la decisión A se tomó sobre las pantallas de T3.
+- Cambiarla tocaría las pruebas y la pantalla del editor de recetas, que quedan fuera del alcance de T3 (D-2: no se reabre T2).
+- Queda una inconsistencia visible: la ficha muestra el CPP con 4 decimales y la receta con 2. Se propone resolverla en un seguimiento menor con la misma regla (costo unitario con 4 decimales e importes con 2), si el usuario lo quiere.
+
+**Defectos corregidos.**
+- **DEF-005:** `reverse` (`inventory-manager/src/controllers/inventory-kardex.ts`) pasa `onUnavailable` a `inventorySession` y escribe antes de leer el documento.
+  - Con la API caída, tanto si falla la sesión como si falla la escritura o la lectura posterior, vuelve a pintar la confirmación (503) con el aviso, el motivo y el mismo `requestId`, sin la tabla de vista previa (`reversalUnavailable`).
+  - La vista acepta un documento mínimo (id y tipo).
+  - **Prueba:** en `inventory-kardex-views.test.ts`, con los modos `writes-down` y `down` del doble, comprueba el 503 con el motivo y la clave; al volver la API, el mismo envío revierte.
+- **DEF-006:** la región desplazable de las tablas (`partials/recipe-table.html`) lleva `relative`.
+  - Así los `span.sr-only` de los botones de fila (posición absoluta) quedan dentro de la región y no ensanchan la página a 360 px.
+  - Es la misma causa en todas las tablas que usan ese parcial: proveedores, y por precaución existencias, documentos, Kardex y recetas. Solo la de proveedores tenía botones con texto oculto.
+  - No hay prueba permanente: jsdom no calcula la maquetación. Lo comprueba QA en el navegador.
+
+**Observaciones atendidas.**
+- **OBS-20:** la prueba de OBS-12 (a) prueba 6 destinos hostiles; todos vuelven a `/`. Son `//otro`, `/inventario//otro`, `/inventario/../usuarios`, `/inventario\otro`, una query con `<script>` y una URL absoluta.
+- **OBS-21:** `occurredOn` tiene ahora prueba permanente en la API (`admin-inventory-kardex-api.test.ts`) y en MySQL (`prisma-inventory-kardex.test.ts`), con la fecha del hecho distinta de la de registro y `documentsByIds` con un id inexistente.
+- **OBS-22:** el estado "Revertido por #N" enlaza a la reversión en la lista. El detalle añade "Ver la reversión #N" o "Ver el documento revertido #N".
+- **OBS-26:** las cantidades y la existencia resultante de la vista previa de la reversión llevan la unidad base, tomada de las líneas del documento.
+- **Sin tocar:** OBS-23, OBS-24 y OBS-25, como pidió el usuario.
+
+**Validaciones (ronda 2), desde `restaurante/`:**
+- `npm run build:css`: 0.
+- `npm run typecheck`: 0.
+- `npm run lint`: 0, con `check-private-data`.
+- `npm test`: `api` 1281, `landing-pages` 918 e `inventory-manager` 305, todas en verde.
+- Limpieza: sin bases `restaurante_test*`, sin procesos de Vitest y sin los guiones temporales de la corrección.
+- No se verificó `scrollWidth` a 360 px con un navegador en esta ronda: queda para QA.
+
+**Archivos de la ronda 2:**
+- `restaurante/inventory-manager/src/controllers/inventory-kardex.ts`
+- `restaurante/inventory-manager/src/views/inventory-kardex.ts`
+- `restaurante/inventory-manager/src/views/partials/recipe-table.html`
+- `restaurante/inventory-manager/tests/integration/inventory-kardex-views.test.ts`
+- `restaurante/api/tests/integration/admin-inventory-kardex-api.test.ts`
+- `restaurante/landing-pages/tests/integration/prisma-inventory-kardex.test.ts`
+- este ticket.
+
+## QA Action Plan — PR 3a
+
+### Objetivo
+
+Validar con evidencia que el PR 3a (rama `feature/REQ-F-051-kardex-pantallas`, sin commit, sobre `c4c2ad6`) cumple su alcance:
+
+- las pantallas del admin (existencias, ficha con Kardex, proveedores, documentos y reversión) muestran lo que devuelve la `api` real, solo con teclado, a 360 px y en escritorio, y sin JavaScript;
+- OBS-12 (a) y (c), OBS-14 y OBS-16 quedan resueltas;
+- el Kardex de la API devuelve la fecha del hecho de cada movimiento;
+- el respaldo y el simulacro (DT-T3-6 A) funcionan, también con un Kardex que no cuadra;
+- `despliegue.md` describe procedimientos que funcionan tal como están escritos;
+- nada de T1, T2, el PR 2 ni el resto del monorepo cambia.
+
+Fuentes: el ticket (RF-1, RF-4, RF-7 a RF-10, RF-14, RF-16, RF-17, CA-6, CA-16 a CA-18, CA-21 a CA-23, CA-25, CA-26 y CA-31, el Technical Action Plan §"Frontend (PR 3)" y §"Documentación", el DoD del PR 3 y las observaciones del QA del PR 2), el diff del worktree y las reglas del proyecto. Se revisó `_stich_source_/`: no tiene diseños del admin, así que aplican PV-8 y PV-T3-10 (sistema visual del admin, sin Stitch). CodeGraph solo indexa `main`: en Q1 se usaron lecturas dirigidas del worktree. NotebookLM no está disponible en esta sesión.
+
+### Requisito bajo prueba
+
+- **En el 3a:** RF-1 (pantallas), RF-4, RF-7, RF-8, RF-9 (lista y detalle), RF-10 (ficha), RF-14 (DT-T3-6 A), RF-16 y RF-17 (a) y (c); CA-6 y CA-7 (pantalla), CA-16, CA-17, CA-18 (ficha), CA-21 (admin), CA-22 (admin), CA-23 (simulacro), CA-25 (estas pantallas), CA-26 y CA-31 (a) y (c); OBS-14 y OBS-16 (reversión y proveedores); `occurredOn` del Kardex de la API; `despliegue.md` §5, §6, §9, §11.1, §11.7 y §11.8; y `ci.yml`.
+- **Fuera del 3a, sin tratarlo como defecto:** los formularios con líneas (saldo inicial, compra, ajuste y devolución), sus acciones, "Añadir 10 filas" (CA-25, segunda viñeta), CA-1 a CA-5, CA-29 y CA-30 en pantalla y OBS-15. Todo esto es del 3b. Que "Devolver" o "Nueva compra" no existan todavía es lo esperado.
+- **Ya cerrado:** CA-31 (b) (PR 1a) y las reglas de cálculo (PR 1b y PR 2).
+
+### Riesgos identificados
+
+- **R-1. La prueba de humo de respaldos no se ejecutó.** `ops/backup/ci/smoke.sh` necesita Linux con GNU coreutils, `flock` y `age`, y en el CI solo corre en el PR hacia `main`. Si falla allí, bloquea el PR de la épica. Se ejecuta en un contenedor Linux local (BK1).
+- **R-2. El caso positivo de la prueba de humo es débil.** La base de la prueba no tiene movimientos del Kardex, así que `inventory:verify` da 0 sobre un Kardex vacío. Esa comprobación no demuestra que el simulacro falle con un Kardex que no cuadra. Se prueban el camino de fallo y una base con datos (BK2 y BK3).
+- **R-3. Redirección abierta (OBS-12 a).** El patrón nuevo de `RETURN_PATTERNS` admite cualquier ruta `/inventario/...` con su query. Hay que probar con `//`, `..`, barras invertidas, mayúsculas, CRLF codificado y esquemas (O1).
+- **R-4. Fecha del hecho de respaldo.** Si falta el documento en el mapa, `itemKardex` usa `recordedAt.toISOString().slice(0, 10)`: la fecha UTC, no la de `BUSINESS_TIMEZONE`. No debería pasar nunca (la FK lo impide). Se comprueba que el mapa siempre trae la fecha y se valora el respaldo (K2).
+- **R-5. OBS-16 con la API caída.** La reversión y el alta de proveedor deben conservar lo escrito y el mismo `requestId`, de modo que el reintento no duplique (I2).
+- **R-6. Parciales reutilizados.** Las tablas nuevas reutilizan el bloque BEM `recipe-table` de T2. Es un riesgo de nomenclatura, no funcional: hay que comprobar que las recetas no cambian (B8) y se registra como observación.
+- **R-7. `api/.env`, `inventory-manager/.env` y `landing-pages/.env` del worktree.** Todo arranque usa `env -i` con variables propias y una base `restaurante_test_qa051d_*`. Se comprueba por conteos que no se tocó la base de desarrollo. Lección del QA del PR 2: los procesos se detienen por su puerto, no con `pkill` por patrón.
+
+### Entorno
+
+- **MySQL 8.4 local** (`restaurante-mysql-dev-1`), base `restaurante_test_qa051d_ui` migrada con el worktree, más la semilla de desarrollo (`npm run inventory:seed-dev`: 22 artículos, 3 recetas, 3 proveedores y 7 documentos).
+  - Datos adicionales por la API: 55 proveedores, 51 documentos y 51 movimientos de un artículo (para paginar), una compra con devolución, un saldo de 0.001 kg a 99 999 999 999.0000 seguido de una compra a 0.00 (para OBS-14), un Compuesto y un no inventariable.
+- **Servicios del worktree** con `env -i`: la `api` en 3201 (`TZ=Asia/Tokyo`, `BUSINESS_TIMEZONE=America/Mexico_City`), el `inventory-manager` en 3203 y la `landing-pages` en 3200.
+- **Usuarios de QA:** administrador, gerente y editor.
+
+### Criterios de aceptación
+
+| CA (alcance del 3a) | Pruebas |
+|---|---|
+| CA-16 y RF-7 (existencias) | P1, O2, B1–B4 |
+| CA-17 y RF-8 (Kardex en la ficha) | P2, K1, K2, O2, B1–B4 |
+| CA-18 y RF-10 (ficha) | P2, B8 |
+| RF-1 y CA-22 (proveedores) | P3, I1, B1–B4 |
+| RF-9 (documentos) | P4, O2 |
+| CA-6, CA-7 y RF-4 (reversión) | P5, I2, I3 |
+| CA-21 (admin) | P6 |
+| CA-25 (estas pantallas) | B1 a B7 |
+| CA-26 | S1 a S5, R1, R2, B8 |
+| CA-31 (a) y (c) | O1, O2 |
+| OBS-14 y OBS-16 | I2, I3 |
+| CA-23 (simulacro, DT-T3-6 A) | BK1 a BK6 |
+| `despliegue.md` y `ci.yml` | D1 a D4 |
+
+### Pruebas funcionales (HTTP contra el admin y la `api` reales)
+
+Sondas en el scratchpad (`curl` y `fetch` con cookie de sesión y el token CSRF del formulario). Cada valor de la pantalla se compara con el JSON de la API.
+
+- **P1. Existencias:**
+  - columnas (artículo con enlace, categoría, tipo, existencia y unidad, CPP, último costo, valor y estado);
+  - totales en el `dl`, iguales a los de la API (semilla: 3 349.00, −140.00 y 10 "Sin costo"), "Negativo" y "Sin costo" con texto;
+  - filtros por GET (búsqueda con acentos "cébolla", categoría, tipo y estado) y su conservación al paginar;
+  - un filtro inválido con su mensaje, no un error 500;
+  - sin Compuestos, padres ni no inventariables.
+- **P2. Ficha (RF-8, RF-10):**
+  - existencia, CPP y último costo de un insumo con compras;
+  - el texto de un artículo sin existencias (Compuesto, no inventariable y padre);
+  - el Kardex con las columnas de RF-8 (fecha y hora de registro y fecha del hecho en `BUSINESS_TIMEZONE`, tipo legible, enlace al documento, cantidad capturada y base con signo, existencias anterior y nueva, costo, CPP posterior y usuario), del más reciente al más antiguo;
+  - `?kardex=2#kardex` con 51 movimientos;
+  - recetas con origen "CPP" (CA-18).
+- **P3. Proveedores:**
+  - lista con estado (por defecto, Activos) y búsqueda sin acentos;
+  - alta válida y con errores por campo (nombre vacío, 81 caracteres, repetido sin distinguir mayúsculas, contacto de texto libre), conservando lo escrito;
+  - edición; conflicto de versión con dos sesiones, "Guardar mis cambios sobre la versión vigente" y el historial con `overwrite_after_conflict`;
+  - inactivar y reactivar (POST con versión), y reactivar con el nombre en uso (mensaje);
+  - historial en la edición.
+- **P4. Documentos:**
+  - lista del más reciente al más antiguo, con filtros por tipo y proveedor y paginación;
+  - detalle de cada tipo de la semilla (saldo, compra, ajuste y reversión) con cabecera, líneas, total, autor, "Con IVA" en una compra, "sin cargo" en un importe 0, "Por devolver" en una compra, sus devoluciones, y "Revertido por #N" o "Reversión de #N" con enlace;
+  - "Revertir" solo en un documento no revertido que no es una reversión;
+  - 404 de un documento inexistente.
+- **P5. Reversión (RF-4, CA-6, CA-7):**
+  - la confirmación muestra la tabla de movimientos contrarios y el aviso de negativo cuando corresponde;
+  - el motivo es obligatorio (sin él o con más de 400 caracteres, error en el campo conservando lo escrito);
+  - al revertir, el original queda "Revertido por #N" y deja de ofrecer "Revertir";
+  - 409 `ALREADY_REVERSED` y `DOCUMENT_HAS_RETURNS` (nombra las devoluciones) con su mensaje;
+  - CA-6 sobre los valores de la semilla.
+- **P6. Permisos (CA-21):**
+  - el Editor recibe 403 en las 13 rutas nuevas y no ve "Inventario" ni la subnavegación;
+  - sin sesión, cada GET redirige al acceso;
+  - cada POST sin el token CSRF del formulario da 403 y no escribe nada;
+  - el Gerente y el Administrador lo usan todo;
+  - la subnavegación tiene 6 enlaces, con `aria-current` en la sección actual.
+
+### Pruebas negativas y casos límite
+
+- **O1. OBS-12 (a), redirección tras el acceso (R-3):**
+  - sin sesión, `/inventario/existencias?q=c%C3%A1rne&estado=negativos&pagina=2` vuelve a esa misma URL tras iniciar sesión, igual con cada pantalla nueva y con la ficha con `?kardex=2`;
+  - un POST sin sesión vuelve a la pantalla del formulario;
+  - `next` con `//evil.example`, `/inventario//evil.example`, `/inventario/../usuarios`, `/inventario/%2e%2e/x`, `/inventario\evil`, `/INVENTARIO`, `/inventario?x=%0d%0aSet-Cookie:a`, `https://evil.example` y `javascript:` acaban en `/`, nunca fuera del origen, y no inyectan cabeceras;
+  - las rutas de T1, T2 y del cotizador conservan su comportamiento.
+- **O2. OBS-12 (c), página fuera de rango:** en las 6 listas (artículos, recetas, existencias, proveedores, documentos y Kardex de la ficha), `pagina=999` con resultados muestra un solo aviso "Esta página no existe…" con un enlace que lleva a la última página, y nunca "N resultados" junto a "No hay…". Una lista vacía sigue mostrando su "No hay…". `pagina=0` o `abc` muestran su mensaje.
+- **O3. Escape:** un proveedor y un artículo con `<script>`, comillas y `&` en el nombre o el motivo se ven como texto en todas las pantallas.
+
+### Idempotencia y API caída (OBS-14 y OBS-16)
+
+- **I1.** Alta de proveedor: el mismo formulario enviado dos veces (mismo `requestId`) crea un solo proveedor. Con la `api` detenida (puerto cerrado), se conserva lo escrito y el `requestId`; al volver la `api`, el reenvío crea uno solo.
+- **I2.** Reversión: doble envío con el mismo `requestId` → un solo documento de reversión. Con la `api` detenida, se conservan el motivo y el `requestId`; al volver, el reenvío crea una sola reversión.
+- **I3. OBS-14:** la reversión que daría un CPP fuera de rango (escenario D3 del QA del PR 2) muestra el error de la línea como aviso legible en la confirmación, con lo escrito conservado. Ningún campo `lines.0.quantity` sin dueño ni un 500.
+
+### Kardex de la API (`occurredOn`)
+
+- **K1.** `GET articulos/:id/kardex`, en MySQL: cada movimiento trae `occurredOn`, igual al del documento (también uno de hoy − 3 y uno de hoy − 31), con la `api` en `Asia/Tokyo`. El contrato `itemKardexResponseSchema` lo valida. `documentsByIds` hace una sola consulta por página (se registra con el log de consultas de MySQL o por revisión).
+- **K2. Fecha de respaldo (R-4):** revisión de que, con la FK de `inventory_movement.document_id`, el mapa siempre trae el documento. Se registra si el respaldo en UTC podría alcanzarse; si no, queda como observación.
+
+### Navegador (Claude in Chrome)
+
+Pestaña nueva, cerrada al terminar, en 360×800, 768×1024 y 1280×900. No se pulsan elementos que abran `alert` o `confirm`.
+
+- **B1. Responsive:** existencias, ficha con Kardex, lista y alta de proveedores, edición con conflicto, lista y detalle de documentos y confirmación de reversión. Sin desbordamiento horizontal del documento (`scrollWidth` ≤ `innerWidth`), con las tablas desplazables dentro de su región. Sin textos cortados ni objetivos menores de 24 px.
+- **B2. Teclado:** recorrido con Tab por cada pantalla. Foco visible en enlaces, botones, campos y regiones de tabla desplazables. Orden lógico. Se puede filtrar, paginar, abrir un documento, revertir y guardar un proveedor sin ratón.
+- **B3. Semántica:** un `h1` y jerarquía correcta; `caption` y `scope` en las tablas; `dl` de totales; etiquetas en todos los campos; errores con texto y enlazados (resumen de errores con enlaces al campo); estados que no dependen solo del color.
+- **B4. axe-core** (ver decisión 2): 0 violaciones en las 8 pantallas de B1 y en los estados de error (proveedor con errores, conflicto y reversión sin motivo), a 360 y 1280 px.
+- **B5. Sin JavaScript:** el admin no carga JS obligatorio en estas pantallas. Con JS desactivado para el origen (o, si la extensión no lo permite, por `curl` y envíos de formulario), se pueden filtrar, paginar, revertir y guardar.
+- **B6.** La consola sin errores, y la red sin peticiones fallidas ni a terceros.
+- **B7.** Contraste de "Negativo", "Sin costo", "Inactivo" y los avisos frente al sistema visual del admin (axe más una revisión puntual).
+- **B8. Regresión visual de T1 y T2:** lista y ficha de artículos, recetas (con el parcial `recipe-table` reutilizado) y su editor, a 360 y 1280 px, comparadas con la épica previa (`c4c2ad6`) por capturas.
+
+### Respaldos y simulacro (DT-T3-6 A, CA-23)
+
+**Cómo ejecutar la prueba de humo en local (R-1).** Se usa un contenedor Linux "runner", no el Mac:
+
+- Imagen `ubuntu:24.04` con `docker-ce-cli` y `docker-compose-plugin` (del repositorio de Docker), `age`, `curl`, `jq`, `util-linux` (`flock`) y GNU coreutils.
+- El socket de Docker Desktop montado (`-v /var/run/docker.sock:/var/run/docker.sock`) y `--network host`. Así los `127.0.0.1:<puerto>` que publica `smoke.sh` son los de la VM de Docker y el runner los alcanza.
+- El worktree y un directorio de trabajo montados en la misma ruta que en el Mac (`-v <ruta>:<ruta>`), con `SMOKE_WORKDIR` dentro del scratchpad. Las rutas que `smoke.sh` pasa como bind mounts a los contenedores hermanos existen así también para el daemon (Docker Desktop comparte `/Users` y `/private`).
+- Si algo de esto no funciona en Docker Desktop (por ejemplo, `--network host`), se documenta el motivo exacto y CA-23 queda en BK2 a BK6 más la ejecución del PR hacia `main` (ver decisión 1).
+
+Pruebas:
+
+- **BK0.** Imágenes locales del worktree: `docker build -f landing-pages/Dockerfile --target production|migrate|api` (`qa051d/production`, `qa051d/migrate` y `qa051d/api`).
+- **BK1.** `bash restaurante/ops/backup/ci/smoke.sh qa051d/production qa051d/migrate qa051d/api` en el runner, como en `ci.yml`. Código 0 y todos sus `check` en verde, incluidos los nuevos: `api_image` en el manifiesto e "inventory:verify da 0". También sin el tercer argumento: el manifiesto lleva `api_image=` vacío y el simulacro lo anota sin fallar.
+- **BK2. Camino de fallo (R-2):** la misma prueba con una imagen `api` derivada (`FROM qa051d/api`, con `scripts/inventory-verify.ts` sustituido por uno que sale con 1). Esperado: `verify-backup.sh --drill` termina distinto de 0 con "el Kardex restaurado no cuadra", y `smoke.sh` falla en ese `check`. No se modifica ningún archivo del repositorio.
+- **BK3. Con datos reales del Kardex:** sobre el MySQL efímero de BK1 (o un volcado de la base de QA con la semilla, restaurado con el procedimiento del simulacro), el `docker run` de `verify-backup.sh` paso 5 (red efímera, usuario de la app, `--read-only`, `--tmpfs /tmp`, `--cap-drop ALL`, `no-new-privileges`) da 0. Con una existencia alterada, 1 sin datos en la salida.
+- **BK4. `backup.sh`:** `RESTAURANTE_API_IMAGE` válida → `api_image=` en el manifiesto; ausente → vacía y continúa; con un carácter inválido (`img;rm`) → código 3 sin escribir el respaldo.
+- **BK5. Sin Kardex:** un respaldo de una base anterior a la migración `inventario_kardex` (sin `inventory_movement`) anota "no tiene Kardex" y no falla.
+- **BK6. `shellcheck -x`** de los scripts de `ops/backup` (como en el CI, `koalaman/shellcheck:stable`, borrada al terminar): 0 avisos. La credencial no aparece en los argumentos del proceso (`-e DATABASE_URL` sin valor) ni en el log del simulacro.
+
+### Documentación y CI
+
+- **D1. `despliegue.md`:** §5 "Arranque del inventario en producción", §6, §9, §11.1, §11.7 y §11.8 coinciden con el código. Los comandos que se pueden ejecutar en local se ejecutan tal como están escritos: `inventory:verify` en el contenedor `api` contra la base de QA (código 0, y 1 con una alteración) y el paso 7 del simulacro (cubierto por BK1). Lo que solo aplica en el servidor (systemd o R2 real) se revisa como texto.
+- **D2. `ci.yml`:** el YAML es válido (`actionlint` en un contenedor, borrado al terminar, o el parser de YAML). La prueba de humo recibe `restaurante:api`, esa imagen se construye antes en el mismo job y la condición (`github.event_name != 'pull_request' || github.base_ref == 'main'`) no cambia.
+- **D3.** `docs/arquitectura.md`, si menciona las pantallas o el simulacro, coincide. `README.md` no queda contradicho.
+- **D4.** `.claude/CLAUDE.md`, `senior-fullstack.md` y `deploy/` sin cambios: la suma de `deploy/` no cambia.
+
+### Pruebas de regresión
+
+- **S1.** `npm run build:css` y `npm run typecheck`: código 0.
+- **S2.** `npm run lint` con `check-private-data`: código 0, sin avisos.
+- **S3.** `npm test` frente al Implementation Result: `api` 1281, `landing-pages` 917 e `inventory-manager` 304, con el número de archivos (`inventory-manager` 18 → 19).
+- **S4.** `inventory-kardex-views.test.ts`, `inventory.test.ts` y `prisma-inventory-kardex.test.ts`, por debajo de 20 s, y los de MySQL 5 veces seguidas sin intermitencias (`documentsByIds` toca el store de MySQL).
+- **S5.** `git diff c4c2ad6`: sin migraciones, `deploy/`, `package-lock.json`, `compose.yaml`, `.env.example` ni `_stich_source_/`.
+- **R1.** Pantallas de T1 y T2 (artículos, categorías, recetas y su editor) y del resto del admin (productos, página, usuarios, cuenta, bot y cotizador) en 200 contra la `api` real, sin errores en los logs.
+- **R2.** `landing-pages` del worktree: `/`, `/birria` y `/molotes` en 200 con productos.
+
+### Revisión de las pruebas permanentes (`testing.md`)
+
+- **T1.** Los 7 casos de `inventory-kardex-views.test.ts` y el cambio de `inventory.test.ts` protegen comportamientos de la app (permisos, sesión, CSRF, idempotencia y pantallas de inventario), sin duplicar los del PR 2.
+- **T2.** El doble nuevo `api-double-kardex.ts` no reproduce reglas de core (los cálculos vienen de la API); si las reproduce, se registra.
+- **T3.** No se borran ni debilitan pruebas, ni se añaden `retry`, `testTimeout` ni esperas fijas. Datos ficticios.
+- **T4.** En el árbol final no queda ninguna sonda, y `git status` coincide con el Implementation Result.
+
+### Mutaciones (descartables, en una copia del árbol en el scratchpad)
+
+- **X1.** `RETURN_PATTERNS` de inventario permite `//` o cualquier carácter: debe fallar la prueba de OBS-12 (a).
+- **X2.** `backTo` devuelve siempre `returnTo`: debe fallar la vuelta con la query.
+- **X3.** Sin el aviso de fuera de rango: debe fallar OBS-12 (c).
+- **X4.** Sin la cabecera `Idempotency-Key` en el alta de proveedor y en la reversión: debe fallar OBS-16.
+- **X5.** Sin `occurredOn` en `itemKardex`: el contrato o una prueba deben fallar.
+- **X6.** "Revertir" visible en una reversión, y sin el aviso de negativo: deben fallar CA-6 y CA-7 en pantalla.
+- **X7.** El Editor con acceso a una ruta nueva: debe fallar CA-21.
+- Un mutante que sobrevive se registra como observación (prueba que falta), no como defecto.
+
+### Evidencia requerida
+
+- La salida y el código de salida de cada comando.
+- Por sonda: el estado HTTP, la URL de redirección y los fragmentos de HTML comparados con el JSON de la API.
+- Capturas a 360 y 1280 px por pantalla; `scrollWidth`, `activeElement` y estilo de foco; el resultado de axe por pantalla y ancho.
+- La salida completa de `smoke.sh` (resumen de `check`) y de `verify-backup.sh --drill` en BK1 y BK2.
+- El resultado de cada mutación.
+- Todo queda en el QA Report del ticket.
+
+### Criterios de aprobación
+
+- Los CA del 3a en PASS con evidencia, incluida la ejecución de `smoke.sh` en el runner Linux (o la decisión 1 si no se puede).
+- S1 a S3 en verde; S4 por debajo de 20 s sin intermitencias.
+- axe con 0 violaciones en las pantallas del 3a, o su respaldo aceptado.
+- Sin defectos `BLOCKER` ni `CRITICAL`. Los `MAJOR` necesitan una decisión del usuario.
+- Las observaciones (R-2, R-4, R-6 y mutantes supervivientes) no bloquean si se registran.
+
+### Limpieza
+
+Al terminar, también si algo falla:
+
+- se borran las bases `restaurante_test_qa051d_*`;
+- se borran las imágenes `qa051d/*`, `bksmoke/*`, la del runner, `versity/versitygw` si no estaba antes, `koalaman/shellcheck` y la de `actionlint`;
+- se borran los contenedores, redes y volúmenes `bksmoke-*` y `restaurante-verify-*` que deje `smoke.sh`;
+- se detienen la `api`, el `inventory-manager`, la `landing-pages`, Vitest y Chrome sin interfaz (si se usa), y se liberan los puertos;
+- se cierran las pestañas de Claude in Chrome;
+- se borran las sondas, capturas, la copia de mutaciones y el directorio de trabajo de la prueba de humo del scratchpad;
+- se comprueba con `git worktree list`, `lsof`, `docker ps -a`, `docker images`, `docker network ls`, `docker volume ls` y `SHOW DATABASES LIKE 'restaurante\_test%'`.
+
+### Decisiones para la aprobación
+
+1. **Prueba de humo de respaldos (R-1).** ¿Se autoriza ejecutar `smoke.sh` en local dentro de un contenedor runner `ubuntu:24.04`? El runner monta el socket de Docker y usa `--network host`. Instala dentro del contenedor el CLI de Docker con compose, `age` y `curl` desde sus repositorios oficiales. Descarga `versity/versitygw:v1.9.0` y la imagen de MySQL del compose de producción. Construye `qa051d/production`, `qa051d/migrate` y `qa051d/api`. Todo se borra al terminar y la ejecución completa tarda unos 10 a 20 minutos. Si Docker Desktop no permite que la prueba funcione, ¿acepta que CA-23 quede validado con BK2 a BK6 y con la ejecución del CI en el PR de la épica hacia `main`, registrado como riesgo? Recomendación: sí a las dos.
+2. **axe-core (B4).** No está en el proyecto y la CSP del admin (`script-src 'self'`) impide inyectarlo desde la pestaña. Opciones:
+   - **A (recomendada):** descargar `axe-core` en una versión fija del registro de npm al scratchpad (sin tocar ningún `package.json`). Ejecutarlo en un Chrome sin interfaz controlado por el protocolo de depuración, con `Runtime.evaluate`, que no está sujeto a la CSP de la página, a 360 y 1280 px. Claude in Chrome queda para lo visual y el teclado.
+   - **B:** axe-core en jsdom sobre el HTML servido (sin reglas de color ni de viewport) más la revisión manual.
+   - Las dos se borran al terminar.
+3. **Sondas y arranques.** ¿Se autorizan las sondas en el scratchpad, la base `restaurante_test_qa051d_ui` con la semilla y los datos adicionales, y arrancar la `api`, el `inventory-manager` y la `landing-pages` del worktree con `env -i`? También detener y reiniciar la `api` para I1 e I2, y las mutaciones en una copia del árbol.
+4. **B8 (capturas de la épica previa).** Para comparar T1 y T2 hace falta arrancar el `inventory-manager` de `c4c2ad6`: una copia con `git archive` en el scratchpad y `node_modules` clonado. ¿Se autoriza, o basta con comparar contra las capturas del QA de T2, si existen, más la revisión del diff de los parciales? Recomendación: autorizar la copia, porque el parcial `recipe-table` se reutiliza.
+
+
+## QA Report — PR 3a
+
+### Ronda
+
+1. Rama `feature/REQ-F-051-kardex-pantallas`, sin commit, sobre `c4c2ad6`. El usuario aprobó el plan con "Lo apruebo", con las cuatro respuestas recomendadas:
+
+- la prueba de humo en un runner Linux;
+- axe-core opción A;
+- las sondas y los arranques;
+- la copia de `c4c2ad6` para B8.
+
+Se usó MySQL 8.4 local con una base `restaurante_test_qa051d_ui`, migrada con el worktree y con la semilla de desarrollo. Encima se añadieron por la API 55 proveedores, 51 movimientos de un artículo, una compra con devolución, el escenario de OBS-14 y un negativo. La `api` (`TZ=Asia/Tokyo`, `BUSINESS_TIMEZONE=America/Mexico_City`), el `inventory-manager` y la `landing-pages` del worktree corrieron con `env -i`. Ninguna sonda se escribió en el repositorio.
+
+### Pruebas ejecutadas
+
+| ID | Acción | Resultado |
+|---|---|---|
+| S1 | `npm run build:css` y `npm run typecheck` | Código 0 y 0. PASS |
+| S2 | `npm run lint` | Código 0, sin avisos; `check-private-data`: 902 archivos, sin datos privados. PASS |
+| S3 | `npm test` | `api` 57/1281, `landing-pages` 65/917 e `inventory-manager` 19/304, todo en verde. Código 0. PASS |
+| S4 | Duración y estabilidad | `inventory-kardex-views.test.ts` + `inventory.test.ts`: 17/17 en 1.84 s; cada caso nuevo tarda menos de 0.2 s. `prisma-inventory-kardex` + `prisma-inventory-store`, 5 veces: 21/21 en cada una, de 5.21 a 5.74 s. PASS |
+| S5 | `git diff c4c2ad6` | Sin migraciones, `deploy/`, `package-lock.json`, `compose.yaml`, `.env.example` ni `_stich_source_/`. PASS |
+| P1 | Existencias | `caption` y `dl`. Totales iguales a los de la API ($100,004,515.00, −$140.00 y 10 "Sin costo"). "Negativo" y "Sin costo" con texto. Sin Compuestos, padres ni no inventariables. Enlace a la ficha. "cébolla" encuentra "Cebolla". `negativos`, categoría y tipo funcionan y se conservan en el formulario. Un estado inválido da un mensaje, no un 500. PASS |
+| P2 | Ficha | "Existencia 51 kg", "CPP $10.12 / kg" y "Último costo $14.00 / kg". El Kardex tiene las 11 columnas de RF-8 con `scope`; "51 movimientos"; del más reciente al más antiguo (por registro); la fecha del hecho de hoy − 31 en la primera fila. `?kardex=2` muestra "Página 2 de 2", con enlaces `#kardex`. Un Compuesto y un no inventariable no tienen Kardex y dicen que no llevan existencias. La receta muestra "CPP" (CA-18). PASS (ver la pregunta de precisión) |
+| K1 | `occurredOn` del Kardex de la API (MySQL) | Cada movimiento lo trae, con `AAAA-MM-DD`. Los de hoy − 31 y hoy − 3 coinciden con su documento, con la `api` en `Asia/Tokyo`. PASS |
+| K2 | Respaldo UTC (R-4) | La FK de `inventory_movement.document_id` garantiza que el documento existe, así que el respaldo no se alcanza. Ninguna prueba permanente cubre `occurredOn` (X5): ver OBS-21 |
+| P3 | Proveedores | Lista por defecto de Activos, 50 por página ("58 proveedores", "Página 1 de 2"). Búsqueda sin mayúsculas. El formulario lleva `_csrf` y `requestId`. Contacto inválido → 422 con enlace `#f-contact`, conservando lo escrito y el `requestId`. Nombre repetido sin mayúsculas → 422 `#f-name`. Vacío o de 81 caracteres → 422. Alta → 303. Doble envío con el mismo `requestId` → 1 proveedor (OBS-16). Conflicto con dos sesiones → 409 conservando lo escrito, con el botón `overwrite`; "guardar encima" → 303 y `overwrite_after_conflict`. Historial en la edición. Inactivar → 303. Reactivar con el nombre en uso → mensaje, sin reactivar. PASS |
+| P4 | Documentos | La lista empieza por el más reciente; 50 por página; filtros por tipo y proveedor. El detalle de una compra muestra "Con IVA", "Por devolver" (20 kg), sus devoluciones (#61), "Revertir" y "Total $600.00". "Sin cargo" en un importe 0. "Revertido por #7" y "Reversión de #6", sin "Revertir" (el texto "Revertido por #N" no enlaza a #N: OBS-22). Saldo inicial con autor. 404 de un documento inexistente. PASS |
+| P5 | Reversión (RF-4, CA-6, CA-7) | Confirmación con `caption` y "Quedará negativa". Sin motivo → 422; con 401 caracteres → 422 conservando lo escrito y el `requestId`. Revertir → 303, y el doble envío da 1 reversión (OBS-16). El original queda "Revertido por #N" sin "Revertir". El motivo con `<b>` sale escapado. 409 `ALREADY_REVERSED` con su mensaje. `DOCUMENT_HAS_RETURNS` nombra "#61". `GET …/revertir` de una reversión → 303 al documento. CA-6 sobre la semilla: "Existencia 50 kg" y "$20.00 / kg". PASS |
+| I1 | Alta de proveedor con la `api` detenida | 503 con lo escrito y el `requestId` conservados y el aviso. Al volver, el reenvío con ese `requestId` (dos veces) crea 1 proveedor. PASS |
+| I2 | Reversión con la `api` detenida | **DEF-005.** 503 con la página genérica "Servicio no disponible": se pierden el motivo y el `requestId`. Al volver, el reenvío con el `requestId` original crea 1 reversión. FAIL |
+| I2b | CA-14 por la pantalla: documento bloqueado 8 s con `FOR UPDATE` | 503 "Inténtalo de nuevo", con el motivo y el `requestId` conservados. Al soltar, el reenvío revierte una vez. PASS |
+| I3 | OBS-14 | La reversión que daría un CPP fuera de rango → 422 con el aviso "No se puede revertir. El costo por unidad resultante supera el máximo…", el motivo conservado y ningún 500. PASS |
+| P6 | Permisos (CA-21) | El Editor no ve Inventario; las 7 pantallas → 403; los 5 POST → 403. Sin sesión, los GET → 303 al acceso, y los POST no escriben. Gerente con un CSRF falso → 403 en los 5 POST. Checksums sin cambios. Administrador y Gerente → 200 en todo (salvo `revertir` de un documento ya revertido: 303 al documento, como se espera). La subnavegación tiene 6 enlaces, con `aria-current="true"` en la sección (como en T1) y `aria-current="page"` en Inventario. PASS |
+| O1 | OBS-12 (a) | Tras el acceso se vuelve exactamente a cada URL: existencias con `q=c%C3%A1rne&estado=negativos&pagina=2`, la ficha con `?kardex=2`, proveedores con estado, `revertir`, documentos con tipo y página, y recetas con `q`. Un POST sin sesión vuelve al formulario (`next=/inventario/documentos/67/revertir&expirada=1`). Los 13 destinos hostiles van a `/`: `//evil`, `/inventario//evil`, `..`, `%2e%2e`, barra invertida, mayúsculas, CRLF, `https:`, `javascript:`, fragmento, `<b>`, `/\evil` y `..%2f`. `next` sale escapado en el formulario de acceso. Las vueltas de artículos y del cotizador siguen igual. PASS |
+| O2 | OBS-12 (c) | En las 6 listas, `pagina=999` (o `kardex=999`) da un solo "Esta página no existe…", sin "No hay…" ni "N resultados". "Ir a la última página" lleva a una página válida. Una lista vacía sigue diciendo "No hay…". `pagina=0`, `abc` y `kardex=abc` → mensaje, nunca 500. PASS |
+| O3 | Escape | Proveedor `<script>alert(1)</script> "QA" & Cía` y artículo `QA <b>negrita</b> & "comillas"`: escapados en existencias, la lista, el detalle, la ficha y la edición. PASS |
+| B1 | Responsive (Chrome sin interfaz por CDP; 360×800 móvil y 1280×900) | Sin desbordamiento horizontal en 14 de 15 pantallas. **DEF-006:** la lista de proveedores a 360 px tiene `scrollWidth` 624 (551 en la página 2 y 621 con `estado=all`). Lo causan los `span.sr-only` de los botones "Inactivar/Reactivar" (parcial `inventory-post-button`), que tienen `position:absolute` y salen de la región desplazable (`overflow-x-auto` sin `position: relative`). Ninguna otra pantalla lo tiene. FAIL |
+| B2 | Teclado (Claude in Chrome) | En proveedores, foco visible (contorno sólido de 2 px) en filtros, la región de la tabla, los enlaces y los botones "Inactivar: <nombre>", en orden lógico. En la reversión, del enlace de salto hasta la región, el enlace del artículo, el motivo y "Revertir"; enviada solo con teclado → 303 a "Reversión #72" con el aviso de éxito. PASS |
+| B3 | Semántica | Un `h1` en las 15 pantallas (CDP). `caption` y `scope="col"`. `dl` de totales. Etiquetas y `aria-describedby`. Resumen de errores con enlaces a `#f-name` y `#f-contact`. Estados con texto e icono. PASS |
+| B4 | axe-core 4.10.2 (`npm pack` al scratchpad, sha256 `9ea2d2d6…`), por CDP con `Runtime.evaluate` | **0 violaciones** en 15 estados × 2 anchos: existencias, negativos, ficha con Kardex, ficha de un Compuesto, proveedores, alta, edición, documentos, detalle, confirmación de la reversión, fuera de rango, alta con errores, reversión sin motivo, artículos y recetas. PASS |
+| B5 | Sin JavaScript | Todas las sondas P, O e I son HTTP con formularios planos, sin JS. Filtrar, paginar, revertir y guardar funcionan. PASS |
+| B6 | Consola y red | Los únicos errores y peticiones a terceros son las fuentes de Google que ya cargaba el admin (definidas en Stitch, `fonts.googleapis.com`/`gstatic`) y un aviso de CSP que provoca axe al intentar leerlas. La app no tiene errores propios. PASS |
+| B7 | Contraste | axe sin violaciones de contraste en los estados "Negativo", "Sin costo" e "Inactivo" ni en los avisos. PASS |
+| B8 | Regresión frente a `c4c2ad6` (copia `git archive`, admin en 3205, contra la misma `api`) | Artículos, categorías, recetas, ficha y editor de receta: 200 en los dos. Las mismas clases y etiquetas, sin ninguna que solo exista en una versión. El texto solo cambia en los 3 enlaces nuevos de la subnavegación y, en la ficha, en la existencia y el Kardex. PASS |
+| R1 | Resto del admin (administrador) | Inicio, productos y página de los dos negocios, usuarios, cuenta, bot, cotizador, artículos, categorías, recetas y alta: 200. 0 errores en los logs de las tres apps. PASS |
+| R2 | `landing-pages` | `/`, `/birria` y `/molotes`: 200. PASS |
+| BK0 | Imágenes `qa051d/production`, `migrate` y `api` del worktree | Construidas (código 0). PASS |
+| BK1 | `ops/backup/ci/smoke.sh` en el runner `ubuntu:24.04` (CLI de Docker 29 y compose v5, `age` 1.1.1, `flock` de util-linux y GNU coreutils 9.4), con el socket de Docker Desktop, `--network host` y `SMOKE_WORKDIR` montado en la misma ruta | Con las 3 imágenes, como en `ci.yml`: "todas las comprobaciones pasaron" (77 `ok`, 0 `FALLO`, 1 min 47 s). Incluye "el manifiesto trae la imagen de la api" y "el simulacro ejecuta inventory:verify y da 0". Sin la imagen `api` (2 argumentos): también todas en verde; el manifiesto lleva `api_image=` vacío y el simulacro anota "el manifiesto no trae la imagen de la api". La prueba de humo **sí se puede ejecutar en local** así. PASS |
+| BK2 | Camino de fallo (R-2): imagen `qa051d/api-falla` (`FROM qa051d/api` con un `inventory-verify.ts` que sale con 1, por `COPY`) | `verify-backup.sh --drill` registra "ERROR: el Kardex restaurado no cuadra (inventory:verify distinto de 0)" y `resultado=fallo`, también con el respaldo de formato 1. `smoke.sh` falla exactamente en esos 4 `check` y termina con 1. PASS |
+| BK3 | Paso 5 con datos reales | Volcado de la base de QA (26 artículos, 74 movimientos y 72 documentos) restaurado en un MySQL efímero de red propia. El `docker run` del paso 5 (usuario de la app, `--read-only`, `--tmpfs /tmp`, `--cap-drop ALL`, `no-new-privileges` y `-e DATABASE_URL` sin valor en la línea de órdenes) da `inventory_verify_ok …`, código 0. Con el CPP de una existencia alterado, `inventory_verify_mismatch itemId=23 check=existencia_distinta`, código 1, sin datos. Confirma R-2: en la prueba de humo, `inventory:verify` da `artículos=0 movimientos=0`. PASS |
+| BK4 | `backup.sh`: `RESTAURANTE_API_IMAGE` | La línea de validación (l. 150) va antes de `mktemp` y del volcado (l. 155 y 167). Aislada en el runner: un digest de GHCR y `restaurante:api` → se aceptan; vacío → `api_image=` vacío; `img;rm -rf x`, con espacio o `$(id)` → código 3. BK1 cubre el valor válido y el ausente de punta a punta. PASS |
+| BK5 | Paso 5 sin Kardex y con una imagen inválida | El fragmento del paso 5 de `verify-backup.sh`, ejecutado sobre el MySQL efímero sin `inventory_movement`, da "simulacro: el respaldo no tiene Kardex; inventory:verify no aplica" y no falla. Con `api_image=bad;img` → "el manifiesto no tiene una imagen de la api válida" y falla. PASS |
+| BK6 | `shellcheck -x lib.sh backup.sh env-backup.sh restore.sh verify-backup.sh ci/smoke.sh` | Código 0, sin avisos (imagen `koalaman/shellcheck-alpine:stable`, ya instalada). PASS |
+| D1 | `despliegue.md` | §5 "Arranque del inventario", §6, §9, §11.1, §11.7 y §11.8 coinciden con el código y con BK1 a BK5. El comando `$C exec -T api node scripts/inventory-verify.ts` es la ruta del contenedor que se probó en K1 del PR 2 y en BK3. Los pasos 4 y 5 nombran las pantallas "Saldo inicial" y "Nueva compra", que llegan en el 3b (OBS-23). PASS |
+| D2 | `ci.yml` | `actionlint` (imagen `rhysd/actionlint`, ya instalada): código 0. `restaurante:api` ya se construye en ese job (la usa antes la prueba de humo del despliegue). La condición no cambia. PASS |
+| D3–D4 | Documentación y `deploy/` | `.claude/CLAUDE.md`, `senior-fullstack.md` y `deploy/` sin cambios. PASS |
+| X1–X7 | Mutaciones en una copia del árbol | Ver la tabla |
+
+**Mutaciones** (pruebas permanentes de `inventory-manager`, `api` y MySQL)
+
+| ID | Mutante | Lo detectan las pruebas permanentes |
+|---|---|---|
+| X1 | `RETURN_PATTERNS` de inventario como `/^\/inventario.*$/` | **No** (OBS-20). O1 lo comprueba por sonda |
+| X2 | `backTo` devuelve siempre `returnTo` | Sí: "sin sesión, una pantalla del inventario vuelve a sí misma…" |
+| X3 | Sin el aviso de fuera de rango | Sí: existencias |
+| X4a | Alta de proveedor sin `Idempotency-Key` | Sí: proveedores |
+| X4b | Reversión sin `Idempotency-Key` | Sí: documentos y reversión |
+| X5a | `occurredOn` siempre la fecha UTC de registro | **No** (OBS-21) |
+| X5b | MySQL: `documentsByIds` vacío | **No** (OBS-21) |
+| X6a | "Revertir" en una reversión | Sí |
+| X6b | Sin el aviso de negativo | Sí |
+| X7 | El Editor entra al inventario | Sí |
+
+### Criterios de aceptación
+
+| CA (alcance del 3a) | Resultado | Evidencia |
+|---|---|---|
+| CA-16 y RF-7 | PASS | P1, O2, B1, B4 |
+| CA-17 y RF-8 | PASS | P2, K1, O2, B4 |
+| CA-18 y RF-10 (ficha) | PASS | P2, B8 |
+| RF-1 y CA-22 | PASS | P3, I1, B2, B4 |
+| RF-9 | PASS | P4, O2 |
+| CA-6, CA-7 y RF-4 | PASS | P5, I2b, I3, B2 |
+| CA-14 (pantalla de la reversión) | PASS | I2b |
+| Caso límite "la `api` caída sin perder lo escrito" | **FAIL** | I2 (DEF-005); I1 pasa |
+| CA-21 (admin) | PASS | P6, X7 |
+| CA-25 (estas pantallas) | **FAIL** | B1 (DEF-006 en la lista de proveedores a 360 px). B2 a B5 y axe pasan |
+| CA-26 | PASS | S1 a S5, R1, R2, B8 |
+| CA-31 (a) y (c) | PASS | O1, O2 |
+| OBS-14 y OBS-16 | PASS | I1, I3, P3, P5 |
+| CA-23 (simulacro, DT-T3-6 A) | PASS | BK1 a BK6 (la prueba de humo se ejecutó en local) |
+| `despliegue.md` y `ci.yml` | PASS | D1 a D4 |
+| RN-T3-10 / PV-13 (precisión de los costos unitarios en pantalla) | **Bloqueado por ambigüedad** | Ver REQUIREMENT_AMBIGUITY-1 |
+
+### Defectos encontrados
+
+#### DEF-005
+
+- **Severidad:** `MINOR`.
+- **Criterio afectado:** caso límite del ticket "El botón atrás tras guardar (respuesta 303), el doble envío, y la `api` caída sin perder lo escrito"; Implementation Result del 3a ("con la API caída, se conserva lo escrito").
+- **Descripción:** `reverse` (`inventory-manager/src/controllers/inventory-kardex.ts`) llama a `inventorySession` sin el callback `onUnavailable`, y después pide el documento (`getKardexDocument`) antes de escribir. Si la `api` no responde, devuelve la página genérica "Servicio no disponible", sin el formulario. En cambio, `createSupplier` sí pasa `onUnavailable` y conserva lo escrito. El 503 de la escritura misma sí conserva el motivo (I2b, CA-14).
+- **Pasos para reproducir:**
+  1. Abrir `/inventario/documentos/<compra>/revertir` y escribir un motivo.
+  2. Detener la `api`.
+  3. Pulsar "Revertir".
+- **Resultado esperado:** 503 en la confirmación de la reversión, con el aviso, el motivo y el mismo `requestId`, como en el alta de proveedor (I1).
+- **Resultado actual:** 503 "Servicio no disponible. No se pudo conectar con el sistema…" con "Volver al inicio": se pierden el motivo y el `requestId`.
+- **Evidencia:** sonda I2: el HTML del 503 no contiene el formulario. Al volver la `api`, reenviar el `requestId` original crea una sola reversión (no hay riesgo de duplicado).
+- **Impacto:** hay que volver a escribir un motivo de hasta 400 caracteres. No se escribe nada ni se duplica.
+- **Recomendación:** que una `api` inalcanzable durante el envío de la reversión vuelva a pintar la confirmación con lo escrito y el `requestId`, como el alta de proveedor. Si el documento no se puede leer, basta con el formulario sin la tabla de vista previa.
+
+#### DEF-006
+
+- **Severidad:** `MINOR`.
+- **Criterio afectado:** CA-25 ("Se pueden usar a 360 px") y RF-16 (mobile-first desde 360 px).
+- **Descripción:** en la lista de proveedores, los botones "Inactivar"/"Reactivar" de cada fila (parcial `inventory-post-button`, reutilizado de T1) llevan un `span.sr-only` con el nombre del proveedor. Su `position: absolute` lo saca de la región desplazable de la tabla (`div.recipe-table … overflow-x-auto`, sin `position: relative`), así que el documento se ensancha.
+- **Pasos para reproducir:** abrir `/inventario/proveedores` en un móvil de 360 px (CDP: `setDeviceMetricsOverride` 360×800 móvil).
+- **Resultado esperado:** `document.documentElement.scrollWidth` ≤ 360; la tabla solo se desplaza dentro de su región, como en Existencias, Documentos, Kardex, Artículos y Recetas (las 14 pantallas restantes dan 360/360).
+- **Resultado actual:** `scrollWidth` 624 (551 en la página 2 y 621 con `estado=all`). Con `mobile:false`, 623 frente a 360. Los elementos fuera de la vista son `SPAN.sr-only` (`position:absolute`).
+- **Impacto:** en un teléfono la página se aleja o se desplaza horizontalmente, con un espacio vacío a la derecha. Sigue siendo usable y axe no lo detecta.
+- **Recomendación:** contener los elementos posicionados dentro de la región desplazable de esa tabla, o usar en las filas un patrón de botón cuyo texto oculto no salga de la región. Conviene comprobar a 360 px las demás tablas que usen ese parcial.
+
+#### REQUIREMENT_AMBIGUITY-1 (no es un defecto; necesita decisión)
+
+- **Tema:** precisión con que se **muestran** los costos unitarios (CPP, último costo, costo unitario del Kardex y de las líneas).
+- **Hechos:**
+  - Las pantallas del 3a usan `money()` de T2, que redondea a 2 decimales ("166.6667 → $166.67 (PV-13)").
+  - Un CPP de 10.1176 se ve "$10.12 / kg"; 21.3333 se ve "$21.33 / kg".
+  - Por el código de `money()`, un costo por gramo de 0.0450 se vería "$0.05 / g", y 0.0449 se vería "$0.04".
+- **Fuentes en conflicto:**
+  - RN-T3-10 dice "Cantidades con 3 decimales, costos unitarios con 4 e importes capturados con 2 como máximo. Los importes se muestran con 2." Solo los importes tienen dicho que se muestran con 2.
+  - PV-13 (REQ-F-049) dice "Costos unitarios con 4 decimales… Importes mostrados redondeados a 2", con la razón "Un costo por gramo necesita más de 2 decimales".
+  - Los CA dan los costos con 4 decimales (CA-1 "20.0000/kg", CA-2 "21.3333").
+  - Las recetas de T2, ya aprobadas, muestran los costos unitarios con 2.
+- **Por qué no es un defecto:** el ticket no dice explícitamente con cuántos decimales se **muestra** un costo unitario, y T2 sentó el precedente de 2.
+
+### Observaciones (no bloquean)
+
+- **OBS-20 (X1).** Ninguna prueba permanente detecta que se relaje el patrón de `RETURN_PATTERNS` de `/inventario`. La prueba existente usa un destino externo que no empieza por `/inventario`. O1 lo valida por sonda (13 destinos hostiles). Recomendación: añadir `/inventario//evil.example` o `/inventario/../usuarios` a la prueba existente de OBS-12 (a).
+- **OBS-21 (X5).** `occurredOn` del Kardex de la API (RF-8, nuevo en este PR) no tiene prueba permanente, ni en memoria ni en MySQL (`documentsByIds`). La prueba de pantalla usa el doble. K1 lo valida por sonda. Recomendación: una comprobación en la prueba existente del Kardex de `admin-inventory-kardex-api.test.ts` y otra en `prisma-inventory-kardex.test.ts`.
+- **OBS-22.** El detalle dice "Revertido por #N" y "Reversión de #N" como texto, sin enlace al otro documento. RF-9 no exige el enlace (RF-8 sí lo exige para el documento en el Kardex, y lo tiene).
+- **OBS-23.** `despliegue.md` §5, pasos 4 y 5, remite a "Documentos → Saldo inicial" y "Nueva compra", que llegan en el 3b. Es coherente si la épica va a `main` después del 3b.
+- **OBS-24 (R-2).** El `check` positivo de la prueba de humo pasa con un Kardex vacío (`artículos=0 movimientos=0`). BK2 y BK3 demuestran el camino de fallo y el caso con datos, pero no quedan en el CI.
+- **OBS-25 (R-6).** Las tablas nuevas reutilizan el bloque BEM `recipe-table`. Funciona; el nombre del bloque ya no describe su uso.
+- **OBS-26.** En la vista previa de la reversión, la cantidad sale sin unidad ("−10") y la existencia resultante también ("−8").
+
+### Revisión de las pruebas permanentes (`testing.md`)
+
+- **T1.** Los 7 casos de `inventory-kardex-views.test.ts` y el cambio de `inventory.test.ts` (6 enlaces) protegen comportamientos de la app: permisos, sesión, CSRF, idempotencia y pantallas. X2 a X4, X6 y X7 lo confirman. PASS
+- **T2.** El doble `api-double-kardex.ts` sirve respuestas fijas y no recalcula CPP ni existencias. PASS
+- **T3.** No se borran ni debilitan pruebas, ni se añaden `retry`, `testTimeout` ni esperas fijas. Datos ficticios. PASS
+- **T4.** `git status` final: los mismos cambios del Implementation Result y el ticket (33 entradas). Ninguna sonda en el árbol. PASS
+
+### Regresión
+
+Suite completa en verde (S3). Las pantallas de T1 y T2 son idénticas a las de `c4c2ad6`, salvo la subnavegación y las secciones nuevas de la ficha (B8). El resto del admin y las landings responden 200 (R1 y R2). La prueba de humo de respaldos pasa completa (BK1).
+
+### Responsive, Accesibilidad, UX/UI, SEO
+
+- **Responsive:** DEF-006 en la lista de proveedores a 360 px; las demás 14 pantallas sin desbordamiento a 360 y 1280 px.
+- **Accesibilidad:** axe con 0 violaciones en 30 combinaciones; teclado y foco visible; semántica correcta (B2 a B4 y B7).
+- **UX/UI:** sistema visual del admin; `_stich_source_/` no tiene diseño del admin.
+- **SEO:** no aplica (admin con `noindex`).
+- **Responsive con Claude in Chrome:** la ventana no bajó de su tamaño mínimo (`innerWidth` siguió en 2560 tras `resize_window`). Por eso los anchos de 360 y 1280 px se midieron con Chrome sin interfaz por CDP (decisión 2), y Claude in Chrome se usó para teclado, foco y capturas a ancho de escritorio. No queda nada pendiente de revisión manual por esto.
+
+### Performance
+
+Sin hallazgos. Las pantallas responden con normalidad; no hay JS obligatorio, y las únicas peticiones a terceros son las fuentes de Google que ya estaban.
+
+### Pendientes de revisión manual
+
+Ninguno.
+
+### Limpieza
+
+- **Bases:** se borró `restaurante_test_qa051d_ui`. `SHOW DATABASES LIKE 'restaurante\_test%'` devuelve 0.
+- **Contenedores, redes y volúmenes:**
+  - se borraron `qa051d-mysql` y la red `qa051d-net`;
+  - `smoke.sh` retiró sus `bksmoke-*` y `restaurante-verify-*` en las tres ejecuciones;
+  - `docker ps -a` solo muestra `restaurante-mysql-dev-1`, y no quedan redes ni volúmenes de QA.
+- **Imágenes:**
+  - se borraron `qa051d/production`, `qa051d/migrate`, `qa051d/api`, `qa051d/api-falla`, `qa051d/runner`, `bksmoke/app-anterior`, `bksmoke/api-en-marcha`, `versity/versitygw` (descargada para la prueba) y 2 imágenes intermedias sin etiqueta;
+  - `ubuntu:24.04` solo quedó en la caché de BuildKit;
+  - la imagen de MySQL con el digest de producción no se borró: la usa `restaurante-mysql-dev-1` y ya estaba;
+  - `mysql:8.4`, `rhysd/actionlint` y `koalaman/shellcheck-alpine` ya estaban antes y se conservan;
+  - la caché de construcción no se purgó, porque es compartida.
+- **Procesos y puertos:** se detuvieron la `api` (3201/3204), el `inventory-manager` (3203), el admin de `c4c2ad6` (3205), la `landing-pages` (3200) y Chrome sin interfaz (9333). Ningún puerto queda ocupado y no queda ningún proceso de `src/server.ts`, Vitest ni Chrome de QA.
+- **Navegador:** se cerraron las 2 pestañas de Claude in Chrome (el grupo quedó vacío y se eliminó).
+- **Archivos:** se borró `scratchpad/q3`, con las sondas, axe-core, la copia de `c4c2ad6`, la copia de mutaciones, los volcados, los logs y el directorio de la prueba de humo. Quedan `src050` y `t3`, que no son de este QA.
+- **Repositorio:** `git status` sin sondas; `git worktree list` muestra `main` y el worktree del ticket.
+- **MySQL:** `restaurante-mysql-dev-1` sigue encendido, y su base de desarrollo no se tocó.
+
+### Resultado final
+
+NEEDS_USER_DECISION
+
+- DEF-005 y DEF-006 son `MINOR` y hacen fallar un caso límite y CA-25: con ellos, el resultado será `QA_REJECTED` en cualquier caso.
+- Antes de devolverlo a senior-fullstack, hace falta la decisión sobre REQUIREMENT_AMBIGUITY-1, porque cambia el alcance de la corrección.
+
+
+### Ronda 2
+
+El usuario aprobó la implementación de la ronda 2 con "Si" y decidió REQUIREMENT_AMBIGUITY-1 con la opción A: costos unitarios con 4 decimales y montos con 2 en las pantallas de T3. Aceptó dejar la alineación de las recetas de T2 como seguimiento fuera de T3.
+
+Se revalida lo que cambió en la ronda 2:
+
+- `inventory-kardex.ts` (controlador y vista);
+- `partials/recipe-table.html`;
+- tres archivos de prueba.
+
+Se usó una base nueva `restaurante_test_qa051d_r2` con la semilla y datos propios: 52 proveedores de nombre largo, un artículo en gramos, una compra con devolución, un negativo y 6 compras para revertir. La `api` y el admin del worktree corrieron con `env -i`. Entre el admin y la `api` se puso un proxy local (puerto 3206) que corta, según el modo, todas las peticiones, la escritura de la reversión o la lectura del documento.
+
+#### Pruebas ejecutadas (ronda 2)
+
+| ID | Acción | Resultado |
+|---|---|---|
+| S1–S2 | `build:css`, `typecheck` y `lint` | Código 0, 0 y 0; `check-private-data`: 902 archivos. PASS |
+| S3 | `npm test` | `api` 57/1281, `landing-pages` 65/918 e `inventory-manager` 19/305, todo en verde. PASS |
+| D5-1 | DEF-005: la `api` cae en la sesión (proxy `all`) | 503 con el formulario de la reversión, el motivo (escapado) y el mismo `requestId`. 0 reversiones escritas. Al volver, el reenvío → 303, y otro reenvío no crea otra: 1 reversión. PASS |
+| D5-2 | DEF-005: la escritura cae (proxy `write`) | 503 con el motivo y el `requestId`; 0 reversiones. Al volver → 303 y 1 reversión. PASS |
+| D5-3 | DEF-005: la lectura cae después de un 422 de la escritura (motivo de 401 caracteres; proxy `readget`) | 503 con el motivo y el `requestId`. Al volver, el mismo envío da su 422 normal con la vista previa, y con el motivo corregido → 303 y 1 reversión. Tras un 409 (ya revertido) con la lectura caída: 503 con el motivo. Si la escritura tiene éxito, no se lee el documento (303 directo). PASS |
+| D6 | DEF-006 y responsive: Chrome sin interfaz por CDP a 360×800 (móvil) y 1280×900 | `scrollWidth` ≤ ancho en las 15 pantallas: proveedores (página 1, página 2 y `estado=all`, con nombres largos), existencias, documentos, detalle, confirmación de la reversión, ficha con Kardex, ficha en gramos, recetas, ficha y receta de "Salsa base" (T2), artículos, la reversión sin motivo y el alta con errores. A 360 px: 360/360 en todas. PASS |
+| A11Y | axe-core 4.10.2 (sha256 `9ea2d2d6…`) por CDP | 0 violaciones en las 15 pantallas × 2 anchos, y en el 503 de la reversión con el motivo conservado (360 y 1280 px). PASS |
+| DEC | 4 decimales en costos unitarios y 2 en montos (decisión A) | Existencias: "QA Gramos … $0.0450 / g $0.0333 / g $45.14" (1003 g × 0.0450 = 45.135 → $45.14) y totales con 2. Ficha: "CPP $0.0450 / g", "Último costo $0.0333 / g". Kardex: costo unitario y CPP posterior con 4 ("$3.3333"). Detalle: "$0.0450 $45.00", "Total $45.00"; "$24.0000 $600.00" y la devolución "· $120.00". Vista previa: "−10 kg $10.0000 −8 kg". PASS |
+| OBS-22 | Enlaces del estado | El original tiene "Ver la reversión #N" con enlace. La reversión tiene "Ver el documento revertido #N" con enlace. En la lista, "Revertido por" lleva el enlace "#N". PASS |
+| OBS-26 | Unidades en la vista previa | "−10 kg" y "−8 kg". PASS |
+| R1 | Regresión de la reversión y del admin | Reversión normal → 303 `?ok=reversed`. Sin motivo → 422 con la tabla. 409 `DOCUMENT_HAS_RETURNS` (nombra la devolución) y `ALREADY_REVERSED`. Inicio, productos y página, usuarios, cuenta, bot, cotizador y las 6 secciones de inventario: 200. 0 errores en los logs. PASS |
+
+**Mutaciones** (copia del árbol en el scratchpad)
+
+| Mutante | Lo detectan las pruebas permanentes |
+|---|---|
+| OBS-20: `RETURN_PATTERNS` de inventario como `/^\/inventario.*$/` | Sí: "sin sesión, una pantalla del inventario vuelve a sí misma…" |
+| OBS-21b: `documentsByIds` devuelve `[]` (MySQL) | Sí: "OBS-21: el Kardex del artículo da la fecha del hecho…" |
+| OBS-21a: la ruta de la API usa siempre la fecha UTC de registro | **No** (ver OBS-27) |
+| DEF-005a: sin `onUnavailable` en la sesión | Sí |
+| DEF-005b: escritura caída → página genérica | Sí |
+| DEF-005c: lectura caída → página genérica | **No** (ver OBS-28) |
+| Costos unitarios con 2 decimales | Sí: ficha y reversión |
+| OBS-22: sin "Ver la reversión" | Sí |
+| OBS-26: vista previa sin unidad | Sí |
+| DEF-006 | Sin prueba permanente, como declara el Implementation Result: jsdom no calcula la maquetación. D6 lo valida en el navegador |
+
+#### Lo que no se repitió y por qué
+
+- **Prueba de humo de respaldos y BK1 a BK6, `despliegue.md`, `ci.yml` y `shellcheck`:** `ops/`, `deploy/`, `.github/` y la documentación no cambian en la ronda 2. El diff de `ops/` frente a `c4c2ad6` es el mismo de la ronda 1.
+- **P1 a P6, O1 a O3 y la permanencia de la ronda 1:** su código (permisos, proveedores, listas y paginación) no cambia. Las mutaciones de OBS-20 y la regresión R1 lo vuelven a cubrir.
+- **B8 (comparación con `c4c2ad6`):** el único cambio compartido con T2 es `relative` en `recipe-table.html`. Se validó con D6 (recetas, ficha y receta a 360 y 1280 px) y axe.
+- **Claude in Chrome:** el teclado y el foco no cambian. El 503 de la reversión reutiliza el mismo formulario, y axe lo valida.
+
+#### Criterios de aceptación (ronda 2)
+
+| CA | Resultado | Evidencia |
+|---|---|---|
+| Caso límite "la `api` caída sin perder lo escrito" (DEF-005) | PASS | D5-1 a D5-3 |
+| CA-25 (DEF-006) | PASS | D6, A11Y |
+| RN-T3-10 / PV-13 con la decisión A | PASS | DEC |
+| OBS-20, OBS-22 y OBS-26 | PASS | Mutaciones, OBS-22, OBS-26 |
+| OBS-21 | Parcial | El comportamiento es correcto (K1 de la ronda 1, en MySQL); la prueba de la API no detecta su mutante (OBS-27) |
+| El resto del 3a | PASS (ronda 1, sin cambios en lo que comprueban) | Ver la ronda 1 |
+
+#### Defectos
+
+- **DEF-005:** corregido y verificado (D5-1 a D5-3).
+- **DEF-006:** corregido y verificado (D6).
+- **REQUIREMENT_AMBIGUITY-1:** resuelta con la opción A y verificada (DEC).
+- Sin defectos nuevos.
+
+#### Observaciones nuevas (no bloquean)
+
+- **OBS-27 (OBS-21 parcial).**
+  - La prueba de la API que añade la ronda 2 compara `occurredOn` con `[TODAY, TODAY]`, la misma fecha que la de registro. Si la ruta usara siempre la fecha UTC de registro, la prueba seguiría pasando (mutante OBS-21a).
+  - El Implementation Result dice que la prueba de la API usa "la fecha del hecho distinta de la de registro"; eso solo es cierto en la de MySQL.
+  - Además, la de MySQL usa el día 1 del mes como fecha distinta. Si la suite corre un día 1, las dos fechas coinciden y la prueba pierde su sentido ese día.
+  - Recomendación: en la prueba existente de la API, usar un documento con `occurredOn` de un día anterior. En la de MySQL, usar hoy − 1 en lugar del día 1.
+- **OBS-28.** El camino "la lectura del documento cae tras un 422 o un 409 de la escritura" no tiene prueba permanente (mutante DEF-005c). D5-3 lo valida por sonda.
+- **Seguimiento aceptado por el usuario (fuera de T3):** alinear los costos unitarios de las recetas de T2 a 4 decimales. Hoy la ficha muestra el CPP con 4 decimales y la receta con 2.
+
+#### Limpieza (ronda 2)
+
+- **Base:** se borró `restaurante_test_qa051d_r2`. `SHOW DATABASES LIKE 'restaurante\_test%'` devuelve 0.
+- **Procesos:** se detuvieron la `api` (3201/3204), el admin (3203), el proxy (3206) y Chrome sin interfaz (9334). Ningún puerto 3200 a 3209 ni 9330 a 9339 queda ocupado, y no queda ningún proceso de `src/server.ts`, `proxy.ts` ni Vitest.
+- **Archivos:** se borró `scratchpad/q3b`, con las sondas, axe-core, la copia de mutaciones, el proxy y los logs. Quedan `src050` y `t3`, que no son de este QA.
+- **Docker:** no se construyeron imágenes ni contenedores; solo queda `restaurante-mysql-dev-1`.
+- **Navegador:** no se abrieron pestañas de Claude in Chrome en esta ronda.
+- **Repositorio:** `git status` muestra los cambios de la implementación (36 entradas, con los de la ronda 2) y ninguna sonda. `git worktree list` muestra `main` y el worktree del ticket.
+- **MySQL:** `restaurante-mysql-dev-1` sigue encendido, y su base de desarrollo no se tocó.
+
+#### Resultado final (ronda 2)
+
+QA_APPROVED
+
+## Antes del commit del PR 3a (OBS-27)
+
+El usuario aprobó corregir OBS-27 con "si". Solo cambian pruebas, no código de producción.
+
+- `admin-inventory-kardex-api.test.ts`: la compra de la prueba de lecturas lleva una fecha del hecho distinta de la de registro (`2026-10-20` frente a `2026-10-26`). El Kardex debe dar `[hoy, 2026-10-20]`. **Mutación descartable:** si la ruta usara la fecha de registro (mutante OBS-21a), la prueba falla.
+- `prisma-inventory-kardex.test.ts`: la fecha distinta es hoy − 3 días, así que nunca coincide con la de registro, tampoco un día 1. **Mutación descartable:** si `documentsByIds` devolviera vacío, la prueba falla.
+- `npm run typecheck` y `npm run lint` terminan con 0, y `npm test` pasa entero: `api` 1281, `landing-pages` 918 e `inventory-manager` 305.
+- **OBS-28** (el camino "la lectura cae tras un 422 o un 409 de la escritura" sin prueba permanente) queda anotada, sin cambios.
+
 ## Historial de cambios
 
 ### Versión 1
@@ -2911,3 +3628,20 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 
 - 2026-11-26, senior-fullstack: commit `f02c5f1` y PR #197 en borrador hacia `epic/inventario`. OBS-13 a OBS-18 quedan como pendientes del PR 3 o del cierre.
 - 2026-11-26, senior-fullstack: el PR #197 pasa a listo. Su CI (ejecución 45827311555) dejó `calidad`, `docker`, `auditoria` y `pruebas` en `pass`. Estado: `READY_FOR_MERGE`.
+
+### Implementación del PR 3a (T2)
+
+- 2026-11-26, senior-fullstack: PR 3a implementado en `feature/REQ-F-051-kardex-pantallas`, desde `c4c2ad6`. Incluye existencias, Kardex en la ficha, proveedores, documentos, reversión, OBS-12 (a) y (c), `ops/backup` y `despliegue.md`. Validado (`build:css`, `typecheck`, `lint` y `test` en verde), sin commit. Se propone partir el PR 3 y dejar los formularios con líneas en el 3b. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`, con la partición por confirmar.
+
+### QA (Q1, PR 3a)
+
+- 2026-11-26, senior-qa: el usuario aprobó la implementación del PR 3a y la partición en 3a y 3b ("Si"). QA Action Plan del 3a redactado a partir del ticket, del diff del worktree (sin commit, sobre `c4c2ad6`) y de las reglas del proyecto, sin ejecutar ninguna prueba. Incluye cómo ejecutar `smoke.sh` en un contenedor Linux local (runner con el socket de Docker y `--network host`), el camino de fallo del simulacro con una imagen `api` derivada y las pruebas de redirección abierta de OBS-12 (a). Cuatro decisiones para la aprobación: la prueba de humo, axe-core, las sondas y la comparación con la épica previa. Estado: `NEEDS_QA_PLAN_APPROVAL`.
+
+### QA (Q2, PR 3a, ronda 1)
+
+- 2026-11-26, senior-qa: el usuario aprobó el plan con "Lo apruebo". Ejecutado completo: S1 a S5, P1 a P6, K1 a K2, I1 a I3, O1 a O3, B1 a B8, R1 a R2, BK0 a BK6, D1 a D4, X1 a X7 y T1 a T4. La prueba de humo de respaldos pasa en un runner Linux local, y el camino de fallo del simulacro queda demostrado. axe da 0 violaciones. DEF-005 y DEF-006 (`MINOR`), REQUIREMENT_AMBIGUITY-1 (precisión de los costos unitarios en pantalla) y 7 observaciones (OBS-20 a OBS-26). Limpieza comprobada. Estado: `NEEDS_USER_DECISION`.
+- 2026-11-26, senior-fullstack (ronda 2 del PR 3a): decisión A del usuario sobre REQUIREMENT_AMBIGUITY-1 ("si, con tus recomendaciones"): costos unitarios con 4 decimales en T3; las recetas de T2 no se alinean, con el motivo anotado. DEF-005 y DEF-006 corregidos; OBS-20, OBS-21, OBS-22 y OBS-26 atendidas. Validado. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA (Q2, PR 3a, ronda 2)
+
+- 2026-11-26, senior-qa: el usuario aprobó la ronda 2 ("Si") y la opción A de REQUIREMENT_AMBIGUITY-1. Revalidación selectiva: S1 a S3, DEF-005 en sus tres modos de caída (con un proxy local), DEF-006 a 360 px en 15 pantallas, axe, los decimales, OBS-22, OBS-26, la regresión de la reversión y del admin, y 9 mutaciones. Lo no repetido está justificado. Dos mutantes sobreviven (OBS-27 y OBS-28), sin defectos nuevos. Limpieza comprobada. Estado: `QA_APPROVED`.

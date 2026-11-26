@@ -386,7 +386,13 @@ export function createInventoryViews({ render, join, attrs, page, notice, errorS
                 ),
               })
             : render('partials/empty', { text: 'No hay artículos que coincidan con los filtros. Cambia o quita alguno, o crea un artículo nuevo.' });
-        if (pages > 1) {
+        // OBS-12 (c) de REQ-F-050: una página fuera de rango no dice a la vez «N resultados» y «No hay…».
+        const outOfRange = info.total > 0 && info.number > pages;
+        if (outOfRange) {
+          summary = '';
+          results = render('partials/empty', { text: `Esta página no existe: hay ${info.total === 1 ? '1 artículo' : `${info.total} artículos`} en ${pages === 1 ? '1 página' : `${pages} páginas`}.` });
+        }
+        if (pages > 1 || outOfRange) {
           const query = (number: number) => {
             const params = new URLSearchParams(Object.entries({ estado: filter.estado, tipo: filter.tipo, categoria: filter.categoria, q: filter.q }).filter(([, value]) => value !== ''));
             params.set('pagina', String(number));
@@ -394,8 +400,10 @@ export function createInventoryViews({ render, join, attrs, page, notice, errorS
           };
           const link = (number: number, label: string) => render('partials/inventory-page-link', { href: query(number), label });
           pagination = render('partials/inventory-pagination', {
-            text: `Página ${info.number} de ${pages}`,
-            links: join([...(info.number > 1 ? [link(info.number - 1, 'Anterior')] : []), ...(info.number < pages ? [link(info.number + 1, 'Siguiente')] : [])]),
+            text: outOfRange ? `La última página es la ${pages}.` : `Página ${info.number} de ${pages}`,
+            links: outOfRange
+              ? link(pages, 'Ir a la última página')
+              : join([...(info.number > 1 ? [link(info.number - 1, 'Anterior')] : []), ...(info.number < pages ? [link(info.number + 1, 'Siguiente')] : [])]),
           });
         }
       }
@@ -469,10 +477,16 @@ export function createInventoryViews({ render, join, attrs, page, notice, errorS
       categories,
       usedIn = null,
       conversion,
+      stockRows = [],
+      kardex,
       notices = [],
     }: {
       context: PageContext;
       item: InventoryItemDetail;
+      /** REQ-F-051 (RF-10): existencia, CPP y último costo, en lugar del «Sin costo» de T2. */
+      stockRows?: SafeHtml[];
+      /** REQ-F-051 (RF-8): el Kardex del artículo. */
+      kardex?: SafeHtml | undefined;
       history: InventoryHistoryEntry[];
       categories: readonly CategoryOption[];
       /** REQ-F-050 (RF-8): recetas vigentes que lo usan; null si no se pudieron consultar. */
@@ -493,8 +507,7 @@ export function createInventoryViews({ render, join, attrs, page, notice, errorS
               dataRow('SKU', item.sku ?? '—'),
               ...(item.type === 'insumo' ? [dataRow('Inventariable', item.inventoriable ? 'Sí' : 'No: no lleva existencias; se costea por su costo de referencia')] : []),
               ...(item.type === 'compuesto' ? [] : [dataRow('Costo de referencia', item.referenceCost === null ? 'Sin costo de referencia' : referenceCostText(item.referenceCost, item.baseUnit))]),
-              dataRow('Último costo', 'Sin costo'),
-              dataRow('Costo promedio (CPP)', 'Sin costo'),
+              ...stockRows,
             ]),
         dataRow('Descripción', item.description ?? '—'),
       ];
@@ -559,6 +572,7 @@ export function createInventoryViews({ render, join, attrs, page, notice, errorS
                     ? render('partials/inventory-plain-list', { items: join(usedIn.map((recipe) => render('partials/inventory-link-item', { href: recipePath(recipe.itemId), text: `${recipe.name} (versión ${recipe.versionNumber})${recipe.active ? '' : ' · inactivo'}` }))) })
                     : render('partials/empty', { text: 'No se usa en ninguna receta vigente.' }),
             }),
+        kardex: kardex ?? none(),
         history: render('partials/inventory-section', {
           id: 'historial',
           title: 'Historial de cambios',

@@ -307,7 +307,13 @@ export function createRecipeViews({ render, join, attrs, page, notice, errorSumm
                 ),
               )
             : render('partials/empty', { text: 'No hay recetas vigentes que coincidan con los filtros. Cambia o quita alguno; para crear una receta, abre la ficha de un artículo Intermedio o Compuesto.' });
-        if (pages > 1) {
+        // OBS-12 (c) de REQ-F-050: una página fuera de rango no dice a la vez «N resultados» y «No hay…».
+        const outOfRange = info.total > 0 && info.number > pages;
+        if (outOfRange) {
+          summary = '';
+          results = render('partials/empty', { text: `Esta página no existe: hay ${info.total === 1 ? '1 receta vigente' : `${info.total} recetas vigentes`} en ${pages === 1 ? '1 página' : `${pages} páginas`}.` });
+        }
+        if (pages > 1 || outOfRange) {
           const query = (number: number) => {
             const params = new URLSearchParams(Object.entries({ tipo: filter.tipo, q: filter.q }).filter(([, value]) => value !== ''));
             params.set('pagina', String(number));
@@ -315,8 +321,10 @@ export function createRecipeViews({ render, join, attrs, page, notice, errorSumm
           };
           const link = (number: number, label: string) => render('partials/inventory-page-link', { href: query(number), label });
           pagination = render('partials/inventory-pagination', {
-            text: `Página ${info.number} de ${pages}`,
-            links: join([...(info.number > 1 ? [link(info.number - 1, 'Anterior')] : []), ...(info.number < pages ? [link(info.number + 1, 'Siguiente')] : [])]),
+            text: outOfRange ? `La última página es la ${pages}.` : `Página ${info.number} de ${pages}`,
+            links: outOfRange
+              ? link(pages, 'Ir a la última página')
+              : join([...(info.number > 1 ? [link(info.number - 1, 'Anterior')] : []), ...(info.number < pages ? [link(info.number + 1, 'Siguiente')] : [])]),
           });
         }
       }
@@ -416,7 +424,7 @@ export function createRecipeViews({ render, join, attrs, page, notice, errorSumm
         name: item.name,
         notices: join(notices),
         intro: current
-          ? `La versión ${current.version.number} deja de estar vigente y queda en el historial, sin cambios. El artículo queda sin receta vigente: las recetas que lo usan lo costearán por su costo de referencia o quedarán «Sin costo».`
+          ? `La versión ${current.version.number} deja de estar vigente y queda en el historial, sin cambios. El artículo queda sin receta vigente: las recetas que lo usan lo costearán por su costo promedio (CPP), si tiene compras, o por su costo de referencia, o quedarán «Sin costo».`
           : 'Este artículo ya no tiene receta vigente.',
         button: current
           ? render('partials/inventory-post-button', {

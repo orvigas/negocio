@@ -144,6 +144,10 @@ APP_IMAGE=$(sed -n 's/^RESTAURANTE_APP_IMAGE=//p' "$RELEASE_FILE" | tail -n 1)
 MIGRATE_IMAGE=$(sed -n 's/^RESTAURANTE_MIGRATE_IMAGE=//p' "$RELEASE_FILE" | tail -n 1)
 COMMIT=$(sed -n 's/^RESTAURANTE_COMMIT=//p' "$RELEASE_FILE" | tail -n 1)
 [[ "$APP_IMAGE" =~ ^[A-Za-z0-9./:@_-]+$ ]] || fail 3 "RESTAURANTE_APP_IMAGE ausente o inválida en $RELEASE_FILE"
+# Imagen de la api (REQ-F-051, DT-T3-6 A): el simulacro la usa para `inventory:verify`. Opcional: tras
+# una restauración, release.env puede no traerla (DEF-002 de REQ-F-038); entonces queda vacía.
+API_IMAGE=$(sed -n 's/^RESTAURANTE_API_IMAGE=//p' "$RELEASE_FILE" | tail -n 1)
+[[ -z "$API_IMAGE" || "$API_IMAGE" =~ ^[A-Za-z0-9./:@_-]+$ ]] || fail 3 "RESTAURANTE_API_IMAGE inválida en $RELEASE_FILE"
 
 MYSQL_CID=$(docker ps -q --filter "label=com.docker.compose.project=$PROJECT" --filter label=com.docker.compose.service=mysql --filter status=running)
 [[ "$MYSQL_CID" =~ ^[0-9a-f]+$ ]] || fail 3 'el contenedor de MySQL no está en marcha (o hay más de uno)'
@@ -188,6 +192,7 @@ COUNTS_STABLE=true
   printf 'commit=%s\n' "$COMMIT"
   printf 'app_image=%s\n' "$APP_IMAGE"
   printf 'migrate_image=%s\n' "$MIGRATE_IMAGE"
+  printf 'api_image=%s\n' "$API_IMAGE"
   printf 'users=%s\n' "$USERS"
   printf 'products=%s\n' "$PRODUCTS"
   printf 'last_migration=%s\n' "$LAST_MIGRATION"

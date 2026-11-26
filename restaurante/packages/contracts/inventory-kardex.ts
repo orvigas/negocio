@@ -263,7 +263,11 @@ export interface StockFilter {
   page?: string;
 }
 
-export const itemKardexResponseSchema = z.object({ item: stockItemSchema, stock: itemStockSchema.nullable(), movements: z.array(kardexMovementSchema), page });
+/** Movimiento del Kardex del artículo, con la fecha del hecho de su documento (RF-8). */
+export const itemKardexMovementSchema = kardexMovementSchema.extend({ occurredOn: businessDay });
+export type ItemKardexMovement = z.infer<typeof itemKardexMovementSchema>;
+
+export const itemKardexResponseSchema = z.object({ item: stockItemSchema, stock: itemStockSchema.nullable(), movements: z.array(itemKardexMovementSchema), page });
 export type ItemKardexResponse = z.infer<typeof itemKardexResponseSchema>;
 
 export const kardexOptionsResponseSchema = z.object({

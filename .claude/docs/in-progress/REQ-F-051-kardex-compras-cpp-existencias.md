@@ -4,6 +4,8 @@
 
 QA_APPROVED
 
+PR 3a: commit `ce9c53c` en `feature/REQ-F-051-kardex-pantallas` y PR #198 (https://github.com/orvigas/negocio/pull/198) hacia `epic/inventario`, abierto en borrador; el CI está pendiente.
+
 QA del PR 3a aprobado por senior-qa el 2026-11-26 (ver "QA Report — PR 3a", ronda 2). El usuario aprobó la implementación de la ronda 2 con "Si" y eligió la opción A en REQUIREMENT_AMBIGUITY-1. DEF-005 y DEF-006 quedan corregidos y verificados, y los costos unitarios se muestran con 4 decimales. Quedan dos observaciones nuevas de cobertura (OBS-27 y OBS-28) y el seguimiento de los decimales de las recetas de T2. Siguiente paso: senior-fullstack hace el commit y abre el PR hacia `epic/inventario` (T4).
 
 PR 3a, ronda 2: corregidos DEF-005 y DEF-006, aplicada la opción A de REQUIREMENT_AMBIGUITY-1 (decisión del usuario: "si, con tus recomendaciones") y atendidas OBS-20, OBS-21, OBS-22 y OBS-26. Sin commit (ver "Implementation Result — PR 3a", "Ronda 2").
@@ -560,7 +562,7 @@ En `epic/inventario`:
 | Operación | RF-14, RF-15 | — | CA-23, CA-24, CA-28 | 1–3 |
 | UX | RF-16 | — | CA-25, CA-26 | 3 |
 
-PR de T3: PR 2 #197 (https://github.com/orvigas/negocio/pull/197; API, contratos, cliente y semilla). PR 1b #196 (https://github.com/orvigas/negocio/pull/196; Kardex, CPP, correcciones, existencias, costo real e `inventory:verify`). PR 1a #195 (https://github.com/orvigas/negocio/pull/195), que cubre la parte de modelo, proveedores y existencias de Integridad, Proveedores, Acceso y Operación.
+PR de T3: PR 3a #198 (https://github.com/orvigas/negocio/pull/198; pantallas de consulta, proveedores, reversión, respaldos y despliegue). PR 2 #197 (https://github.com/orvigas/negocio/pull/197; API, contratos, cliente y semilla). PR 1b #196 (https://github.com/orvigas/negocio/pull/196; Kardex, CPP, correcciones, existencias, costo real e `inventory:verify`). PR 1a #195 (https://github.com/orvigas/negocio/pull/195), que cubre la parte de modelo, proveedores y existencias de Integridad, Proveedores, Acceso y Operación.
 
 No hay diseño en `_stich_source_/` (PV-8).
 
@@ -3645,3 +3647,7 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 ### QA (Q2, PR 3a, ronda 2)
 
 - 2026-11-26, senior-qa: el usuario aprobó la ronda 2 ("Si") y la opción A de REQUIREMENT_AMBIGUITY-1. Revalidación selectiva: S1 a S3, DEF-005 en sus tres modos de caída (con un proxy local), DEF-006 a 360 px en 15 pantallas, axe, los decimales, OBS-22, OBS-26, la regresión de la reversión y del admin, y 9 mutaciones. Lo no repetido está justificado. Dos mutantes sobreviven (OBS-27 y OBS-28), sin defectos nuevos. Limpieza comprobada. Estado: `QA_APPROVED`.
+
+### Commit y PR (T4, PR 3a)
+
+- 2026-11-26, senior-fullstack: OBS-27 corregida en las pruebas (aprobada con "si"). Commit `ce9c53c` y PR #198 en borrador hacia `epic/inventario`. Pendientes anotadas: OBS-13, OBS-17, OBS-18, OBS-23, OBS-24, OBS-25 y OBS-28.

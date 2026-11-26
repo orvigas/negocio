@@ -30,6 +30,7 @@ import {
 
 import type { Database } from './client.ts';
 import { databaseErrorDetails, isTransactionConflict, isUniqueViolation, toUnavailable } from './errors.ts';
+import { kardexReaderOn, kardexTxOn } from './prisma-kardex.ts';
 import { Prisma } from './generated/prisma/client.ts';
 
 /**
@@ -59,10 +60,14 @@ import { Prisma } from './generated/prisma/client.ts';
  *   crea antes las que falten (un artículo creado por una imagen anterior; también tras el TRUNCATE de
  *   las pruebas).
  * - `hasMovements` es `last_seq > 0`; `isInUse` lo incluye (RN-T3-11).
+ * - Kardex (documentos, movimientos y existencias): `prisma-kardex.ts`. `kardexTransaction` es READ
+ *   COMMITTED (DT-13): el orden de bloqueo lo fija core (documento de origen y existencias por id).
  */
 
 const WRITE_TX = Object.freeze({ isolationLevel: 'Serializable', maxWait: 5000, timeout: 10_000 } as const);
 const RECIPE_TX = Object.freeze({ isolationLevel: 'ReadCommitted', maxWait: 5000, timeout: 10_000 } as const);
+/** Kardex (REQ-F-051, DT-13): READ COMMITTED con SELECT … FOR UPDATE ordenado, no Serializable. */
+const KARDEX_TX = RECIPE_TX;
 const READ_TX = Object.freeze({ maxWait: 5000, timeout: 10_000 } as const);
 /** Intentos ante un interbloqueo, con una espera aleatoria corta entre ellos. */
 export const MAX_ATTEMPTS = 3;
@@ -252,6 +257,7 @@ function readerOn(client: Tx): InventoryStoreReader {
     return row ? toItem(row) : null;
   };
   return {
+    ...kardexReaderOn(client),
     getItem,
 
     async listVariants(parentId) {
@@ -379,6 +385,7 @@ function readerOn(client: Tx): InventoryStoreReader {
 function txOn(tx: Tx): InventoryStoreTx {
   return {
     ...readerOn(tx),
+    ...kardexTxOn(tx),
 
     async activeItemIdByNameKey(nameKey) {
       const row = await tx.inventoryItem.findUnique({ where: { activeNameKey: nameKey }, select: { id: true } });
@@ -522,11 +529,23 @@ function txOn(tx: Tx): InventoryStoreTx {
 /**
  * `writeTimeoutMs`: tiempo máximo de una transacción de `transaction` (10 s por defecto). Solo la
  * importación única de datos maestros (REQ-F-050, A5), que escribe todo en una transacción, lo sube.
+ * `readTimeoutMs`: lo mismo para `read`; solo `inventory:verify` (REQ-F-051), que lee todo el Kardex en
+ * una lectura consistente, lo sube.
  */
-export function createPrismaInventoryStore({ prisma, writeTimeoutMs = WRITE_TX.timeout }: { prisma: Database; writeTimeoutMs?: number }): InventoryStore {
+export function createPrismaInventoryStore({
+  prisma,
+  writeTimeoutMs = WRITE_TX.timeout,
+  readTimeoutMs = READ_TX.timeout,
+}: {
+  prisma: Database;
+  writeTimeoutMs?: number;
+  readTimeoutMs?: number;
+}): InventoryStore {
   if (!prisma) throw new TypeError('createPrismaInventoryStore requiere el cliente de la base de datos');
   if (!(Number.isSafeInteger(writeTimeoutMs) && writeTimeoutMs > 0)) throw new TypeError('writeTimeoutMs debe ser un entero positivo');
+  if (!(Number.isSafeInteger(readTimeoutMs) && readTimeoutMs > 0)) throw new TypeError('readTimeoutMs debe ser un entero positivo');
   const writeTx = { ...WRITE_TX, timeout: writeTimeoutMs };
+  const readTx = { ...READ_TX, timeout: readTimeoutMs };
 
   /** Errores de dominio tal cual; interbloqueo -> se repite la transacción entera; resto -> 503. */
   async function run<T>(operation: () => Promise<T>): Promise<T> {
@@ -547,8 +566,9 @@ export function createPrismaInventoryStore({ prisma, writeTimeoutMs = WRITE_TX.t
   }
 
   return Object.freeze<InventoryStore>({
-    read: (task) => run(() => prisma.$transaction((tx) => task(readerOn(tx)), READ_TX)),
+    read: (task) => run(() => prisma.$transaction((tx) => task(readerOn(tx)), readTx)),
     transaction: (task) => run(() => prisma.$transaction((tx) => task(txOn(tx)), writeTx)),
     recipeTransaction: (task) => run(() => prisma.$transaction((tx) => task(txOn(tx)), RECIPE_TX)),
+    kardexTransaction: (task) => run(() => prisma.$transaction((tx) => task(txOn(tx)), KARDEX_TX)),
   });
 }

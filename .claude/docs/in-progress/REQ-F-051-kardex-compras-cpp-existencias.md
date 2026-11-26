@@ -2,9 +2,15 @@
 
 ## Estado
 
-READY_FOR_MERGE
+QA_APPROVED
 
-PR 1a: commit `1fb5a02` en `feature/REQ-F-051-kardex-modelo` y PR #195 (https://github.com/orvigas/negocio/pull/195) hacia `epic/inventario` (no se despliega). El CI de `d8e7461`, con el PR listo (ejecución 45736787294), pasó `calidad`, `docker`, `auditoria` y `pruebas` (1/2 y 2/2). Siguiente paso: el usuario revisa y hace merge del PR #195. Después, el PR 1b sale de la punta de la épica.
+QA del PR 1b aprobado por senior-qa el 2026-11-26 (ver "QA Report — PR 1b", ronda 1). El usuario había aprobado el plan de QA con "Si", en respuesta a "¿Aprueba el plan de QA del PR 1b con esas cuatro respuestas?". Hay 2 defectos sin bloqueo: DEF-001 (`MINOR`) y DEF-002 (`TRIVIAL`). Siguiente paso: senior-fullstack hace el commit y abre el PR hacia `epic/inventario` (T4), y decide con el usuario si DEF-001 y DEF-002 se corrigen en este PR o en uno posterior.
+
+PR 1b de T3 (Kardex, CPP, saldo inicial, compra, ajuste, devolución, reversión, existencias, `inventory:verify` y sus pruebas en MySQL) implementado y validado en `feature/REQ-F-051-kardex-dominio`, desde `origin/epic/inventario` (`27c7a25`), sin commit (ver "Implementation Result — PR 1b"). El usuario decidió mantenerlo como un solo PR y confirmó RN-T3-12 a RN-T3-14 (ver "Decisiones sobre el PR 1b"). Falta que apruebe la implementación para pasar a QA.
+
+PR 1a mergeado en `epic/inventario` (#195, merge `27c7a25`).
+
+Historial del PR 1a: commit `1fb5a02` en `feature/REQ-F-051-kardex-modelo` y PR #195 (https://github.com/orvigas/negocio/pull/195) hacia `epic/inventario` (no se despliega). El CI de `d8e7461`, con el PR listo (ejecución 45736787294), pasó `calidad`, `docker`, `auditoria` y `pruebas` (1/2 y 2/2). Siguiente paso: el usuario revisa y hace merge del PR #195. Después, el PR 1b sale de la punta de la épica.
 
 QA del PR 1a aprobado por senior-qa el 2026-11-25 (ver "QA Report — PR 1a", ronda 1). El usuario aprobó el plan de QA: "Sí, apruebo el plan de QA con las tres respuestas". No hay defectos; quedan 4 observaciones. Siguiente paso: senior-fullstack hace el commit y abre el PR en borrador hacia `epic/inventario` (T4).
 
@@ -1524,6 +1530,679 @@ Salen de las observaciones del QA del PR 1a. Ninguna bloquea.
 - **OBS-3 (M3):** el relleno de la migración no provocó esperas agotadas. En producción no hay artículos, así que no hace falta ninguna acción.
 - **OBS-4 (V2/V4):** `DATABASE_NEWER_THAN_CODE` solo nombra la migración más nueva. Es el comportamiento que ya tenía `verify.ts`, fuera del alcance de T3. Si se quiere cambiar, irá en un ticket aparte.
 
+## Implementation Result — PR 1b
+
+### Rama
+
+`feature/REQ-F-051-kardex-dominio` (worktree `.claude/worktrees/req-f-051-pr1b`), creada desde `origin/epic/inventario` (`27c7a25`, con el 1a mergeado) y sin upstream. Destino: `epic/inventario`. Sin commit.
+
+### Cambios realizados
+
+- **Core (`packages/core/inventory`):**
+  - `kardex-schema.ts`:
+    - los 11 tipos (DT-T3-1): 5 que se escriben en T3 y 6 reservados;
+    - etiqueta legible, con "Movimiento (tipo no reconocido)" para un valor desconocido;
+    - criterio de costo, motivos de ajuste, límites (50 líneas, folio de 40, nota de 400, ventana de 31 días) y las formas `StockRow`, `KardexDocument` y `KardexMovement`.
+  - `kardex-math.ts`: el único módulo de cálculo, en `bigint`.
+    - `purchaseUnitCost` (importe / cantidad base, escala 4);
+    - `applyEntry` (RN-T3-5);
+    - `applyEntryReversal` (RN-T3-6; nunca deja el CPP negativo, ver Riesgos);
+    - `nextAvgCost`: decide la regla por tipo y signo, y la usan igual las escrituras y la verificación;
+    - `lineValue` y `stockValue`.
+  - `business-date.ts`: "hoy" en `BUSINESS_TIMEZONE` con `Intl`, y la fecha del hecho entre hoy − 31 y hoy (RN-T3-3, CA-11).
+  - `kardex-repository.ts`:
+    - **Escrituras:** `createInitialBalance`, `createPurchase`, `createAdjustment`, `createSupplierReturn` y `reverseDocument`.
+    - **Lecturas:** `previewReversal`, `getDocument` (con lo que queda por devolver), `listDocuments`, `listStock` (RF-7, DT-T3-5 y DT-T3-8), `itemKardex` (RF-8) y `formOptions`.
+    - **Orden de cada escritura:**
+      1. valida en el borde (errores `lines.N.campo`);
+      2. clave de envío persistente (DT-14);
+      3. bloquea el documento de origen y después las existencias;
+      4. lee los artículos **después** de bloquear;
+      5. calcula en orden e inserta.
+    - **Reglas aprobadas:** DT-T3-3 (409 `DocumentHasReturnsError`; la devolución se permite con el artículo o el proveedor inactivos), DT-T3-4 (último costo = última compra no revertida, o vacío) y DT-T3-7 (rechaza el costo escrito en una entrada cuando ya hay CPP).
+  - `kardex-verify.ts`: verificador puro (`createKardexVerifier`, y `verifyKardex` por lotes con clave). Las incidencias solo llevan `{ itemId, check, seq }`.
+  - `errors.ts`: `DocumentNotFoundError`, `InitialBalanceNotAllowedError`, `AlreadyReversedError`, `ReversalNotReversibleError`, `DocumentHasReturnsError`, `DocumentNotReturnableError`, `DocumentReversedError`, `IdempotencyKeyReusedError` e `IdempotencyRaceError`.
+  - `inventory-store.ts`: el contrato añade `kardexTransaction` y los métodos de lectura y escritura del Kardex.
+  - `recipe-repository.ts`: el CPP entra en el costo de las recetas (RF-10).
+  - `inventory-repository.ts`: la ficha devuelve `stock`.
+- **Stores:**
+  - **Memoria:** documentos, movimientos y existencias.
+  - **Prisma:** `prisma-kardex.ts`, nuevo. Decimales con signo sin coma flotante, y la fecha del hecho como medianoche UTC. Las claves únicas se traducen a `IdempotencyRaceError` y `AlreadyReversedError`. No hay ningún update ni delete de documentos o movimientos.
+  - `prisma-inventory-store.ts`: `kardexTransaction` (`ReadCommitted`) y `readTimeoutMs`, este último solo para `verify`.
+- **`inventory:verify`:**
+  - `api/scripts/inventory-verify.ts` y `api/scripts/support/inventory-verify-cli.ts`;
+  - un script en el `package.json` de `api` y otro en el de la raíz;
+  - copiado a la imagen `api` en `landing-pages/Dockerfile`. El plan lo dejaba para el PR 2; se adelanta porque es una línea y el README ya lo documenta.
+  - Salida: 0 si cuadra, 1 si hay descuadres y 2 si no pudo verificar; solo conteos, ids y nombres de comprobación.
+- **Documentación:**
+  - `docs/arquitectura.md`: la sección Kardex (costo, concurrencia, idempotencia, inmutabilidad con **los límites de la regla de lint de OBS-1**, verificación y tipos en `VARCHAR`) y el árbol de `core/inventory`;
+  - `README.md`: el comando `inventory:verify`.
+- **Fuera de este PR, según el plan:**
+  - PR 2: contratos, rutas de la API y semilla ampliada;
+  - PR 3: pantallas, OBS-12 (a) y (c), `ops/backup` (DT-T3-6 A) y `despliegue.md`.
+
+### Criterios de aceptación (alcance del 1b: dominio y persistencia; API y pantallas en los PR 2 y 3)
+
+| CA | Estado | Evidencia |
+|---|---|---|
+| CA-1 a CA-4 | PASS | Unitarias: 50.000 kg a 20.0000; CPP 21.3333 y último costo 24.0000; existencia de −2 a 8 con CPP 25.0000; 3.3333 y 6.6667; coma y decimales de más rechazados |
+| CA-5, CA-8 | PASS | Saldo de 12.500 a 18.5000; un segundo saldo o uno tras una compra dan 409 con el mensaje "ajuste"; tras revertir el saldo se admite otro |
+| CA-6, CA-7 | PASS | 50.000 kg con CPP 20.0000 (19.99995 redondeado hacia arriba); el original no cambia; un segundo intento da `AlreadyReversedError` y una reversión no se revierte; negativo con el CPP conservado y la vista previa lo avisa |
+| CA-9, CA-10 | PASS | Compuesto, padre, no inventariable e inactivo marcados por línea, sin escritura; proveedor inactivo rechazado; sin factor de conversión y redondeo a 0 rechazados |
+| CA-11 | PASS | Hoy y hoy − 31 se aceptan; mañana, hoy − 32 y el 30 de febrero, no; a las 23:30 y a las 00:30 locales da el día local |
+| CA-12 | PASS | Memoria: reenvío y huella distinta. MySQL: un segundo store (simula el reinicio) con dos envíos a la vez deja un solo documento |
+| CA-13 | PASS | MySQL: 20 salidas simultáneas, con `seq` del 1 al 21 y 70.000 exactos; 10 documentos cruzados sin errores; `verify` da 0 |
+| CA-14 | Parcial | 1205 → 503 `INVENTORY_BUSY` ya existe en `run()`. La espera agotada real es una sonda de QA |
+| CA-15 | PASS | Unitaria y MySQL: un `UPDATE` hecho a mano lo detectan `cpp_recalculado` y `existencia_distinta`, sin valores |
+| CA-16, CA-17 | PASS (dominio) | Columnas, totales, estados, inactivos (DT-T3-5) y totales redondeados (DT-T3-8); Kardex del más reciente al más antiguo. Las pantallas van en el PR 3 |
+| CA-18 | PASS | 0.500 kg a 10.0000 con origen `cpp`, sin versión nueva; la ficha muestra el CPP y el último costo; cadena punta a punta en MySQL |
+| CA-19 | PASS | Carrera en MySQL (3 rondas): el cambio de inventariable y el primer movimiento nunca se aplican los dos |
+| CA-29, CA-30 | PASS | Salida a 20.0000; "otro" sin nota rechazado; entrada sin CPP ni costo rechazada; la devolución sale a 24.0000 y no pasa de lo pendiente; DT-T3-3 |
+| CA-23, CA-24 | Pendiente de QA | Sin migración nueva en el 1b |
+| Resto | Fuera del 1b | PR 2 y PR 3 |
+
+### Validaciones ejecutadas
+
+Todo desde `restaurante/` en el worktree.
+
+- `npm run typecheck`: 0.
+- `npm run lint`: 0, con `check-private-data`.
+- `npm run build:css`: 0.
+- `npm test`: `api` 1270, `landing-pages` 915 e `inventory-manager` 297, todas en verde.
+- **Pruebas nuevas:**
+  - `api/tests/unit/inventory-kardex.test.ts`: 25 pruebas en total (17 nuevas), unos 0.3 s;
+  - `landing-pages/tests/integration/prisma-inventory-kardex.test.ts`: 8 pruebas, unos 4.7 s, verde 4 veces seguidas.
+- **Defecto propio detectado y corregido:** la prueba de RN-T3-11 encontró que la compra leía los artículos antes de bloquear su existencia. El repositorio ahora bloquea primero (`lockItemIds`), como dice el plan.
+- **`inventory:verify` como lo documenta el README** (sondas descartables, ya borradas):
+  - contra una base `restaurante_test_verify051` migrada:
+    - vacía: código 0;
+    - con una compra y un ajuste: código 0;
+    - con un `UPDATE` hecho a mano: código 1, que lista `existencia_nueva` y `existencia_anterior` solo con ids;
+    - con MySQL inalcanzable: código 2;
+  - con la imagen `api` construida en local (`docker build --target api`): `node scripts/inventory-verify.ts` contra una base temporal da 0.
+- **Ida y vuelta de la fecha del hecho (`DATE`, H-11):** pasa con `TZ=America/Mexico_City` en el proceso de pruebas. **El plan B (`CHAR(10)`) no hace falta.**
+- **Limpieza:**
+  - sin bases `restaurante_test*`, sin procesos de Vitest y sin la imagen de sonda;
+  - borrados los archivos temporales (`zz-probe.ts` y los registros).
+  - El worktree se conserva para QA.
+
+### Archivos afectados
+
+- **Nuevos:**
+  - en `restaurante/packages/core/inventory/`: `{kardex-schema,kardex-math,kardex-repository,kardex-verify,business-date}.ts`;
+  - `restaurante/packages/db/src/prisma-kardex.ts`;
+  - `restaurante/api/scripts/inventory-verify.ts` y `restaurante/api/scripts/support/inventory-verify-cli.ts`;
+  - `restaurante/landing-pages/tests/integration/prisma-inventory-kardex.test.ts`.
+- **Modificados:**
+  - en `restaurante/packages/core/inventory/`: `{errors,index,inventory-repository,inventory-store,memory-inventory-store,recipe-repository}.ts`;
+  - `restaurante/packages/db/src/prisma-inventory-store.ts`;
+  - `restaurante/api/tests/unit/inventory-kardex.test.ts`;
+  - `restaurante/api/package.json` y `restaurante/package.json`;
+  - `restaurante/landing-pages/Dockerfile`;
+  - `restaurante/docs/arquitectura.md` y `restaurante/README.md`;
+  - este ticket.
+- **Sin cambios en `deploy/`.**
+
+### Riesgos o pendientes
+
+- **CPP negativo, fecha de la reversión y unidad de la devolución:** confirmados por el usuario como RN-T3-12 a RN-T3-14 (ver "Decisiones sobre el PR 1b").
+- **Tamaño del PR:** el usuario decidió mantenerlo como un solo PR.
+
+## Decisiones sobre el PR 1b
+
+Aprobadas por el usuario el 2026-11-25 con "Si", en respuesta a "¿Mantengo el PR 1b como un solo PR, y confirma esos tres supuestos con mis recomendaciones?".
+
+- **Tamaño:** el PR 1b queda como **un solo PR**, aunque añade 2 438 líneas (unas 1 890 de producción con comentarios, 505 de pruebas y unas 45 de documentación) frente a las ~1 500 del plan. Motivo: el repositorio del Kardex es un único módulo cohesionado y ya está validado en conjunto. No se parte en 1b-1 y 1b-2.
+- **RN-T3-12. CPP nunca negativo.** Si la fórmula de RN-T3-6, `(q·c − d·k) / (q − d)`, diera un CPP negativo al revertir una entrada o devolver mercancía, el CPP queda en 0. Ocurre cuando lo que sale costó mucho más que el promedio de lo que queda. Implementado en `applyEntryReversal` (`kardex-math.ts`); `inventory:verify` lo recalcula igual.
+- **RN-T3-13. Fecha del hecho de una reversión.** Es el día en que se registra, en `BUSINESS_TIMEZONE`. La reversión no pregunta la fecha.
+- **RN-T3-14. Cantidad de una devolución.** Se captura en la unidad base del artículo, y el detalle de la compra muestra "queda por devolver" en esa unidad.
+
+## QA Action Plan — PR 1b
+
+### Objetivo
+
+Validar con evidencia que el PR 1b (rama `feature/REQ-F-051-kardex-dominio`, sin commit, sobre `27c7a25`) cumple sus criterios de dominio y persistencia:
+
+- el CPP, el costo de compra, la reversión, la devolución, el ajuste y el saldo inicial calculan exactamente lo que dicen RN-T3-4 a RN-T3-8 y RN-T3-12 a RN-T3-14;
+- la concurrencia, la idempotencia persistente y la espera agotada no pierden ni duplican movimientos;
+- el Kardex es inmutable, e `inventory:verify` lo comprueba sin filtrar datos;
+- la vuelta atrás a `main` y a la épica previa sigue funcionando;
+- nada de T1, T2, el 1a ni el resto del monorepo cambia.
+
+### Requisito bajo prueba
+
+- **En el 1b:** RF-2 a RF-6, RF-7 y RF-8 (solo el dominio), RF-10, RF-11, RF-13, RN-T3-1 a RN-T3-10, RN-T3-12 a RN-T3-14, DT-14, DT-13, DT-5 (inmutabilidad y `verify`), DT-T3-3, DT-T3-4, DT-T3-5, DT-T3-7, DT-T3-8 y OBS-1 (documentación).
+- **Fuera del 1b, sin tratarlo como defecto:**
+  - PR 2: contratos, rutas, el 503 `INVENTORY_BUSY` en HTTP, CA-21 y la semilla (CA-28);
+  - PR 3: pantallas, CA-25, OBS-12 (a) y (c), `ops/backup` (DT-T3-6 A) y `despliegue.md`.
+  - "Lo escrito se conserva" (CA-14) y el texto visible de CA-6, CA-16, CA-17 y CA-18 son de pantalla: aquí solo se valida el dominio que los alimenta.
+
+### Cálculos verificados a mano (antes de ejecutar)
+
+Notación: cantidades con escala 3, costos con escala 4 e importes con escala 2. `divideRounded` hace `(2n + d) / (2d)`, es decir, mitad hacia arriba (lejos de cero).
+
+| CA | Cálculo | Esperado |
+|---|---|---|
+| CA-1 | 2 bultos × 25 = 50.000 kg; 1 000.00 / 50.000 = 100 000·10⁵ / 50 000 = 200 000 | 20.0000; existencia 0.000 → 50.000; CPP y último costo 20.0000 |
+| CA-2 | k = 600.00 / 25.000 = 24.0000; (50·20 + 25·24) / 75 = 1 600 / 75 = 21.33333… | CPP 21.3333; último costo 24.0000 |
+| CA-3 | q = −2.000 ≤ 0 → c' = k = 250.00 / 10.000 = 25.0000 | existencia 8.000; CPP 25.0000 |
+| CA-4 | 10.00 / 3 = 3.33333… → 3.3333; 20.00 / 3 = 6.66666… → 6.6667 | 3.3333 y 6.6667 |
+| CA-5 | q = 0 → c' = k | existencia 12.500; CPP 18.5000 |
+| CA-6 | (75.000·21.3333 − 25.000·24.0000) / 50.000 = (15 999 975 000 − 6 000 000 000) / 50 000 = 199 999.5 (escala 4) → 200 000 | 19.99995 → **20.0000**; existencia 50.000. Con redondeo hacia abajo o truncado saldría 19.9999 |
+| CA-7 | q − d ≤ 0 → se conserva c | CPP sin cambio |
+| CA-16 | 50.000 × 20.0000 = 1 000.0000000 → escala 2 | 1 000.00 |
+| CA-18 | 0.500 × 20.0000 | 10.00, origen `cpp` |
+| CA-29 | salida de 2.000 al CPP 20.0000; c sin cambio | existencia 8.000; costo 20.0000 |
+| CA-30 | sobre el estado de CA-2: devolver 5.000 a 24.0000 → (75·21.3333 − 5·24) / 70 = (15 999 975 000 − 1 200 000 000) / 70 000 = 211 428.21… | sale a 24.0000; CPP 21.1428 |
+| RN-T3-12 | compra de 10.000 por 10.00 (k = 1.0000, CPP 1.0000); compra de 10.000 por 1 000.00 (CPP (10 + 1 000) / 20 = 50.5000); salida de 9.000 (q = 11.000). Revertir la segunda compra: (11·50.5 − 10·100) / 1 = −444.5 < 0 | CPP **0.0000**; existencia 1.000; último costo 1.0000 (DT-T3-4) |
+
+### Criterios de aceptación
+
+| CA (alcance 1b) | Pruebas |
+|---|---|
+| CA-1 a CA-4 (compra, CPP, existencia ≤ 0, redondeo y formato) | S3, F1, F2, N1, X1 |
+| CA-5 y CA-8 (saldo inicial) | S3, F3, C6, C7, X8 |
+| CA-6 y CA-7 (reversión) | S3, F4, F5, C3, X1, X9 |
+| CA-9 y CA-10 (artículos, proveedor y conversión) | S3, F6, N2 |
+| CA-11 (fecha del hecho) | S3, F7, X10 |
+| CA-12 (doble envío, también con reinicio) | S3, F8, C8, X5, X6 |
+| CA-13 (concurrencia y `verify` en 0) | S3, C1, C2, C10, P1, X3 |
+| CA-14 (espera agotada real) | B1 a B3 |
+| CA-15 (inmutabilidad y `verify` con filas alteradas) | S3, I1, I2, K1 a K8, X7 |
+| CA-16 y CA-17 (existencias y Kardex, dominio) | S3, F9, F10 |
+| CA-18 (costo real) | S3, F11, H1 |
+| CA-19 (bloqueo por uso con movimientos reales) | S3, C9 |
+| CA-29 (ajuste) | S3, F12 |
+| CA-30 (devolución) | S3, F13, C4, C5 |
+| CA-23 (respaldo, con sonda) | RB1 a RB3 |
+| CA-24 (vuelta atrás, con sonda) | V1 a V6 |
+| RN-T3-12 a RN-T3-14 | F4, F5, F13, F14, X2 |
+| CA-26 (regresión de lo tocado) y DoD | S1 a S7, H1, T1 a T4, A1 a A3 |
+
+### Riesgos identificados
+
+- **R-1. Desbordamiento de DECIMAL en MySQL.** El store en memoria no tiene límites de columna, así que las pruebas unitarias no lo verían. Hay dos casos que el dominio no comprueba:
+  - `line_total` y `total_cost` (`DECIMAL(19,4)`) en un saldo inicial o un ajuste con una cantidad y un costo grandes: 9 999 999 999.999 × 99 999 999 999.9999 ≈ 10²¹;
+  - un CPP posterior (`DECIMAL(15,4)`) que la fórmula de RN-T3-6 amplifica cuando q − d es muy pequeño. Ejemplo calculado: saldo de 0.001 kg a 99 999 999 999.0000, compra de 999.999 kg por 0.00 (CPP 100 000.0000) y reversión de la compra, que da (1 000·100 000) / 0.001 = 100 000 000 000.0000, uno más que el máximo.
+  - Los casos límite piden "se rechaza con un mensaje en el campo". Un error de base (503) sería un defecto; su severidad depende de lo realista del dato (N3).
+- **R-2. RN-T3-12 sin prueba permanente.** No hay ningún caso que fije el CPP en 0 (X2 lo comprueba). Si no lo hay, se registra como observación.
+- **R-3. Unicidad del documento.** `insertDocument` traduce cualquier clave única repetida a `IdempotencyRaceError` si el envío trae clave. Una reversión con clave que choque por `reverses_document_id` acabaría en un error de carrera, en lugar de `AlreadyReversedError`. El bloqueo del documento de origen debería impedirlo (C3).
+- **R-4. `verify` y la paginación por clave.** El lote de 5 000 movimientos puede partir la cadena de un artículo, y la lectura debe ser consistente mientras se escribe (K6 y C10).
+- **R-5. `api/.env` existe en el worktree.** `npm run inventory:verify` lo carga con `--env-file-if-exists`. Toda sonda usa un env propio o variables exportadas, que tienen prioridad, y se comprueba con los conteos que la base usada es la de QA. Nunca se toca la base de desarrollo.
+- **R-6. Pruebas permanentes.** La ida y vuelta de DECIMAL y `DATE` está en la frontera de las "pruebas de driver" de `testing.md`, aunque el plan aprobado la pide (H-11). Se revisa en T2 sin tratarla como defecto.
+- **R-7. Vuelta atrás.** `27c7a25` no usa el CPP en las recetas (se costean por referencia), y `main` no conoce el inventario. Es lo esperado: un efecto más amplio sería un defecto.
+
+### Pruebas funcionales (sondas en el scratchpad, MySQL 8.4 y memoria)
+
+Las sondas se escriben en el scratchpad y se ejecutan desde la raíz del worktree, importando `@restaurante/core` y `@restaurante/db`. Usan bases propias `restaurante_test_qa051b_*`, creadas con `TEST_ADMIN_DATABASE_URL` y migradas con el `migrate deploy` del worktree. `BUSINESS_TIMEZONE=America/Mexico_City` y, cuando importa, `TZ` distinta (`Asia/Tokyo` y `UTC`). Cada escenario se ejecuta igual en memoria y en MySQL, y se comparan los movimientos y las existencias (diferencial).
+
+- **F1. CA-1 a CA-3** exactos, con los valores de la tabla de cálculos: `unitCost`, `balanceBefore`, `balanceAfter`, `avgCostBefore`, `avgCostAfter`, `lineTotal` y `totalCost` de cada movimiento, y la existencia.
+- **F2. CA-4:**
+  - 3 pza por 10.00 y por 20.00;
+  - la mitad exacta: 0.01 por 0.064 kg = 0.15625, que debe dar 0.1563; y un cociente exacto, 1.00 por 0.032 kg = 31.2500;
+  - "1,5", "10.001" en el importe, "1.0005" en la cantidad y "18.50005" en el costo: error en su campo, sin escritura.
+- **F3. CA-5 y CA-8:**
+  - saldo de 12.500 a 18.5000; un segundo saldo: `InitialBalanceNotAllowedError` con el texto "ajuste";
+  - saldo tras una compra: rechazado;
+  - saldo revertido: admite otro;
+  - compra revertida sin otros movimientos: admite saldo, según RN-T3-8 ("movimientos vigentes");
+  - el mismo artículo dos veces en el mismo saldo: error en la línea;
+  - el saldo no cambia el último costo.
+- **F4. Reversiones sin devoluciones:**
+  - de una compra (CA-6: 20.0000, el original sin cambios y `reversedById`);
+  - de un saldo inicial, de un ajuste de entrada, de un ajuste de salida (entra al costo con que salió) y de una devolución;
+  - de una salida sin costo: el CPP no cambia;
+  - una reversión de una reversión: `ReversalNotReversibleError`;
+  - una segunda reversión: `AlreadyReversedError`;
+  - con el artículo y el proveedor inactivos: se permite;
+  - motivo vacío o de 401 caracteres: error en `reason`;
+  - un id inexistente: `DocumentNotFoundError`;
+  - fecha del hecho = hoy en `BUSINESS_TIMEZONE`, aunque el original sea de hace 20 días (RN-T3-13);
+  - DT-T3-4: revertir la compra más reciente deja el costo de la anterior no revertida; revertir una antigua conserva el último costo; revertir la única deja el último costo vacío.
+- **F5. Reversiones con devoluciones (DT-T3-3) y CA-7:**
+  - compra → devolución → revertir la compra: `DocumentHasReturnsError` con el id de la devolución;
+  - revertir la devolución y después la compra: se aplica, con el estado final calculado a mano;
+  - CA-7: entrada consumida y revertida → negativo con el CPP conservado; `previewReversal` lo marca sin escribir ni bloquear (conteos sin cambios).
+- **F6. CA-9 y CA-10:**
+  - un Compuesto, un padre, un no inventariable y un inactivo, cada uno en una línea distinta del mismo documento: un error por línea y ninguna fila nueva (documentos, movimientos, existencias y claves);
+  - un proveedor inactivo y uno inexistente: error en `supplierId`;
+  - pza en un artículo en kg sin factor; 0.001 g en un artículo en kg (redondea a 0);
+  - un factor de empaque decimal (p. ej. caja = 0.75 kg).
+- **F7. CA-11:**
+  - con el reloj fijado a las 23:30 y a las 00:30 de `America/Mexico_City`, y el proceso en `TZ=Asia/Tokyo` y en `UTC`: "hoy" es el día local;
+  - se aceptan hoy y hoy − 31; se rechazan mañana, hoy − 32, `2026-02-30` y "2026-1-5".
+- **F8. CA-12, doble envío con reinicio real:**
+  - el proceso A registra una compra con un `requestId` y termina; un proceso B nuevo envía lo mismo: `replayed: true` y el mismo id, con un solo documento en la base;
+  - el mismo `requestId` con otro cuerpo: `IdempotencyKeyReusedError`, sin escritura;
+  - el mismo `requestId` con otro actor o con otro tipo de documento: documentos distintos (la clave lleva el actor y el tipo);
+  - un `requestId` que no es un UUID: error en `requestId`;
+  - repetir el envío de una compra ya revertida: devuelve la compra original, sin escribir.
+- **F9. CA-16 (dominio):**
+  - con 50.000 kg a 20.0000: valor 1 000.00;
+  - los estados "Negativo" y "Sin costo";
+  - un CPP 0 (de RN-T3-12 o de una compra sin cargo) cuenta como "con costo" y vale 0.00. "Sin costo" es solo la ausencia de CPP;
+  - los totales: positivos, negativos aparte y el conteo de sin costo;
+  - sin Compuestos, padres ni no inventariables; un inactivo solo con existencia distinta de 0 (DT-T3-5);
+  - los filtros (búsqueda, categoría, tipo y estado) y la paginación con 51 artículos;
+  - el redondeo de un valor negativo con la mitad exacta se registra (ver N4).
+- **F10. CA-17 (dominio):** con 51 movimientos de un artículo, la página 1 tiene `seq` 51 a 2 y la 2 tiene `seq` 1. Cada movimiento lleva su documento, el usuario, la fecha y hora de registro y la fecha del hecho.
+- **F11. CA-18:** un ingrediente con referencia 30.0000 y una compra a 20.0000 hace que su línea de 0.500 kg cueste 10.00 con origen `cpp`, sin versión nueva de la receta. `getItem` devuelve la existencia, el CPP y el último costo. Un Intermedio con receta vigente y compras se costea por su receta (DT-7), aunque tenga CPP.
+- **F12. CA-29:**
+  - salida de 2.000 a 20.0000;
+  - "otro" sin nota: error en `note`;
+  - entrada sin CPP ni costo: error en la línea;
+  - entrada con CPP y costo escrito: rechazada (DT-T3-7);
+  - salida con costo escrito: rechazada;
+  - salida sin CPP: `unitCost` nulo y la línea "sin costo";
+  - motivo fuera de la lista y dirección inválida: error en su campo.
+- **F13. CA-30 y RN-T3-14:**
+  - devolver 5.000 de 25.000 sale a 24.0000, con el CPP 21.1428 de la tabla;
+  - devolver 20.000 más: se acepta, porque queda justo 0;
+  - devolver 0.001 más: rechazado;
+  - dos líneas del mismo documento que juntas pasan lo pendiente: la segunda se rechaza;
+  - una línea de otra compra: rechazada;
+  - devolver desde un saldo inicial o un ajuste: `DocumentNotReturnableError`; desde una compra revertida: `DocumentReversedError`;
+  - con el artículo y el proveedor inactivos: se permite;
+  - la unidad guardada es la base, y `getDocument` da lo que queda por devolver en esa unidad;
+  - revertir una devolución libera lo pendiente.
+- **F14. RN-T3-12:** la cadena de la tabla de cálculos deja el CPP en 0.0000, y `verify` da 0 sobre ella. Una entrada posterior promedia desde 0 (no desde "sin CPP").
+
+### Pruebas negativas y casos límite
+
+- **N1. Formato:** importe "1e3", " 12 ", "-1", "+1", "00012.50", ".5", "5.", vacío y no texto, en cantidad, importe y costo. Se registra la respuesta de cada uno; cualquier valor aceptado que no sea un decimal con punto es un defecto de RN-T3-10.
+- **N2. Documento:** 0 líneas, 50 líneas (se acepta), 51 líneas (se rechaza), folio de 41 y nota de 401 caracteres, y un `supplierId` que no es un entero.
+- **N3. Desbordamiento (R-1), en MySQL:**
+  - una cantidad que lleva la existencia acumulada por encima de `DECIMAL(13,3)`: error en `lines.N.quantity` (ya lo comprueba `compute`);
+  - un saldo inicial y un ajuste de entrada con `line_total` mayor que `DECIMAL(19,4)`;
+  - un documento de 50 líneas cuyo `total_cost` se desborda aunque cada línea quepa;
+  - la reversión del ejemplo de R-1, con un CPP mayor que `DECIMAL(15,4)`.
+  - Esperado: error del dominio con mensaje y nada escrito. Si sale un 503 o un error de base, es un defecto. Su severidad se propone por lo realista de los valores (importes de cientos de millones de pesos).
+- **N4. Redondeo con signo:** `stockValue` de −0.001 × 5.0000 (−0.005 → ¿−0.01 o 0.00?). "Mitad hacia arriba" en negativos no está definido en el ticket. Se registra el resultado como dato; no es un defecto salvo que contradiga una regla escrita.
+- **N5. Inmutabilidad del store en memoria:** mutar un documento o movimiento devuelto no cambia lo guardado (copias defensivas). Si lo cambia, es una observación, porque solo afecta a las pruebas.
+
+### Pruebas de concurrencia (MySQL; 10 rondas cada una)
+
+- **C1.** 20 operaciones simultáneas sobre un artículo, mezcladas (compras, ajustes de entrada y de salida): 20 movimientos con `seq` contiguo, la existencia exacta (la suma) y el CPP igual al que recalcula `verify`. `verify`: 0.
+- **C2.** 10 documentos simultáneos con los artículos en órdenes cruzados (A, B, C frente a C, B, A), algunos de 50 líneas. Sin errores visibles, `verify` en 0. Se cuentan los interbloqueos (1213) reintentados: con el orden ascendente deberían ser 0.
+- **C3.** Dos reversiones simultáneas del mismo documento, con `requestId` distintos y sin él: una se aplica y la otra da `AlreadyReversedError`, nunca `IdempotencyRaceError` ni 503 (R-3).
+- **C4.** Una devolución y la reversión de la misma compra a la vez: o la devolución se aplica y la reversión da `DocumentHasReturnsError`, o la reversión se aplica y la devolución da `DocumentReversedError`. Nunca las dos.
+- **C5.** Dos devoluciones simultáneas de 15.000 sobre una línea de 25.000: una se aplica y la otra da error en la línea. Lo devuelto nunca pasa de lo comprado.
+- **C6.** Dos saldos iniciales simultáneos del mismo artículo: uno se aplica y el otro da `InitialBalanceNotAllowedError`.
+- **C7.** Un saldo inicial y una compra simultáneos de un artículo sin movimientos: según el orden, se aplican los dos (primero el saldo) o el saldo se rechaza. Nunca queda un saldo inicial registrado después de una compra vigente.
+- **C8.** 5 envíos simultáneos con el mismo `requestId`, repartidos entre dos instancias del store: 1 documento; los demás `replayed: true` con el mismo id.
+- **C9. CA-19:** carrera entre el cambio de inventariable o de unidad y un primer movimiento real (no simulado con SQL): nunca se aplican los dos.
+- **C10.** `inventory:verify` mientras 10 escritores registran documentos: siempre 0 (lectura consistente), sin errores ni esperas agotadas.
+- **P1. Contención del pool (medición, no prueba).** Con el pool de 5 conexiones: 20 y 40 operaciones simultáneas de 1 y de 50 líneas. Se registran la latencia p50/p95/máxima, los reintentos y los errores de espera del pool (P2024 → 503). Es un hallazgo, no un defecto, salvo que una carga realista (≤ 5 usuarios) dé 503.
+- En todas: cero errores fuera de la jerarquía del dominio, y core no escribe en los logs.
+
+### Pruebas de espera agotada (CA-14)
+
+El MySQL de pruebas corta la espera de bloqueo a los 5 s. Una sesión externa (cliente `mysql` en el contenedor, con el usuario administrador de pruebas) mantiene un bloqueo unos 8 s y después lo suelta:
+
+- **B1.** `FOR UPDATE` sobre la existencia de un artículo y una compra de ese artículo: `InventoryBusyError` a unos 5 s. Documentos, movimientos, existencias y la clave de envío sin cambios. Al liberar, el mismo `requestId` crea un solo documento con `replayed: false`.
+- **B2.** Bloqueo de solo el segundo artículo de una compra de dos líneas (el primero ya quedó bloqueado por la transacción): `InventoryBusyError` y nada escrito del primero (todo o nada).
+- **B3.** `FOR UPDATE` sobre la fila de una compra y una reversión o devolución de esa compra: `InventoryBusyError`, nada escrito.
+- La correspondencia con el 503 `INVENTORY_BUSY` de HTTP y la conservación de lo escrito en el formulario se validan en los PR 2 y 3.
+
+### `inventory:verify` (RF-13, CA-15)
+
+Se ejecuta como lo documenta el README (`npm run inventory:verify` desde `restaurante/`, con las variables exportadas) y como en el contenedor (`node scripts/inventory-verify.ts` desde `api/`). Se comprueba con los conteos que la base usada es la de QA (R-5).
+
+- **K1.** Base vacía y migrada: código 0 con `artículos=0 movimientos=0 documentos=0`.
+- **K2.** Datos correctos, con todos los tipos de documento, reversiones, devoluciones, negativos, sin costo y CPP 0: código 0 y conteos iguales a los de la base.
+- **K3. Una alteración por copia nueva de la base** (`UPDATE` o `INSERT` con el administrador de pruebas):
+  - la cantidad de un movimiento;
+  - `balance_before` y `balance_after`;
+  - `avg_cost_before` y `avg_cost_after`;
+  - el `unit_cost` de una compra;
+  - el `seq` de un movimiento (hueco);
+  - el tipo (`'xxx'`);
+  - una cantidad 0;
+  - `quantity`, `avg_cost` y `last_seq` de la existencia;
+  - una existencia con movimientos borrada, si la FK lo permite;
+  - una existencia sin movimientos y con cantidad.
+  - Esperado: código 1, con la comprobación correspondiente. Las alteraciones que RF-13 no pide (`line_total`, `last_cost`, `occurred_on`, el autor) se registran como no detectadas, como observación.
+- **K4. Salida sin datos:** en cada salida de K1 a K3 y K7 solo aparecen los prefijos `inventory_verify_*`, `itemId`, `check`, `seq` y conteos. Ningún nombre, costo, cantidad, contraseña ni URL (CA-15 y CA-27). Se comprueba por patrón sobre stdout y stderr.
+- **K5.** Más de 100 incidencias: 100 líneas, `inventory_verify_more N` y el total.
+- **K6. Paginación por clave:** más de 5 000 movimientos (unos 110 documentos de 50 líneas), con un artículo cuya cadena cruza el borde del lote: código 0 y conteos exactos. Con una alteración justo después del borde, código 1.
+- **K7. No pudo verificar (código 2):**
+  - MySQL inalcanzable (puerto cerrado);
+  - sin `DATABASE_URL`;
+  - contraseña incorrecta (la salida no la muestra);
+  - una base sin migrar o con migraciones pendientes.
+- **K8. Solo lectura:** con un usuario temporal que solo tiene `SELECT` sobre la base de QA, da 0 (ver "Decisiones para la aprobación"). Tras ejecutarlo, los `CHECKSUM TABLE` de las tablas del inventario no cambian.
+- **K9. En la imagen:** `docker build --target api` del worktree y `node scripts/inventory-verify.ts` en el contenedor contra una base de QA: código 0, y código 1 con una alteración (ver "Decisiones para la aprobación").
+
+### Inmutabilidad (DT-5, CA-15)
+
+- **I1.** Revisión del diff: el contrato `InventoryStore`, el store en memoria y `prisma-kardex.ts` no exponen ningún update ni delete de documentos o movimientos. Búsqueda en el árbol del worktree de `inventoryDocument`/`inventoryMovement` con `update*`, `upsert` o `delete*`, y de `$executeRaw`/`$queryRaw` con `UPDATE` o `DELETE` sobre esas tablas, también en las formas de OBS-1 (desestructuración, alias y acceso calculado): 0 en producción.
+- **I2.** `npm run lint` en verde. `arquitectura.md` documenta los límites de la regla (OBS-1).
+
+### Pruebas de respaldo (CA-23, sonda; el simulacro con `ops/backup` es del PR 3)
+
+- **RB1.** Una base de QA con los datos de K2 y un proveedor inactivo se vuelca con los mismos parámetros que `ops/backup/backup.sh` (`--single-transaction --no-tablespaces --skip-lock-tables --default-character-set=utf8mb4 --hex-blob --set-gtid-purged=OFF`, sin `--databases` para poder restaurar con otro nombre) y se restaura en otra base `restaurante_test_qa051b_*`.
+- **RB2.** Los conteos y los `CHECKSUM TABLE` de `inventory_supplier`, `inventory_document`, `inventory_movement`, `inventory_stock` y del resto de tablas `inventory_*` son iguales en el origen y en la restaurada. `inventory:verify` sobre la restaurada: 0.
+- **RB3.** En la restaurada, una compra nueva continúa los `seq`, un reenvío con un `requestId` ya usado devuelve el documento existente, y `verify` sigue en 0.
+
+### Pruebas de vuelta atrás (CA-24, sonda)
+
+Mismo método que el QA del PR 1a: el código fuente arrancado con `node src/server.ts` y un env propio en el scratchpad que apunta a la base de QA, nunca al `.env` de desarrollo.
+
+- `main` (`74ca737`): desde `/Users/orvigas/Desktop/Negocio/restaurante`, solo lectura. Si falta su cliente de Prisma, una copia con `git archive`.
+- Épica previa (`27c7a25`): copia con `git archive` en el scratchpad, `node_modules` con `cp -a` (comprobado con `realpath`) y `prisma generate`. Antes se comprueba que `package-lock.json` y `packages/db/prisma` son idénticos entre `27c7a25` y la rama.
+
+Pasos:
+
+- **V1.** Base migrada con el worktree, con la semilla, el fixture A5 y los datos de K2 escritos con el core del worktree. Se toman los conteos y los `CHECKSUM TABLE`.
+- **V2. `main`:**
+  - sin `DATABASE_ALLOW_NEWER_SCHEMA`: `DATABASE_NEWER_THAN_CODE`;
+  - con la variable: arranca; productos y página públicos de los dos negocios en 200; acceso al admin, productos, página y usuarios en 2xx; la `landing-pages` de `main` en `/`, `/birria` y `/molotes` en 200 con productos; 0 errores en el log.
+- **V3. `27c7a25`, sin la variable:**
+  - arranca sin aviso de esquema (no hay migración nueva);
+  - la lista y todas las fichas en 200, con `locked = true` en los artículos con movimientos;
+  - las recetas en 200, costeadas por referencia (R-7);
+  - editar el nombre de un artículo con movimientos: 200; cambiar su unidad o su inventariable: rechazado (bloqueo del 1a);
+  - alta: 201, con existencia en 0;
+  - el `inventory-manager` de `27c7a25`: acceso, lista, ficha y recetas en 200.
+- **V4.** Tras V2 y V3: las tablas del Kardex sin cambios (checksums), salvo la existencia nueva del alta de V3. `inventory:verify` del worktree: 0.
+- **V5. De vuelta en el worktree:**
+  - la receta usa el CPP;
+  - el artículo creado por `27c7a25` admite una compra al instante (CA-20, dominio);
+  - `verify`: 0.
+- **V6.** Se compara el resultado con la nota de vuelta atrás del plan. Un efecto más amplio es un defecto.
+
+### Pruebas de regresión
+
+- **S1.** `npm run build:css` y `npm run typecheck`: código 0.
+- **S2.** `npm run lint`, con `check-private-data`: código 0, sin avisos.
+- **S3.** `npm test` completo, comparado con el Implementation Result: `api` 1270, `landing-pages` 915 e `inventory-manager` 297, con el número de archivos (frente al 1a: `api` 56, `landing-pages` 64 + 1 y `inventory-manager` 18).
+- **S4. Duración y estabilidad:** `inventory-kardex.test.ts` y `prisma-inventory-kardex.test.ts` se miden con el reporter de Vitest: menos de 20 s cada uno. El de MySQL se ejecuta 10 veces seguidas, sin fallos intermitentes.
+- **S5. Consumidores.** CodeGraph indexa `main`, que no tiene el inventario: se comprobó en Q1 y no da resultados útiles. Por grep en el worktree, los consumidores de lo tocado son `api/src/server.ts`, `api/src/admin/inventory-routes.ts` y `inventory-recipe-routes.ts` (DTO explícito, sin `stock`; el contrato ya admite `cpp`), los scripts `inventory-seed-dev`, `inventory-import` e `inventory-verify`, `api/tests/support/admin.ts` y las pruebas `inventory-{catalog,recipes,import,kardex}` y `prisma-inventory-{store,import,recipes,kardex}`. Se confirma que la suite los ejecuta.
+- **S6. Sin cambios ajenos:** `git diff 27c7a25` no toca `deploy/` (la suma no cambia), `package-lock.json`, `compose.yaml`, los `.env.example` ni `packages/db/prisma` (sin migración nueva). `prisma migrate diff --from-migrations … --to-schema … --exit-code` y `--from-config-datasource` sobre una base nueva: código 0.
+- **S7.** La línea `COPY` del Dockerfile copia `inventory-verify.ts`, y `scripts/support` incluye `inventory-verify-cli.ts` (K9 lo ejercita).
+- **H1. HTTP con la `api` y el `inventory-manager` del worktree** sobre la base de V1: la ficha del artículo en 200 (sin `stock` en la respuesta, que es del PR 2) y el detalle de la receta en 200, con `source: 'cpp'` aceptado por el contrato y la etiqueta "CPP" en el HTML del admin. 0 errores en el log.
+
+### Revisión de las pruebas permanentes (`testing.md`)
+
+- **T1.** Cada caso nuevo (17 en `api/tests/unit/inventory-kardex.test.ts` y 8 en `landing-pages/tests/integration/prisma-inventory-kardex.test.ts`) protege un comportamiento de la app. Ninguno es de arquitectura ni de mudanza. Se valora la ida y vuelta de DECIMAL y `DATE` (R-6) frente a la lista de pruebas de driver; como el plan aprobado la pide, cualquier conflicto es una observación.
+- **T2. Duplicados:** se busca por grep (CodeGraph no indexa la rama) que no haya casos que ya cubran lo mismo: el bloqueo por uso con `last_seq` del 1a frente a la carrera con movimientos reales; CA-12 en memoria y en MySQL (el reinicio solo lo prueba MySQL). Cada comportamiento debe estar en la prueba más barata.
+- **T3.** El diff de `tests/` frente a `27c7a25` no borra ni debilita pruebas, y no añade `retry`, `testTimeout` ni esperas fijas. Los datos son ficticios.
+- **T4.** En el árbol final no queda ninguna sonda, y `git status` coincide con el del Implementation Result.
+
+### Mutaciones (descartables)
+
+En una copia del árbol en el scratchpad (`rsync` sin `node_modules`, más `cp -a` de `node_modules`), nunca en el worktree. En cada una se registra qué prueba permanente falla:
+
+- **X1.** `divideRounded` truncando en `applyEntryReversal` (CA-6 da 19.9999) y en `purchaseUnitCost` (CA-4 da 6.6666).
+- **X2.** Sin el tope en 0 de `applyEntryReversal` (RN-T3-12, R-2).
+- **X3.** Sin `lockStock` en `write()`: debe fallar la prueba de 20 salidas simultáneas.
+- **X4.** Sin `lockDocument`: se registra si la de las dos reversiones simultáneas lo detecta (la clave única puede respaldarla).
+- **X5.** Sin la búsqueda previa de la clave de envío: deben fallar las pruebas de CA-12.
+- **X6.** Sin el manejo de `IdempotencyRaceError`: debe fallar la prueba de CA-12 en MySQL.
+- **X7.** `verify` sin `cpp_recalculado` y sin `existencia_distinta`: deben fallar las pruebas de CA-15.
+- **X8.** `itemsWithActiveMovements` contando los documentos revertidos: debe fallar CA-8.
+- **X9.** `lastPurchaseCost` sin excluir el documento que se revierte: debe fallar DT-T3-4.
+- **X10.** `businessDate` con la zona del servidor: debe fallar CA-11.
+- **X11.** Sin la comprobación de DT-T3-3 y sin `remaining.set` en la devolución: deben fallar DT-T3-3 y CA-30.
+- Un mutante que sobrevive a una regla aprobada es una observación (prueba que falta), no un defecto de la implementación.
+
+### Documentación
+
+- **A1.** `arquitectura.md`: la sección Kardex coincide con el código (aislamiento READ COMMITTED, orden documento → existencias ascendentes, clave `<actor>:<tipo>:<requestId>` con huella, los límites de la regla de lint de OBS-1, `verify` y tipos en `VARCHAR`).
+- **A2.** README: la fila de `inventory:verify` coincide con el comportamiento (K1 a K7).
+- **A3.** `.claude/CLAUDE.md`, `senior-fullstack.md` y `deploy/` sin cambios en la rama.
+
+### Pruebas que no aplican en el 1b
+
+- **Navegador, responsive, accesibilidad, UX/UI, SEO, WhatsApp y performance del frontend:** el 1b no cambia vistas, CSS, JS de navegador ni rutas. No se usa Claude in Chrome. H1 y V2 comprueban por HTTP que el admin y las landings siguen respondiendo.
+- **Performance del backend:** solo P1 y S4.
+
+### Evidencia requerida
+
+- La salida y el código de salida de cada comando.
+- Por sonda y ronda: los valores calculados frente a los esperados, los conteos y los errores por clase.
+- Los `CHECKSUM TABLE` de RB y V.
+- La salida completa de `verify` en K1 a K9.
+- Los logs de arranque de V y H (solo códigos de evento).
+- El resultado de cada mutación.
+- Todo queda en el QA Report del ticket.
+
+### Criterios de aprobación
+
+- CA-1 a CA-13, CA-15 a CA-19, CA-29 y CA-30 (dominio y persistencia), y CA-14, CA-23 y CA-24 por sonda, en PASS con evidencia.
+- Los cálculos de la tabla, exactos en memoria y en MySQL.
+- S1 a S3 en verde, y S4 por debajo de 20 s sin intermitencias.
+- Sin defectos `BLOCKER` ni `CRITICAL`. Los `MAJOR` necesitan una decisión del usuario.
+- Las observaciones (mutantes supervivientes, alteraciones que RF-13 no pide, P1, N4 y N5) no bloquean si se registran.
+
+### Limpieza
+
+Al terminar, también si algo falla:
+
+- se borran las bases `restaurante_test_qa051b_*`, tras confirmar el prefijo;
+- se borra el usuario temporal de K8;
+- se borra la imagen de K9;
+- se detienen los procesos de V, H y las sondas (`api`, `landing-pages`, `inventory-manager` y Vitest) y las sesiones `mysql` de B, y se liberan los puertos;
+- se borran las copias de `main`, de `27c7a25` y de las mutaciones, los volcados de RB y las sondas del scratchpad;
+- se comprueba con `git worktree list`, `lsof`/`ps`, `docker images` y `SHOW DATABASES LIKE 'restaurante\_test%'`.
+
+### Decisiones para la aprobación
+
+1. **K8:** ¿se autoriza crear, con el `root` del MySQL local, y borrar al terminar, un usuario temporal con solo `SELECT` sobre una base `restaurante_test_qa051b_*`, para demostrar que `inventory:verify` solo lee? Si no, K8 queda como revisión estática más la comparación de checksums.
+2. **K9:** ¿se autoriza construir en local la imagen `api` del worktree (`docker build --target api`, unos minutos) para ejecutar `verify` en el contenedor, y borrarla al terminar? El Dockerfile cambia en este PR. Si no, K9 queda en S7 (revisión estática), y el DoD del PR 2 lo vuelve a pedir.
+3. **CA-24 con código fuente** de `main` (`74ca737`) y de `27c7a25`, como en el PR 1a, sin construir sus imágenes. ¿Basta? El 1b no añade migración, así que la imagen de T2 (`ad50c50`) no se repite: el QA del PR 1a ya la cubrió (V4 y V5) con `last_seq` simulado, que es equivalente para su código. ¿Está de acuerdo, o quiere que V3 se repita también con `ad50c50`?
+4. **Sondas** en el scratchpad, ejecutadas desde la raíz del worktree (fuera de `landing-pages/tests/`) y borradas al terminar, como en el PR 1a. ¿Se autorizan?
+
+## QA Report — PR 1b
+
+### Ronda
+
+1. Rama `feature/REQ-F-051-kardex-dominio`, sin commit, sobre `27c7a25`. El usuario aprobó el plan con "Si", con estas respuestas:
+
+- K8: un usuario temporal de solo `SELECT`;
+- K9: construir la imagen `api` en local;
+- CA-24: con el código fuente de `main` (`74ca737`) y de `27c7a25`, sin imágenes y sin repetir T2;
+- sondas en el scratchpad.
+
+Todo se ejecutó sobre el MySQL 8.4 local, en bases `restaurante_test_qa051b_*` propias. Ninguna sonda se escribió en el repositorio.
+
+### Pruebas ejecutadas
+
+| ID | Acción | Resultado |
+|---|---|---|
+| S1 | `npm run build:css` y `npm run typecheck` | Código 0 y 0. PASS |
+| S2 | `npm run lint` | Código 0, sin avisos; `check-private-data`: 898 archivos, sin datos privados. PASS |
+| S3 | `npm test` | `api` 56/1270, `landing-pages` 65/915 e `inventory-manager` 18/297, todo en verde: igual que el Implementation Result. Código 0. PASS |
+| S4 | Duración y estabilidad | `prisma-inventory-kardex.test.ts`, 10 veces seguidas: 8/8 en cada una, de 3.89 a 4.15 s. `inventory-kardex.test.ts`: 0.17 s. PASS |
+| S5 | Consumidores | CodeGraph indexa `main`, sin el inventario. Por grep en el worktree: `api/src/server.ts`, las rutas de inventario y de recetas (DTO explícito; el contrato ya admite `cpp`), los scripts `inventory-{seed-dev,import,verify}` y las pruebas `inventory-*` y `prisma-inventory-*`. Todos están en la suite. PASS |
+| S6 | `git diff 27c7a25` | Sin cambios en `deploy/`, `package-lock.json`, `compose.yaml`, los `.env.example`, `packages/db/prisma`, `.claude/CLAUDE.md` ni `.claude/agents`. Sobre una base nueva, `migrate diff --from-config-datasource` y `--from-migrations` contra el esquema dan "No difference detected" y código 0. PASS |
+| S7 | Imagen `api` (ver K9) | `scripts/` tiene `inventory-verify.ts`, y `scripts/support/` tiene `inventory-verify-cli.ts`. PASS |
+| F1–F14, N1, N2, N4, N5 | Sonda funcional, la misma en memoria y en MySQL (90 comprobaciones) | 90/90 en los dos stores, con salidas idénticas (el diferencial no tiene diferencias). En MySQL, también con el proceso en `TZ=Asia/Tokyo`, `America/Mexico_City` y `Pacific/Kiritimati` (UTC+14): 90/90; la fecha `DATE` va y vuelve igual. Cada cálculo de la tabla de Q1 sale exacto (detalle en "Criterios de aceptación"). PASS |
+| F7 | CA-11 con el reloj fijado a las 23:30 y a las 00:30 de Ciudad de México, y el proceso en `Asia/Tokyo`, `UTC` y `America/Mexico_City` | 16/16 en cada zona. Hoy y hoy − 31 se aceptan; mañana y hoy − 32 se rechazan; `2026-02-30`, `2026-1-5`, `26-11-2026`, `2026-11-26T00:00` y vacío, también. La reversión toma la fecha de hoy local (RN-T3-13). PASS |
+| F8 | CA-12 con reinicio real: cada envío en un proceso de Node distinto | El proceso A crea el documento 1. El B, nuevo, recibe `replayed: true` con el mismo id. Tres procesos a la vez: los tres `replayed`. Otro cuerpo con la misma clave: `IdempotencyKeyReusedError`. Siempre 1 documento y 10.000 kg. Cinco procesos simultáneos en el primer envío, 5 rondas: siempre 1 `replayed: false`, 4 `replayed: true` y 1 documento. PASS |
+| C1–C10 | Concurrencia, 10 rondas cada una (112 comprobaciones) | Todas pasan. **C1:** 20 operaciones mezcladas dan 20 movimientos con `seq` del 1 al 21 y la existencia igual a la suma. **C2:** 10 documentos cruzados, algunos de 50 líneas, todos aplicados; 0 interbloqueos del Kardex (los 2 que se contaron fueron de la sonda al dar de alta 3 artículos a la vez, en el catálogo del 1a, y se reintentaron solos). **C3:** 1 reversión aplicada y 2 `AlreadyReversedError`, nunca `IdempotencyRaceError`. **C4:** 5 rondas aplicaron la devolución (la reversión dio `DocumentHasReturnsError`) y 5 la reversión (la devolución dio `DocumentReversedError`); nunca las dos. **C5:** 1 devolución y 1 error en la línea; existencia 10.000. **C6:** 1 saldo y 1 `InitialBalanceNotAllowedError`. **C7:** "saldo → compra" o solo la compra; nunca un saldo después de una compra. **C8:** 1 documento y 4 `replayed`. **C9:** inventariable y unidad base contra un primer movimiento real: nunca se aplican los dos. **C10:** `verify` durante 10 escrituras: 0 incidencias. Ningún error fuera del dominio. PASS |
+| B1–B3 | CA-14: una sesión externa (`mysql`, usuario administrador de pruebas) mantiene `FOR UPDATE` unos 8 s | **B1:** `InventoryBusyError` a los 5 028 ms; documentos, movimientos y existencias sin cambios. Al liberar, el mismo `requestId` crea 1 documento con `replayed: false`. **B2:** solo el segundo artículo bloqueado: `InventoryBusyError` a los 5 019 ms, sin escribir nada del primero. **B3:** la compra de origen bloqueada: la reversión y la devolución dan `InventoryBusyError` (5 014 y 5 013 ms), sin escribir nada. `verify`: 0. PASS |
+| N3 | Desbordamiento de DECIMAL en MySQL (R-1) | **DEF-001.** En MySQL, un `line_total`, un `total_cost` o un CPP fuera de rango terminan en `DatabaseUnavailableError` ("Base de datos no disponible"), sin escribir nada. En memoria se aceptan. La existencia fuera de rango y el costo unitario de compra fuera de rango sí se rechazan con un mensaje en el campo |
+| K1–K2 | `npm run inventory:verify` desde la raíz con `DATABASE_URL` exportada; `node --env-file=<propio> scripts/inventory-verify.ts` desde `api/` | Base vacía: `inventory_verify_ok artículos=0 movimientos=0 documentos=0`, código 0. Base K2 (todos los tipos, reversiones, devoluciones, negativo, sin costo y CPP 0): `artículos=8 movimientos=20 documentos=20`, código 0. Los conteos coinciden con la base de QA, así que no se usó `api/.env`. PASS |
+| K3 | 18 alteraciones, cada una sobre una copia nueva de K2 | Código 1 con la comprobación esperada en las 14 que pide RF-13: cantidad, `balance_before`, `balance_after`, `avg_cost_before`, `avg_cost_after`, `unit_cost`, hueco de `seq`, tipo `'xxx'`, cantidad 0, y `quantity`, `avg_cost` o `last_seq` de la existencia, existencia borrada (`existencia_ausente`) y existencia sin movimientos con cantidad. Código 0 en las 4 que RF-13 no pide: `line_total`, `last_cost`, `occurred_on` y el autor (OBS-5). PASS |
+| K4 | Patrón sobre todas las salidas de K3 | 0 líneas fuera de `inventory_verify_{ok,failed,mismatch,more}` con ids, `check`, `seq` y conteos. 0 nombres, costos ni cantidades. PASS |
+| K5 | 304 incidencias | 100 líneas, `inventory_verify_more 204` y el total. Código 1. PASS |
+| K6 | 5 300 movimientos; la cadena del artículo 1 cruza el borde del lote (seq 5000/5001) | Código 0 y conteos exactos. Con el lote de 7, también 0. Con una alteración en el `seq` 5001: código 1, con `cpp_recalculado` en 5001 y `cpp_anterior` en 5002. PASS |
+| K7 | Sin poder verificar | Código 2 con MySQL inalcanzable (`DATABASE_UNREACHABLE`), sin `DATABASE_URL`, con contraseña incorrecta (`DATABASE_AUTH_FAILED`), con la base sin migrar (`MIGRATIONS_PENDING`) y con una base inexistente (`DATABASE_ACCESS_DENIED`). Stdout vacío; la contraseña no aparece en ninguna salida. PASS |
+| K8 | Usuario temporal `qa051b_ro` con solo `SELECT` sobre la base K2 | `inventory_verify_ok`, código 0. Los `CHECKSUM TABLE` de las tablas del inventario y de `_prisma_migrations` son iguales antes y después. Usuario borrado (0 filas en `mysql.user`). PASS |
+| K9 | `docker build --target api` del worktree y `node scripts/inventory-verify.ts` en el contenedor | Base K2: código 0. Una copia con la existencia alterada: código 1 con `existencia_distinta`. Imagen borrada. PASS |
+| I1 | Búsqueda en `packages`, `api`, `inventory-manager` y `landing-pages/src` | 0 `update*`, `upsert` ni `delete*` sobre documentos o movimientos, también en las formas de OBS-1, y 0 `UPDATE` o `DELETE` en SQL crudo sobre esas tablas (solo la alteración deliberada de la prueba de CA-15). El contrato del store y el store en memoria no tienen ninguna operación que los edite o borre. PASS |
+| I2 | `npm run lint` y `arquitectura.md` | Lint en verde (S2). OBS-1 documentado. Ver DEF-002 |
+| RB1–RB3 | CA-23: volcado de K2 con los parámetros de `backup.sh` (sin `--databases`) y restauración en otra base | Las 28 tablas tienen `CHECKSUM TABLE` idénticos, incluidas `inventory_supplier`, `_document`, `_movement` y `_stock`. `verify` sobre la restaurada: 0. Una compra nueva continúa el `seq`. Una segunda restauración (volcado de la restaurada) devuelve `replayed: true` al reenviar la clave. `verify`: 0. PASS |
+| V1 | Base de V | Migrada con el worktree. Contiene un administrador de QA, la semilla (22 artículos y 3 recetas) y los datos de K2. El fixture A5 choca con la semilla, así que la importación no escribe nada, como está previsto: el A5 se probó en el 1a. `verify`: 0. |
+| V2 | `api` de `main` sin la variable | `DATABASE_NEWER_THAN_CODE`, código 1. PASS |
+| V3 (main) | `api` de `main` con `DATABASE_ALLOW_NEWER_SCHEMA=true` | Arranca con `database_newer_than_code_allowed`. Productos y página públicos de los dos negocios: 200. Acceso al admin: 201. Sesión, productos y página de los dos negocios, y usuarios: 200. La `landing-pages` de `main` responde 200 en `/`, `/birria` y `/molotes`, con `landing_products_loaded` y `landing_page_loaded` de los dos negocios. 0 errores en los logs. PASS |
+| V3 (épica) | `api` e `inventory-manager` de `27c7a25` (copia con `git archive`, lock y `prisma` idénticos a la rama, `@restaurante/*` resuelto a la copia), sin la variable | Arranca sin aviso de esquema. Lista de 30 artículos y 30 fichas en 200. `locked = true` en los artículos con movimientos y en los que están en recetas. Categorías y recetas en 200; la receta de "Taco QA" cuesta 15.0000 por referencia (R-7, lo esperado). Cambiar la unidad de un artículo con movimientos: 409 `ITEM_LOCKED`. Pasarlo a no inventariable: 422. Editar su nombre: 200. Alta: 201. Admin: acceso 303 y lista, ficha, recetas y receta en 200; la búsqueda "máSA" encuentra "Masa QA". 0 errores. PASS |
+| V4 | Checksums antes y después de la épica, y `verify` | `inventory_document`, `inventory_movement` e `inventory_supplier` sin cambios. Solo cambian `inventory_item` e `inventory_change` (la edición y el alta) e `inventory_stock` (la fila nueva del alta, en 0 y sin costo). `verify`: 0, con 29 artículos. PASS |
+| V5 / H1 | `api` e `inventory-manager` del worktree sin la variable, sobre la misma base | Sin avisos nuevos. 31 fichas en 200; la ficha de la API no lleva `stock` (es del PR 2). La receta de "Taco QA" cuesta 11.2500 con origen `cpp` (0.500 × 22.5000), y el admin la muestra con la etiqueta "CPP". Cambiar la unidad: 409; pasar a no inventariable: 422; editar el nombre: 200. El artículo creado por `27c7a25` admite una compra al instante (3.000 kg a 20.0000, `seq` 1). `verify`: 0. 0 errores en los logs. PASS |
+| V6 | Comparación con la nota de vuelta atrás del plan | Coincide. El único efecto es que `27c7a25` costea por referencia. PASS |
+| P1 | Pool de 5 conexiones: 5, 20 y 40 operaciones simultáneas de 1 y de 50 líneas, sobre 1 y sobre 5 artículos | 0 errores en las 12 combinaciones. Máximo de 1 108 ms (40 documentos de 50 líneas); p95 de 211 ms con 20 operaciones de 1 línea sobre el mismo artículo. Sin hallazgos |
+| X1–X11 | Mutaciones en una copia del árbol en el scratchpad | Ver la tabla de mutaciones |
+| T1–T4 | Pruebas permanentes | Ver "Revisión de las pruebas permanentes" |
+
+**Mutaciones** (pruebas permanentes: unitaria `inventory-kardex` y MySQL `prisma-inventory-kardex`)
+
+| ID | Mutante | Lo detectan las pruebas permanentes | Lo detectan las sondas de QA |
+|---|---|---|---|
+| X1a | Truncar en `applyEntryReversal` | Sí: CA-6 y CA-30 (unitarias) | — |
+| X1b | Truncar en `purchaseUnitCost` | Sí: CA-4 | — |
+| X2 | Sin el tope en 0 (RN-T3-12) | **No** (OBS-6) | Sí: F14 da −444.5000 |
+| X3 | Sin `lockStock` | Sí: 3 MySQL (CA-13 y RN-T3-11) | — |
+| X4 | Sin `lockDocument` | No | No: es redundante con el bloqueo de las existencias, porque los documentos de una compra tocan sus mismos artículos (OBS-9) |
+| X5 | Sin la búsqueda previa de la clave | No | Equivalente: la clave única lleva al mismo resultado |
+| X6 | Sin el manejo de `IdempotencyRaceError` | **No** (OBS-7) | Sí: C8 (los reenvíos simultáneos fallan) |
+| X7a | `verify` sin `cpp_recalculado` | Sí: CA-15 en MySQL | — |
+| X7b | `verify` sin `existencia_distinta` | Sí: unitaria y MySQL | — |
+| X8a | MySQL: los movimientos vigentes cuentan los revertidos | **No** (OBS-7) | Sí: F3 en MySQL |
+| X8b | Lo mismo en memoria | Sí: CA-5 y CA-8 | — |
+| X9a | MySQL: `lastPurchaseCost` sin excluir el documento | **No** (OBS-7) | Sí: F4, 5 comprobaciones |
+| X9b | Lo mismo en memoria | Sí: CA-6, CA-7 y CA-30 | — |
+| X10 | `businessDate` con la zona del servidor | Solo con el proceso en otra zona: con `TZ=UTC` falla CA-11; con la zona local (CST) no (OBS-8) | Sí: F7 en `Asia/Tokyo` y `UTC` |
+| X11a | Sin DT-T3-3 | Sí | — |
+| X11b | Sin `remaining.set` (dos líneas de la misma devolución) | **No** (OBS-7) | Sí: F13 |
+
+### Criterios de aceptación
+
+| CA | Estado | Evidencia |
+|---|---|---|
+| CA-1 | PASS | F1, igual en memoria y MySQL: `compra 50.000 kg, 0.000 → 50.000, 20.0000, total 1000.0000`, CPP y último costo 20.0000, unidad capturada `bulto` |
+| CA-2 | PASS | F1: 75.000, CPP 21.3333 y último costo 24.0000 |
+| CA-3 | PASS | Unitaria y S3; con −2.000 y una compra de 10 por 250.00, existencia 8.000 y CPP 25.0000 |
+| CA-4 | PASS | F2: 3.3333 y 6.6667. La mitad exacta 0.15625 da 0.1563; 31.2500 sale exacto. La coma, 3 decimales en el importe, 4 en la cantidad y 5 en el costo dan error en su campo. N1 |
+| CA-5 | PASS | F3: 12.500 a 18.5000 con un movimiento `saldo_inicial`. Un segundo saldo y un saldo tras una compra dan `InitialBalanceNotAllowedError` con "ajuste" |
+| CA-6 | PASS | F4: 50.000 kg con CPP **20.0000** (19.99995 redondeado hacia arriba) y último costo 20.0000. El original queda con `reversedById` y su total sin cambios. Una segunda reversión da `AlreadyReversedError`, y revertir una reversión, `ReversalNotReversibleError`. C3 en MySQL. X1a |
+| CA-7 | PASS | F5: −8.000 con el CPP de 30.0000 conservado. La vista previa marca negativo sin escribir. Existencias la muestra como "Negativo" (−240.00) |
+| CA-8 | PASS | F3: un saldo revertido admite otro; una compra revertida sin otros movimientos, también |
+| CA-9 | PASS | F6: un error por línea para el Compuesto, el padre, el no inventariable, el inactivo y el inexistente, y nada escrito. Proveedor inactivo o inexistente, y `supplierId` no entero: error en `supplierId` |
+| CA-10 | PASS | F6: pza sin factor y 0.001 g dan error en la línea. Un factor decimal (3 cajas de 0.75 kg) da 2.250 kg a 20.0000 |
+| CA-11 | PASS | F7 en tres zonas del proceso; X10 |
+| CA-12 | PASS | F8 (reinicio real entre procesos), C8, RB3 y S3 |
+| CA-13 | PASS | C1, C2, C10, P1 y S3; `verify` en 0; X3 |
+| CA-14 | PASS (dominio) | B1–B3: `InventoryBusyError` a los ~5 s y nada a medias. El 503 en HTTP y conservar lo escrito son de los PR 2 y 3 |
+| CA-15 | PASS | I1 y K3–K4. Cada alteración que pide RF-13 da código distinto de 0, sin valores. X7 |
+| CA-16 | PASS (dominio) | F9: 50.000 kg a 20.0000 valen 1 000.00; negativo y sin costo; sin Compuestos, padres ni no inventariables; un inactivo con existencia; totales igual a la suma de la página; CPP 0 cuenta "con costo" |
+| CA-17 | PASS (dominio) | F10: página 1 con 50 movimientos (`seq` 51 → 2), página 2 con `seq` 1; total 51; documento, usuario y fechas |
+| CA-18 | PASS | F11: de 15.0000 por referencia a 10.0000 por `cpp`, sin versión nueva; ficha con CPP y último costo de 20.0000; el Intermedio con receta se costea por receta (DT-7). V5/H1 por HTTP: origen `cpp` y etiqueta "CPP" |
+| CA-19 | PASS | C9 con movimientos reales; V3 y V5: 409 y 422 |
+| CA-23 | PASS (sonda) | RB1–RB3. El simulacro con `ops/backup` es del PR 3 |
+| CA-24 | PASS | V1–V6 |
+| CA-29 | PASS | F12: salida de 2.000 a 20.0000; "otro" sin nota, entrada sin CPP ni costo, costo escrito con CPP (DT-T3-7), costo escrito en una salida, motivo y dirección inválidos: todos rechazados en su campo. Una salida sin CPP queda sin costo |
+| CA-30 | PASS | F13: devolver 5.000 de 25.000 sale a 24.0000 con CPP 21.1428 (igual al cálculo a mano). 20.000 más se aceptan; 0.001 más, y dos líneas que juntas pasan lo pendiente, se rechazan. Devolver desde un saldo inicial o una compra revertida, o una línea de otra compra, también. Con el artículo y el proveedor inactivos se permite. Revertir la devolución libera lo pendiente. C4 y C5 |
+| RN-T3-12 a RN-T3-14 | PASS | F14 (CPP 0.0000, y la entrada siguiente promedia desde 0 a 1.5000); F4 y F7 (fecha de hoy local); F13 (unidad base `kg` y lo que queda por devolver en `kg`) |
+| CA-26 (lo tocado) | PASS | S1–S7, V3, V5 y H1 |
+
+### Defectos encontrados
+
+#### DEF-001
+
+- **Severidad:** `MINOR`.
+- **Criterio de aceptación afectado:** ninguno directamente. Afecta al caso límite del ticket "una cantidad o un importe superan los límites de precisión, o la existencia acumulada se desborda: se rechaza con un mensaje en el campo" y a RN-T3-10.
+- **Descripción:** el dominio valida la existencia acumulada (`DECIMAL(13,3)`) y el costo unitario de compra (`DECIMAL(15,4)`). No valida, en cambio, que caben en sus columnas:
+  - el valor de la línea (`line_total`, `DECIMAL(19,4)`);
+  - el total del documento (`total_cost`, `DECIMAL(19,4)`);
+  - el CPP que calcula una reversión o una devolución (`DECIMAL(15,4)`).
+- **Consecuencia:** en MySQL, la escritura falla en la base y se convierte en `DatabaseUnavailableError` (503 "Base de datos no disponible"), sin escribir nada. El store en memoria acepta esos mismos valores, así que las pruebas unitarias no lo ven.
+- **Pasos para reproducir** (sonda N3, MySQL):
+  1. Saldo inicial de 9 999 999 999.999 kg a 99 999 999 999.9999 (o un ajuste de entrada igual).
+  2. Saldo inicial de 50 líneas de 10 000 000 kg a 10 000 000.0000 (cada línea cabe; el total, no).
+  3. Saldo de 0.001 kg a 99 999 999 999.0000, compra de 999.999 kg por 0.00 y reversión de esa compra. La reversión da un CPP de 100 000 000 000.0000.
+- **Resultado esperado:** un `InventoryValidationError` con un mensaje en el campo de la línea (o en el documento), como ya ocurre con la existencia y con el costo unitario de compra.
+- **Resultado actual:** `DatabaseUnavailableError` en los tres casos. Documentos, movimientos y existencias sin cambios; `verify` en 0.
+- **Evidencia:**
+  - N3 en MySQL frente a memoria: memoria acepta 999 999 999 999 899 000 000.0000 y un CPP de 100 000 000 000.0000.
+  - Con valores realistas (100 000 kg a 100 000.0000 = 10 000 000 000.00, y la misma reversión con un costo de 1 000) todo funciona.
+- **Impacto:** solo con importes de billones de pesos por línea o costos de cientos de millones por unidad, que no se dan en el negocio. No hay corrupción ni escritura parcial. El usuario vería "inténtalo de nuevo" en lugar del motivo, y reintentar no lo resuelve.
+- **Severidad propuesta:** `MINOR`, porque los valores no son realistas.
+- **Recomendación:** comprobar en el dominio el rango de `line_total`, `total_cost` y el CPP resultante antes de escribir, con el mismo mensaje en el campo que ya se usa para la existencia. Puede ir en el PR 2, junto a los 422 por línea.
+
+#### DEF-002
+
+- **Severidad:** `TRIVIAL`.
+- **Criterio de aceptación afectado:** ninguno (documentación; `.claude/rules/documentacion.md`).
+- **Descripción:** `restaurante/docs/arquitectura.md`, en la sección Kardex, apartado "Inmutabilidad", dice que `npm run inventory:verify` "detecta cualquier fila alterada". K3 muestra que no detecta cambios en `line_total`, `last_cost`, `occurred_on` ni en el autor. RF-13 tampoco lo pide.
+- **Pasos para reproducir:** K3, alteraciones 15 a 18: código 0.
+- **Resultado esperado:** que el texto diga lo que se comprueba: la cadena de cantidades, existencias, CPP, `seq` y tipo, y la existencia guardada.
+- **Resultado actual:** "cualquier fila alterada".
+- **Impacto:** puede hacer creer que `verify` protege el importe o el autor de un documento. No afecta al funcionamiento.
+- **Recomendación:** ajustar la frase. Si se quiere, mencionar también el tope en 0 de RN-T3-12 en el apartado "Costo", que hoy no lo nombra.
+
+### Observaciones (no bloquean)
+
+- **OBS-5 (K3).** `verify` no comprueba `line_total`, `last_cost`, `occurred_on` ni el autor. RF-13 no lo pide. Lo relevante para la documentación está en DEF-002.
+- **OBS-6 (X2).** RN-T3-12 (el CPP no baja de 0), decidida por el usuario, no tiene ninguna prueba permanente: quitar el tope no rompe nada. Recomendación: un caso unitario, por ejemplo la cadena de F14, que es funcional según `testing.md`.
+- **OBS-7 (X6, X8a, X9a, X11b).** Las implementaciones MySQL de "movimientos vigentes" y de "último costo sin el documento que se revierte", la carrera del primer envío simultáneo (`IdempotencyRaceError` → reenvío) y el límite de lo pendiente entre dos líneas de la misma devolución no tienen prueba permanente que las detecte. Las sondas de QA sí las detectan. Recomendación: valorar en el PR 2 si se añaden a las pruebas de MySQL o de la API, sin duplicar lo que ya cubre la memoria.
+- **OBS-8 (X10).** La prueba de CA-11 solo detecta que "hoy" use la zona del servidor si el proceso corre en otra zona. En el CI (UTC) la detecta; en una máquina con la zona de Ciudad de México, no.
+- **OBS-9 (X4).** El bloqueo del documento de origen es defensa en profundidad: el bloqueo de las existencias ya serializa las devoluciones y la reversión de una misma compra (C3 a C5 pasan sin él).
+- **OBS-10 (N1).** Se aceptan " 12 " (con espacios) y "00012.50", y se normalizan. Es el comportamiento que ya tenía `parseDecimal` en T2. El número 12 (no texto) se rechaza.
+- **OBS-11 (N4).** El valor de una existencia negativa redondea la mitad alejándose de cero (−0.005 da −0.01). Es simétrico con los positivos, y el ticket no define el caso.
+- **OBS-12 (R-6).** La prueba permanente de ida y vuelta de DECIMAL y `DATE` está en la frontera de las "pruebas de driver" de `testing.md`. La pide el plan aprobado (H-11), y la sonda F muestra que el riesgo existe en otras zonas (UTC+14 pasa).
+
+### Revisión de las pruebas permanentes (`testing.md`)
+
+- **T1.** Los 17 casos unitarios nuevos y los 8 de MySQL protegen comportamientos de la app: CPP, saldo, reversión, ajuste, devolución, fecha, doble envío, existencias, Kardex, costo real, `verify`, concurrencia y RN-T3-11. Ninguno es de arquitectura ni de mudanza; la prueba de DECIMAL y `DATE` queda como OBS-12. PASS
+- **T2.** No hay duplicados. CA-12 está en memoria (reenvío y huella) y en MySQL (reinicio y clave única), que son caminos distintos. CA-15 está en el verificador puro y en una alteración por SQL real. La carrera de RN-T3-11 con movimientos reales complementa la del 1a, que simulaba `last_seq`. PASS
+- **T3.** El diff de `tests/` frente a `27c7a25` solo añade: +330 en la unitaria, con un comentario reescrito, y +175 en el archivo nuevo. No añade `retry`, `testTimeout` ni esperas fijas. Los datos son ficticios. PASS
+- **T4.** `git status` final: los mismos 23 cambios del Implementation Result (22 archivos más el ticket). Ninguna sonda en el árbol. PASS
+
+### Regresión
+
+Suite completa en verde, con los mismos totales (S3). Siguen funcionando:
+
+- las landings y la `api` de `main` sobre la base con el Kardex (V3);
+- el catálogo, las recetas y el admin de `27c7a25` (V3 y V4);
+- el worktree sobre los datos que dejó la épica (V5 y H1).
+
+El inventario de T1/T2 y las búsquedas siguen igual.
+
+### Responsive, Accesibilidad, UX/UI, SEO
+
+No aplican: el 1b no cambia vistas, CSS, JS de navegador ni rutas. No se usó Chrome. H1 comprueba por HTTP la etiqueta "CPP" en el admin.
+
+### Performance
+
+P1 y S4: sin hallazgos. 0 errores con 40 documentos simultáneos de 50 líneas.
+
+### Pendientes de revisión manual
+
+Ninguno.
+
+### Limpieza
+
+- **Bases:** se borraron todas las `restaurante_test_qa051b_*`, incluidas las de dos sondas interrumpidas. `SHOW DATABASES LIKE 'restaurante\_test%'` devuelve 0.
+- **Usuario e imagen:** se borró el usuario temporal `qa051b_ro` (0 filas en `mysql.user`) y la imagen `qa051b-api:probe` (0 imágenes `qa051b`). La caché de construcción de Docker no se purgó: es compartida.
+- **Procesos y puertos:** se detuvieron los servidores de V y H. Los puertos 3101 a 3116 están libres, y no queda ningún proceso de Node de las sondas ni de Vitest.
+- **Archivos:** se borraron la copia de mutaciones, la copia de `27c7a25`, las sondas, los env, los volcados y los logs del scratchpad.
+- **Repositorio:** `git worktree list` muestra solo `main` y el worktree del ticket, que queda como estaba. El árbol de `main` sigue limpio.
+- **MySQL:** `restaurante-mysql-dev-1` sigue encendido, como se pidió.
+
+### Resultado final
+
+QA_APPROVED
+
+## Pendientes del PR 1b para los PR 2 y 3
+
+Decisión de la sesión principal sobre los defectos del QA del PR 1b (ninguno es `MAJOR`): DEF-002 se corrige en este PR y DEF-001 queda para el PR 2.
+
+- **DEF-002 (`TRIVIAL`): corregido en este PR.** En `restaurante/docs/arquitectura.md`, la sección Kardex dice ahora qué comprueba `inventory:verify` (la cadena de cantidades, existencias y CPP, el `seq`, el tipo, la cantidad distinta de 0 y la existencia guardada) y qué no (`line_total`, `last_cost`, `occurred_on` y el autor). Ya no promete detectar «cualquier fila alterada». También menciona en «Costo» el tope en 0 de RN-T3-12.
+- **DEF-001 (`MINOR`): pendiente del PR 2.** Validar en el dominio, antes de escribir, el rango de `line_total` y `total_cost` (`DECIMAL(19,4)`) y del CPP que calculan una reversión o una devolución (`DECIMAL(15,4)`). Debe dar un error en el campo (422), como ya pasa con la existencia y con el costo unitario de compra, y no un 503. Hoy solo se da con valores irreales.
+- **OBS-6: pendiente del PR 2.** Añadir un caso unitario de RN-T3-12 (CPP con tope en 0; la cadena de la sonda F14), que es funcional según `testing.md`.
+- **OBS-7: pendiente del PR 2.** Valorar pruebas de MySQL o de la API, sin duplicar lo que ya cubre la memoria, para:
+  - los "movimientos vigentes" de MySQL;
+  - el "último costo sin el documento que se revierte";
+  - la carrera del primer envío simultáneo (`IdempotencyRaceError` → reenvío);
+  - el límite de lo pendiente entre dos líneas de la misma devolución.
+- **OBS-8: pendiente del PR 2.** Revisar la prueba de CA-11 para que detecte el uso de la zona del servidor aunque el proceso corra en la zona del negocio. Por ejemplo, fijando `process.env.TZ` a otra zona dentro de la prueba.
+- **OBS-5, OBS-9, OBS-10, OBS-11 y OBS-12:** no requieren acción.
+  - OBS-5 está cubierta por la corrección de DEF-002.
+  - OBS-9: el bloqueo del documento es defensa en profundidad.
+  - OBS-10 y OBS-11 son el comportamiento existente y simétrico.
+  - OBS-12: la prueba de DECIMAL y `DATE` la pide el plan aprobado (H-11).
+
 ## Historial de cambios
 
 ### Versión 1
@@ -1554,3 +2233,16 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 
 - 2026-11-25, senior-fullstack: commit `1fb5a02` y PR #195 en borrador hacia `epic/inventario`. Observaciones OBS-1 a OBS-4 del QA registradas como pendientes del 1b, el 2 y el 3.
 - 2026-11-25, senior-fullstack: el PR #195 pasa a listo. Su CI (ejecución 45736787294) dejó `calidad`, `docker`, `auditoria` y `pruebas` en `pass`. Estado: `READY_FOR_MERGE`.
+
+### Implementación del PR 1b (T2)
+
+- 2026-11-25, senior-fullstack: el PR 1b queda implementado y validado en `feature/REQ-F-051-kardex-dominio`, desde `27c7a25`, con `typecheck`, `lint`, `test` y `build:css` en verde. Está sin commit. Pasa de unas 1 500 líneas, así que se pide decidir la partición. Estado: `NEEDS_TECHNICAL_CLARIFICATION`.
+- 2026-11-25, senior-fullstack: el usuario decidió con "Si" mantener el PR 1b como un solo PR y confirmó RN-T3-12 (el CPP no baja de 0), RN-T3-13 (la reversión toma la fecha del día en que se registra) y RN-T3-14 (la devolución se captura en la unidad base). Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA (Q1, PR 1b)
+
+- 2026-11-25, senior-qa: el usuario aprobó la implementación del PR 1b ("Si"). QA Action Plan del PR 1b redactado a partir del ticket, del diff del worktree (sin commit, sobre `27c7a25`) y de las reglas del proyecto, sin ejecutar ninguna prueba. Incluye los cálculos de CA-1 a CA-7, CA-16, CA-18, CA-29, CA-30 y RN-T3-12 verificados a mano (19.99995 → 20.0000) y dos riesgos de desbordamiento de DECIMAL en MySQL que no ven las pruebas en memoria (R-1). Cuatro decisiones para la aprobación: el usuario de solo lectura de K8, la imagen de K9, CA-24 con el código fuente y sin `ad50c50`, y las sondas en el scratchpad. Estado: `NEEDS_QA_PLAN_APPROVAL`.
+
+### QA (Q2, PR 1b, ronda 1)
+
+- 2026-11-26, senior-qa: el usuario aprobó el plan con "Si" y las cuatro respuestas recomendadas. Ejecutado completo: S1 a S7, F1 a F14, N1 a N5, C1 a C10, B1 a B3, K1 a K9, I1 a I2, RB1 a RB3, V1 a V6, H1, P1, X1 a X11 y T1 a T4. Todos los criterios del 1b pasan, también CA-14, CA-23 y CA-24 por sonda. Hay 2 defectos que no bloquean: DEF-001 (`MINOR`, desbordamiento de DECIMAL en MySQL con valores irreales) y DEF-002 (`TRIVIAL`, una frase de `arquitectura.md`). Quedan 8 observaciones. Limpieza comprobada. Estado: `QA_APPROVED`.

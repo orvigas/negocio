@@ -128,8 +128,12 @@ async function loadCatalog(reader: InventoryStoreReader) {
     ids.add(version.itemId);
     for (const line of version.lines) ids.add(line.ingredientId);
   }
-  const items = new Map((await reader.itemsByIds([...ids])).map((item) => [item.id, item]));
-  return { current, items, recipes: new Map(current.map((version) => [version.itemId, version])) };
+  const [found, stock] = await Promise.all([reader.itemsByIds([...ids]), reader.stockRows([...ids])]);
+  const items = new Map(found.map((item) => [item.id, item]));
+  // RF-10 (REQ-F-051): el CPP de cada artículo con existencias entra al costo (RN-T2-4: CPP → referencia).
+  const cpp = new Map<number, bigint>();
+  for (const row of stock.values()) if (row.avgCost !== null) cpp.set(row.itemId, row.avgCost);
+  return { current, items, recipes: new Map(current.map((version) => [version.itemId, version])), cpp };
 }
 
 async function requireRecipeItem(reader: InventoryStoreReader, itemId: number): Promise<InventoryItem> {
@@ -152,8 +156,8 @@ export function createRecipeRepository({ store, now = () => new Date() }: { stor
     async listRecipes(filter = {}) {
       const query = readListFilter(filter);
       return store.read(async (reader) => {
-        const { current, items, recipes } = await loadCatalog(reader);
-        const calculator = createCostCalculator({ items, recipes });
+        const { current, items, recipes, cpp } = await loadCatalog(reader);
+        const calculator = createCostCalculator({ items, recipes, cpp });
         const entries: RecipeListEntry[] = [];
         for (const version of current) {
           const item = items.get(version.itemId);
@@ -178,10 +182,10 @@ export function createRecipeRepository({ store, now = () => new Date() }: { stor
     getRecipe(itemId) {
       return store.read(async (reader) => {
         const item = await requireRecipeItem(reader, itemId);
-        const [{ items, recipes }, versions] = await Promise.all([loadCatalog(reader), reader.recipeVersions(itemId)]);
+        const [{ items, recipes, cpp }, versions] = await Promise.all([loadCatalog(reader), reader.recipeVersions(itemId)]);
         const version = recipes.get(itemId) ?? null;
         const ingredients = await reader.itemsByIds(ingredientIdsOf(versions));
-        const current = version ? { version, cost: createCostCalculator({ items, recipes }).recipeCost(version) } : null;
+        const current = version ? { version, cost: createCostCalculator({ items, recipes, cpp }).recipeCost(version) } : null;
         const inactiveIngredientIds = version ? version.lines.filter((line) => items.get(line.ingredientId)?.active === false).map((line) => line.ingredientId) : [];
         return { item, current, versions, ingredients, inactiveIngredientIds };
       });

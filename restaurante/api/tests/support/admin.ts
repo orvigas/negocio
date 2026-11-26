@@ -13,9 +13,13 @@ import { createMemoryPageStore, createPageRepository, createProductRepository, t
 import type { QuoteCatalogSource } from '@restaurante/core/cotizador';
 import {
   createInventoryRepository,
+  createKardexRepository,
   createMemoryInventoryStore,
+  createSupplierRepository,
   createRecipeRepository,
   type InventoryRepository,
+  type KardexRepository,
+  type SupplierRepository,
   type MemoryInventoryStore,
   type RecipeRepository,
 } from '@restaurante/core/inventory';
@@ -218,6 +222,9 @@ export interface AdminHarness {
   /** Catálogo de inventario (REQ-F-049) sobre el store en memoria. */
   inventory: InventoryRepository;
   recipes: RecipeRepository;
+  /** Proveedores y Kardex (REQ-F-051), sobre el mismo store. */
+  suppliers: SupplierRepository;
+  kardex: KardexRepository;
   inventoryStore: MemoryInventoryStore;
 }
 
@@ -281,6 +288,8 @@ export async function startAdmin({
   const inventoryStore = createMemoryInventoryStore();
   const inventory = createInventoryRepository({ store: inventoryStore, now });
   const recipes = createRecipeRepository({ store: inventoryStore, now });
+  const suppliers = createSupplierRepository({ store: inventoryStore, now });
+  const kardex = createKardexRepository({ store: inventoryStore, timeZone: 'America/Mexico_City', now });
   const admin = createAdminRoutes({
     users,
     products,
@@ -291,13 +300,15 @@ export async function startAdmin({
     quotes: quoteSource,
     inventory,
     recipes,
+    suppliers,
+    kardex,
     timeZone: 'America/Mexico_City',
     hashParams: TEST_HASH_PARAMS,
     now,
     logger,
   });
   const { url } = await listenLocal(createApiApp({ store, pages, admin, logger }));
-  return { url, store, pageStore, products, calls, change, audit, hashes, failNext, notified, notifier, logger, clock, botControl, botStore, inventory, recipes, inventoryStore, ids: Object.fromEntries(records.map((user) => [user.username, user.id])) };
+  return { url, store, pageStore, products, calls, change, audit, hashes, failNext, notified, notifier, logger, clock, botControl, botStore, inventory, recipes, suppliers, kardex, inventoryStore, ids: Object.fromEntries(records.map((user) => [user.username, user.id])) };
 }
 
 export interface Session {

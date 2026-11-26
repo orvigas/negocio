@@ -140,6 +140,7 @@ export function handleInventory(ctx: Context, double: InventoryDouble, user: Adm
       parent: parent ? { id: parent.id, name: parent.name, active: parent.active } : null,
       variants: double.items.filter((candidate) => candidate.parentId === item.id).map(({ id, name, sku, baseUnit, active }) => ({ id, name, sku, baseUnit, active })),
       locked: false,
+      stock: null,
       equivalences,
     };
   }

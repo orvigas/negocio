@@ -172,4 +172,43 @@ describe('persistencia', () => {
     expect(recipe.current?.cost.lines.map((line) => [formatDecimal(line.unitCost ?? 0n, 4), formatDecimal(line.cost ?? 0n, 4), line.source])).toEqual([['20.0000', '10.0000', 'cpp']]);
     expect(recipe.versions).toHaveLength(1);
   });
+
+  it('OBS-7: movimientos vigentes, último costo sin la compra revertida y lo pendiente entre dos líneas de una devolución, en MySQL', async () => {
+    const { prisma, store, kardex, insumo, ana, today, purchase } = await setup();
+    const masa = await insumo('Masa de maíz');
+    const first = await purchase([{ itemId: masa.id, quantity: '10', amount: '200.00' }]);
+    const second = await purchase([{ itemId: masa.id, quantity: '10', amount: '300.00' }]);
+    expect((await stockOf(prisma, masa.id)).lastCost).toBe('30.0000');
+    await kardex.reverseDocument(second.document.id, { reason: 'Duplicada' }, ana);
+    // DT-T3-4: el último costo vuelve a la última compra no revertida.
+    expect((await stockOf(prisma, masa.id)).lastCost).toBe('20.0000');
+
+    // Devolución con dos líneas de la misma línea de compra: entre las dos no pasan de lo comprado.
+    const [line] = await store.read((reader) => reader.documentMovements(first.document.id));
+    const back = (quantities: string[]) => kardex.createSupplierReturn(first.document.id, { occurredOn: today, lines: quantities.map((quantity) => ({ sourceMovementId: line?.id, quantity })) }, ana);
+    await expect(back(['6', '5'])).rejects.toMatchObject({ fields: { 'lines.1.quantity': 'Es más de lo que queda por devolver de esta línea.' } });
+    await back(['6', '4']);
+    expect(await store.read((reader) => reader.itemsWithActiveMovements([masa.id]))).toEqual(new Set([masa.id]));
+
+    // RN-T3-8 en MySQL: un artículo cuya única compra se revirtió no tiene movimientos vigentes.
+    const sal = await insumo('Sal');
+    const wrong = await purchase([{ itemId: sal.id, quantity: '1', amount: '12.00' }]);
+    expect(await store.read((reader) => reader.itemsWithActiveMovements([sal.id]))).toEqual(new Set([sal.id]));
+    await kardex.reverseDocument(wrong.document.id, { reason: 'Error' }, ana);
+    expect(await store.read((reader) => reader.itemsWithActiveMovements([sal.id]))).toEqual(new Set());
+    await expect(kardex.createInitialBalance({ occurredOn: today, lines: [{ itemId: sal.id, quantity: '2', unit: 'kg', unitCost: '11' }] }, ana)).resolves.toMatchObject({ replayed: false });
+  });
+
+  it('OBS-7: dos primeros envíos simultáneos con la misma clave crean un solo documento y el otro recibe ese mismo', async () => {
+    const { prisma, insumo, purchase } = await setup();
+    const masa = await insumo('Masa de maíz');
+    for (let round = 0; round < 3; round += 1) {
+      const key = `envio-simultaneo-000${round}`;
+      const [a, b] = await Promise.all([purchase([{ itemId: masa.id, quantity: '1', amount: '20.00' }], key), purchase([{ itemId: masa.id, quantity: '1', amount: '20.00' }], key)]);
+      expect(a.document.id).toBe(b.document.id);
+      expect([a.replayed, b.replayed].sort()).toEqual([false, true]);
+    }
+    expect(await prisma.inventoryDocument.count()).toBe(3);
+    expect((await stockOf(prisma, masa.id)).quantity).toBe('3.000');
+  });
 });

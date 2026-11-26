@@ -351,6 +351,17 @@ REQ-F-054), la confirmación de cierre
 artículo muestra el costo de referencia, el inventariable y "Usado en"; inactivar un artículo usado en
 recetas vigentes lista esas recetas y pide confirmarlo.
 
+**Proveedores, Kardex y existencias (REQ-F-051, T3; en `epic/inventario`).** Bajo el mismo prefijo y con
+el mismo acceso (`packages/contracts/inventory-kardex.ts`):
+
+- **Proveedores:** `GET|POST proveedores` (lista con `estado`, `q` y `pagina`; alta con `Idempotency-Key`), `GET|PUT proveedores/:id` (ficha con historial; edición con versión: 409 `SUPPLIER_VERSION_CONFLICT` con `current`) y `POST proveedores/:id/desactivar|reactivar`.
+- **Documentos:** `POST documentos/saldo-inicial`, `POST documentos/compras`, `POST documentos/ajustes`, `POST documentos/:id/devoluciones` y `POST documentos/:id/reversion` (con su vista previa en `GET`).
+  - Responden 201 con el documento, o 200 con `replayed: true` si es el mismo envío (`Idempotency-Key` persistente, DT-14).
+  - Errores: 422 `VALIDATION_FAILED` con `fields` por línea (`lines.N.campo`); 409 `INITIAL_BALANCE_NOT_ALLOWED` (con `items`), `ALREADY_REVERSED`, `REVERSAL_NOT_REVERSIBLE`, `DOCUMENT_HAS_RETURNS` (con `returnIds`), `DOCUMENT_NOT_RETURNABLE` y `DOCUMENT_REVERSED`; 503 `INVENTORY_BUSY`.
+  - **Clave de envío (`Idempotency-Key`):** la usan las altas de T1 y T2 (en memoria) y los documentos y proveedores de T3. Una clave con otro formato (16 a 64 caracteres `A-Z`, `a-z`, `0-9`, `_` o `-`) da 400 `INVALID_IDEMPOTENCY_KEY`. La misma clave con otros datos da 422 `IDEMPOTENCY_KEY_REUSED`, y no se escribe nada.
+- **Lecturas:** `GET documentos` (`tipo`, `proveedor` y `pagina`), `GET documentos/:id`, `GET existencias` (`q`, `categoria`, `tipo`, `estado` = `todos|negativos|sin_costo`, y `pagina`), `GET articulos/:id/kardex` (`pagina`) y `GET kardex/opciones` (artículos y proveedores de los formularios). La ficha (`GET articulos/:id`) añade `stock`, que es `null` en un artículo sin existencias (padre, Compuesto o no inventariable; RN-T3-1).
+- **Formato:** cantidades, costos e importes viajan como texto decimal. Ninguna ruta edita ni borra documentos o movimientos.
+
 **El bot de WhatsApp es un cliente más de `core`** (REQ-F-042). Vive dentro de `api` (`api/src/bot/`)
 y su webhook es otra entrada HTTP, en un puerto propio. Cuando exista `sales`, sus pedidos
 confirmados se guardan como ventas en lugar de solo avisar al personal.

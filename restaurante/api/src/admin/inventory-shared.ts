@@ -1,6 +1,7 @@
 import type { Context } from 'koa';
 
 import { IDEMPOTENCY_HEADER, IDEMPOTENCY_KEY_PATTERN, INVENTORY_ERROR_CODES } from '@restaurante/contracts';
+import { STOCK_ITEM_TYPES, type InventoryItem } from '@restaurante/core/inventory';
 import type { Logger } from '@restaurante/core/shared';
 
 import { ApiHttpError } from '../errors.ts';
@@ -59,3 +60,10 @@ export function inventoryBusy(ctx: Context, logger: Logger): ApiHttpError {
   logger.warn('inventory_busy', { method: ctx.method, path: ctx.path });
   return new ApiHttpError(503, INVENTORY_ERROR_CODES.INVENTORY_BUSY, 'El inventario está ocupado con otra escritura: inténtalo de nuevo en unos segundos. No se guardó nada.');
 }
+
+/**
+ * RN-T3-1 y DT-T3-2 (REQ-F-051): solo un Insumo, Intermedio o Reventa inventariable y que no es padre
+ * muestra existencia en la ficha y en el Kardex; el resto da `stock: null` (DEF-004 del QA del PR 2).
+ */
+export const holdsStock = (item: Pick<InventoryItem, 'kind' | 'type' | 'inventoriable'>): boolean =>
+  item.kind !== 'parent' && item.inventoriable && (STOCK_ITEM_TYPES as readonly string[]).includes(item.type);

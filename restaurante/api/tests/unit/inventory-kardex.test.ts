@@ -26,7 +26,7 @@ import {
   type DocumentResult,
 } from '@restaurante/core/inventory';
 
-import { seedInventoryDev } from '../../scripts/support/inventory-dev-seed.ts';
+import { seedInventoryDev, seedKardexDev } from '../../scripts/support/inventory-dev-seed.ts';
 
 /**
  * Kardex, existencias y proveedores (REQ-F-051, T3) sobre el store en memoria: las reglas que no
@@ -396,11 +396,22 @@ describe('artículos, proveedores, unidades y fecha (CA-9 a CA-11)', () => {
     expect(await fieldsOf(purchase(masa.id, '1', '20', 'kg', { occurredOn: '2026-10-24' }))).toHaveProperty('occurredOn');
     expect(await fieldsOf(purchase(masa.id, '1', '20', 'kg', { occurredOn: '2026-02-30' }))).toHaveProperty('occurredOn');
 
-    // 23:30 y 00:30 locales (UTC−6) dan el día local, sin importar la zona del servidor.
+    // 23:30 y 00:30 locales (UTC−6) dan el día local de BUSINESS_TIMEZONE.
     expect(businessDate(new Date('2026-11-26T05:30:00.000Z'), TZ)).toBe('2026-11-25');
     expect(businessDate(new Date('2026-11-26T06:30:00.000Z'), TZ)).toBe('2026-11-26');
     const lateNight = await kardexSetup(() => new Date('2026-11-26T05:30:00.000Z'));
     expect(await fieldsOf(lateNight.purchase(lateNight.masa.id, '1', '20', 'kg', { occurredOn: '2026-11-26' }))).toEqual({ occurredOn: 'La fecha no puede ser futura.' });
+    // OBS-8 (QA del PR 1b): un negocio en una zona que no es la del servidor (UTC+14). A las 11:00 UTC del
+    // 25 allí ya es el 26, y en UTC (CI) o en Ciudad de México (desarrollo) sigue siendo el 25: si «hoy»
+    // usara la zona del servidor, esto fallaría en cualquier máquina.
+    const kiritimati = 'Pacific/Kiritimati';
+    expect(businessDate(new Date('2026-11-25T11:00:00.000Z'), kiritimati)).toBe('2026-11-26');
+    const store = createMemoryInventoryStore();
+    const farInventory = createInventoryRepository({ store, now: () => NOW });
+    const category = await farInventory.createCategory({ name: 'Lejos' }, ANA);
+    const harina = await farInventory.createItem({ type: 'insumo', categoryId: category.id, name: 'Harina', baseUnit: 'kg' }, ANA);
+    const far = createKardexRepository({ store, timeZone: kiritimati, now: () => new Date('2026-11-25T11:00:00.000Z') });
+    await expect(far.createPurchase({ occurredOn: '2026-11-26', lines: [{ itemId: harina.id, quantity: '1', unit: 'kg', amount: '20' }] }, ANA)).resolves.toMatchObject({ replayed: false });
   });
 });
 
@@ -502,5 +513,62 @@ describe('verificación de la cadena (RF-13, CA-15)', () => {
       { itemId: masa.id, check: VERIFY_CHECKS.STOCK_MISMATCH, seq: null },
     ]);
     expect(JSON.stringify(report)).not.toMatch(/Masa|1000|20\.0/);
+  });
+});
+
+describe('límites de las columnas (DEF-001 del QA del PR 1b) y RN-T3-12', () => {
+  it('un valor de línea, un total o un CPP que no caben en sus columnas se rechazan en el campo, sin escribir nada', async () => {
+    const { store, inventory, abarrotes, kardex, masa, purchase } = await kardexSetup();
+    const initial = (itemId: number, lines: { quantity: string; unitCost: string }[]) =>
+      kardex.createInitialBalance({ occurredOn: TODAY, lines: lines.map((line) => ({ itemId, unit: 'kg', ...line })) }, ANA);
+    expect(await fieldsOf(initial(masa.id, [{ quantity: '9999999999.999', unitCost: '99999999999.9999' }]))).toEqual({
+      'lines.0.quantity': 'El valor de la línea supera el máximo que se puede guardar: revisa la cantidad y el costo.',
+    });
+
+    const items = [];
+    for (let index = 0; index < 50; index += 1) items.push(await inventory.createItem({ type: 'insumo', categoryId: abarrotes.id, name: `Insumo ${index}`, baseUnit: 'kg' }, ANA));
+    const fifty = kardex.createInitialBalance({ occurredOn: TODAY, lines: items.map((item) => ({ itemId: item.id, quantity: '10000000', unit: 'kg', unitCost: '10000000' })) }, ANA);
+    expect(await fieldsOf(fifty)).toEqual({ lines: 'El total del documento supera el máximo que se puede guardar: divídelo en varios documentos.' });
+
+    const sal = await inventory.createItem({ type: 'insumo', categoryId: abarrotes.id, name: 'Sal', baseUnit: 'kg' }, ANA);
+    await initial(sal.id, [{ quantity: '0.001', unitCost: '99999999999.0000' }]);
+    const free = await purchase(sal.id, '999.999', '0.00');
+    expect(await fieldsOf(kardex.reverseDocument(free.document.id, { reason: 'error' }, ANA))).toEqual({
+      'lines.0.quantity': 'El costo por unidad resultante supera el máximo que se puede guardar: revisa la cantidad y el costo.',
+    });
+    expect(store.state.documents.map((document) => document.type)).toEqual(['saldo_inicial', 'compra']);
+  });
+
+  it('RN-T3-12: si la fórmula de la reversión diera un CPP negativo, el CPP queda en 0', async () => {
+    const { kardex, masa, stockOf, purchase, adjust } = await kardexSetup();
+    await purchase(masa.id, '10', '100.00');
+    const expensive = await purchase(masa.id, '5', '150.00');
+    expect(c4(stockOf(masa.id)?.avgCost)).toBe('16.6667');
+    await adjust(masa.id, 'salida', '8');
+    // (7 × 16.6667 − 5 × 30.0000) / (7 − 5) sería −16.6666.
+    await kardex.reverseDocument(expensive.document.id, { reason: 'Factura de otro proveedor' }, ANA);
+    expect([q3(stockOf(masa.id)?.quantity), c4(stockOf(masa.id)?.avgCost)]).toEqual(['2.000', '0.0000']);
+  });
+});
+
+describe('semilla de desarrollo del Kardex (RF-15, CA-28)', () => {
+  it('carga proveedores y documentos ficticios con CPP, un negativo, un revertido y un «Sin costo»; la cadena cuadra; es idempotente', async () => {
+    const store = createMemoryInventoryStore();
+    const inventory = createInventoryRepository({ store, now: () => NOW });
+    const kardex = createKardexRepository({ store, timeZone: TZ, now: () => NOW });
+    const suppliers = createSupplierRepository({ store, now: () => NOW });
+    await seedInventoryDev({ inventory, recipes: createRecipeRepository({ store, now: () => NOW }) });
+    expect(await seedKardexDev({ inventory, suppliers, kardex }, TODAY)).toEqual({ suppliers: 3, documents: 7 });
+
+    const stock = await kardex.listStock();
+    const row = (name: string) => stock.entries.find((entry) => entry.item.name === name);
+    expect(c4(row('Masa de maíz')?.avgCost)).toBe('21.3333');
+    expect([q3(row('Queso')?.quantity), row('Queso')?.negative]).toEqual(['-1.000', true]);
+    expect(row('Cebolla')?.noCost).toBe(true);
+    expect(store.state.documents.filter((document) => document.type === 'reversion')).toHaveLength(1);
+    expect((await suppliers.listSuppliers({ status: 'inactive' })).page.total).toBe(1);
+    const reader = { movementsAfter: (id: number, seq: number, limit: number) => store.read((r) => r.movementsAfter(id, seq, limit)), allStock: () => store.read((r) => r.allStock()) };
+    expect((await verifyKardex(reader)).issues).toEqual([]);
+    expect(await seedKardexDev({ inventory, suppliers, kardex }, TODAY)).toEqual({ suppliers: 0, documents: 0 });
   });
 });

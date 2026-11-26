@@ -81,6 +81,40 @@ import {
   type RecipeVersionResponse,
 } from './inventory-recipes.ts';
 import {
+  inventoryKardexPaths,
+  itemKardexResponseSchema,
+  kardexDocumentDetailResponseSchema,
+  kardexDocumentListResponseSchema,
+  kardexDocumentWriteResponseSchema,
+  kardexOptionsResponseSchema,
+  kardexReversalPreviewResponseSchema,
+  stockResponseSchema,
+  supplierDetailResponseSchema,
+  supplierListResponseSchema,
+  supplierResponseSchema,
+  type AdjustmentRequest,
+  type InitialBalanceRequest,
+  type ItemKardexResponse,
+  type KardexDocumentDetailResponse,
+  type KardexDocumentFilter,
+  type KardexDocumentListResponse,
+  type KardexDocumentWriteResponse,
+  type KardexOptionsResponse,
+  type KardexReversalPreviewResponse,
+  type PurchaseRequest,
+  type ReversalRequest,
+  type StockFilter,
+  type StockResponse,
+  type SupplierCreateRequest,
+  type SupplierDetailResponse,
+  type SupplierListFilter,
+  type SupplierListResponse,
+  type SupplierResponse,
+  type SupplierReturnRequest,
+  type SupplierStatusRequest,
+  type SupplierUpdateRequest,
+} from './inventory-kardex.ts';
+import {
   pageConflictSchema,
   pageStateResponseSchema,
   pageWriteResponseSchema,
@@ -131,6 +165,10 @@ const apiErrorBodySchema = z.object({
       usedBy: z.array(z.string()).optional(),
       /** 409 `ITEM_IN_ACTIVE_RECIPES` (REQ-F-050, RF-7): recetas vigentes que lo usan. */
       recipes: z.array(z.object({ itemId: z.number(), name: z.string() })).optional(),
+      /** 409 `INITIAL_BALANCE_NOT_ALLOWED` (REQ-F-051, RN-T3-8): artículos que ya tienen movimientos. */
+      items: z.array(z.object({ itemId: z.number(), name: z.string() })).optional(),
+      /** 409 `DOCUMENT_HAS_RETURNS` (REQ-F-051, DT-T3-3): devoluciones vigentes que hay que revertir antes. */
+      returnIds: z.array(z.number()).optional(),
     })
     // `current` cambia de forma según el código: el de un artículo o producto (versión) o el de una receta.
     .transform(({ current, ...rest }) => {
@@ -223,6 +261,30 @@ export interface AdminApiClient {
   /** 201 versión nueva o 200 sin cambios (`created: false`). */
   saveInventoryRecipe(auth: AdminCredentials, itemId: number, input: RecipeSaveRequest, idempotencyKey?: string): Promise<AdminApiResult<RecipeSaveResponse>>;
   closeInventoryRecipe(auth: AdminCredentials, itemId: number, input: RecipeCloseRequest): Promise<AdminApiResult<RecipeCloseResponse>>;
+  // Proveedores, Kardex y existencias (administradores y gerentes; REQ-F-051).
+  listInventorySuppliers(auth: AdminCredentials, filter?: SupplierListFilter): Promise<AdminApiResult<SupplierListResponse>>;
+  getInventorySupplier(auth: AdminCredentials, id: number): Promise<AdminApiResult<SupplierDetailResponse>>;
+  createInventorySupplier(auth: AdminCredentials, input: SupplierCreateRequest, idempotencyKey?: string): Promise<AdminApiResult<SupplierResponse>>;
+  updateInventorySupplier(auth: AdminCredentials, id: number, input: SupplierUpdateRequest): Promise<AdminApiResult<SupplierResponse>>;
+  setInventorySupplierActive(auth: AdminCredentials, id: number, active: boolean, input: SupplierStatusRequest): Promise<AdminApiResult<SupplierResponse>>;
+  kardexOptions(auth: AdminCredentials): Promise<AdminApiResult<KardexOptionsResponse>>;
+  /** 201 documento nuevo o 200 reenvío del mismo envío (`replayed: true`; clave persistente, DT-14). */
+  createInitialBalance(auth: AdminCredentials, input: InitialBalanceRequest, idempotencyKey?: string): Promise<AdminApiResult<KardexDocumentWriteResponse>>;
+  createPurchase(auth: AdminCredentials, input: PurchaseRequest, idempotencyKey?: string): Promise<AdminApiResult<KardexDocumentWriteResponse>>;
+  createAdjustment(auth: AdminCredentials, input: AdjustmentRequest, idempotencyKey?: string): Promise<AdminApiResult<KardexDocumentWriteResponse>>;
+  createSupplierReturn(auth: AdminCredentials, purchaseId: number, input: SupplierReturnRequest, idempotencyKey?: string): Promise<AdminApiResult<KardexDocumentWriteResponse>>;
+  previewReversal(auth: AdminCredentials, documentId: number): Promise<AdminApiResult<KardexReversalPreviewResponse>>;
+  reverseDocument(auth: AdminCredentials, documentId: number, input: ReversalRequest, idempotencyKey?: string): Promise<AdminApiResult<KardexDocumentWriteResponse>>;
+  listKardexDocuments(auth: AdminCredentials, filter?: KardexDocumentFilter): Promise<AdminApiResult<KardexDocumentListResponse>>;
+  getKardexDocument(auth: AdminCredentials, id: number): Promise<AdminApiResult<KardexDocumentDetailResponse>>;
+  listStock(auth: AdminCredentials, filter?: StockFilter): Promise<AdminApiResult<StockResponse>>;
+  getItemKardex(auth: AdminCredentials, itemId: number, page?: string): Promise<AdminApiResult<ItemKardexResponse>>;
+}
+
+/** Query con claves en español a partir de pares [clave, valor]; los vacíos se omiten. */
+function spanishQuery(entries: [string, string | undefined][]): string {
+  const text = new URLSearchParams(entries.filter((entry): entry is [string, string] => entry[1] !== undefined && entry[1] !== '')).toString();
+  return text === '' ? '' : `?${text}`;
 }
 
 /** Query de la lista de artículos (claves en español, como la ruta). */
@@ -304,6 +366,10 @@ export function createAdminApiClient({ baseUrl, timeoutMs, fetch: fetchFn = (inp
     }
   }
 
+  /** Escritura de un documento del Kardex: 201 nuevo o 200 reenvío del mismo envío (REQ-F-051, DT-14). */
+  const writeDocument = (auth: AdminCredentials, path: string, input: unknown, idempotencyKey?: string): Promise<AdminApiResult<KardexDocumentWriteResponse>> =>
+    request('POST', path, { auth, body: input, headers: idempotencyKey ? { [IDEMPOTENCY_HEADER]: idempotencyKey } : {}, schema: kardexDocumentWriteResponseSchema, expect: [200, 201] });
+
   return Object.freeze<AdminApiClient>({
     login: (body, clientIp) => request('POST', adminPaths.session, { body, headers: { 'x-forwarded-for': clientIp }, schema: loginResponseSchema, expect: 201 }),
     session: (auth) => request('GET', adminPaths.session, { auth, schema: sessionResponseSchema }),
@@ -370,5 +436,25 @@ export function createAdminApiClient({ baseUrl, timeoutMs, fetch: fetchFn = (inp
     saveInventoryRecipe: (auth, itemId, input, idempotencyKey) =>
       request('POST', inventoryRecipePaths.item(itemId), { auth, body: input, headers: idempotencyKey ? { [IDEMPOTENCY_HEADER]: idempotencyKey } : {}, schema: recipeSaveResponseSchema, expect: [200, 201] }),
     closeInventoryRecipe: (auth, itemId, input) => request('POST', inventoryRecipePaths.close(itemId), { auth, body: input, schema: recipeCloseResponseSchema }),
+    listInventorySuppliers: (auth, { status, q, page } = {}) =>
+      request('GET', `${inventoryKardexPaths.suppliers}${spanishQuery([['estado', status], ['q', q], ['pagina', page]])}`, { auth, schema: supplierListResponseSchema }),
+    getInventorySupplier: (auth, id) => request('GET', inventoryKardexPaths.supplier(id), { auth, schema: supplierDetailResponseSchema }),
+    createInventorySupplier: (auth, input, idempotencyKey) =>
+      request('POST', inventoryKardexPaths.suppliers, { auth, body: input, headers: idempotencyKey ? { [IDEMPOTENCY_HEADER]: idempotencyKey } : {}, schema: supplierResponseSchema, expect: 201 }),
+    updateInventorySupplier: (auth, id, input) => request('PUT', inventoryKardexPaths.supplier(id), { auth, body: input, schema: supplierResponseSchema }),
+    setInventorySupplierActive: (auth, id, active, input) => request('POST', inventoryKardexPaths.supplierStatus(id, active ? 'reactivar' : 'desactivar'), { auth, body: input, schema: supplierResponseSchema }),
+    kardexOptions: (auth) => request('GET', inventoryKardexPaths.options, { auth, schema: kardexOptionsResponseSchema }),
+    createInitialBalance: (auth, input, idempotencyKey) => writeDocument(auth, inventoryKardexPaths.initialBalances, input, idempotencyKey),
+    createPurchase: (auth, input, idempotencyKey) => writeDocument(auth, inventoryKardexPaths.purchases, input, idempotencyKey),
+    createAdjustment: (auth, input, idempotencyKey) => writeDocument(auth, inventoryKardexPaths.adjustments, input, idempotencyKey),
+    createSupplierReturn: (auth, purchaseId, input, idempotencyKey) => writeDocument(auth, inventoryKardexPaths.returns(purchaseId), input, idempotencyKey),
+    previewReversal: (auth, documentId) => request('GET', inventoryKardexPaths.reversal(documentId), { auth, schema: kardexReversalPreviewResponseSchema }),
+    reverseDocument: (auth, documentId, input, idempotencyKey) => writeDocument(auth, inventoryKardexPaths.reversal(documentId), input, idempotencyKey),
+    listKardexDocuments: (auth, { type, supplierId, page } = {}) =>
+      request('GET', `${inventoryKardexPaths.documents}${spanishQuery([['tipo', type], ['proveedor', supplierId], ['pagina', page]])}`, { auth, schema: kardexDocumentListResponseSchema }),
+    getKardexDocument: (auth, id) => request('GET', inventoryKardexPaths.document(id), { auth, schema: kardexDocumentDetailResponseSchema }),
+    listStock: (auth, { q, categoryId, type, status, page } = {}) =>
+      request('GET', `${inventoryKardexPaths.stock}${spanishQuery([['q', q], ['categoria', categoryId], ['tipo', type], ['estado', status], ['pagina', page]])}`, { auth, schema: stockResponseSchema }),
+    getItemKardex: (auth, itemId, page) => request('GET', `${inventoryKardexPaths.itemKardex(itemId)}${spanishQuery([['pagina', page]])}`, { auth, schema: itemKardexResponseSchema }),
   });
 }

@@ -44,7 +44,7 @@ import { toZonedIsoString, type Logger } from '@restaurante/core/shared';
 import { ApiHttpError } from '../errors.ts';
 import type { AdminAccess, AdminAuth } from './access.ts';
 import type { IdempotencyStore } from './idempotency.ts';
-import { idempotencyKey, inventoryBusy, routeId, runOnce, type Handler, type RouteContext } from './inventory-shared.ts';
+import { holdsStock, idempotencyKey, inventoryBusy, routeId, runOnce, type Handler, type RouteContext } from './inventory-shared.ts';
 import { createResponder, validationFailed } from './responses.ts';
 
 /**
@@ -162,6 +162,7 @@ export function createInventoryRoutes({
     updatedAt: iso(item.updatedAt),
   });
 
+  const costOrNull = (value: bigint | null): string | null => (value === null ? null : formatDecimal(value, COST_SCALE));
   const detailDto = (detail: ItemDetail): InventoryItemDetail => ({
     ...itemDto(detail.item),
     category: { id: detail.category.id, name: detail.category.name, active: detail.category.active },
@@ -169,6 +170,7 @@ export function createInventoryRoutes({
     variants: detail.variants.map((variant) => ({ id: variant.id, name: variant.name, sku: variant.sku, baseUnit: variant.baseUnit, active: variant.active })),
     locked: detail.locked,
     equivalences: detail.equivalences.map(({ unit, quantity }) => ({ unit, quantity: formatDecimal(quantity) })),
+    stock: detail.stock && holdsStock(detail.item) ? { quantity: formatDecimal(detail.stock.quantity), avgCost: costOrNull(detail.stock.avgCost), lastCost: costOrNull(detail.stock.lastCost) } : null,
   });
 
   const historyDto = (entry: StoredInventoryChange): InventoryHistoryEntry => ({

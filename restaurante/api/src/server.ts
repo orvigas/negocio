@@ -2,7 +2,7 @@ import { once } from 'node:events';
 
 import { createBotControl } from '@restaurante/core/bot-control';
 import { createPageRepository, createProductRepository } from '@restaurante/core/catalog';
-import { createInventoryRepository, createRecipeRepository } from '@restaurante/core/inventory';
+import { createInventoryRepository, createKardexRepository, createRecipeRepository, createSupplierRepository } from '@restaurante/core/inventory';
 import { errorProp } from '@restaurante/core/shared';
 import { createPrismaClient } from '@restaurante/db/client';
 import { createPrismaBotControlStore } from '@restaurante/db/prisma-bot-control-store';
@@ -113,6 +113,9 @@ await quotes.init();
 const inventoryStore = createPrismaInventoryStore({ prisma });
 const inventory = createInventoryRepository({ store: inventoryStore });
 const recipes = createRecipeRepository({ store: inventoryStore });
+// Proveedores y Kardex (REQ-F-051): mismo store; la fecha del hecho se valida en BUSINESS_TIMEZONE.
+const suppliers = createSupplierRepository({ store: inventoryStore });
+const kardex = createKardexRepository({ store: inventoryStore, timeZone: config.timezone });
 const admin = createAdminRoutes({
   users,
   products,
@@ -123,6 +126,8 @@ const admin = createAdminRoutes({
   quotes,
   inventory,
   recipes,
+  suppliers,
+  kardex,
   timeZone: config.timezone,
   logger,
 });

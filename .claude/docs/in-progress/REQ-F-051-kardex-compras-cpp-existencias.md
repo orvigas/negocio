@@ -4,6 +4,8 @@
 
 QA_APPROVED
 
+PR 1b: commit `8f8c128` en `feature/REQ-F-051-kardex-dominio` y PR #196 (https://github.com/orvigas/negocio/pull/196) hacia `epic/inventario`, abierto en borrador; el CI está pendiente.
+
 QA del PR 1b aprobado por senior-qa el 2026-11-26 (ver "QA Report — PR 1b", ronda 1). El usuario había aprobado el plan de QA con "Si", en respuesta a "¿Aprueba el plan de QA del PR 1b con esas cuatro respuestas?". Hay 2 defectos sin bloqueo: DEF-001 (`MINOR`) y DEF-002 (`TRIVIAL`). Siguiente paso: senior-fullstack hace el commit y abre el PR hacia `epic/inventario` (T4), y decide con el usuario si DEF-001 y DEF-002 se corrigen en este PR o en uno posterior.
 
 PR 1b de T3 (Kardex, CPP, saldo inicial, compra, ajuste, devolución, reversión, existencias, `inventory:verify` y sus pruebas en MySQL) implementado y validado en `feature/REQ-F-051-kardex-dominio`, desde `origin/epic/inventario` (`27c7a25`), sin commit (ver "Implementation Result — PR 1b"). El usuario decidió mantenerlo como un solo PR y confirmó RN-T3-12 a RN-T3-14 (ver "Decisiones sobre el PR 1b"). Falta que apruebe la implementación para pasar a QA.
@@ -534,7 +536,7 @@ En `epic/inventario`:
 | Operación | RF-14, RF-15 | — | CA-23, CA-24, CA-28 | 1–3 |
 | UX | RF-16 | — | CA-25, CA-26 | 3 |
 
-PR abiertos de T3: PR 1a #195 (https://github.com/orvigas/negocio/pull/195), que cubre la parte de modelo, proveedores y existencias de Integridad, Proveedores, Acceso y Operación.
+PR de T3: PR 1b #196 (https://github.com/orvigas/negocio/pull/196; Kardex, CPP, correcciones, existencias, costo real e `inventory:verify`). PR 1a #195 (https://github.com/orvigas/negocio/pull/195), que cubre la parte de modelo, proveedores y existencias de Integridad, Proveedores, Acceso y Operación.
 
 No hay diseño en `_stich_source_/` (PV-8).
 
@@ -2246,3 +2248,7 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 ### QA (Q2, PR 1b, ronda 1)
 
 - 2026-11-26, senior-qa: el usuario aprobó el plan con "Si" y las cuatro respuestas recomendadas. Ejecutado completo: S1 a S7, F1 a F14, N1 a N5, C1 a C10, B1 a B3, K1 a K9, I1 a I2, RB1 a RB3, V1 a V6, H1, P1, X1 a X11 y T1 a T4. Todos los criterios del 1b pasan, también CA-14, CA-23 y CA-24 por sonda. Hay 2 defectos que no bloquean: DEF-001 (`MINOR`, desbordamiento de DECIMAL en MySQL con valores irreales) y DEF-002 (`TRIVIAL`, una frase de `arquitectura.md`). Quedan 8 observaciones. Limpieza comprobada. Estado: `QA_APPROVED`.
+
+### Commit y PR (T4, PR 1b)
+
+- 2026-11-26, senior-fullstack: DEF-002 corregido en `arquitectura.md`. DEF-001 y OBS-5 a OBS-12 quedan anotados en "Pendientes del PR 1b para los PR 2 y 3". Commit `8f8c128` y PR #196 en borrador hacia `epic/inventario`.

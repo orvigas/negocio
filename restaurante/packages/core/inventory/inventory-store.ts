@@ -1,5 +1,6 @@
 import type { InventoryCategory } from './category-schema.ts';
 import type { InventoryItem, ItemType } from './item-schema.ts';
+import type { KardexDocument, KardexMovement, NewKardexDocument, NewKardexMovement, StockRow } from './kardex-schema.ts';
 import type { NewRecipeVersion, RecipeUsage, RecipeVersion } from './recipe-schema.ts';
 import type { Supplier } from './supplier-schema.ts';
 
@@ -81,6 +82,14 @@ export interface ItemListEntry extends InventoryItem {
   variantCount: number;
 }
 
+/** Filtro de la lista de documentos (REQ-F-051, RF-9). */
+export interface DocumentQuery {
+  type: string | null;
+  supplierId: number | null;
+  page: number;
+  pageSize: number;
+}
+
 export interface CategoryWithUsage extends InventoryCategory {
   activeItemCount: number;
 }
@@ -117,6 +126,33 @@ export interface InventoryStoreReader {
   getSupplier(id: number): Promise<Supplier | null>;
   /** Proveedores con ese estado, por nombre (REQ-F-051, RF-1; son pocos: la búsqueda y la página las hace core). */
   listSuppliers(status: ItemStatus): Promise<Supplier[]>;
+
+  // --- Kardex (REQ-F-051) ---
+  /** Existencias de esos artículos (los que no tienen fila se omiten). */
+  stockRows(itemIds: readonly number[]): Promise<Map<number, StockRow>>;
+  /** Todas las existencias (unos cientos de filas: Existencias y el CPP de las recetas). */
+  allStock(): Promise<StockRow[]>;
+  documentById(id: number): Promise<KardexDocument | null>;
+  documentByIdempotencyKey(key: string): Promise<KardexDocument | null>;
+  /** Movimientos del documento, por línea. */
+  documentMovements(documentId: number): Promise<KardexMovement[]>;
+  /** Devoluciones de una compra, de la más antigua a la más reciente. */
+  returnsOf(purchaseId: number): Promise<KardexDocument[]>;
+  /** Página de documentos, del más reciente al más antiguo, y el total que cumple el filtro. */
+  listDocuments(query: DocumentQuery): Promise<{ documents: KardexDocument[]; total: number }>;
+  /** Página del Kardex de un artículo, del movimiento más reciente al más antiguo (por seq). */
+  itemMovements(itemId: number, page: number, pageSize: number): Promise<{ movements: KardexMovement[]; total: number }>;
+  /**
+   * RN-T3-8: artículos con movimientos vigentes (de un documento no revertido que no es una reversión),
+   * entre `itemIds` (null: todos).
+   */
+  itemsWithActiveMovements(itemIds: readonly number[] | null): Promise<Set<number>>;
+  /** DT-T3-4: costo de la última compra no revertida del artículo, sin contar `excludeDocumentId`; null si no hay. */
+  lastPurchaseCost(itemId: number, excludeDocumentId: number | null): Promise<bigint | null>;
+  /** `inventory:verify`: hasta `limit` movimientos después de (itemId, seq), en orden de artículo y seq. */
+  movementsAfter(itemId: number, seq: number, limit: number): Promise<KardexMovement[]>;
+  /** `inventory:verify`: número de documentos. */
+  countDocuments(): Promise<number>;
 }
 
 export interface InventoryStoreTx extends InventoryStoreReader {
@@ -154,6 +190,15 @@ export interface InventoryStoreTx extends InventoryStoreReader {
   insertRecipeVersion(version: NewRecipeVersion): Promise<RecipeVersion>;
   /** Cierra la versión si sigue vigente (única escritura sobre una versión guardada); false si no lo era. */
   closeRecipeVersion(id: number, at: Date): Promise<boolean>;
+  /** Bloquea el documento hasta el fin de la transacción (devolución y reversión). false si no existe. */
+  lockDocument(id: number): Promise<boolean>;
+  /**
+   * Inserta un documento con sus movimientos (solo altas, RN-T3-9). Una clave de idempotencia repetida
+   * lanza IdempotencyRaceError; una segunda reversión del mismo documento, AlreadyReversedError.
+   */
+  insertDocument(document: NewKardexDocument, movements: readonly NewKardexMovement[]): Promise<KardexDocument>;
+  /** Guarda la existencia de esos artículos (la proyección del Kardex). */
+  saveStock(rows: readonly StockRow[]): Promise<void>;
 }
 
 export interface InventoryStore {
@@ -167,4 +212,10 @@ export interface InventoryStore {
    * último confirmado (dos guardados A→B y B→A no pasan los dos).
    */
   recipeTransaction<T>(task: (tx: InventoryStoreTx) => Promise<T>): Promise<T>;
+  /**
+   * Transacción del Kardex (REQ-F-051, DT-13): READ COMMITTED con bloqueo de filas en orden (documento
+   * de origen y después existencias por id ascendente). Reintenta los interbloqueos; una espera
+   * agotada es InventoryBusyError (503).
+   */
+  kardexTransaction<T>(task: (tx: InventoryStoreTx) => Promise<T>): Promise<T>;
 }

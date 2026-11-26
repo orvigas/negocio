@@ -110,7 +110,7 @@ restaurante/
 │   │   ├── shared/          (ids de negocio, logger, errores comunes; desde el paso 2)
 │   │   ├── catalog/         (productos y menú visible)
 │   │   ├── schedule/        (horarios y aviso del día)
-│   │   ├── inventory/       (catálogo de artículos, unidades y variantes, REQ-F-049; recetas y costo teórico, REQ-F-050; en epic/inventario)
+│   │   ├── inventory/       (catálogo de artículos, unidades y variantes, REQ-F-049; recetas y costo teórico, REQ-F-050; proveedores, existencias y Kardex, REQ-F-051; en epic/inventario)
 │   │   ├── sales/           (pedidos, ventas y cobros)            ← nuevo
 │   │   ├── customers/       (CRM: clientes e historial)           ← nuevo
 │   │   ├── identity/        (usuarios, roles y permisos por negocio)
@@ -133,6 +133,10 @@ packages/core/inventory/
 ├── recipe-schema.ts, recipe-graph.ts, recipe-cost.ts ← recetas (REQ-F-050): líneas con merma, ciclos y profundidad, costo teórico
 ├── recipe-repository.ts     ← versiones (crear, cerrar, historial), «usado en» y opciones de ingrediente
 ├── master-import.ts         ← importación única de datos maestros (A5): forma, plan y escritura todo o nada
+├── supplier-schema.ts, supplier-repository.ts ← proveedores (REQ-F-051, RF-1)
+├── kardex-schema.ts, kardex-math.ts, business-date.ts ← Kardex (REQ-F-051): tipos, CPP en bigint y fecha del hecho
+├── kardex-repository.ts     ← saldo inicial, compra, ajuste, devolución, reversión, existencias y Kardex del artículo
+├── kardex-verify.ts         ← verificación de la cadena (base de `npm run inventory:verify`)
 ├── inventory-store.ts       ← interfaz que implementa packages/db (prisma-inventory-store.ts)
 ├── memory-inventory-store.ts ← la implementación en memoria para las pruebas
 └── index.ts                 ← lo único que se importa desde fuera del módulo
@@ -147,6 +151,46 @@ sola vigente por artículo (`current_item_id` único). Las escrituras de recetas
 B→A no forman un ciclo; `updateItem` y `deactivateItem` también lo toman antes que las filas de
 artículos. El costo teórico se calcula al consultar (sin caché, DT-7), en memoria y con decimales en
 `bigint`: CPP (desde T3) → costo de referencia → «Sin costo», nunca 0.
+
+**Kardex (REQ-F-051, T3).** Cada operación (saldo inicial, compra, ajuste, devolución a proveedor y
+reversión) es un documento de 1 a 50 líneas en `inventory_document`, y cada línea un movimiento de
+`inventory_movement`, con `seq` contiguo por artículo. `inventory_stock` es la proyección mutable de la
+cadena: existencia con signo (se permiten negativos, PV-2), CPP, último costo y último `seq`; hay una fila
+por cada artículo que no es padre (DT-T3-2), y RN-T3-1 decide cuáles admiten movimientos y se muestran.
+
+- **Costo.** `kardex-math.ts` es el único sitio que calcula: costo de compra = importe / cantidad base;
+  CPP de una entrada = `(q·c + d·k) / (q + d)` (o `k` con existencia ≤ 0 o sin CPP); la reversión de
+  una entrada y la devolución sacan al costo con que entró y recalculan `(q·c − d·k) / (q − d)`; las demás
+  salidas salen al CPP sin cambiarlo; si esa fórmula diera un CPP negativo, queda en 0 (RN-T3-12). Solo
+  `bigint`, con un redondeo mitad hacia arriba por operación.
+- **Concurrencia (DT-13).** Transacción `ReadCommitted` con un orden de bloqueo fijo: primero el documento
+  de origen (devolución y reversión) y después las existencias de los artículos, por id ascendente
+  (`SELECT … FOR UPDATE`). Los artículos se leen después de bloquear. `updateItem` bloquea también la
+  existencia antes de comprobar si el artículo tiene movimientos (RN-T3-11). Un interbloqueo se reintenta
+  hasta 3 veces; una espera agotada es 503 `INVENTORY_BUSY`.
+- **Idempotencia (DT-14).** Clave de envío persistente (`idempotency_key` única, con la huella del cuerpo
+  en `request_hash`): el mismo envío repetido, también tras reiniciar la `api`, devuelve el documento ya
+  registrado; la misma clave con otros datos se rechaza.
+- **Inmutabilidad (DT-5).** Documentos y movimientos solo se insertan; un error se corrige con una
+  reversión, que no se revierte. Dos defensas: el store no tiene ninguna operación que los edite o borre,
+  y la regla de lint `KARDEX_IMMUTABLE` de `eslint.config.ts` prohíbe en todo el monorepo
+  `inventoryDocument` e `inventoryMovement` con `.update`, `.updateMany`, `.updateManyAndReturn`,
+  `.upsert`, `.delete` o `.deleteMany`, y el borrado de `inventoryStock`. **Límites de la regla (OBS-1
+  del QA del PR 1a):** solo detecta esas llamadas escritas de forma directa (`x.inventoryMovement.update(…)`);
+  no ve la desestructuración, los alias, el acceso calculado (`tx['inventoryMovement'].update`) ni el SQL
+  crudo (`$executeRaw` o `$queryRaw` con `UPDATE` o `DELETE`). La base no lo impide (el usuario de la app
+  tiene DML y no hay triggers). El respaldo es `npm run inventory:verify`, que detecta una alteración de
+  la cadena (ver «Verificación»), no de cualquier columna.
+- **Verificación.** `npm run inventory:verify` (en el contenedor: `node scripts/inventory-verify.ts`) lee
+  en una lectura consistente la cadena de cada artículo y la compara con su existencia: `seq` contiguo,
+  existencias anterior y nueva, CPP recalculado con `kardex-math`, y existencia, CPP y último `seq`
+  guardados; también que el tipo sea conocido y la cantidad distinta de 0. **No** comprueba el importe
+  de la línea (`line_total`), el último costo (`last_cost`), la fecha del hecho (`occurred_on`) ni el
+  autor, porque RF-13 no lo pide: un cambio en esas columnas no se detecta. Sale con 0 si todo cuadra, 1
+  si hay descuadres y 2 si no pudo verificar, y solo imprime ids y el nombre de cada comprobación.
+- **Tipos en `VARCHAR` (DT-T3-1).** Tipos de documento, criterio de costo y motivos son texto con la lista
+  cerrada en `kardex-schema.ts`: una imagen anterior lee un tipo nuevo sin fallar (lo muestra como «tipo
+  no reconocido») y un tipo nuevo no necesita migración.
 
 ### Regla de dependencias
 

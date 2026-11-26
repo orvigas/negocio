@@ -1,6 +1,6 @@
 import { DatabaseUnavailableError } from '../shared/index.ts';
 import type { InventoryCategory } from './category-schema.ts';
-import { CategoryNameTakenError, InventoryBusyError, ItemNameTakenError, SkuTakenError, SupplierNameTakenError } from './errors.ts';
+import { AlreadyReversedError, CategoryNameTakenError, IdempotencyRaceError, InventoryBusyError, ItemNameTakenError, SkuTakenError, SupplierNameTakenError } from './errors.ts';
 import type { InventoryItem } from './item-schema.ts';
 import type {
   CategoryWithUsage,
@@ -10,6 +10,7 @@ import type {
   ItemQuery,
   StoredInventoryChange,
 } from './inventory-store.ts';
+import type { KardexDocument, KardexMovement, StockRow } from './kardex-schema.ts';
 import type { RecipeUsage, RecipeVersion } from './recipe-schema.ts';
 import type { Supplier } from './supplier-schema.ts';
 import { searchKey } from './text.ts';
@@ -24,14 +25,8 @@ import { searchKey } from './text.ts';
  * artículo en uso (RN-4; las recetas y los movimientos ya cuentan solos, REQ-F-050 y REQ-F-051).
  */
 
-/** Existencia de un artículo (REQ-F-051, DT-T3-2): escalas 3 (cantidad) y 4 (costos). */
-export interface MemoryStockRow {
-  quantity: bigint;
-  avgCost: bigint | null;
-  lastCost: bigint | null;
-  lastSeq: number;
-  updatedAt: Date;
-}
+/** Existencia de un artículo (REQ-F-051, DT-T3-2). */
+export type MemoryStockRow = StockRow;
 
 export interface MemoryInventoryState {
   categories: InventoryCategory[];
@@ -45,11 +40,16 @@ export interface MemoryInventoryState {
   suppliers: Supplier[];
   /** Existencias por artículo (REQ-F-051). */
   stock: Map<number, MemoryStockRow>;
+  /** Documentos del Kardex (sin `reversedById`, que se calcula al leer). */
+  documents: Omit<KardexDocument, 'reversedById'>[];
+  movements: KardexMovement[];
   nextCategoryId: number;
   nextItemId: number;
   nextChangeId: number;
   nextRecipeVersionId: number;
   nextSupplierId: number;
+  nextDocumentId: number;
+  nextMovementId: number;
 }
 
 export interface MemoryInventoryStore extends InventoryStore {
@@ -72,11 +72,15 @@ const emptyState = (): MemoryInventoryState => ({
   recipeVersions: [],
   suppliers: [],
   stock: new Map(),
+  documents: [],
+  movements: [],
   nextCategoryId: 1,
   nextItemId: 1,
   nextChangeId: 1,
   nextRecipeVersionId: 1,
   nextSupplierId: 1,
+  nextDocumentId: 1,
+  nextMovementId: 1,
 });
 
 const copyState = (state: MemoryInventoryState): MemoryInventoryState => ({
@@ -88,11 +92,15 @@ const copyState = (state: MemoryInventoryState): MemoryInventoryState => ({
   recipeVersions: structuredClone(state.recipeVersions),
   suppliers: structuredClone(state.suppliers),
   stock: structuredClone(state.stock),
+  documents: structuredClone(state.documents),
+  movements: structuredClone(state.movements),
   nextCategoryId: state.nextCategoryId,
   nextItemId: state.nextItemId,
   nextChangeId: state.nextChangeId,
   nextRecipeVersionId: state.nextRecipeVersionId,
   nextSupplierId: state.nextSupplierId,
+  nextDocumentId: state.nextDocumentId,
+  nextMovementId: state.nextMovementId,
 });
 
 const byName = <T extends { name: string; id: number }>(a: T, b: T): number => a.name.localeCompare(b.name, 'es') || a.id - b.id;
@@ -129,7 +137,7 @@ export function createMemoryInventoryStore(): MemoryInventoryStore {
   const activeSupplierTaken = (data: MemoryInventoryState, supplier: Pick<Supplier, 'id' | 'nameKey' | 'active'>): boolean =>
     supplier.active && data.suppliers.some((other) => other.id !== supplier.id && other.active && other.nameKey === supplier.nameKey);
 
-  const newStock = (at: Date): MemoryStockRow => ({ quantity: 0n, avgCost: null, lastCost: null, lastSeq: 0, updatedAt: at });
+  const newStock = (itemId: number, at: Date): MemoryStockRow => ({ itemId, quantity: 0n, avgCost: null, lastCost: null, lastSeq: 0, updatedAt: at });
 
   const activeCategoryTaken = (data: MemoryInventoryState, category: Pick<InventoryCategory, 'id' | 'nameKey' | 'active'>): boolean =>
     category.active && data.categories.some((other) => other.id !== category.id && other.active && other.nameKey === category.nameKey);
@@ -137,6 +145,14 @@ export function createMemoryInventoryStore(): MemoryInventoryStore {
   function txOn(data: MemoryInventoryState): InventoryStoreTx {
     const findItem = (id: number) => data.items.find((item) => item.id === id) ?? null;
     const hasMovements = (itemId: number): boolean => (data.stock.get(itemId)?.lastSeq ?? 0) > 0;
+    const withReversal = (document: Omit<KardexDocument, 'reversedById'>): KardexDocument => ({
+      ...structuredClone(document),
+      reversedById: data.documents.find((other) => other.reversesDocumentId === document.id)?.id ?? null,
+    });
+    const isActiveDocument = (documentId: number): boolean => {
+      const document = data.documents.find((other) => other.id === documentId);
+      return !!document && document.type !== 'reversion' && !data.documents.some((other) => other.reversesDocumentId === documentId);
+    };
     return {
       async getItem(id) {
         return structuredClone(findItem(id));
@@ -200,9 +216,89 @@ export function createMemoryInventoryStore(): MemoryInventoryStore {
         data.suppliers[index] = structuredClone(supplier);
         return true;
       },
+      async stockRows(itemIds) {
+        const rows = new Map<number, StockRow>();
+        for (const itemId of itemIds) {
+          const row = data.stock.get(itemId);
+          if (row) rows.set(itemId, structuredClone(row));
+        }
+        return rows;
+      },
+      async allStock() {
+        return structuredClone([...data.stock.values()]).sort((a, b) => a.itemId - b.itemId);
+      },
+      async documentById(id) {
+        const document = data.documents.find((other) => other.id === id);
+        return document ? withReversal(document) : null;
+      },
+      async documentByIdempotencyKey(key) {
+        const document = data.documents.find((other) => other.idempotencyKey === key);
+        return document ? withReversal(document) : null;
+      },
+      async documentMovements(documentId) {
+        return structuredClone(data.movements.filter((movement) => movement.documentId === documentId).sort((a, b) => a.line - b.line));
+      },
+      async returnsOf(purchaseId) {
+        return data.documents.filter((document) => document.sourceDocumentId === purchaseId).sort((a, b) => a.id - b.id).map(withReversal);
+      },
+      async listDocuments(query) {
+        const all = data.documents
+          .filter((document) => (query.type === null || document.type === query.type) && (query.supplierId === null || document.supplierId === query.supplierId))
+          .sort((a, b) => b.id - a.id);
+        const start = (query.page - 1) * query.pageSize;
+        return { documents: all.slice(start, start + query.pageSize).map(withReversal), total: all.length };
+      },
+      async itemMovements(itemId, page, pageSize) {
+        const all = data.movements.filter((movement) => movement.itemId === itemId).sort((a, b) => b.seq - a.seq);
+        const start = (page - 1) * pageSize;
+        return { movements: structuredClone(all.slice(start, start + pageSize)), total: all.length };
+      },
+      async itemsWithActiveMovements(itemIds) {
+        const ids = new Set<number>();
+        for (const movement of data.movements) {
+          if ((itemIds === null || itemIds.includes(movement.itemId)) && isActiveDocument(movement.documentId)) ids.add(movement.itemId);
+        }
+        return ids;
+      },
+      async lastPurchaseCost(itemId, excludeDocumentId) {
+        const purchases = data.movements
+          .filter((movement) => movement.itemId === itemId && movement.type === 'compra' && movement.documentId !== excludeDocumentId && isActiveDocument(movement.documentId))
+          .sort((a, b) => b.seq - a.seq);
+        return purchases[0]?.unitCost ?? null;
+      },
+      async movementsAfter(itemId, seq, limit) {
+        return structuredClone(
+          data.movements
+            .filter((movement) => movement.itemId > itemId || (movement.itemId === itemId && movement.seq > seq))
+            .sort((a, b) => a.itemId - b.itemId || a.seq - b.seq)
+            .slice(0, limit),
+        );
+      },
+      async countDocuments() {
+        return data.documents.length;
+      },
+      async lockDocument(id) {
+        return data.documents.some((document) => document.id === id);
+      },
+      async insertDocument(document, movements) {
+        if (document.idempotencyKey !== null && data.documents.some((other) => other.idempotencyKey === document.idempotencyKey)) throw new IdempotencyRaceError();
+        if (document.reversesDocumentId !== null && data.documents.some((other) => other.reversesDocumentId === document.reversesDocumentId)) throw new AlreadyReversedError(null);
+        const saved = { ...structuredClone(document), id: data.nextDocumentId };
+        data.nextDocumentId += 1;
+        data.documents.push(saved);
+        for (const movement of movements) {
+          if (data.movements.some((other) => other.itemId === movement.itemId && other.seq === movement.seq)) throw new Error('seq repetido');
+          data.movements.push({ ...structuredClone(movement), id: data.nextMovementId, documentId: saved.id });
+          data.nextMovementId += 1;
+        }
+        return withReversal(saved);
+      },
+      async saveStock(rows) {
+        for (const row of rows) data.stock.set(row.itemId, structuredClone(row));
+      },
       async lockStock(itemIds) {
         for (const itemId of itemIds) {
-          if (!data.stock.has(itemId) && findItem(itemId)) data.stock.set(itemId, newStock(new Date()));
+          if (!data.stock.has(itemId) && findItem(itemId)) data.stock.set(itemId, newStock(itemId, new Date()));
         }
       },
       async itemsByIds(ids) {
@@ -253,7 +349,7 @@ export function createMemoryInventoryStore(): MemoryInventoryStore {
         if (activeNameTaken(data, saved)) throw new ItemNameTakenError();
         data.nextItemId += 1;
         data.items.push(saved);
-        if (saved.kind !== 'parent') data.stock.set(saved.id, newStock(saved.createdAt));
+        if (saved.kind !== 'parent') data.stock.set(saved.id, newStock(saved.id, saved.createdAt));
         return structuredClone(saved);
       },
       async replaceItem(item, expectedVersion) {
@@ -329,5 +425,6 @@ export function createMemoryInventoryStore(): MemoryInventoryStore {
     },
     transaction,
     recipeTransaction: transaction,
+    kardexTransaction: transaction,
   };
 }

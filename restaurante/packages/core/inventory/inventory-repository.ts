@@ -44,6 +44,7 @@ import {
   type CategoryWithUsage,
   type StoredInventoryChange,
 } from './inventory-store.ts';
+import type { StockRow } from './kardex-schema.ts';
 import { readId } from './text.ts';
 import { convertToBase, equivalences, type Equivalence, type InventoryUnit } from './units.ts';
 
@@ -130,6 +131,8 @@ export interface ItemDetail {
   locked: boolean;
   equivalences: Equivalence[];
   history: StoredInventoryChange[];
+  /** Existencia, CPP y último costo (REQ-F-051, RF-10); null en un padre o sin fila. */
+  stock: StockRow | null;
 }
 
 export interface ConversionResult {
@@ -330,15 +333,16 @@ export function createInventoryRepository({ store, now = () => new Date() }: { s
       return store.read(async (reader) => {
         const item = await reader.getItem(id);
         if (!item) throw new ItemNotFoundError();
-        const [category, parent, variants, locked, history] = await Promise.all([
+        const [category, parent, variants, locked, history, stock] = await Promise.all([
           reader.getCategory(item.categoryId),
           item.parentId === null ? Promise.resolve(null) : reader.getItem(item.parentId),
           item.kind === 'parent' ? reader.listVariants(item.id) : Promise.resolve([]),
           reader.isInUse(item.id),
           reader.history('item', item.id, HISTORY_LIMIT),
+          reader.stockRows([item.id]),
         ]);
         // La clave foránea category_id garantiza que la categoría existe.
-        return { item, category: category as InventoryCategory, parent, variants, locked, equivalences: equivalences(item), history };
+        return { item, category: category as InventoryCategory, parent, variants, locked, equivalences: equivalences(item), history, stock: stock.get(item.id) ?? null };
       });
     },
 

@@ -243,3 +243,84 @@ export class SupplierNameTakenError extends InventoryError {
     this.name = 'SupplierNameTakenError';
   }
 }
+
+/** Documento del Kardex inexistente (REQ-F-051). */
+export class DocumentNotFoundError extends InventoryError {
+  constructor() {
+    super('Documento no encontrado');
+    this.name = 'DocumentNotFoundError';
+  }
+}
+
+/** RN-T3-8: el artículo ya tiene movimientos vigentes; un saldo inicial no procede. */
+export class InitialBalanceNotAllowedError extends InventoryError {
+  readonly items: { itemId: number; name: string }[];
+
+  constructor(items: { itemId: number; name: string }[]) {
+    super('El artículo ya tiene movimientos: corrige su existencia con un ajuste.');
+    this.name = 'InitialBalanceNotAllowedError';
+    this.items = items;
+  }
+}
+
+/** RN-T3-6: el documento ya se revirtió. */
+export class AlreadyReversedError extends InventoryError {
+  readonly reversalId: number | null;
+
+  constructor(reversalId: number | null) {
+    super('El documento ya se revirtió.');
+    this.name = 'AlreadyReversedError';
+    this.reversalId = reversalId;
+  }
+}
+
+/** RN-T3-6: una reversión no se revierte. */
+export class ReversalNotReversibleError extends InventoryError {
+  constructor() {
+    super('Una reversión no se puede revertir.');
+    this.name = 'ReversalNotReversibleError';
+  }
+}
+
+/** DT-T3-3: una compra con devoluciones vigentes no se revierte hasta revertir esas devoluciones. */
+export class DocumentHasReturnsError extends InventoryError {
+  readonly returnIds: number[];
+
+  constructor(returnIds: number[]) {
+    super(`Revierte primero ${returnIds.length === 1 ? 'la devolución' : 'las devoluciones'} ${returnIds.map((id) => `#${id}`).join(', ')}.`);
+    this.name = 'DocumentHasReturnsError';
+    this.returnIds = returnIds;
+  }
+}
+
+/** RF-6: solo se devuelve desde una compra. */
+export class DocumentNotReturnableError extends InventoryError {
+  constructor() {
+    super('Solo se puede devolver mercancía de una compra.');
+    this.name = 'DocumentNotReturnableError';
+  }
+}
+
+/** RF-6: la compra ya se revirtió; no admite devoluciones. */
+export class DocumentReversedError extends InventoryError {
+  constructor() {
+    super('La compra ya se revirtió: no admite devoluciones.');
+    this.name = 'DocumentReversedError';
+  }
+}
+
+/** DT-14: la misma clave de idempotencia llegó con otro contenido. */
+export class IdempotencyKeyReusedError extends InventoryError {
+  constructor() {
+    super('Esa clave de envío ya se usó con otros datos.');
+    this.name = 'IdempotencyKeyReusedError';
+  }
+}
+
+/** Choque con la clave única de idempotencia (carrera entre dos envíos): el store la lanza y core la resuelve. */
+export class IdempotencyRaceError extends InventoryError {
+  constructor() {
+    super('Otro envío con la misma clave se registró a la vez.');
+    this.name = 'IdempotencyRaceError';
+  }
+}

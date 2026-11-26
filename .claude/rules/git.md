@@ -20,9 +20,9 @@ No hagas commits automáticamente salvo que las instrucciones del proyecto lo pe
 
 ### Rama intermedia de la épica de inventario (`epic/inventario`)
 
-Excepción a la regla general, decidida por el usuario en REQ-F-049 (D-4, PV-12 y DT-4):
+Excepción a la regla general, decidida por el usuario en REQ-F-049 (D-4, PV-12 y DT-4) y ampliada en REQ-F-051 (P-3):
 
-- Los PR de los tickets de la épica de inventario (REQ-F-049 a REQ-F-053) van a `epic/inventario` (`gh pr create --base epic/inventario`) hasta que T1 a T3 sean utilizables. La rama de trabajo de cada PR sale de la punta de `epic/inventario`.
+- Los PR de los tickets de la épica de inventario (REQ-F-049 a REQ-F-053 y sus seguimientos, como REQ-F-054) van a `epic/inventario` (`gh pr create --base epic/inventario`) hasta que T1 a T3 sean utilizables. La rama de trabajo de cada PR sale de la punta de `epic/inventario`.
 - El CI valida esos PR igual que uno hacia `main`, sin las pruebas de humo del despliegue y de los respaldos, y sin publicar ni desplegar. No se hace push directo a `epic/inventario`: todo entra por PR.
 - Tras cada cambio a `main`, se integra `main` en la épica con un PR de `main` hacia `epic/inventario` (`gh pr create --base epic/inventario --head main`), mergeado con merge commit (nunca squash). Si hay conflictos, se resuelven en una rama aparte que sale de la épica.
 - La épica llega a `main` con un PR de `epic/inventario` hacia `main` cuando T1 a T3 se puedan usar. Ese PR corre el CI completo.

@@ -16,6 +16,16 @@ export const normalizeName = (raw: string): string => raw.trim().normalize('NFC'
 /** Clave de un nombre: sin distinguir mayúsculas (sí distingue acentos). */
 export const nameKey = (raw: string): string => normalizeName(raw).toLowerCase();
 
+// Marcas diacríticas combinantes, salvo la tilde de la «ñ» (U+0303 tras n/N), que en español es otra letra.
+const ACCENTS_BUT_ENYE = /(?<![nN])\u0303|[\u0300-\u0302\u0304-\u036f]/g;
+
+/**
+ * Clave de búsqueda (REQ-F-051, OBS-12 b): sin distinguir mayúsculas ni acentos, pero distingue la
+ * «ñ» de la «n», como la colación utf8mb4_es_0900_ai_ci con la que busca MySQL. «Cárne» y «carne»
+ * dan la misma clave.
+ */
+export const searchKey = (raw: string): string => raw.trim().normalize('NFD').replace(ACCENTS_BUT_ENYE, '').normalize('NFC').toLowerCase();
+
 /**
  * Nombre obligatorio de una línea. Devuelve el nombre normalizado o el mensaje de error del campo.
  */

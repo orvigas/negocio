@@ -59,7 +59,7 @@ import { convertToBase, equivalences, type Equivalence, type InventoryUnit } fro
  *   campo) y la clave única del store como garantía ante carreras.
  * - SKU (PV-14, DT-3): editable; todo SKU asignado queda registrado y no se reutiliza en otro artículo.
  * - RN-4: la unidad base y los empaques se bloquean cuando `store.isInUse` lo indica (REQ-F-050: el
- *   artículo tiene versiones de receta o aparece en una línea).
+ *   artículo tiene versiones de receta o aparece en una línea; REQ-F-051: o tiene movimientos).
  * - REQ-F-050: la edición y la inactivación toman primero el candado `recetas` (consultan el uso en
  *   recetas); inactivar un artículo usado en recetas vigentes exige `recipes: 'keep'` (RF-7).
  */
@@ -409,6 +409,9 @@ export function createInventoryRepository({ store, now = () => new Date() }: { s
       const version = requireVersion(input.version);
       return write(async (tx) => {
         await tx.lockRecipes();
+        // REQ-F-051 (RN-T3-11): la existencia se bloquea antes de consultar hasMovements e isInUse, así
+        // un primer movimiento simultáneo espera a este cambio o este cambio ve el movimiento.
+        await tx.lockStock([id]);
         const at = now();
         const current = await tx.getItem(id);
         if (!current) throw new ItemNotFoundError();

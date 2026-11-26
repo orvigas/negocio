@@ -7,6 +7,7 @@ import {
   ItemNameTakenError,
   RecipeVersionConflictError,
   SkuTakenError,
+  SupplierNameTakenError,
   WASTE_SCALE,
   formatDecimal,
   parseDecimal,
@@ -24,11 +25,12 @@ import {
   type RecipeUsage,
   type RecipeVersion,
   type StoredInventoryChange,
+  type Supplier,
 } from '@restaurante/core/inventory';
 
 import type { Database } from './client.ts';
 import { databaseErrorDetails, isTransactionConflict, isUniqueViolation, toUnavailable } from './errors.ts';
-import type { Prisma } from './generated/prisma/client.ts';
+import { Prisma } from './generated/prisma/client.ts';
 
 /**
  * Store del catálogo de inventario sobre Prisma/MySQL (REQ-F-049, T1).
@@ -50,6 +52,13 @@ import type { Prisma } from './generated/prisma/client.ts';
  * - Una espera del candado agotada (MySQL 1205) es InventoryBusyError (503), sin reintento. Un choque
  *   con las claves únicas de las versiones (imposible dentro del candado) es un conflicto (409).
  * - Las versiones no se modifican ni se borran: solo se cierran (`valid_to`, `current_item_id`).
+ *
+ * Proveedores y existencias (REQ-F-051, T3):
+ * - `insertItem` crea la existencia (0, sin costo) de todo artículo que no es padre (DT-T3-2).
+ * - `lockStock` bloquea las existencias con `SELECT … FOR UPDATE` en orden ascendente de id (DT-13) y
+ *   crea antes las que falten (un artículo creado por una imagen anterior; también tras el TRUNCATE de
+ *   las pruebas).
+ * - `hasMovements` es `last_seq > 0`; `isInUse` lo incluye (RN-T3-11).
  */
 
 const WRITE_TX = Object.freeze({ isolationLevel: 'Serializable', maxWait: 5000, timeout: 10_000 } as const);
@@ -64,6 +73,7 @@ type ItemRow = Prisma.InventoryItemGetPayload<{ include: typeof ITEM_INCLUDE }>;
 const VERSION_INCLUDE = { lines: { orderBy: { position: 'asc' } } } as const satisfies Prisma.InventoryRecipeVersionInclude;
 type VersionRow = Prisma.InventoryRecipeVersionGetPayload<{ include: typeof VERSION_INCLUDE }>;
 type CategoryRow = Prisma.InventoryCategoryGetPayload<object>;
+type SupplierRow = Prisma.InventorySupplierGetPayload<object>;
 type Tx = Prisma.TransactionClient;
 
 /** DECIMAL(13,3) -> bigint escalado, sin coma flotante. */
@@ -144,6 +154,33 @@ const toCategory = (row: CategoryRow): InventoryCategory => ({
   updatedAt: row.updatedAt,
 });
 
+const toSupplier = (row: SupplierRow): Supplier => ({
+  id: row.id,
+  name: row.name,
+  nameKey: row.nameKey,
+  contact: row.contact,
+  active: row.active,
+  version: row.version,
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+  updatedById: row.updatedById,
+  updatedByName: row.updatedByName,
+});
+
+/** Columnas de un proveedor (sin id). */
+const supplierColumns = (supplier: Omit<Supplier, 'id'>) => ({
+  name: supplier.name,
+  nameKey: supplier.nameKey,
+  activeNameKey: supplier.active ? supplier.nameKey : null,
+  contact: supplier.contact,
+  active: supplier.active,
+  version: supplier.version,
+  createdAt: supplier.createdAt,
+  updatedAt: supplier.updatedAt,
+  updatedById: supplier.updatedById,
+  updatedByName: supplier.updatedByName,
+});
+
 /** Columnas escalares de un artículo (sin id ni empaques). */
 const itemColumns = (item: NewItem) => ({
   kind: item.kind,
@@ -189,17 +226,22 @@ class RecipeConflict extends RecipeVersionConflictError {
 /** Escapa los comodines de LIKE (el carácter de escape de MySQL es la barra invertida). */
 const escapeLike = (text: string): string => text.replace(/[\\%_]/g, '\\$&');
 
-function itemWhere(query: ItemQuery): Prisma.InventoryItemWhereInput {
+/**
+ * Filtro de la lista. La búsqueda por nombre ignora mayúsculas y acentos y distingue la «ñ»
+ * (REQ-F-051, OBS-12 b): la colación de la columna distingue las dos cosas, así que los ids se buscan
+ * con `utf8mb4_es_0900_ai_ci` en una consulta aparte (Prisma no admite COLLATE). El SKU se busca en
+ * mayúsculas en su registro. Prisma no escapa los comodines de LIKE: «%» y «_» se buscan como texto.
+ */
+async function itemWhere(client: Tx, query: ItemQuery): Promise<Prisma.InventoryItemWhereInput> {
   const where: Prisma.InventoryItemWhereInput = {};
   if (query.status !== 'all') where.active = query.status === 'active';
   if (query.type !== null) where.type = query.type;
   if (query.categoryId !== null) where.categoryId = query.categoryId;
   if (query.q !== null) {
-    // La colación distingue mayúsculas: se busca sobre las claves normalizadas (nombre en minúsculas,
-    // SKU en mayúsculas en su registro). Prisma no escapa los comodines de LIKE: «%» y «_» se buscan
-    // como texto.
     const text = escapeLike(query.q);
-    where.OR = [{ nameKey: { contains: text.toLowerCase() } }, { skus: { some: { skuKey: { contains: text.toUpperCase() } } } }];
+    const pattern = `%${text}%`;
+    const rows = await client.$queryRaw<{ id: number }[]>`SELECT id FROM inventory_item WHERE name COLLATE utf8mb4_es_0900_ai_ci LIKE ${pattern}`;
+    where.OR = [{ id: { in: rows.map((row) => Number(row.id)) } }, { skus: { some: { skuKey: { contains: text.toUpperCase() } } } }];
   }
   return where;
 }
@@ -218,7 +260,7 @@ function readerOn(client: Tx): InventoryStoreReader {
     },
 
     async listItems(query) {
-      const where = itemWhere(query);
+      const where = await itemWhere(client, query);
       const [total, rows] = await Promise.all([
         client.inventoryItem.count({ where }),
         client.inventoryItem.findMany({ where, include: ITEM_INCLUDE, orderBy: [{ name: 'asc' }, { id: 'asc' }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
@@ -262,18 +304,35 @@ function readerOn(client: Tx): InventoryStoreReader {
       );
     },
 
-    // RN-4: versiones del artículo o líneas que lo usan, de cualquier versión (dos consultas por
-    // índice). T3 añadirá los movimientos.
+    // RN-4: versiones del artículo, líneas que lo usan (de cualquier versión) o movimientos (REQ-F-051),
+    // tres consultas por clave o índice.
     async isInUse(itemId) {
-      const [version, line] = await Promise.all([
+      const [version, line, stock] = await Promise.all([
         client.inventoryRecipeVersion.findFirst({ where: { itemId }, select: { id: true } }),
         client.inventoryRecipeLine.findFirst({ where: { ingredientItemId: itemId }, select: { id: true } }),
+        client.inventoryStock.findUnique({ where: { itemId }, select: { lastSeq: true } }),
       ]);
-      return version !== null || line !== null;
+      return version !== null || line !== null || (stock?.lastSeq ?? 0) > 0;
     },
 
-    // Hasta T3 (REQ-F-051) no hay movimientos.
-    hasMovements: async () => false,
+    // RN-T3-11: la existencia guarda el seq del último movimiento.
+    async hasMovements(itemId) {
+      const stock = await client.inventoryStock.findUnique({ where: { itemId }, select: { lastSeq: true } });
+      return (stock?.lastSeq ?? 0) > 0;
+    },
+
+    async getSupplier(id) {
+      const row = await client.inventorySupplier.findUnique({ where: { id } });
+      return row ? toSupplier(row) : null;
+    },
+
+    async listSuppliers(status) {
+      const rows = await client.inventorySupplier.findMany({
+        where: status === 'all' ? {} : { active: status === 'active' },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      });
+      return rows.map(toSupplier);
+    },
 
     async itemsByIds(ids) {
       if (ids.length === 0) return [];
@@ -329,6 +388,7 @@ function txOn(tx: Tx): InventoryStoreTx {
     async insertItem(item) {
       const row = await unique(() => tx.inventoryItem.create({ data: itemColumns(item) }), ItemNameTakenError);
       if (item.units.length > 0) await tx.inventoryItemUnit.createMany({ data: unitRows(row.id, item.units) });
+      if (item.kind !== 'parent') await tx.inventoryStock.create({ data: { itemId: row.id, updatedAt: item.createdAt } });
       return toItem(await tx.inventoryItem.findUniqueOrThrow({ where: { id: row.id }, include: ITEM_INCLUDE }));
     },
 
@@ -368,6 +428,37 @@ function txOn(tx: Tx): InventoryStoreTx {
     },
 
     countActiveItemsInCategory: (categoryId) => tx.inventoryItem.count({ where: { categoryId, active: true } }),
+
+    async activeSupplierIdByNameKey(nameKey) {
+      const row = await tx.inventorySupplier.findUnique({ where: { activeNameKey: nameKey }, select: { id: true } });
+      return row?.id ?? null;
+    },
+
+    async insertSupplier(supplier) {
+      const row = await unique(() => tx.inventorySupplier.create({ data: supplierColumns(supplier) }), SupplierNameTakenError);
+      return toSupplier(row);
+    },
+
+    async replaceSupplier(supplier, expectedVersion) {
+      const { id, ...rest } = supplier;
+      const { count } = await unique(() => tx.inventorySupplier.updateMany({ where: { id, version: expectedVersion }, data: supplierColumns(rest) }), SupplierNameTakenError);
+      return count === 1;
+    },
+
+    async lockStock(itemIds) {
+      const ids = [...new Set(itemIds)].sort((a, b) => a - b);
+      if (ids.length === 0) return;
+      const lock = () => tx.$queryRaw<{ item_id: number }[]>`SELECT item_id FROM inventory_stock WHERE item_id IN (${Prisma.join(ids)}) ORDER BY item_id FOR UPDATE`;
+      const locked = new Set((await lock()).map((row) => Number(row.item_id)));
+      const missing = ids.filter((id) => !locked.has(id));
+      if (missing.length === 0) return;
+      // DT-T3-2: solo artículos que existen y no son padres (la clave foránea rechazaría el resto).
+      const items = await tx.inventoryItem.findMany({ where: { id: { in: missing }, kind: { not: 'parent' } }, select: { id: true } });
+      if (items.length === 0) return;
+      const at = new Date();
+      await tx.inventoryStock.createMany({ data: items.map((item) => ({ itemId: item.id, updatedAt: at })), skipDuplicates: true });
+      await lock();
+    },
 
     async lockRecipes() {
       await tx.$executeRaw`INSERT INTO inventory_lock (name) VALUES ('recetas') ON DUPLICATE KEY UPDATE name = name`;

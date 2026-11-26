@@ -1,6 +1,6 @@
 import { DatabaseUnavailableError } from '../shared/index.ts';
 import type { InventoryCategory } from './category-schema.ts';
-import { CategoryNameTakenError, InventoryBusyError, ItemNameTakenError, SkuTakenError } from './errors.ts';
+import { CategoryNameTakenError, InventoryBusyError, ItemNameTakenError, SkuTakenError, SupplierNameTakenError } from './errors.ts';
 import type { InventoryItem } from './item-schema.ts';
 import type {
   CategoryWithUsage,
@@ -11,16 +11,27 @@ import type {
   StoredInventoryChange,
 } from './inventory-store.ts';
 import type { RecipeUsage, RecipeVersion } from './recipe-schema.ts';
+import type { Supplier } from './supplier-schema.ts';
+import { searchKey } from './text.ts';
 
 /**
  * Store del catálogo de inventario en memoria (REQ-F-049): mismas operaciones y claves únicas que el
  * de Prisma, sin base de datos. Doble de las pruebas unitarias.
  *
  * Atomicidad: cada transacción trabaja sobre una copia y solo la publica si termina sin error (las
- * transacciones se serializan, así que el candado de recetas no hace nada). `state` permite
- * inspeccionar los datos, `failNext` simula una base caída y `markInUse` simula un artículo usado en un
- * movimiento (RN-4; las recetas ya cuentan solas, REQ-F-050).
+ * transacciones se serializan, así que el candado de recetas y el bloqueo de existencias no hacen nada).
+ * `state` permite inspeccionar los datos, `failNext` simula una base caída y `markInUse` simula un
+ * artículo en uso (RN-4; las recetas y los movimientos ya cuentan solos, REQ-F-050 y REQ-F-051).
  */
+
+/** Existencia de un artículo (REQ-F-051, DT-T3-2): escalas 3 (cantidad) y 4 (costos). */
+export interface MemoryStockRow {
+  quantity: bigint;
+  avgCost: bigint | null;
+  lastCost: bigint | null;
+  lastSeq: number;
+  updatedAt: Date;
+}
 
 export interface MemoryInventoryState {
   categories: InventoryCategory[];
@@ -31,10 +42,14 @@ export interface MemoryInventoryState {
   changes: (InventoryChangeEntry & { id: number })[];
   inUse: Set<number>;
   recipeVersions: RecipeVersion[];
+  suppliers: Supplier[];
+  /** Existencias por artículo (REQ-F-051). */
+  stock: Map<number, MemoryStockRow>;
   nextCategoryId: number;
   nextItemId: number;
   nextChangeId: number;
   nextRecipeVersionId: number;
+  nextSupplierId: number;
 }
 
 export interface MemoryInventoryStore extends InventoryStore {
@@ -55,10 +70,13 @@ const emptyState = (): MemoryInventoryState => ({
   changes: [],
   inUse: new Set(),
   recipeVersions: [],
+  suppliers: [],
+  stock: new Map(),
   nextCategoryId: 1,
   nextItemId: 1,
   nextChangeId: 1,
   nextRecipeVersionId: 1,
+  nextSupplierId: 1,
 });
 
 const copyState = (state: MemoryInventoryState): MemoryInventoryState => ({
@@ -68,10 +86,13 @@ const copyState = (state: MemoryInventoryState): MemoryInventoryState => ({
   changes: structuredClone(state.changes),
   inUse: new Set(state.inUse),
   recipeVersions: structuredClone(state.recipeVersions),
+  suppliers: structuredClone(state.suppliers),
+  stock: structuredClone(state.stock),
   nextCategoryId: state.nextCategoryId,
   nextItemId: state.nextItemId,
   nextChangeId: state.nextChangeId,
   nextRecipeVersionId: state.nextRecipeVersionId,
+  nextSupplierId: state.nextSupplierId,
 });
 
 const byName = <T extends { name: string; id: number }>(a: T, b: T): number => a.name.localeCompare(b.name, 'es') || a.id - b.id;
@@ -82,9 +103,9 @@ function matches(data: MemoryInventoryState, item: InventoryItem, query: ItemQue
   if (query.type !== null && item.type !== query.type) return false;
   if (query.categoryId !== null && item.categoryId !== query.categoryId) return false;
   if (query.q === null) return true;
-  const name = query.q.toLowerCase();
+  // Como MySQL (utf8mb4_es_0900_ai_ci): sin distinguir mayúsculas ni acentos (REQ-F-051, OBS-12 b).
   const sku = query.q.toUpperCase();
-  if (item.nameKey.includes(name)) return true;
+  if (searchKey(item.name).includes(searchKey(query.q))) return true;
   return [...data.skus].some(([key, entry]) => entry.itemId === item.id && key.includes(sku));
 }
 
@@ -105,11 +126,17 @@ export function createMemoryInventoryStore(): MemoryInventoryStore {
   const activeNameTaken = (data: MemoryInventoryState, item: Pick<InventoryItem, 'id' | 'nameKey' | 'active'>): boolean =>
     item.active && data.items.some((other) => other.id !== item.id && other.active && other.nameKey === item.nameKey);
 
+  const activeSupplierTaken = (data: MemoryInventoryState, supplier: Pick<Supplier, 'id' | 'nameKey' | 'active'>): boolean =>
+    supplier.active && data.suppliers.some((other) => other.id !== supplier.id && other.active && other.nameKey === supplier.nameKey);
+
+  const newStock = (at: Date): MemoryStockRow => ({ quantity: 0n, avgCost: null, lastCost: null, lastSeq: 0, updatedAt: at });
+
   const activeCategoryTaken = (data: MemoryInventoryState, category: Pick<InventoryCategory, 'id' | 'nameKey' | 'active'>): boolean =>
     category.active && data.categories.some((other) => other.id !== category.id && other.active && other.nameKey === category.nameKey);
 
   function txOn(data: MemoryInventoryState): InventoryStoreTx {
     const findItem = (id: number) => data.items.find((item) => item.id === id) ?? null;
+    const hasMovements = (itemId: number): boolean => (data.stock.get(itemId)?.lastSeq ?? 0) > 0;
     return {
       async getItem(id) {
         return structuredClone(findItem(id));
@@ -140,10 +167,43 @@ export function createMemoryInventoryStore(): MemoryInventoryStore {
         return structuredClone(entries) as StoredInventoryChange[];
       },
       async isInUse(itemId) {
-        return data.inUse.has(itemId) || data.recipeVersions.some((version) => version.itemId === itemId || version.lines.some((line) => line.ingredientId === itemId));
+        return (
+          data.inUse.has(itemId) ||
+          hasMovements(itemId) ||
+          data.recipeVersions.some((version) => version.itemId === itemId || version.lines.some((line) => line.ingredientId === itemId))
+        );
       },
-      async hasMovements() {
-        return false;
+      async hasMovements(itemId) {
+        return hasMovements(itemId);
+      },
+      async getSupplier(id) {
+        return structuredClone(data.suppliers.find((supplier) => supplier.id === id) ?? null);
+      },
+      async listSuppliers(status) {
+        const wanted = data.suppliers.filter((supplier) => status === 'all' || supplier.active === (status === 'active'));
+        return structuredClone(wanted).sort(byName);
+      },
+      async activeSupplierIdByNameKey(nameKey) {
+        return data.suppliers.find((supplier) => supplier.active && supplier.nameKey === nameKey)?.id ?? null;
+      },
+      async insertSupplier(supplier) {
+        const saved: Supplier = { ...structuredClone(supplier), id: data.nextSupplierId };
+        if (activeSupplierTaken(data, saved)) throw new SupplierNameTakenError();
+        data.nextSupplierId += 1;
+        data.suppliers.push(saved);
+        return structuredClone(saved);
+      },
+      async replaceSupplier(supplier, expectedVersion) {
+        const index = data.suppliers.findIndex((other) => other.id === supplier.id);
+        if (index < 0 || data.suppliers[index]?.version !== expectedVersion) return false;
+        if (activeSupplierTaken(data, supplier)) throw new SupplierNameTakenError();
+        data.suppliers[index] = structuredClone(supplier);
+        return true;
+      },
+      async lockStock(itemIds) {
+        for (const itemId of itemIds) {
+          if (!data.stock.has(itemId) && findItem(itemId)) data.stock.set(itemId, newStock(new Date()));
+        }
       },
       async itemsByIds(ids) {
         return structuredClone(data.items.filter((item) => ids.includes(item.id)));
@@ -193,6 +253,7 @@ export function createMemoryInventoryStore(): MemoryInventoryStore {
         if (activeNameTaken(data, saved)) throw new ItemNameTakenError();
         data.nextItemId += 1;
         data.items.push(saved);
+        if (saved.kind !== 'parent') data.stock.set(saved.id, newStock(saved.createdAt));
         return structuredClone(saved);
       },
       async replaceItem(item, expectedVersion) {

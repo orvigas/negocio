@@ -2,9 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
-PR 2: commit `f02c5f1` en `feature/REQ-F-051-kardex-api` y PR #197 (https://github.com/orvigas/negocio/pull/197) hacia `epic/inventario`, abierto en borrador; el CI está pendiente.
+PR 2: commit `f02c5f1` en `feature/REQ-F-051-kardex-api` y PR #197 (https://github.com/orvigas/negocio/pull/197) hacia `epic/inventario` (no se despliega). El CI de `76df742`, con el PR listo (ejecución 45827311555), pasó `calidad`, `docker`, `auditoria` y `pruebas` (1/2 y 2/2). Siguiente paso: el usuario revisa y hace merge del PR #197. Después viene el PR 3 (pantallas, OBS-12 a y c, `ops/backup`, `despliegue.md` y OBS-13 a OBS-18).
 
 QA del PR 2 aprobado por senior-qa el 2026-11-26 (ver "QA Report — PR 2", ronda 2). El usuario aprobó la implementación de la ronda 2 con "si". DEF-003 y DEF-004 quedan corregidos y verificados sobre MySQL y HTTP real; las pruebas permanentes detectan las dos mutaciones. Sin defectos nuevos. OBS-13 a OBS-18 siguen registradas. Siguiente paso: senior-fullstack hace el commit y abre el PR hacia `epic/inventario` (T4).
 
@@ -2910,3 +2910,4 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 ### Commit y PR (T4, PR 2)
 
 - 2026-11-26, senior-fullstack: commit `f02c5f1` y PR #197 en borrador hacia `epic/inventario`. OBS-13 a OBS-18 quedan como pendientes del PR 3 o del cierre.
+- 2026-11-26, senior-fullstack: el PR #197 pasa a listo. Su CI (ejecución 45827311555) dejó `calidad`, `docker`, `auditoria` y `pruebas` en `pass`. Estado: `READY_FOR_MERGE`.

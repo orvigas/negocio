@@ -3,7 +3,8 @@
  *
  *   npm run inventory:seed-dev
  *
- * Carga los artículos, categorías y recetas ficticios de `support/inventory-dev-seed.ts` en la base de
+ * Carga los artículos, categorías, recetas, proveedores y documentos del Kardex ficticios de
+ * `support/inventory-dev-seed.ts` (REQ-F-051: con su propia comprobación de idempotencia) en la base de
  * DATABASE_URL, solo si es local (127.0.0.1, localhost, ::1 o mysql-dev) y NODE_ENV no es
  * production. Es idempotente: si ya hay artículos o categorías, no hace nada. No migra: antes
  * verifica que la base esté lista. La `api` nunca la ejecuta al arrancar, así que una instalación de
@@ -11,14 +12,14 @@
  */
 import { stderr, stdout } from 'node:process';
 
-import { createInventoryRepository, createRecipeRepository } from '@restaurante/core/inventory';
+import { businessDate, createInventoryRepository, createKardexRepository, createRecipeRepository, createSupplierRepository } from '@restaurante/core/inventory';
 import { createPrismaClient } from '@restaurante/db/client';
 import type { DatabaseConfig } from '@restaurante/db/database-config';
 import { createPrismaInventoryStore } from '@restaurante/db/prisma-inventory-store';
 import { DatabaseInitError, probeOf, queryOf, verifyDatabase } from '@restaurante/db/verify';
 
-import { ApiConfigError, loadDatabaseConfig } from '../src/config.ts';
-import { devSeedRefusal, seedInventoryDev } from './support/inventory-dev-seed.ts';
+import { API_DEFAULTS, ApiConfigError, loadDatabaseConfig } from '../src/config.ts';
+import { devSeedRefusal, seedInventoryDev, seedKardexDev } from './support/inventory-dev-seed.ts';
 
 function fail(message: string): never {
   stderr.write(`${message}\n`);
@@ -49,8 +50,14 @@ try {
 
 try {
   const store = createPrismaInventoryStore({ prisma });
-  const { created, recipes } = await seedInventoryDev({ inventory: createInventoryRepository({ store }), recipes: createRecipeRepository({ store }) });
+  const inventory = createInventoryRepository({ store });
+  const { created, recipes } = await seedInventoryDev({ inventory, recipes: createRecipeRepository({ store }) });
   stdout.write(created > 0 ? `Semilla de desarrollo cargada: ${created} artículos y ${recipes} recetas.\n` : 'El inventario ya tiene datos: no se cargó la semilla.\n');
+  // REQ-F-051 (RF-15): el Kardex ficticio, con su propia comprobación (sirve también en una base ya sembrada con T2).
+  const timeZone = process.env.BUSINESS_TIMEZONE?.trim() || API_DEFAULTS.BUSINESS_TIMEZONE;
+  const kardex = createKardexRepository({ store, timeZone });
+  const seeded = await seedKardexDev({ inventory, suppliers: createSupplierRepository({ store }), kardex }, businessDate(new Date(), timeZone));
+  stdout.write(seeded.documents > 0 ? `Kardex de desarrollo cargado: ${seeded.suppliers} proveedores y ${seeded.documents} documentos.\n` : 'El Kardex ya tiene datos: no se cargó su semilla.\n');
 } catch {
   // Sin detalles técnicos (los errores de Prisma incluyen rutas e invocaciones).
   stderr.write('No se pudo cargar la semilla: la base de datos no respondió o rechazó los datos.\n');

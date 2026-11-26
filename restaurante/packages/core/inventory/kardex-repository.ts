@@ -205,6 +205,8 @@ const REQUEST_ID = /^[A-Za-z0-9_-]{8,64}$/;
 const COST_LIMIT = { scale: COST_SCALE, integerDigits: COST_INTEGER_DIGITS };
 const AMOUNT_LIMIT = { scale: AMOUNT_SCALE, integerDigits: 13 };
 const MAX_COST = 10n ** BigInt(COST_INTEGER_DIGITS + COST_SCALE) - 1n;
+/** Mayor importe que se guarda (DECIMAL(19,4): 15 enteros y 4 decimales; DEF-001 del QA del PR 1b). */
+const MAX_TOTAL = 10n ** 19n - 1n;
 const DIRECTIONS = Object.freeze(['entrada', 'salida'] as const);
 type Direction = (typeof DIRECTIONS)[number];
 
@@ -354,7 +356,16 @@ function compute(type: string, lines: readonly PlannedLine[], stocks: ReadonlyMa
       errors[`lines.${line.index}.quantity`] = 'La existencia del artículo superaría el máximo que se puede guardar.';
       continue;
     }
+    // DEF-001 (QA del PR 1b): lo que no cabe en sus columnas se rechaza en el campo, nunca llega a la base.
+    if (cost.lineTotal !== null && cost.lineTotal > MAX_TOTAL) {
+      errors[`lines.${line.index}.quantity`] = 'El valor de la línea supera el máximo que se puede guardar: revisa la cantidad y el costo.';
+      continue;
+    }
     const avgCostAfter = nextAvgCost(type, row.quantity, row.avgCost, line.quantity, cost.unitCost);
+    if ((cost.unitCost !== null && cost.unitCost > MAX_COST) || (avgCostAfter !== null && avgCostAfter > MAX_COST)) {
+      errors[`lines.${line.index}.quantity`] = 'El costo por unidad resultante supera el máximo que se puede guardar: revisa la cantidad y el costo.';
+      continue;
+    }
     const seq = row.lastSeq + 1;
     movements.push({
       line: movements.length + 1,
@@ -376,6 +387,7 @@ function compute(type: string, lines: readonly PlannedLine[], stocks: ReadonlyMa
       actorName: author.name,
     });
     if (cost.lineTotal !== null) total += cost.lineTotal;
+    if (total > MAX_TOTAL && !errors.lines) errors.lines = 'El total del documento supera el máximo que se puede guardar: divídelo en varios documentos.';
     // RN-T3-5: el último costo es el de la última compra.
     const lastCost = type === 'compra' ? cost.unitCost : row.lastCost;
     running.set(line.itemId, { itemId: line.itemId, quantity: balanceAfter, avgCost: avgCostAfter, lastCost, lastSeq: seq, updatedAt: at });

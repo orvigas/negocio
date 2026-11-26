@@ -4,7 +4,19 @@
 
 READY_FOR_MERGE
 
-PR 1b: commit `8f8c128` en `feature/REQ-F-051-kardex-dominio` y PR #196 (https://github.com/orvigas/negocio/pull/196) hacia `epic/inventario` (no se despliega). El CI de `7249efc`, con el PR listo (ejecución 45784137262), pasó `calidad`, `docker`, `auditoria` y `pruebas` (1/2 y 2/2). Siguiente paso: el usuario revisa y hace merge del PR #196. Después viene el PR 2 (API, semilla, DEF-001 y OBS-6 a OBS-8).
+PR 2: commit `f02c5f1` en `feature/REQ-F-051-kardex-api` y PR #197 (https://github.com/orvigas/negocio/pull/197) hacia `epic/inventario` (no se despliega). El CI de `76df742`, con el PR listo (ejecución 45827311555), pasó `calidad`, `docker`, `auditoria` y `pruebas` (1/2 y 2/2). Siguiente paso: el usuario revisa y hace merge del PR #197. Después viene el PR 3 (pantallas, OBS-12 a y c, `ops/backup`, `despliegue.md` y OBS-13 a OBS-18).
+
+QA del PR 2 aprobado por senior-qa el 2026-11-26 (ver "QA Report — PR 2", ronda 2). El usuario aprobó la implementación de la ronda 2 con "si". DEF-003 y DEF-004 quedan corregidos y verificados sobre MySQL y HTTP real; las pruebas permanentes detectan las dos mutaciones. Sin defectos nuevos. OBS-13 a OBS-18 siguen registradas. Siguiente paso: senior-fullstack hace el commit y abre el PR hacia `epic/inventario` (T4).
+
+PR 2, ronda 2: DEF-003 y DEF-004 del QA corregidos en este PR (decisión previa del usuario: "Sí, apruebo el plan con las cinco recomendaciones", R-1 y R-2 opción A) y OBS-19 documentada. Sin commit (ver "Implementation Result — PR 2", "Ronda 2").
+
+QA del PR 2 rechazado por senior-qa el 2026-11-26 (ver "QA Report — PR 2", ronda 1). El usuario había aprobado el plan con "Sí, apruebo el plan con las cinco recomendaciones". Se confirmaron R-1 y R-2 del plan, y el usuario había decidido de antemano que, si se confirmaban, serían `MINOR` y se corregirían en este PR: DEF-003 (404 antes que 401/403 en `devoluciones` y `reversion`) y DEF-004 (`stock` no nulo en la ficha y el Kardex de un Compuesto o un no inventariable). El resto del plan pasa. Siguiente paso: senior-fullstack corrige DEF-003 y DEF-004 y QA revalida (ronda 2).
+
+QA Action Plan del PR 2 redactado por senior-qa el 2026-11-26 (ver "QA Action Plan — PR 2"), sin ejecutar ninguna prueba. El usuario aprobó la implementación del PR 2 con "si". Quedan 5 decisiones para la aprobación del plan.
+
+PR 2 de T3 (API del Kardex y de los proveedores, contratos, cliente HTTP, semilla ampliada, DEF-001 y OBS-6 a OBS-8 del QA del PR 1b) implementado en `feature/REQ-F-051-kardex-api`, desde `origin/epic/inventario` (`851ec79`, con el PR 1b mergeado en #196), sin commit (ver "Implementation Result — PR 2"). Añade 1 445 líneas, por debajo de las ~1 500 del plan: no hace falta partirlo en 2a y 2b.
+
+PR 1b mergeado en `epic/inventario` (#196, merge `851ec79`). Historial del PR 1b: commit `8f8c128` en `feature/REQ-F-051-kardex-dominio` y PR #196 (https://github.com/orvigas/negocio/pull/196) hacia `epic/inventario` (no se despliega). El CI de `7249efc`, con el PR listo (ejecución 45784137262), pasó `calidad`, `docker`, `auditoria` y `pruebas` (1/2 y 2/2). Siguiente paso: el usuario revisa y hace merge del PR #196. Después viene el PR 2 (API, semilla, DEF-001 y OBS-6 a OBS-8).
 
 QA del PR 1b aprobado por senior-qa el 2026-11-26 (ver "QA Report — PR 1b", ronda 1). El usuario había aprobado el plan de QA con "Si", en respuesta a "¿Aprueba el plan de QA del PR 1b con esas cuatro respuestas?". Hay 2 defectos sin bloqueo: DEF-001 (`MINOR`) y DEF-002 (`TRIVIAL`). Siguiente paso: senior-fullstack hace el commit y abre el PR hacia `epic/inventario` (T4), y decide con el usuario si DEF-001 y DEF-002 se corrigen en este PR o en uno posterior.
 
@@ -536,7 +548,7 @@ En `epic/inventario`:
 | Operación | RF-14, RF-15 | — | CA-23, CA-24, CA-28 | 1–3 |
 | UX | RF-16 | — | CA-25, CA-26 | 3 |
 
-PR de T3: PR 1b #196 (https://github.com/orvigas/negocio/pull/196; Kardex, CPP, correcciones, existencias, costo real e `inventory:verify`). PR 1a #195 (https://github.com/orvigas/negocio/pull/195), que cubre la parte de modelo, proveedores y existencias de Integridad, Proveedores, Acceso y Operación.
+PR de T3: PR 2 #197 (https://github.com/orvigas/negocio/pull/197; API, contratos, cliente y semilla). PR 1b #196 (https://github.com/orvigas/negocio/pull/196; Kardex, CPP, correcciones, existencias, costo real e `inventory:verify`). PR 1a #195 (https://github.com/orvigas/negocio/pull/195), que cubre la parte de modelo, proveedores y existencias de Integridad, Proveedores, Acceso y Operación.
 
 No hay diseño en `_stich_source_/` (PV-8).
 
@@ -2205,6 +2217,630 @@ Decisión de la sesión principal sobre los defectos del QA del PR 1b (ninguno e
   - OBS-10 y OBS-11 son el comportamiento existente y simétrico.
   - OBS-12: la prueba de DECIMAL y `DATE` la pide el plan aprobado (H-11).
 
+## Implementation Result — PR 2
+
+### Rama
+
+`feature/REQ-F-051-kardex-api` (worktree `.claude/worktrees/req-f-051-pr2`), creada desde `origin/epic/inventario` (`851ec79`) y sin upstream. Destino: `epic/inventario`. Sin commit.
+
+### Cambios realizados
+
+- **Contratos (`packages/contracts`):**
+  - `inventory-kardex.ts`, nuevo:
+    - rutas en `inventoryKardexPaths` y códigos en `INVENTORY_KARDEX_ERROR_CODES`;
+    - listas cerradas `INVENTORY_MOVEMENT_TYPES`, `INVENTORY_STOCK_ITEM_TYPES` e `INVENTORY_ADJUSTMENT_REASONS`, copias de core;
+    - esquemas Zod de proveedores, documentos, movimientos, vista previa, existencias, Kardex del artículo y opciones;
+    - tipos de las peticiones. Los decimales viajan como texto.
+  - `inventory.ts`: `itemStockSchema`; la ficha añade `stock` (RF-10).
+  - `admin-client.ts`: 17 métodos nuevos. Los documentos esperan 201 o 200 (`replayed`). El error admite `items` (409 `INITIAL_BALANCE_NOT_ALLOWED`) y `returnIds` (409 `DOCUMENT_HAS_RETURNS`).
+- **API (`api/src/admin`):**
+  - `inventory-supplier-routes.ts`: lista, ficha con historial, alta con `Idempotency-Key` en memoria (como las altas de T1), edición con 409 `SUPPLIER_VERSION_CONFLICT` y `current`, inactivar y reactivar.
+  - `inventory-kardex-routes.ts`:
+    - opciones;
+    - saldo inicial, compra, ajuste, devolución y reversión, con `Idempotency-Key` persistente (DT-14): 201, o 200 con `replayed`;
+    - vista previa de la reversión, lista y detalle de documentos, existencias (`estado` = `todos|negativos|sin_costo`) y Kardex del artículo;
+    - cuerpos cerrados, también por línea (422 "Campo desconocido");
+    - los `fields` de los filtros usan los nombres de la query;
+    - errores de dominio traducidos a 404, 409, 422 y 503;
+    - logs solo con ids, tipos y conteos.
+  - `router.ts`, `index.ts` y `server.ts`: las 16 rutas nuevas, y los repositorios de proveedores y Kardex sobre el mismo store, con `BUSINESS_TIMEZONE`.
+  - `inventory-routes.ts`: la ficha devuelve `stock`.
+- **Core, DEF-001:** `compute` (`kardex-repository.ts`) rechaza en el campo, antes de escribir, un `line_total` o un `total_cost` que no caben en `DECIMAL(19,4)` y un costo unitario o CPP resultante que no cabe en `DECIMAL(15,4)`. Responde 422, no 503.
+- **Semilla (RF-15, CA-28):** `seedKardexDev` en `api/scripts/support/inventory-dev-seed.ts`, llamada desde `npm run inventory:seed-dev`.
+  - Crea 3 proveedores (uno inactivo).
+  - Crea 7 documentos: un saldo inicial, dos compras de masa (CPP 21.3333), una de carne, un ajuste que deja el queso en negativo, y una compra revertida con su reversión.
+  - La cebolla queda «Sin costo».
+  - Tiene su propia comprobación de idempotencia, así que amplía una base ya sembrada con T2.
+- **Pruebas** (funcionales, sin duplicar lo existente):
+  - `api/tests/integration/admin-inventory-kardex-api.test.ts`, nuevo, 8 pruebas:
+    - CA-21 en las 17 rutas (Editor 403 sin escritura; 401; sin CSRF, 403); el Gerente y el Administrador leen todo;
+    - proveedores (CA-22): nombre repetido, contacto, conflicto con quién guardó, reactivar con el nombre en uso, historial, filtro y 404;
+    - CA-12 por la API: 201, 200 `replayed` y 422 `IDEMPOTENCY_KEY_REUSED`;
+    - 422 por línea y campo desconocido;
+    - 409 `INITIAL_BALANCE_NOT_ALLOWED` (con `items`), `DOCUMENT_HAS_RETURNS` (con `returnIds`), `ALREADY_REVERSED`, `REVERSAL_NOT_REVERSIBLE` y `DOCUMENT_NOT_RETURNABLE`;
+    - DEF-001 en 422;
+    - 503 `INVENTORY_BUSY`;
+    - existencias, lista de documentos, Kardex paginado, opciones y la ficha con `stock`.
+  - `api/tests/unit/inventory-kardex.test.ts`, +3 pruebas:
+    - DEF-001: línea, total del documento y CPP de una reversión;
+    - **OBS-6:** RN-T3-12, el CPP queda en 0. Sin el tope, la prueba falla;
+    - semilla del Kardex: datos, cadena en 0 e idempotencia.
+    - **OBS-8:** la prueba de CA-11 añade un negocio en `Pacific/Kiritimati` (UTC+14). Detecta el uso de la zona del servidor en cualquier máquina (en UTC y en Ciudad de México). Sin `timeZone` en `businessDate`, falla.
+  - `landing-pages/tests/integration/prisma-inventory-kardex.test.ts`, +2 pruebas (**OBS-7**):
+    - en MySQL: último costo sin la compra revertida, lo pendiente entre dos líneas de una devolución, y los movimientos vigentes antes y después de revertir (con el saldo inicial que vuelve a admitirse);
+    - dos primeros envíos simultáneos con la misma clave: un solo documento, y el otro recibe ese mismo. Sin el manejo de `IdempotencyRaceError`, falla.
+  - `api/tests/unit/contract-types.test.ts` (se modifica): las tres listas nuevas son iguales en core y en el contrato.
+  - `api/tests/support/admin.ts` e `inventory-manager/tests/support/api-double-inventory.ts` (soporte): los repositorios nuevos, y `stock: null` en la ficha del doble.
+- **Documentación:** `docs/arquitectura.md` §6 (rutas, códigos y formato) y `README.md` (la semilla ampliada).
+
+### Criterios de aceptación (alcance del PR 2: API y semilla; pantallas en el PR 3)
+
+| CA | Estado | Evidencia |
+|---|---|---|
+| CA-12 | PASS | API: reenvío 200 e `IDEMPOTENCY_KEY_REUSED`. MySQL: carrera del primer envío y reinicio (PR 1b) |
+| CA-14 | PASS (API) | 503 `INVENTORY_BUSY` sin escritura. La espera agotada real sigue siendo una sonda de QA |
+| CA-21 | PASS (API) | Las 17 rutas con el Editor (403), sin sesión (401) y sin CSRF (403). Las pantallas, en el PR 3 |
+| CA-22 | PASS | Por la API |
+| CA-16 a CA-18 | PASS (API) | Existencias, Kardex paginado y `stock` de la ficha |
+| CA-28 | PASS (desarrollo) | Semilla en memoria y en MySQL; la producción no la ejecuta (salvaguardas de T1) |
+| CA-11 (OBS-8) | PASS | Zona del negocio distinta de la del servidor |
+| RN-T3-12 (OBS-6) | PASS | Prueba permanente |
+| DEF-001 | Corregido | Unitaria y API: 422 en el campo |
+| Resto | Fuera del PR 2 | PR 3 (pantallas, OBS-12 a y c, `ops/backup` y `despliegue.md`) |
+
+### Validaciones ejecutadas
+
+Todo desde `restaurante/` en el worktree.
+
+- `npm run typecheck`: 0.
+- `npm run lint`: 0, con `check-private-data`.
+- `npm run build:css`: 0.
+- `npm test`: `api` 1281, `landing-pages` 917 e `inventory-manager` 297, todas en verde.
+- **Duración de los archivos nuevos o modificados:** API, unos 1.1 s; Kardex en MySQL, unos 6.2 s; unitaria, menos de 1 s.
+- **Mutaciones rápidas descartables** (todas restauradas):
+  - sin el tope de RN-T3-12: falla 1 prueba;
+  - `businessDate` sin zona: falla 1 prueba;
+  - sin el manejo de `IdempotencyRaceError`: falla la carrera en MySQL.
+- **Procedimiento documentado** (`README`), en una base temporal `restaurante_test_seed051` migrada y después borrada:
+  - `npm run inventory:seed-dev`: "22 artículos y 3 recetas" y "3 proveedores y 7 documentos";
+  - repetido: "no se cargó" en las dos partes;
+  - `npm run inventory:verify`: `inventory_verify_ok`, código 0.
+- **Limpieza:** sin bases `restaurante_test*`, sin procesos de Vitest y sin temporales.
+  - El worktree se conserva para QA.
+  - El MySQL de desarrollo queda encendido (`npm run db:up`).
+
+### Archivos afectados
+
+- **Nuevos:**
+  - `restaurante/packages/contracts/inventory-kardex.ts`
+  - `restaurante/api/src/admin/inventory-kardex-routes.ts`
+  - `restaurante/api/src/admin/inventory-supplier-routes.ts`
+  - `restaurante/api/tests/integration/admin-inventory-kardex-api.test.ts`
+- **Modificados:**
+  - `restaurante/packages/contracts/{admin-client,index,inventory}.ts`
+  - `restaurante/packages/core/inventory/kardex-repository.ts`
+  - `restaurante/api/src/admin/{index,router,inventory-routes}.ts` y `restaurante/api/src/server.ts`
+  - `restaurante/api/scripts/inventory-seed-dev.ts` y `restaurante/api/scripts/support/inventory-dev-seed.ts`
+  - `restaurante/api/tests/support/admin.ts`
+  - `restaurante/api/tests/unit/{contract-types,inventory-kardex}.test.ts`
+  - `restaurante/landing-pages/tests/integration/prisma-inventory-kardex.test.ts`
+  - `restaurante/inventory-manager/tests/support/api-double-inventory.ts`
+  - `restaurante/docs/arquitectura.md` y `restaurante/README.md`
+  - este ticket.
+- **Sin cambios** en `deploy/`, ni migraciones, ni dependencias.
+
+### Riesgos o pendientes
+
+- **Respuesta de una escritura:** la API vuelve a leer el documento con `getDocument` tras escribirlo, para devolver el nombre del proveedor. Es una lectura más por escritura, despreciable con el volumen esperado.
+- **Error de estado en Existencias:** un valor de `estado` desconocido se envía a core marcado (`?valor`) para que el 422 llegue con la clave `estado`.
+- **Pendientes del PR 3:** pantallas (proveedores, existencias, documentos, formularios con bloques de filas, reversión con confirmación y Kardex en la ficha), CA-25 y CA-26, OBS-12 (a) y (c), `ops/backup` (DT-T3-6 A) y `docs/despliegue.md`. El admin todavía no usa los métodos nuevos del cliente.
+
+### Ronda 2 (correcciones del QA)
+
+**Defectos corregidos.**
+
+- **DEF-003 (`MINOR`, CA-21):** en `api/src/admin/inventory-kardex-routes.ts`, `supplierReturn` y `reverse` leían el `:id` antes que el acceso. Ahora `writeDocument` comprueba primero la sesión y el rol (con CSRF) y después lee el id (`withId`). Con un id que no es numérico, el orden queda como en el resto: anónimo 401, Editor 403 y Gerente sin CSRF 403, y no 404.
+  - **Prueba:** la lista de rutas de CA-21 de `admin-inventory-kardex-api.test.ts` (archivo existente) añade `POST documentos/abc/devoluciones` y `POST documentos/abc/reversion`.
+  - **Mutación descartable:** con el orden anterior, la prueba falla.
+- **DEF-004 (`MINOR`, RF-10, RN-T3-1, DT-T3-2):** la ficha (`GET articulos/:id`) y el Kardex del artículo (`GET articulos/:id/kardex`) dan `stock: null` a todo artículo sin existencias: un padre, un Compuesto o un no inventariable. Antes solo se lo daban al padre.
+  - La regla vive en `holdsStock` (`api/src/admin/inventory-shared.ts`) y la usan las dos rutas.
+  - El comentario de `itemStockSchema` y el de la ficha en `packages/contracts/inventory.ts` describen la regla.
+  - **Prueba:** la de lecturas de `admin-inventory-kardex-api.test.ts` (archivo existente) comprueba `stock: null` en la ficha y en el Kardex de un Compuesto y de un no inventariable.
+  - **Mutación descartable:** con la regla anterior (solo el padre), la prueba falla.
+
+**OBS-19 (documentación).** `docs/arquitectura.md` §6:
+- documenta 400 `INVALID_IDEMPOTENCY_KEY` (formato de la clave) y 422 `IDEMPOTENCY_KEY_REUSED` (misma clave con otros datos), comunes a las altas de T1 y T2 y a T3;
+- aclara que `stock` es `null` en un artículo sin existencias.
+- El número de rutas correcto es **17**: corrige el "16" del primer Implementation Result.
+
+**Sin tocar:** OBS-13 a OBS-18 quedan registradas en el QA Report para el PR 3 o el cierre.
+- OBS-14 y OBS-15: mapear en las pantallas los campos `lines.N.quantity` de la reversión y `lines.N.item` / `lines.N.sourceMovement`.
+- OBS-16: el PR 3 siempre envía `Idempotency-Key`.
+
+**Validaciones (ronda 2), desde `restaurante/`:**
+- `npm run typecheck`: 0.
+- `npm run lint`: 0, con `check-private-data`.
+- `npm test`: `api` 1281, `landing-pages` 917 e `inventory-manager` 297, todas en verde.
+- Las pruebas relevantes por separado (`admin-inventory-kardex-api`, `inventory-kardex`, `contract-types` y `admin-inventory-api`): 57 en verde.
+- Limpieza: sin bases `restaurante_test*`, sin procesos de Vitest y sin temporales. El worktree se conserva para QA.
+
+**Archivos de la ronda 2:**
+- `restaurante/api/src/admin/inventory-kardex-routes.ts`
+- `restaurante/api/src/admin/inventory-routes.ts`
+- `restaurante/api/src/admin/inventory-shared.ts`
+- `restaurante/packages/contracts/inventory.ts`
+- `restaurante/api/tests/integration/admin-inventory-kardex-api.test.ts`
+- `restaurante/docs/arquitectura.md`
+- este ticket.
+
+## QA Action Plan — PR 2
+
+### Objetivo
+
+Validar con evidencia que el PR 2 (rama `feature/REQ-F-051-kardex-api`, sin commit, sobre `851ec79`) cumple lo suyo:
+
+- expone el Kardex, los proveedores y las existencias por HTTP con el contrato, los permisos y los códigos de error del Technical Action Plan;
+- el cliente HTTP del admin habla correctamente con esa API;
+- la semilla de desarrollo cumple RF-15 y CA-28;
+- DEF-001, OBS-6, OBS-7 y OBS-8 del QA del PR 1b quedan resueltos;
+- nada de T1, T2, el PR 1 ni el resto del monorepo cambia.
+
+Fuentes: el ticket (requisitos, CA, Technical Action Plan §"Contratos y rutas de la API (PR 2)", DoD del PR 2, "Pendientes del PR 1b"), el diff del worktree y las reglas del proyecto. CodeGraph solo indexa `main`, que no tiene el inventario: en Q1 se usaron lecturas dirigidas del worktree. NotebookLM no estaba disponible en la sesión de Q1 (no hay herramientas MCP `notebooklm`): no se consultó.
+
+### Requisito bajo prueba
+
+- **En el PR 2:** las rutas del plan (6 de proveedores, 10 del Kardex y la ficha con `stock`), CA-12 y CA-14 por HTTP, CA-15 (ninguna ruta edita ni borra), CA-21 en la API, CA-22, CA-16 a CA-18 en la API, CA-27 (logs de las rutas nuevas), CA-28, RF-15, RF-10 (ficha), DEF-001, OBS-6, OBS-7, OBS-8, la documentación de §6 y el README, y el DoD del PR 2 (`inventory:verify` en el contenedor `api` construido).
+- **Fuera del PR 2, sin tratarlo como defecto:** pantallas, CA-25, CA-26 completo (solo lo tocado), CA-31 / OBS-12, `ops/backup` y `despliegue.md` (PR 3). Las reglas de cálculo ya aprobadas en el 1b no se repiten salvo por HTTP y MySQL donde el PR 2 añade un camino nuevo.
+- **Conteo de rutas:** el router añade 17 (6 de proveedores, 10 de documentos, existencias y opciones, y `articulos/:id/kardex`). El Implementation Result dice 16 en un sitio y 17 en otro; se comprueban las 17.
+
+### Valores esperados verificados a mano (antes de ejecutar)
+
+Semilla de RF-15 tal como está escrita en `seedKardexDev`:
+
+| Artículo | Movimientos | Existencia | CPP | Último costo | Valor |
+|---|---|---|---|---|---|
+| Masa de maíz | 2 bultos por 1 000.00; 25 kg por 600.00 | 75.000 | 21.3333 | 24.0000 | 75 × 21.3333 = 1 599.9975 → 1 600.00 |
+| Carne de res cruda | 10 kg por 1 600.00 | 10.000 | 160.0000 | 160.0000 | 1 600.00 |
+| Jitomate | saldo 5 kg a 25 | 5.000 | 25.0000 | null | 125.00 |
+| Sal | saldo 2 kg a 12; compra 1 kg por 15.00 → CPP (24 + 15) / 3 = 13.0000; reversión: (3·13 − 1·15) / 2 = 12.0000 | 2.000 | 12.0000 | null (DT-T3-4: no queda ninguna compra vigente) | 24.00 |
+| Queso | saldo 3 kg a 140; ajuste de salida de 4 kg | −1.000 ("Negativo") | 140.0000 | null | −140.00 |
+| Cebolla y el resto de artículos de RN-T3-1 sin movimientos | — | 0.000 | null ("Sin costo") | null | null |
+
+Totales esperados de Existencias: positivas 3 349.00, negativas −140.00 y "Sin costo" igual al número de artículos de RN-T3-1 sin CPP, contado aparte por SQL. 3 proveedores (1 inactivo) y 7 documentos (saldo, 4 compras, ajuste y reversión).
+
+### Criterios de aceptación
+
+| CA (alcance del PR 2) | Pruebas |
+|---|---|
+| CA-21 (permisos en la API) | S3, A1, A2, N1 |
+| CA-22 (proveedores) | S3, A3, C3 |
+| CA-12 (doble envío por HTTP, también con reinicio) | S3, A4, H3, C1 |
+| CA-14 (sistema ocupado por HTTP) | S3, B1, B2 |
+| CA-15 (ninguna ruta edita ni borra) | A9, H1 |
+| CA-16, CA-17 y CA-18 en la API | S3, A6, A7, H2 |
+| RF-10 (`stock` en la ficha) | A7, N4 |
+| CA-27 (logs) y privacidad | L1, L2, S2 |
+| CA-28 y RF-15 (semilla) | SD1 a SD5 |
+| DEF-001 | D1 a D4 |
+| OBS-6, OBS-7 y OBS-8 | X1 a X5, S4 |
+| Cliente HTTP del admin (17 métodos) | CL1, CL2 |
+| DoD del PR 2: `verify` en el contenedor `api` | K1 |
+| CA-26 (regresión de lo tocado) y DoD | S1 a S6, R1 a R3, T1 a T4, DOC1 a DOC3 |
+
+### Riesgos identificados
+
+- **R-1. Orden de las comprobaciones en `devoluciones` y `reversion`.** `supplierReturn` y `reverse` calculan `routeId` antes de `access.inventory`, al revés que el resto de rutas de inventario y que el orden documentado en la cabecera del archivo (401 → 403 → CSRF → 404). Con un id no numérico (`/documentos/abc/reversion`), un anónimo o un Editor recibirían 404 en lugar de 401/403. La prueba permanente de CA-21 usa el id `1`, así que no lo vería (N1).
+- **R-2. `stock` en la ficha de un Compuesto o de un no inventariable.** La ficha y el Kardex del artículo devuelven `stock: null` solo para un padre. Por DT-T3-2, un Compuesto y un no inventariable tienen su fila de existencia (en 0, sin costo), así que la API los mostraría con `{ quantity: '0.000', avgCost: null, lastCost: null }`. DT-T3-2 dice que esa fila "nunca se muestra" y RN-T3-1 que esos artículos no tienen existencias (N4; ver decisión 1).
+- **R-3. DEF-001 en una reversión.** El error del CPP fuera de rango se informa en `lines.N.quantity`, pero el cuerpo de una reversión solo tiene `reason`. El cliente no tendría un campo donde mostrarlo. Se registra lo que devuelve (D3); se valora frente a "mensaje en el campo".
+- **R-4. Semilla no atómica.** `seedKardexDev` crea proveedores y documentos uno a uno y su idempotencia mira si ya hay alguno. Si falla a mitad, un segundo intento no completa nada. Solo afecta al desarrollo (SD4).
+- **R-5. Escritura correcta seguida de un fallo de lectura.** Tras escribir, la ruta vuelve a leer el documento. Si esa lectura falla, el cliente ve un 503 con el documento ya creado. Con `Idempotency-Key`, el reintento devuelve 200 `replayed`; sin clave, duplicaría (H3, observación si se confirma).
+- **R-6. Logs.** Los 422 pasan por `validationFailed` y el manejador central: hay que comprobar que no registran valores de los campos (costos, cantidades, nombres o contactos) (L1).
+- **R-7. Valores del filtro `estado`.** Existencias usa valores en español (`todos|negativos|sin_costo`) y proveedores los de core (`all`, …), como los artículos de T1. No es un requisito del ticket: se registra como observación si se confirma.
+- **R-8. `api/.env` del worktree.** Toda sonda y todo arranque usan variables exportadas o un env propio en el scratchpad que apunta a una base `restaurante_test_qa051c_*`. Se comprueba por conteos que no se usó la base de desarrollo.
+- **R-9. Cliente sin pruebas.** Ninguna prueba ejerce los 17 métodos nuevos de `admin-client.ts` (`expect`, consulta en español, cabecera `Idempotency-Key`, `items` y `returnIds` en el error) (CL1).
+
+### Pruebas funcionales de la API (en proceso y sobre MySQL)
+
+Las sondas se escriben en el scratchpad y se ejecutan desde la raíz del worktree. Las de MySQL arrancan la `api` del worktree (`node src/server.ts`) con un env propio sobre una base `restaurante_test_qa051c_*` creada con `TEST_ADMIN_DATABASE_URL` y migrada con el `migrate deploy` del worktree, y un administrador y un gerente de QA (más un editor).
+
+- **A1. CA-21 en las 17 rutas** con ids existentes e inexistentes: Editor 403 `FORBIDDEN_ROLE`, anónimo 401, sin CSRF 403 `CSRF_INVALID` en cada escritura, y el Administrador y el Gerente en 2xx. Tras todo, documentos, movimientos, existencias, proveedores e historial sin cambios (conteos y `CHECKSUM TABLE`).
+- **A2.** Mismas comprobaciones contra la `api` real sobre MySQL (H1), no solo en memoria.
+- **A3. Proveedores (RF-1, CA-22):** alta (nombre de 80 y 81 caracteres, contacto teléfono, correo, texto libre y 121 caracteres), duplicado sin distinguir mayúsculas entre activos, mismo nombre que un inactivo (se admite), edición con versión, 409 con `current` (`version`, `updatedAt`, `updatedBy`), `overwrite`, inactivar y reactivar con el nombre en uso (422), filtros `estado`/`q`/`pagina` (incluida la búsqueda sin acentos, "molíno") y 404. Alta con la misma `Idempotency-Key`: un solo proveedor. Historial con las acciones en orden.
+- **A4. Documentos (RF-2 a RF-6):** saldo inicial, compra (con y sin proveedor; proveedor inactivo → 422 en el campo), ajuste de entrada y salida (`otro` sin nota → 422), devolución y reversión, cada uno con 201, `Location` y el cuerpo del contrato; el mismo envío → 200 `replayed: true` sin `Location`; la misma clave con otro cuerpo → 422 `IDEMPOTENCY_KEY_REUSED`; clave mal formada → 400 `INVALID_IDEMPOTENCY_KEY`. Valores de CA-1, CA-2, CA-5, CA-6, CA-29 y CA-30 exactos en la respuesta y en el detalle.
+- **A5. Errores propios:** 409 `INITIAL_BALANCE_NOT_ALLOWED` con `items`, `ALREADY_REVERSED`, `REVERSAL_NOT_REVERSIBLE`, `DOCUMENT_HAS_RETURNS` con `returnIds`, `DOCUMENT_NOT_RETURNABLE` y `DOCUMENT_REVERSED`; 404 `DOCUMENT_NOT_FOUND` e `ITEM_NOT_FOUND`. Todos con la forma central `{ error: { code, message } }` y sin datos internos.
+- **A6. Lecturas:** existencias (columnas, totales, `estado`, `tipo`, `categoria`, `q` sin acentos, paginación de 50 con 51 artículos), lista de documentos (más reciente primero, filtros `tipo` y `proveedor`, paginación), detalle (`returnable`, `returns`, "Revertido por" con `reversedById` y "Reversión de" con `reversesDocumentId`, `costBasis: con_iva`, importe 0 "sin cargo"), vista previa de la reversión (`negative` cuando la existencia quedaría negativa) y opciones (solo artículos de RN-T3-1 activos, `initialBalanceAllowed`, `referenceCost` y solo proveedores activos).
+- **A7. Kardex del artículo y ficha (RF-8 y RF-10):** del más reciente al más antiguo, 50 por página (51 movimientos → 2 páginas), fechas en `BUSINESS_TIMEZONE` (offset `-06:00`) y `occurredOn`, cantidades con signo, `stock` en la ficha igual al de Existencias. CA-18: la receta muestra el costo con origen `cpp` tras una compra por la API.
+- **A8. Cuerpos:** campos desconocidos en la raíz y en las líneas (422), 51 líneas, 0 líneas, `lines` que no es lista, cuerpo de más de 64 KiB (413), sin JSON (415) y JSON mal formado (400).
+- **A9. CA-15 en HTTP:** `PUT`, `PATCH` y `DELETE` sobre `documentos`, `documentos/:id` y los movimientos responden 404/405 y no cambian nada. Revisión del router: ninguna ruta de edición o borrado.
+
+### Pruebas negativas y casos límite
+
+- **N1. Orden de las comprobaciones (R-1):** anónimo, Editor y Gerente sin CSRF contra `documentos/abc/devoluciones`, `documentos/abc/reversion`, `documentos/0/reversion` y `documentos/99999999999/reversion`, comparado con las demás rutas con id (`proveedores/abc`, `documentos/abc`). Esperado: 401, 403 y 403 antes que 404.
+- **N2. Filtros inválidos:** `pagina=0`, `pagina=-1`, `pagina=abc` y `estado=raro` por separado y juntos en existencias, documentos, proveedores y Kardex; `tipo` fuera de lista; `proveedor=abc`. Esperado: 422 con las claves de la query (`pagina`, `estado`, …). Se registra si dos errores juntos solo informan uno (la prueba permanente con `estado=raro&pagina=0` solo espera `estado`).
+- **N3. Fecha del hecho por HTTP (CA-11):** hoy, hoy − 31, mañana y hoy − 32, con la `api` en `TZ=Asia/Tokyo` y `BUSINESS_TIMEZONE=America/Mexico_City`.
+- **N4. `stock` fuera de RN-T3-1 (R-2):** ficha y Kardex de un padre, un Compuesto, un no inventariable y una variante. Se registra el valor de `stock` en cada uno (ver decisión 1).
+- **N5. Artículos no admitidos por HTTP (CA-9 y CA-10):** Compuesto, padre, no inventariable e inactivo en una línea; pza en un artículo en kg sin factor; cantidad que redondea a 0. 422 en esa línea y nada escrito.
+
+### DEF-001 (MySQL, por HTTP y por core)
+
+Los tres escenarios de N3 del QA del 1b, ahora en MySQL:
+
+- **D1.** Saldo inicial (y ajuste de entrada) de 9 999 999 999.999 kg a 99 999 999 999.9999: 422 en el campo de la línea, no 503.
+- **D2.** Saldo inicial de 50 líneas de 10 000 000 kg a 10 000 000.0000: 422 en `lines` (total del documento).
+- **D3.** Saldo de 0.001 kg a 99 999 999 999.0000, compra de 999.999 kg por 0.00 y reversión de esa compra: 422 con la clave que se devuelva (R-3).
+- **D4. Bordes:** un `line_total` y un `total_cost` exactamente en 999 999 999 999 999.9999 se aceptan y se guardan; uno más se rechaza. Un CPP resultante de 99 999 999 999.9999 se acepta. En todos, `inventory:verify` en 0 y nada escrito en los rechazos.
+
+### Concurrencia y sistema ocupado (MySQL, por HTTP; 10 rondas cada una)
+
+- **C1.** 5 peticiones simultáneas del primer envío con la misma `Idempotency-Key`: 1 respuesta 201 y 4 respuestas 200 `replayed` con el mismo id, nunca 5xx. Un documento.
+- **C2.** 20 compras simultáneas por HTTP sobre un artículo: 20 documentos, `seq` contiguo, existencia exacta y `verify` en 0; ningún 503 con el pool de 5 (medición de latencia como hallazgo).
+- **C3.** Dos ediciones simultáneas del mismo proveedor con la misma versión: una 200 y otra 409 con `current`.
+- **B1. CA-14 por HTTP:** una sesión `mysql` externa (usuario administrador de pruebas) mantiene `FOR UPDATE` sobre la existencia unos 8 s. Una compra responde 503 `INVENTORY_BUSY` con el mensaje "inténtalo de nuevo" a unos 5 s, y no se escribe nada. Al soltar, la misma clave crea 1 documento (201).
+- **B2.** Lo mismo con una reversión y una devolución bloqueando la compra de origen.
+
+### Arranque real y reinicio (H)
+
+- **H1.** `api` del worktree sobre la base de QA: arranca sin errores; las 17 rutas responden; `inventory:verify` en 0 al terminar todas las sondas.
+- **H2.** El `inventory-manager` del worktree contra esa `api`: acceso, artículos, ficha (con `stock` en la respuesta) y recetas en 200, sin errores en los logs (el contrato de la ficha cambió).
+- **H3. CA-12 con reinicio por HTTP:** compra con clave → 201; se detiene la `api` (SIGTERM) y se arranca de nuevo; el mismo envío → 200 `replayed` con el mismo id; otro cuerpo → 422. Un documento. R-5 se valora por revisión del código y se registra.
+
+### Logs y privacidad (CA-27)
+
+- **L1.** Se capturan los logs de la `api` durante A1 a D4, B y H, con un proveedor de contacto `qa-contacto@ejemplo.example` y artículos de nombre `QA-NOMBRE-*`, cantidades y costos con dígitos reconocibles (`7777.777`, `8888.8888`). Búsqueda por patrón: 0 apariciones de nombres, contactos, cantidades ni costos. Aparecen los eventos del plan (`inventory_document_created|replayed`, `inventory_supplier_saved`, `inventory_busy`, `inventory_document_key_reused`) con solo ids, tipos y conteos.
+- **L2.** `npm run lint` con `check-private-data` en verde (S2), y los datos de la semilla y de las pruebas nuevas son ficticios (`.example`, teléfonos de ceros).
+
+### Semilla (RF-15, CA-28)
+
+Procedimiento del README, desde `restaurante/`, con `DATABASE_URL` exportada hacia una base `restaurante_test_qa051c_seed` migrada:
+
+- **SD1.** `npm run inventory:seed-dev` en una base vacía: los dos mensajes ("22 artículos y 3 recetas", "3 proveedores y 7 documentos"). Por SQL y por la API: los valores de la tabla de valores esperados, 1 proveedor inactivo, 1 reversión con "Revertido por", 1 negativo y la cebolla "Sin costo". `inventory:verify`: 0.
+- **SD2.** Repetido: "no se cargó" en las dos partes, sin cambios (checksums).
+- **SD3.** Base ya sembrada con la semilla de T2 de `851ec79` (sin Kardex): el segundo paso añade solo el Kardex.
+- **SD4. Salvaguardas:** `NODE_ENV=production` y un host no local se niegan sin escribir. Una base con un proveedor creado a mano: no carga el Kardex. R-4 se registra por revisión.
+- **SD5. Producción:** la `api` no ejecuta la semilla al arrancar (H1 sobre una base vacía: 0 proveedores y 0 documentos), y la imagen `api` no contiene `inventory-seed-dev.ts` (K1).
+
+### `inventory:verify` en el contenedor (DoD del PR 2)
+
+- **K1.** `docker build --target api` del worktree. En el contenedor: `node scripts/inventory-verify.ts` contra la base de SD1, código 0; contra una copia con una existencia alterada, código 1 sin datos en la salida. Se lista `scripts/` de la imagen (sin la semilla). Imagen borrada al terminar (ver decisión 2).
+
+### Cliente HTTP del admin
+
+- **CL1.** Sonda que crea `createAdminApiClient` del worktree contra la `api` de H1 con una sesión de gerente, y llama a los 17 métodos nuevos: resultado `ok` con el cuerpo validado por su esquema; 201 y 200 `replayed` aceptados en los documentos; la cabecera `Idempotency-Key` llega (se comprueba por el reenvío); los filtros llegan con las claves en español; los errores 409 traen `items` y `returnIds`; un 422 trae `fields`; un 503 se distingue.
+- **CL2.** Revisión de `admin-client.ts`: cada método usa la ruta de `inventoryKardexPaths` y el esquema de su respuesta.
+
+### Pruebas de regresión
+
+- **S1.** `npm run build:css` y `npm run typecheck`: código 0.
+- **S2.** `npm run lint`, con `check-private-data`: código 0, sin avisos.
+- **S3.** `npm test` completo, frente al Implementation Result: `api` 1281, `landing-pages` 917 e `inventory-manager` 297, y el número de archivos (frente al 1b: `api` 56 → 57, `landing-pages` 65 e `inventory-manager` 18).
+- **S4. Duración y estabilidad:** `admin-inventory-kardex-api.test.ts`, `inventory-kardex.test.ts` y `prisma-inventory-kardex.test.ts` medidos con el reporter de Vitest, por debajo de 20 s. El de MySQL, 10 veces seguidas sin fallos intermitentes; la unitaria con `TZ=America/Mexico_City`, `UTC` y `Asia/Tokyo` (OBS-8).
+- **S5. Consumidores.** Por grep en el worktree: `server.ts`, `admin/index.ts`, `router.ts`, `inventory-routes.ts`, `tests/support/admin.ts`, el doble del `inventory-manager` y las pruebas que comparan la forma de la ficha (`admin-inventory-api.test.ts` y las del admin). Se confirma que la suite los ejecuta.
+- **S6. Sin cambios ajenos:** `git diff 851ec79` no toca `deploy/` (la suma no cambia), `landing-pages/Dockerfile`, `package-lock.json`, `compose.yaml`, los `.env.example`, `packages/db/prisma`, `.claude/CLAUDE.md` ni `.claude/agents`.
+- **R1.** Las rutas de T1 y T2 (artículos, categorías, recetas, importación) y las del resto del admin (productos, página, usuarios, bot, cotizador) siguen en verde en la suite (S3) y por HTTP en H1 (lista, ficha, receta y una edición).
+- **R2.** La `landing-pages` del worktree contra la `api` de H1: `/`, `/birria` y `/molotes` en 200 con productos.
+- **R3. Vuelta atrás:** el PR 2 no añade migración. CA-24 no se repite (ver decisión 4); se comprueba en S6 que `packages/db/prisma` no cambia.
+
+### Revisión de las pruebas permanentes (`testing.md`)
+
+- **T1.** Cada caso nuevo (8 en `admin-inventory-kardex-api.test.ts`, 3 en `inventory-kardex.test.ts` y 2 en `prisma-inventory-kardex.test.ts`) y el caso de CA-11 modificado protegen un comportamiento de la app (permisos, CSRF, idempotencia, errores, proveedores, existencias, Kardex, semilla, RN-T3-12, fecha del negocio, movimientos vigentes, devolución). La comparación de listas core ↔ contrato de `contract-types.test.ts` se valora frente a "pruebas de arquitectura" (es la misma técnica que ya existía para T1 y T2).
+- **T2. Duplicados:** CA-12 en memoria (1b), en MySQL (1b) y ahora por HTTP; CA-21 frente a las pruebas de acceso de T1 y T2; DEF-001 en la unitaria y en la API. Cada comportamiento en la prueba más barata.
+- **T3.** El diff de `tests/` frente a `851ec79` no borra ni debilita pruebas, y no añade `retry`, `testTimeout` ni esperas fijas. Datos ficticios.
+- **T4.** En el árbol final no queda ninguna sonda, y `git status` coincide con el del Implementation Result.
+
+### Mutaciones (descartables, en una copia del árbol en el scratchpad)
+
+- **X1.** Sin el tope en 0 de RN-T3-12 (OBS-6): debe fallar la unitaria.
+- **X2.** `businessDate` sin `timeZone` (OBS-8): debe fallar CA-11 con `TZ=America/Mexico_City` y con `TZ=UTC`.
+- **X3.** Sin el manejo de `IdempotencyRaceError` (OBS-7): debe fallar la carrera en MySQL; se ejecuta 5 veces para ver si la detección es estable.
+- **X4.** MySQL: movimientos vigentes contando los revertidos, `lastPurchaseCost` sin excluir el documento y sin `remaining.set` (OBS-7): deben fallar las pruebas de MySQL.
+- **X5.** Sin cada comprobación de DEF-001 (línea, total, CPP): deben fallar la unitaria o la de la API.
+- **X6.** Rutas: sin `unknownLineFields`, con `access.inventory({ write: false })` en una escritura, sin el mapa `STOCK_STATUS` y sin `renameFields`: deben fallar las pruebas de la API.
+- Un mutante que sobrevive a una regla aprobada es una observación, no un defecto.
+
+### Documentación
+
+- **DOC1.** `arquitectura.md` §6: rutas, códigos y formato coinciden con el router y con las respuestas reales de A1 a A9 (incluidos 400 `INVALID_IDEMPOTENCY_KEY` y 422 `IDEMPOTENCY_KEY_REUSED`).
+- **DOC2.** README: la fila de `inventory:seed-dev` describe lo que hace SD1 a SD4.
+- **DOC3.** `.claude/CLAUDE.md`, `senior-fullstack.md` y `deploy/` sin cambios.
+
+### Pruebas que no aplican en el PR 2
+
+- **Navegador, responsive, accesibilidad, UX/UI, SEO, WhatsApp y performance del frontend:** el PR 2 no cambia vistas, CSS, JS de navegador ni rutas del admin. No se usa Claude in Chrome. H2 y R2 comprueban por HTTP que el admin y las landings siguen respondiendo.
+- **Performance del backend:** solo C2 y S4.
+- **Respaldo (CA-23):** el PR 2 no cambia tablas; el simulacro con `ops/backup` es del PR 3.
+
+### Evidencia requerida
+
+- La salida y el código de salida de cada comando.
+- Por sonda: el estado HTTP, el código de error y los valores frente a los esperados.
+- Los `CHECKSUM TABLE` y conteos de A1, SD2 y los rechazos.
+- Los logs de la `api` de H, B y L (solo los eventos y el resultado del patrón).
+- La salida de `verify` en K1 y SD1.
+- El resultado de cada mutación.
+- Todo queda en el QA Report del ticket.
+
+### Criterios de aprobación
+
+- CA-12, CA-14, CA-15, CA-21, CA-22, CA-27 y CA-28 (en la API), CA-16 a CA-18 y RF-10 (en la API), DEF-001 y OBS-6 a OBS-8 en PASS con evidencia.
+- El DoD del PR 2: `verify` en el contenedor `api` (K1) y la semilla (SD1).
+- S1 a S3 en verde, y S4 por debajo de 20 s sin intermitencias.
+- Sin defectos `BLOCKER` ni `CRITICAL`. Los `MAJOR` necesitan una decisión del usuario.
+- Las observaciones (mutantes supervivientes, R-4, R-5, R-7 y C2) no bloquean si se registran.
+
+### Limpieza
+
+Al terminar, también si algo falla:
+
+- se borran las bases `restaurante_test_qa051c_*`, tras confirmar el prefijo;
+- se borra la imagen de K1;
+- se detienen la `api`, el `inventory-manager`, la `landing-pages`, Vitest y las sesiones `mysql` de B, y se liberan los puertos;
+- se borran la copia de las mutaciones, las sondas, los env y los logs del scratchpad;
+- se comprueba con `git worktree list`, `lsof`/`ps`, `docker images` y `SHOW DATABASES LIKE 'restaurante\_test%'`;
+- el MySQL de desarrollo `restaurante-mysql-dev-1` queda encendido y su base de desarrollo no se toca.
+
+### Decisiones para la aprobación
+
+1. **`stock` en la ficha de un Compuesto o un no inventariable (R-2, N4).** Si N4 confirma que la API devuelve `{ quantity: '0.000', avgCost: null, lastCost: null }` para ellos (y `null` solo para un padre), ¿cómo se clasifica?
+   - **A (recomendada):** defecto `MINOR` que se corrige en el PR 2: `stock: null` para todo artículo fuera de RN-T3-1, porque DT-T3-2 dice que esa fila "nunca se muestra".
+   - **B:** se acepta en la API y el PR 3 decide qué mostrar en la ficha.
+2. **K1:** ¿se autoriza construir en local la imagen `api` del worktree (`docker build --target api`, unos minutos) para ejecutar `verify` en el contenedor, como pide el DoD del PR 2, y borrarla al terminar? Si no, el DoD queda pendiente.
+3. **Sondas y arranques:** ¿se autorizan las sondas en el scratchpad (fuera de `landing-pages/tests/`), las bases temporales `restaurante_test_qa051c_*`, el arranque de la `api`, el `inventory-manager` y la `landing-pages` del worktree con un env propio, la sesión `mysql` de B1 y B2 con el usuario administrador de pruebas, y el reinicio de la `api` de H3? Todo se borra al terminar.
+4. **CA-24:** el PR 2 no añade migración ni cambia `packages/db/prisma`. ¿Está de acuerdo en no repetir la vuelta atrás con `main` y con `851ec79`, y comprobar solo en S6 que el esquema no cambia?
+5. **R-1 (orden 404 frente a 401/403):** si N1 confirma que un anónimo o un Editor reciben 404 con un id no numérico en `devoluciones` y `reversion`, ¿lo clasifico como `MINOR` (no expone datos ni escribe nada, pero rompe el orden documentado y CA-21 dice "403 en todas las rutas")? Recomendación: sí, `MINOR`, a corregir en este PR porque es mover una línea.
+
+## QA Report — PR 2
+
+### Ronda
+
+1. Rama `feature/REQ-F-051-kardex-api`, sin commit, sobre `851ec79`. El usuario aprobó el plan con "Sí, apruebo el plan con las cinco recomendaciones":
+
+- R-2, si se confirma: `MINOR` y se corrige en el PR 2 (A);
+- K1: se construye la imagen `api` en local;
+- sondas, bases `restaurante_test_qa051c_*`, arranques con env propio, sesión `mysql` de B y reinicio de H3;
+- CA-24 no se repite (solo S6);
+- R-1, si se confirma: `MINOR` y se corrige en este PR.
+
+Todo se ejecutó sobre el MySQL 8.4 local, en bases propias, con la `api` del worktree en `TZ=Asia/Tokyo` y `BUSINESS_TIMEZONE=America/Mexico_City`, sin `api/.env` (`env -i`). Las sondas, en el scratchpad. Ninguna se escribió en el repositorio.
+
+### Pruebas ejecutadas
+
+| ID | Acción | Resultado |
+|---|---|---|
+| S1 | `npm run build:css` y `npm run typecheck` | Código 0 y 0. PASS |
+| S2 | `npm run lint` | Código 0, sin avisos; `check-private-data`: 898 archivos, sin datos privados. PASS |
+| S3 | `npm test` | `api` 57/1281, `landing-pages` 65/917 e `inventory-manager` 18/297, todo en verde, igual que el Implementation Result. Código 0. PASS |
+| S4 | Duración y estabilidad | `inventory-kardex.test.ts` + `admin-inventory-kardex-api.test.ts`: 36/36 en ~1 s con `TZ=America/Mexico_City`, `UTC` y `Asia/Tokyo`. `prisma-inventory-kardex.test.ts`, 10 veces seguidas: 10/10 en cada una, de 4.33 a 4.67 s. PASS |
+| S5 | Consumidores | `server.ts`, `admin/index.ts`, `router.ts`, `inventory-routes.ts`, `tests/support/admin.ts` y el doble del admin. La suite (S3) y H2 los ejercen. PASS |
+| S6 | `git diff 851ec79` | Sin cambios en `deploy/`, el Dockerfile, `package-lock.json`, `compose.yaml`, los `.env.example`, `packages/db/prisma`, `.claude/CLAUDE.md` ni `.claude/agents`. Sin migración nueva: CA-24 no se repite (decisión 4). PASS |
+| A1/A2 | CA-21 en las 17 rutas, `api` real sobre MySQL | Editor 403 `FORBIDDEN_ROLE`, anónimo 401, sin CSRF y con CSRF erróneo 403 en cada escritura. El Administrador y el Gerente, 200 en las lecturas. `CHECKSUM TABLE` de documentos, movimientos, existencias, proveedores e historial iguales antes y después. PASS (con ids numéricos; ver N1) |
+| A3 | Proveedores (RF-1, CA-22) | 80 caracteres → 201; 81 → 422 `name`. Contacto de teléfono → 201; texto libre y 121 caracteres → 422 `contact`. Alta con la misma `Idempotency-Key` → mismo proveedor (1 fila). "MOLÍNO qa" frente a "Molíno QA" → 422 `name`. Edición 200 (v2) y 409 `SUPPLIER_VERSION_CONFLICT` con `current` (`version` 2, `updatedBy`). "Guardar encima" con la versión vigente → 200, en el historial como `overwrite_after_conflict`. Inactivar 200. Mismo nombre que un inactivo → 201. Reactivar con el nombre en uso → 422. "molino" encuentra "Molíno" (sin acentos); el filtro por defecto da solo los activos. Historial `deactivate, overwrite_after_conflict, update, create`. 404. PASS |
+| A4 | Documentos (RF-2 a RF-6) | CA-1: 201 con `Location`, contrato válido, `costBasis: con_iva`, total 1000.0000; línea 50.000 kg, `enteredQuantity` 2.000 `bulto`, 20.0000, 0.000 → 50.000, CPP 20.0000. Reenvío → 200 `replayed`, mismo id y sin `Location`. Misma clave con otro cuerpo → 422 `IDEMPOTENCY_KEY_REUSED`; clave mal formada → 400 `INVALID_IDEMPOTENCY_KEY`. CA-2: CPP 21.3333, último costo 24.0000, y la ficha da `{75.000, 21.3333, 24.0000}`. Proveedor inactivo → 422 `supplierId`. Importe 0 → 201, total 0.0000. CA-5: 12.500 a 18.5000. CA-29: salida de 2.000 a 20.0000, existencia 8.000; `otro` sin nota → 422; entrada sin CPP ni costo → 422 en la línea. CA-30: devolver 25.001 → 422; devolver 5.000 → sale a 24.0000 y el CPP queda en 21.1428. CA-6: tras revertir, 50.000 y 20.0000, con "Revertido por #N". PASS |
+| A5 | Errores propios | 409 `INITIAL_BALANCE_NOT_ALLOWED` con `items` (2), `DOCUMENT_HAS_RETURNS` con `returnIds`, `ALREADY_REVERSED`, `REVERSAL_NOT_REVERSIBLE`, `DOCUMENT_NOT_RETURNABLE` y `DOCUMENT_REVERSED`. 404 `DOCUMENT_NOT_FOUND` e `ITEM_NOT_FOUND`. Todos con la forma central. PASS |
+| A6 | Lecturas | Existencias: contrato válido; sin el Compuesto, el padre ni el no inventariable, con la variante. CA-16: 50 × 20 = 1000.00. Filtros `negativos` (−1.000, −10.00, total negativo −10.00 aparte), `sin_costo`, `categoria`+`tipo` y `q` sin acentos ni mayúsculas ("qa-nombre-mása"). Paginación de 50. Documentos del más reciente al más antiguo, con filtros `tipo` y `proveedor`. "Reversión de #N". `returnable` 20.000 y `returns`. Vista previa con `negative: true` y −8.000, sin escribir. Opciones: solo artículos de RN-T3-1 activos y solo proveedores activos, con `referenceCost`, `avgCost` e `initialBalanceAllowed`. PASS |
+| A7 | Kardex del artículo y ficha | 51 movimientos: 50 en la página 1 y 1 en la 2, el `seq` 51 primero, −1.500, existencia anterior 50.000. `recordedAt` con `-06:00`, autor y `occurredOn` del hecho (hoy − 3). `stock` igual en la ficha y en el Kardex. CA-18: receta con 0.500 kg a 20.0000 = 10.0000, origen `cpp`. PASS |
+| A8 | Cuerpos | Campo desconocido en la raíz (`extra`) y en la línea (`lines.0.price`), 51 y 0 líneas, `lines` que no es lista y una línea que no es objeto → 422. Más de 64 KiB → 413, sin JSON → 415 y JSON roto → 400. Nota de 401 caracteres, folio de 41 y motivo de 401 caracteres o vacío → 422. Coma decimal y 3 decimales en el importe → 422. PASS |
+| A9 | CA-15 por HTTP | `PUT`, `PATCH` y `DELETE` sobre `documentos`, `documentos/:id`, `documentos/:id/reversion` y `existencias` → 405. Tablas del Kardex intactas. PASS |
+| N1 | Orden de las comprobaciones (R-1) | **DEF-003.** `POST documentos/{abc,0,99999999999}/{devoluciones,reversion}`: 404 para el anónimo, el Editor y el Gerente sin CSRF. Las demás rutas con id (`GET documentos/abc`, `GET proveedores/abc`, `GET documentos/abc/reversion`, `POST proveedores/abc/desactivar`) dan 401 / 403 / 403. FAIL |
+| N2 | Filtros inválidos | Los 15 casos dan 422 con la clave de la query (`pagina`, `estado`, `tipo`, `categoria` y `proveedor`). Con dos errores a la vez (`estado=raro&pagina=0` y `tipo=xxx&pagina=0`) solo se informa uno (OBS-13). PASS |
+| N3 | Fecha por HTTP (CA-11) | Con la `api` en `Asia/Tokyo`: hoy y hoy − 31 → 201; mañana y hoy − 32 → 422 `occurredOn`. PASS |
+| N4 | `stock` fuera de RN-T3-1 (R-2) | **DEF-004.** Un padre da `stock: null`. Un Compuesto y un no inventariable dan `{ quantity: '0.000', avgCost: null, lastCost: null }` en la ficha y en `GET articulos/:id/kardex`. La variante, con `stock`, como se espera. FAIL |
+| N5 | Artículos no admitidos (CA-9, CA-10) | Compuesto, padre, no inventariable, inactivo e inexistente → 422 en `lines.N.item` de esa línea, con su mensaje. pza en kg sin factor → 422 `lines.0.unit`. 0.0001 kg y 0.4 g → 422. Nada escrito (conteos). PASS |
+| D1–D3 | DEF-001 en MySQL por HTTP | D1: saldo inicial y ajuste de entrada de 9 999 999 999.999 × 99 999 999 999.9999 → 422 `lines.0.quantity` ("El valor de la línea supera…"). D2: 50 líneas de 10⁷ × 10⁷ → 422 `lines` ("El total del documento…"). D3: reversión con un CPP de 10¹¹ → 422 `lines.0.quantity` ("El costo por unidad resultante…"). Nada escrito y 0 respuestas 503 en el log. PASS |
+| D4 | Bordes de DEF-001 | Total exacto de 999 999 999 999 999.9999 → 201, guardado tal cual. 10¹⁵ (el máximo + 0.0001) → 422 `lines`, sin escribir. Línea 10 000.001 × 99 999 999 999.9999 → 422. CPP 99 999 999 999.9999 guardado. `verify`: 0. PASS |
+| C1 | 5 primeros envíos simultáneos con la misma clave, 10 rondas | 10/10: una respuesta 201, cuatro 200 `replayed` con el mismo id y un documento. Ningún 5xx. PASS |
+| C2 | 20 compras simultáneas por HTTP, 10 rondas | 10/10: 20 respuestas 201, `seq` del 1 al 20 y existencia 210.000. Latencia: p50 132 ms, p95 225 ms y máximo 254 ms. Ningún 503 con el pool de 5. PASS |
+| C3 | Dos ediciones simultáneas del proveedor, 10 rondas | 10/10: 200 + 409 con `current.version` 2. PASS |
+| B1 | CA-14 por HTTP: `FOR UPDATE` externo de unos 8 s sobre la existencia | 503 `INVENTORY_BUSY` a los 5 042 ms: "El inventario está ocupado con otra escritura: inténtalo de nuevo en unos segundos. No se guardó nada." Conteos sin cambios. Al soltar, la misma clave → 201, `replayed: false`. PASS |
+| B2 | La compra de origen bloqueada | La reversión y la devolución → 503 `INVENTORY_BUSY` (5 030 ms), sin escribir. `verify`: 0. PASS |
+| H1 | `api` del worktree sobre la base de QA | Arranca sin errores; las 17 rutas responden (A1 a A9). Una base vacía arranca sin proveedores ni documentos (el primer proveedor de A3 es el id 1). PASS |
+| H2 | `inventory-manager` del worktree contra esa `api` | Acceso 303; lista de artículos, fichas (simple, Compuesto y padre), recetas, búsqueda "mása" y la receta con la etiqueta "CPP": 200. 0 avisos o errores en su log. PASS |
+| H3 | CA-12 con reinicio real | Compra con clave → 201 (doc 276). SIGTERM (`server_stopping`) y nuevo arranque. El mismo envío → 200 `replayed` con el id 276; otro cuerpo → 422 `IDEMPOTENCY_KEY_REUSED`. Un documento con esa clave. PASS |
+| R2 | `landing-pages` del worktree contra la `api` | `/`, `/birria` y `/molotes` en 200, con un `h1`, `landing_products_loaded` y `landing_page_loaded` de los dos negocios. 0 errores. PASS |
+| L1 | Logs de la `api` (1 629 líneas, todas las sondas) | Quitando `time`, `ip` y `durationMs`: 0 apariciones de nombres (`QA-NOMBRE-*`, "Molíno", "Harina"…), contactos (`*.example`), cantidades, costos ni `unitCost`/`amount`/`quantity`. Los eventos llevan solo ids, tipo y conteos: `inventory_document_created {documentId, type, lines[, reversesDocumentId]}`, `inventory_document_replayed`, `inventory_supplier_saved {supplierId, action}`, `inventory_supplier_conflict {supplierId}`, `inventory_busy {method, path}` e `inventory_document_key_reused {path}`. El log de peticiones no incluye la consulta (`q`). PASS |
+| L2 | Datos ficticios | `check-private-data` en verde (S2). La semilla usa `.example` y teléfonos de ceros. PASS |
+| SD1 | `npm run inventory:seed-dev` en una base vacía | "22 artículos y 3 recetas" y "3 proveedores y 7 documentos". Por SQL y por la API, igual a la tabla de Q1: Masa 75.000 / 21.3333 / 24.0000 / 1600.00, Carne 160.0000, Jitomate 25.0000, Sal 2.000 / 12.0000 / sin último costo, Queso −1.000 / 140.0000. Totales 3349.00 y −140.00; "Sin costo" 10 (la Cebolla, 5 intermedios sin compras y 4 variantes). Compra revertida con "Revertido por" y autor "Semilla de desarrollo". 3 proveedores, 1 inactivo. `verify`: 0 (`artículos=20 movimientos=9 documentos=7`). PASS |
+| SD2 | Repetida | "no se cargó" en las dos partes; `CHECKSUM TABLE` iguales. PASS |
+| SD3 | Base sembrada solo con el catálogo de T2 | "El inventario ya tiene datos" y "Kardex de desarrollo cargado: 3 proveedores y 7 documentos". `verify`: 0. PASS |
+| SD4 | Salvaguardas | `NODE_ENV=production` → código 1 sin escribir. Host no local → código 1 sin conectar. Con un proveedor creado a mano, el catálogo se carga pero el Kardex no (22 artículos, 1 proveedor, 0 documentos). PASS |
+| SD5 | Producción | `server.ts` no menciona la semilla. La imagen `api` no trae `inventory-seed-dev.ts` (sí `scripts/support/inventory-dev-seed.ts`, que ya estaba en T2 y no se ejecuta solo). PASS |
+| K1 | `docker build --target api` y `node scripts/inventory-verify.ts` en el contenedor | Base de SD1: `inventory_verify_ok …`, código 0. Copia con la existencia del Jitomate alterada: `inventory_verify_mismatch itemId=4 check=existencia_distinta`, código 1, sin datos. Imagen borrada. PASS |
+| CL1 | Los 17 métodos de `createAdminApiClient` contra la `api` real | 23 comprobaciones. 201 y 200 `replayed` aceptados. La cabecera `Idempotency-Key` llega (el reenvío da el mismo id). Las consultas usan claves en español (`estado`, `q`, `pagina`, `tipo`, `proveedor` y `categoria`). El 409 trae `items` y `returnIds`; el 422 trae `fields`; el 404 se distingue. Una comprobación de `listStock` falló por un valor esperado mal calculado en la sonda (14.000, no 13.000); la respuesta es correcta (14.000, CPP 10.6667). PASS |
+| CL2 | Revisión de `admin-client.ts` | Cada método usa la ruta de `inventoryKardexPaths` y el esquema de su respuesta. PASS |
+| X1–X6 | Mutaciones en una copia del árbol | Ver la tabla |
+| DOC1–DOC3 | Documentación | Ver "Documentación" |
+| T1–T4 | Pruebas permanentes | Ver "Revisión de las pruebas permanentes" |
+
+**Mutaciones**
+
+| ID | Mutante | Lo detectan las pruebas permanentes |
+|---|---|---|
+| X1 | Sin el tope en 0 (RN-T3-12, OBS-6) | Sí: "RN-T3-12: … el CPP queda en 0" |
+| X2 | `businessDate` sin `timeZone` (OBS-8) | Sí, con `TZ=America/Mexico_City` y con `TZ=UTC`: CA-11 |
+| X3 | Sin el manejo de `IdempotencyRaceError` (OBS-7) | Sí, 5 de 5 ejecuciones: "OBS-7: dos primeros envíos simultáneos…" |
+| X4a | MySQL: los movimientos vigentes cuentan los revertidos (OBS-7) | Sí (MySQL) |
+| X4b | MySQL: `lastPurchaseCost` sin excluir el documento (OBS-7) | Sí (MySQL) |
+| X4c | Sin `remaining.set` entre líneas de una devolución (OBS-7) | Sí (MySQL); la unitaria no |
+| X5a | Sin el límite de `line_total` (DEF-001) | Sí: unitaria y API |
+| X5b | Sin el límite del CPP o costo resultante (DEF-001) | Sí: unitaria |
+| X5c | Sin el límite del total del documento (DEF-001) | Sí: unitaria |
+| X6a | Sin `unknownLineFields` | Sí: API |
+| X6b | Escrituras con `write: false` (sin CSRF) | Sí: API |
+| X6c | Sin el mapa `STOCK_STATUS` | Sí: API |
+| X6d | Sin `renameFields` | Sí: API |
+
+### Criterios de aceptación
+
+| CA (alcance del PR 2) | Resultado | Evidencia |
+|---|---|---|
+| CA-21 (permisos en la API) | **FAIL** | A1, A2 y C pasan con ids numéricos. N1: con un id no numérico o fuera de rango, `POST documentos/:id/devoluciones` y `POST documentos/:id/reversion` responden 404 al anónimo y al Editor (DEF-003) |
+| CA-22 | PASS | A3, C3 y CL1 |
+| CA-12 | PASS | A4, C1, H3 y CL1 |
+| CA-14 | PASS | B1 y B2 |
+| CA-15 | PASS | A9 |
+| CA-16, CA-17 y CA-18 (API) | PASS | A6, A7 y SD1 |
+| RF-10 (`stock` en la ficha) | **FAIL** | A7 pasa para los artículos de RN-T3-1. N4: el Compuesto y el no inventariable reciben `stock` (DEF-004) |
+| CA-27 | PASS | L1 y L2 |
+| CA-28 y RF-15 | PASS | SD1 a SD5 |
+| DEF-001 | Corregido. PASS | D1 a D4, X5 |
+| OBS-6, OBS-7 y OBS-8 | Resueltas. PASS | X1 a X4, S4 |
+| Cliente HTTP | PASS | CL1 y CL2 |
+| DoD: `verify` en el contenedor `api` | PASS | K1 |
+| CA-26 (lo tocado) | PASS | S1 a S6, H2 y R2 |
+
+### Defectos encontrados
+
+#### DEF-003
+
+- **Severidad:** `MINOR` (decisión 5 del usuario, tomada de antemano).
+- **Criterio de aceptación afectado:** CA-21 ("El Editor recibe 403 en todas las rutas de T3 de la API"; "Sin sesión, la API responde 401").
+- **Descripción:** `supplierReturn` y `reverse` (`restaurante/api/src/admin/inventory-kardex-routes.ts`, líneas 249 a 257) validan el id de la ruta (`routeId`) antes de comprobar la sesión, el rol y el CSRF (`access.inventory`, dentro de `writeDocument`). Si el id no es válido, responden 404 a cualquiera. Las demás rutas con id siguen el orden de la cabecera del archivo: 401 → 403 → CSRF → 404.
+- **Pasos para reproducir:**
+  1. Sin sesión: `POST /api/v1/admin/inventario/documentos/abc/reversion` con `{ "reason": "x" }`.
+  2. Lo mismo con la sesión de un Editor, y con la de un Gerente sin `X-CSRF-Token`.
+  3. Repetir con `documentos/abc/devoluciones`, y con los ids `0` y `99999999999`.
+- **Resultado esperado:** 401, 403 `FORBIDDEN_ROLE` y 403 `CSRF_INVALID`, como en `POST proveedores/abc/desactivar` o `GET documentos/abc/reversion`.
+- **Resultado actual:** 404 `DOCUMENT_NOT_FOUND` en los tres casos y en las 6 combinaciones.
+- **Evidencia:** sonda N1: `"POST abc/reversion":[404,404,404]` frente a `"POST proveedores/abc/desactivar":[401,403,403]`. La prueba permanente de CA-21 usa el id `1` y no lo detecta.
+- **Impacto:** no expone datos ni escribe nada. Rompe el orden documentado, y un cliente sin sesión no recibe el 401 que lo lleva al acceso.
+- **Recomendación:** comprobar el acceso antes que el id en esas dos rutas, como en las demás. Conviene que la prueba de CA-21 incluya un id no numérico en esas rutas.
+
+#### DEF-004
+
+- **Severidad:** `MINOR` (decisión 1 del usuario, opción A, tomada de antemano).
+- **Criterio de aceptación afectado:** RF-10 y RN-T3-1 ("nunca un padre, un Compuesto ni un no inventariable"), con DT-T3-2 ("la fila de un Compuesto queda en 0, nunca se mueve y nunca se muestra").
+- **Descripción:** la ficha (`GET articulos/:id`, `inventory-routes.ts`) y el Kardex del artículo (`GET articulos/:id/kardex`, `inventory-kardex-routes.ts`, línea 343) devuelven `stock: null` solo si el artículo es padre. Un Compuesto y un no inventariable tienen su fila de existencia (DT-T3-2), así que la API los muestra con existencia 0 y sin costo.
+- **Pasos para reproducir:**
+  1. Crear un Compuesto y un insumo con `inventoriable: false`.
+  2. `GET /api/v1/admin/inventario/articulos/:id` y `GET …/articulos/:id/kardex` de cada uno.
+- **Resultado esperado:** `stock: null` en los dos, como en un padre.
+- **Resultado actual:** `{ "quantity": "0.000", "avgCost": null, "lastCost": null }` en la ficha y en el Kardex de los dos.
+- **Evidencia:** sonda N4: `"compuesto":{"ficha":{"quantity":"0.000","avgCost":null,"lastCost":null},"kardex":[200,{…}]}`, igual que en el no inventariable; `"padre":{"ficha":null,"kardex":[200,null]}`.
+- **Impacto:** el PR 3 mostraría existencia y "Sin costo" en la ficha de un Compuesto o de un no inventariable, que según RN-T3-1 no tienen existencias. Hoy no lo ve nadie (no hay pantalla).
+- **Recomendación:** `stock: null` para todo artículo fuera de RN-T3-1 en los dos sitios, y el comentario del contrato (`itemStockSchema`: "null en un padre") actualizado.
+
+### Observaciones (no bloquean)
+
+- **OBS-13 (N2).** Con dos filtros inválidos a la vez, el 422 solo informa uno (`estado=raro&pagina=0` → solo `estado`). Ya era así en las listas de T1 y T2, y el ticket no lo pide.
+- **OBS-14 (R-3).** El CPP fuera de rango de una reversión (DEF-001) se informa en `lines.0.quantity`, un campo que el cuerpo de la reversión no tiene. La pantalla de confirmación del PR 3 tendrá que mostrarlo en la tabla de movimientos o como error general. Lo fija la prueba unitaria.
+- **OBS-15.** Los errores del artículo de una línea van en `lines.N.item`, no en `lines.N.itemId`, y los de la devolución en `lines.N.sourceMovement`. Sigue la convención de T2 (`lines.N.ingredient` para `ingredientId`). El PR 3 debe mapearlos.
+- **OBS-16 (R-5).** La respuesta de una escritura vuelve a leer el documento fuera de la transacción. Si esa lectura fallara, el cliente vería un 503 con el documento ya creado. Con `Idempotency-Key`, el reintento devuelve 200 `replayed` (H3 y B1 lo muestran); sin clave, duplicaría. El PR 3 debe enviar siempre la clave.
+- **OBS-17 (R-7).** El filtro `estado` de Existencias usa valores en español (`todos|negativos|sin_costo`); el de proveedores, los de core (`all|active|inactive`), como los artículos de T1. Es coherente con T1, pero no dentro de T3.
+- **OBS-18 (R-4).** `seedKardexDev` no es atómica: si falla a mitad, un segundo intento no completa el Kardex (su idempotencia mira si ya hay algún proveedor o documento). Solo afecta al desarrollo; se resuelve con una base nueva.
+- **OBS-19 (DOC1).** `arquitectura.md` §6 no menciona 422 `IDEMPOTENCY_KEY_REUSED` ni 400 `INVALID_IDEMPOTENCY_KEY`, que también dan las altas de T1 y T2 sin documentar. Y lista 17 rutas: el Implementation Result dice 16 en un sitio.
+
+### Revisión de las pruebas permanentes (`testing.md`)
+
+- **T1.** Los 8 casos de `admin-inventory-kardex-api.test.ts`, los 3 de `inventory-kardex.test.ts`, el de CA-11 ampliado y los 2 de `prisma-inventory-kardex.test.ts` protegen comportamientos de la app (permisos, CSRF, idempotencia, errores, proveedores, existencias, Kardex, semilla, RN-T3-12, fecha del negocio, movimientos vigentes y devolución). Las mutaciones X1 a X6 lo confirman. La comparación de listas core ↔ contrato de `contract-types.test.ts` amplía una técnica que ya existía para T1 y T2. PASS
+- **T2.** Sin duplicados: CA-12 en memoria y en MySQL (1b) y ahora por HTTP (201/200 y `IDEMPOTENCY_KEY_REUSED`), que son caminos distintos. CA-21 es nuevo para las rutas de T3. DEF-001 está en la unitaria (los tres límites) y en la API (el 422 sobre HTTP). PASS
+- **T3.** El diff de `tests/` frente a `851ec79` solo añade (+141 líneas, −4 por comentarios e imports reescritos). No añade `retry`, `testTimeout` ni esperas fijas. Datos ficticios. PASS
+- **T4.** `git status` final: los mismos 22 cambios del Implementation Result (el ticket incluido). Ninguna sonda en el árbol. PASS
+
+### Regresión
+
+Suite completa en verde, con los mismos totales (S3). El admin del worktree funciona contra la `api` nueva, con la ficha que ahora trae `stock` (H2). Las landings cargan productos y página de la `api` (R2). T1 y T2 (artículos, categorías, recetas con origen `cpp`) siguen igual en A1 a A7 y en H2. Sin migración ni cambios de despliegue (S6).
+
+### Responsive, Accesibilidad, UX/UI, SEO
+
+No aplican: el PR 2 no cambia vistas, CSS, JS de navegador ni rutas del admin. No se usó Chrome. H2 y R2 comprueban por HTTP que el admin y las landings siguen respondiendo.
+
+### Performance
+
+C2: 20 compras simultáneas sobre un artículo, con p95 de 225 ms y un máximo de 254 ms, sin 503. Sin hallazgos.
+
+### Pendientes de revisión manual
+
+Ninguno.
+
+### Limpieza
+
+- **Bases:** se borraron `restaurante_test_qa051c_api`, `_seed`, `_seedalt`, `_seedp` y `_seedt2`. `SHOW DATABASES LIKE 'restaurante\_test%'` devuelve 0.
+- **Imagen:** se borró `qa051c-api:probe` (0 imágenes `qa051c`). La caché de construcción de Docker no se purgó: es compartida.
+- **Procesos y puertos:** se detuvieron la `api` (3201/3204), el `inventory-manager` (3203) y la `landing-pages` (3200). Los puertos 3200 a 3209 están libres, y no queda ningún proceso de `src/server.ts`, Vitest ni sondas. Las sesiones `mysql` de B terminaron solas (`SLEEP(8)`).
+- **Archivos:** se borraron del scratchpad las sondas, la copia de mutaciones, los env, el hash, los logs y las cookies. Un script temporal de SD3 se ejecutó desde `api/` y se borró en el mismo comando. Un log de la `api` que acabó un momento en `api/` (por una ruta relativa) se movió y se borró. `git status` lo confirma (T4).
+- **Repositorio:** `git worktree list` muestra solo `main` y el worktree del ticket.
+- **MySQL:** `restaurante-mysql-dev-1` sigue encendido, y su base de desarrollo no se tocó.
+- **Incidencia de entorno:** durante la preparación, un `pkill` con un patrón que no coincidía dejó la primera `api` en marcha mientras se recreaba su base. Eso dio dos ejecuciones de A3 contaminadas (y dos `server_listen_failed` en el log). Se detuvo esa `api` por su puerto y todo se repitió desde una base nueva. Los resultados de arriba son los de la ejecución limpia.
+
+### Resultado final
+
+QA_REJECTED
+
+### Ronda 2
+
+El usuario aprobó la implementación de la ronda 2 con "si". Se revalida sobre la misma rama, sin commit. Lo que cambió en la ronda 2:
+
+- DEF-003: `writeDocument` comprueba el acceso antes de leer el id (`inventory-kardex-routes.ts`).
+- DEF-004: `holdsStock` (`inventory-shared.ts`), usada por la ficha (`inventory-routes.ts`) y por el Kardex del artículo.
+- Los comentarios del contrato (`packages/contracts/inventory.ts`).
+- Dos pruebas existentes ampliadas en `admin-inventory-kardex-api.test.ts`.
+- OBS-19 en `arquitectura.md` §6.
+
+Ninguna prueba se escribió en el repositorio. MySQL 8.4 local, base `restaurante_test_qa051c_r2`, y la `api` del worktree con `env -i`, `TZ=Asia/Tokyo` y `BUSINESS_TIMEZONE=America/Mexico_City`.
+
+#### Pruebas ejecutadas (ronda 2)
+
+| ID | Acción | Resultado |
+|---|---|---|
+| S1 | `npm run build:css` y `npm run typecheck` | Código 0 y 0. PASS |
+| S2 | `npm run lint` | Código 0, sin avisos; `check-private-data`: 898 archivos, sin datos privados. PASS |
+| S3 | `npm test` | `api` 57/1281, `landing-pages` 65/917 e `inventory-manager` 18/297, todo en verde. Los totales no cambian porque se ampliaron casos existentes. Código 0. PASS |
+| S4 | `admin-inventory-kardex-api.test.ts` | 8/8 en 1.03 s. PASS |
+| N1 | DEF-003, sobre MySQL y HTTP real | `POST documentos/{abc,0,99999999999}/{devoluciones,reversion}` y la reversión de un documento existente: `[401, 403, 403]` en las 7 combinaciones (anónimo, Editor y Gerente sin CSRF). Códigos `FORBIDDEN_ROLE` y `CSRF_INVALID`. Checksums de documentos, movimientos, existencias y proveedores sin cambios. PASS |
+| N1b | El Gerente con CSRF | Ids `abc`, `0`, `99999999999` y `999999` (inexistente) → 404 `DOCUMENT_NOT_FOUND` en la reversión. En `devoluciones`, con un id inexistente y `lines: []`, responde 422 `lines`: el cuerpo se valida antes de buscar el documento, igual que en la ronda 1 (sin cambio). Con un cuerpo válido, 404. PASS |
+| N4 | DEF-004: ficha y Kardex del artículo | Padre, Compuesto y no inventariable → `stock: null` en los dos. Insumo `{9.000, 20.0000, 20.0000}` e Intermedio `{2.000, 5.0000, null}` conservan su stock. Reventa, variante e insumo inactivo sin movimientos → `{0.000, null, null}`. Contratos válidos en los 16 casos. Un insumo inactivo con existencias conserva su `stock` (1.000). Un no inventariable que pasa a inventariable (sin movimientos) vuelve a mostrar `{0.000, null, null}`. Existencias sigue sin el Compuesto ni el padre. PASS |
+| R1 | Regresión de `writeDocument` (los 5 tipos de documento) | Compra 201 con `Location` y reenvío 200 `replayed`; saldo inicial 201; ajuste 201; devolución 201 con `sourceDocumentId` y reenvío 200; reversión 201. 409 `DOCUMENT_HAS_RETURNS` (con `returnIds`), `ALREADY_REVERSED`, `REVERSAL_NOT_REVERSIBLE` y `DOCUMENT_NOT_RETURNABLE`. 400 `INVALID_IDEMPOTENCY_KEY` y 422 `IDEMPOTENCY_KEY_REUSED`. Campo desconocido por línea → 422. PASS |
+| H2 | `inventory-manager` del worktree contra esa `api` | Acceso 303. Las 8 fichas (insumo, intermedio, reventa, Compuesto, no inventariable, padre, variante e inactivo) y la lista: 200. 0 avisos o errores en su log. PASS |
+| L1 | Log de la `api` | 0 nombres, cantidades ni costos (quitando `time`, `ip` y `durationMs`). 0 errores. PASS |
+| M1 | Mutación: el id antes que el acceso (como antes de DEF-003) | La prueba permanente falla: "editor: 403 FORBIDDEN_ROLE…", "POST …/documentos/abc/devoluciones: expected 404 to be 403". PASS |
+| M2 | Mutación: `holdsStock` solo excluye al padre (como antes de DEF-004) | La prueba permanente falla: "Taco ficticio: expected { quantity: '0.000', … } to be null". PASS |
+| DOC | `arquitectura.md` §6 y comentarios del contrato | Coinciden con el comportamiento: patrón `IDEMPOTENCY_KEY_PATTERN` de 16 a 64 caracteres `[A-Za-z0-9_-]` (400 con "corta"), 422 `IDEMPOTENCY_KEY_REUSED` en T1, T2 y T3 (`inventory-shared.ts`, `product-routes.ts` y la ruta del Kardex), y `stock: null` en un padre, un Compuesto o un no inventariable (N4). Son 17 rutas, como se contó en la ronda 1. PASS |
+
+En la sonda, dos comprobaciones dieron FAIL por un valor esperado mal calculado, no por la implementación:
+
+- la existencia del insumo es 9.000, no 7.000, porque la reversión de la devolución devuelve los 2 kg;
+- el 422 de `devoluciones` con un id inexistente y un cuerpo vacío (ver N1b).
+
+#### Lo que no se repitió y por qué
+
+La ronda 2 solo toca el orden de `writeDocument`, la regla de `stock` de dos lecturas, comentarios del contrato y documentación. Por eso no se repiten, con su resultado de la ronda 1 vigente:
+
+- DEF-001 (D1–D4), concurrencia (C1–C3), sistema ocupado (B1–B2) y reinicio (H3): el core, el store y la idempotencia no cambian, y el flujo de escritura después del acceso es el mismo (R1).
+- Semilla (SD1–SD5) y K1: no cambian ni los scripts ni el Dockerfile.
+- Cliente HTTP (CL1): `admin-client.ts` no cambia. Solo cambió un comentario del contrato, y el esquema de `stock` sigue siendo el mismo (nullable).
+- Landings (R2): no consumen las rutas tocadas.
+- Mutaciones X1–X6: no cambia el código que mutaban. Se añadieron M1 y M2 para lo nuevo.
+
+#### Criterios de aceptación (ronda 2)
+
+| CA | Resultado | Evidencia |
+|---|---|---|
+| CA-21 (permisos en la API) | PASS | N1, M1 y A1/A2 de la ronda 1 |
+| RF-10 / RN-T3-1 (`stock` en la ficha y el Kardex) | PASS | N4, M2 y H2 |
+| El resto del alcance del PR 2 | PASS (ronda 1, sin cambios en lo que comprueban) | Ver la tabla de la ronda 1 |
+
+#### Defectos
+
+- **DEF-003:** corregido y verificado (N1 y M1).
+- **DEF-004:** corregido y verificado (N4 y M2).
+- Sin defectos nuevos.
+
+#### Observaciones
+
+OBS-13 a OBS-18 siguen registradas para el PR 3 o el cierre. OBS-19 queda resuelta (DOC).
+
+#### Limpieza (ronda 2)
+
+- **Base:** se borró `restaurante_test_qa051c_r2`. `SHOW DATABASES LIKE 'restaurante\_test%'` devuelve 0.
+- **Procesos:** se detuvieron la `api` (3201/3204) y el `inventory-manager` (3203). Los puertos 3200 a 3209 están libres, y no queda ningún proceso de `src/server.ts` ni de Vitest.
+- **Archivos:** se borraron del scratchpad las sondas, la copia de mutaciones, los logs y las cookies. Quedan `src050` y `t3`, que no son de este QA y no se tocaron.
+- **Imagen:** no se construyó ninguna; 0 imágenes `qa051c`.
+- **Repositorio:** `git status` muestra los cambios del Implementation Result más `inventory-shared.ts`, de la ronda 2, y ninguna sonda. `git worktree list` muestra solo `main` y el worktree del ticket.
+- **MySQL:** `restaurante-mysql-dev-1` sigue encendido, y su base de desarrollo no se tocó.
+
+#### Resultado final (ronda 2)
+
+QA_APPROVED
+
 ## Historial de cambios
 
 ### Versión 1
@@ -2253,3 +2889,25 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 
 - 2026-11-26, senior-fullstack: DEF-002 corregido en `arquitectura.md`. DEF-001 y OBS-5 a OBS-12 quedan anotados en "Pendientes del PR 1b para los PR 2 y 3". Commit `8f8c128` y PR #196 en borrador hacia `epic/inventario`.
 - 2026-11-26, senior-fullstack: el PR #196 pasa a listo. Su CI (ejecución 45784137262) dejó `calidad`, `docker`, `auditoria` y `pruebas` en `pass`. Estado: `READY_FOR_MERGE`.
+
+### Implementación del PR 2 (T2)
+
+- 2026-11-26, senior-fullstack: PR 2 implementado en `feature/REQ-F-051-kardex-api`, desde `851ec79`. Incluye la API, los contratos, el cliente, la semilla, DEF-001, OBS-6, OBS-7 y OBS-8. Validado (`typecheck`, `lint`, `test` y `build:css` en verde), sin commit. Añade 1 445 líneas, así que no se parte. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA (Q1, PR 2)
+
+- 2026-11-26, senior-qa: el usuario aprobó la implementación del PR 2 ("si"). QA Action Plan del PR 2 redactado a partir del ticket, del diff del worktree (sin commit, sobre `851ec79`) y de las reglas del proyecto, sin ejecutar ninguna prueba. Incluye los valores esperados de la semilla calculados a mano y dos riesgos vistos en el código: el orden 404 antes que 401/403 en `devoluciones` y `reversion` con un id no numérico (R-1), y `stock` no nulo en la ficha de un Compuesto o un no inventariable (R-2). Cinco decisiones para la aprobación. Estado: `NEEDS_QA_PLAN_APPROVAL`.
+
+### QA (Q2, PR 2, ronda 1)
+
+- 2026-11-26, senior-qa: el usuario aprobó el plan con "Sí, apruebo el plan con las cinco recomendaciones". Ejecutado completo: S1 a S6, A1 a A9, N1 a N5, D1 a D4, C1 a C3, B1 a B2, H1 a H3, R2, L1 a L2, SD1 a SD5, K1, CL1 a CL2, X1 a X6, DOC y T1 a T4. DEF-001 y OBS-6 a OBS-8 quedan resueltos, y las 13 mutaciones las detectan las pruebas permanentes. Se confirman R-1 (DEF-003, `MINOR`, CA-21) y R-2 (DEF-004, `MINOR`, RF-10). El usuario había decidido de antemano que, si se confirmaban, se corregirían en este PR. Quedan 7 observaciones (OBS-13 a OBS-19). Limpieza comprobada. Estado: `QA_REJECTED`.
+- 2026-11-26, senior-fullstack (ronda 2 del PR 2): DEF-003 (acceso antes que el id en devoluciones y reversión) y DEF-004 (`stock: null` en Compuestos y no inventariables) corregidos, con sus pruebas en los archivos existentes. OBS-19 documentada. OBS-13 a OBS-18 quedan registradas. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA (Q2, PR 2, ronda 2)
+
+- 2026-11-26, senior-qa: el usuario aprobó la implementación de la ronda 2 ("si"). Revalidación selectiva: S1 a S4, N1, N1b, N4, R1 (regresión de los 5 tipos de documento), H2, L1, M1, M2 y la documentación. DEF-003 y DEF-004 quedan verificados, y OBS-19 resuelta. Lo no repetido está justificado en el QA Report. Limpieza comprobada. Estado: `QA_APPROVED`.
+
+### Commit y PR (T4, PR 2)
+
+- 2026-11-26, senior-fullstack: commit `f02c5f1` y PR #197 en borrador hacia `epic/inventario`. OBS-13 a OBS-18 quedan como pendientes del PR 3 o del cierre.
+- 2026-11-26, senior-fullstack: el PR #197 pasa a listo. Su CI (ejecución 45827311555) dejó `calidad`, `docker`, `auditoria` y `pruebas` en `pass`. Estado: `READY_FOR_MERGE`.

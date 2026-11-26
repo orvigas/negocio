@@ -113,6 +113,14 @@ export const inventoryItemSchema = z.object({
 });
 export type InventoryItem = z.infer<typeof inventoryItemSchema>;
 
+/**
+ * Existencia de un artículo (REQ-F-051, RF-10): cantidad con signo, CPP y último costo (estos dos, null sin
+ * costo). La ficha y el Kardex dan `stock: null` a todo artículo sin existencias (RN-T3-1): un padre, un
+ * Compuesto o un no inventariable.
+ */
+export const itemStockSchema = z.object({ quantity: decimalText, avgCost: costText.nullable(), lastCost: costText.nullable() });
+export type ItemStock = z.infer<typeof itemStockSchema>;
+
 /** Ficha (RF-2 a RF-5, RF-7): el artículo con su categoría, padre, variantes y equivalencias. */
 export const inventoryItemDetailSchema = inventoryItemSchema.extend({
   category: itemRefSchema,
@@ -124,6 +132,8 @@ export const inventoryItemDetailSchema = inventoryItemSchema.extend({
   locked: z.boolean(),
   /** Cuánto es 1 `unit` en la unidad base. Vacía en un padre. */
   equivalences: z.array(z.object({ unit: z.string(), quantity: decimalText })),
+  /** Existencia, CPP y último costo (REQ-F-051, RF-10); null si no lleva existencias (padre, Compuesto o no inventariable). */
+  stock: itemStockSchema.nullable(),
 });
 export type InventoryItemDetail = z.infer<typeof inventoryItemDetailSchema>;
 

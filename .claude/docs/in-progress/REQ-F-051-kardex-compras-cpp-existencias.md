@@ -4,6 +4,8 @@
 
 QA_APPROVED
 
+PR 1a: commit `1fb5a02` en `feature/REQ-F-051-kardex-modelo` y PR #195 (https://github.com/orvigas/negocio/pull/195) hacia `epic/inventario`, abierto en borrador; el CI está pendiente.
+
 QA del PR 1a aprobado por senior-qa el 2026-11-25 (ver "QA Report — PR 1a", ronda 1). El usuario aprobó el plan de QA: "Sí, apruebo el plan de QA con las tres respuestas". No hay defectos; quedan 4 observaciones. Siguiente paso: senior-fullstack hace el commit y abre el PR en borrador hacia `epic/inventario` (T4).
 
 PR 1a de T3 (migración `inventario_kardex`, proveedores, existencias, RN-T3-11, búsqueda sin acentos, regla de inmutabilidad y trabajos de arrastre) implementado en `feature/REQ-F-051-kardex-modelo`, desde `origin/epic/inventario` (`ad50c50`), sin commit (ver "Implementation Result — PR 1a"). El PR 1 se parte en 1a y 1b porque completo pasa de unas 1 500 líneas, como prevé el plan. El PR 1b (Kardex, CPP, `inventory:verify` y sus pruebas en MySQL) sale de la punta de la épica cuando el 1a esté mergeado.
@@ -525,6 +527,8 @@ En `epic/inventario`:
 | Acceso y privacidad | Actores, RF-17 | HU-7 | CA-21, CA-27, CA-31 | 2–3 |
 | Operación | RF-14, RF-15 | — | CA-23, CA-24, CA-28 | 1–3 |
 | UX | RF-16 | — | CA-25, CA-26 | 3 |
+
+PR abiertos de T3: PR 1a #195 (https://github.com/orvigas/negocio/pull/195), que cubre la parte de modelo, proveedores y existencias de Integridad, Proveedores, Acceso y Operación.
 
 No hay diseño en `_stich_source_/` (PV-8).
 
@@ -1545,3 +1549,7 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 ### QA (Q2, PR 1a, ronda 1)
 
 - 2026-11-25, senior-qa: el usuario aprobó el plan ("Sí, apruebo el plan de QA con las tres respuestas"). Ejecutado completo: S1 a S6, M1 a M6, D1 a D6, N1 a N3, C1 a C6, V1 a V7, L1 a L4, X1 a X5, R1 a R4 y A1 a A3. Sin defectos; 4 observaciones. Limpieza comprobada. Estado: `QA_APPROVED`.
+
+### Commit y PR (T4, PR 1a)
+
+- 2026-11-25, senior-fullstack: commit `1fb5a02` y PR #195 en borrador hacia `epic/inventario`. Observaciones OBS-1 a OBS-4 del QA registradas como pendientes del 1b, el 2 y el 3.

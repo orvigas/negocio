@@ -4,6 +4,8 @@
 
 QA_APPROVED
 
+PR 2: commit `f02c5f1` en `feature/REQ-F-051-kardex-api` y PR #197 (https://github.com/orvigas/negocio/pull/197) hacia `epic/inventario`, abierto en borrador; el CI está pendiente.
+
 QA del PR 2 aprobado por senior-qa el 2026-11-26 (ver "QA Report — PR 2", ronda 2). El usuario aprobó la implementación de la ronda 2 con "si". DEF-003 y DEF-004 quedan corregidos y verificados sobre MySQL y HTTP real; las pruebas permanentes detectan las dos mutaciones. Sin defectos nuevos. OBS-13 a OBS-18 siguen registradas. Siguiente paso: senior-fullstack hace el commit y abre el PR hacia `epic/inventario` (T4).
 
 PR 2, ronda 2: DEF-003 y DEF-004 del QA corregidos en este PR (decisión previa del usuario: "Sí, apruebo el plan con las cinco recomendaciones", R-1 y R-2 opción A) y OBS-19 documentada. Sin commit (ver "Implementation Result — PR 2", "Ronda 2").
@@ -546,7 +548,7 @@ En `epic/inventario`:
 | Operación | RF-14, RF-15 | — | CA-23, CA-24, CA-28 | 1–3 |
 | UX | RF-16 | — | CA-25, CA-26 | 3 |
 
-PR de T3: PR 1b #196 (https://github.com/orvigas/negocio/pull/196; Kardex, CPP, correcciones, existencias, costo real e `inventory:verify`). PR 1a #195 (https://github.com/orvigas/negocio/pull/195), que cubre la parte de modelo, proveedores y existencias de Integridad, Proveedores, Acceso y Operación.
+PR de T3: PR 2 #197 (https://github.com/orvigas/negocio/pull/197; API, contratos, cliente y semilla). PR 1b #196 (https://github.com/orvigas/negocio/pull/196; Kardex, CPP, correcciones, existencias, costo real e `inventory:verify`). PR 1a #195 (https://github.com/orvigas/negocio/pull/195), que cubre la parte de modelo, proveedores y existencias de Integridad, Proveedores, Acceso y Operación.
 
 No hay diseño en `_stich_source_/` (PV-8).
 
@@ -2904,3 +2906,7 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 ### QA (Q2, PR 2, ronda 2)
 
 - 2026-11-26, senior-qa: el usuario aprobó la implementación de la ronda 2 ("si"). Revalidación selectiva: S1 a S4, N1, N1b, N4, R1 (regresión de los 5 tipos de documento), H2, L1, M1, M2 y la documentación. DEF-003 y DEF-004 quedan verificados, y OBS-19 resuelta. Lo no repetido está justificado en el QA Report. Limpieza comprobada. Estado: `QA_APPROVED`.
+
+### Commit y PR (T4, PR 2)
+
+- 2026-11-26, senior-fullstack: commit `f02c5f1` y PR #197 en borrador hacia `epic/inventario`. OBS-13 a OBS-18 quedan como pendientes del PR 3 o del cierre.

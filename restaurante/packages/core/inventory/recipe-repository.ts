@@ -27,7 +27,7 @@ import {
   type RecipeVersion,
   type RecipeVersionInput,
 } from './recipe-schema.ts';
-import { readId } from './text.ts';
+import { readId, searchKey } from './text.ts';
 
 /**
  * Casos de uso de las recetas (REQ-F-050, T2): lista, receta de un artículo con su costo teórico,
@@ -109,7 +109,7 @@ function readListFilter(filter: RecipeListFilterInput): { type: ItemType | null;
   if (filter.q !== undefined && filter.q !== null) {
     if (typeof filter.q !== 'string') errors.q = 'Debe ser texto.';
     else {
-      q = filter.q.trim().normalize('NFC').toLowerCase() || null;
+      q = searchKey(filter.q) || null;
       if (q !== null && [...q].length > QUERY_MAX) errors.q = `Máximo ${QUERY_MAX} caracteres.`;
     }
   }
@@ -159,7 +159,7 @@ export function createRecipeRepository({ store, now = () => new Date() }: { stor
           const item = items.get(version.itemId);
           if (!item) continue;
           if (query.type !== null && item.type !== query.type) continue;
-          if (query.q !== null && !item.nameKey.includes(query.q)) continue;
+          if (query.q !== null && !searchKey(item.name).includes(query.q)) continue;
           const cost = calculator.recipeCost(version);
           entries.push({
             item,

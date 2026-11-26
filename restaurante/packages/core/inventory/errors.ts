@@ -216,3 +216,30 @@ export class InventoryBusyError extends InventoryError {
     this.name = 'InventoryBusyError';
   }
 }
+
+/** Proveedor inexistente (REQ-F-051, RF-1). */
+export class SupplierNotFoundError extends InventoryError {
+  constructor() {
+    super('Proveedor no encontrado');
+    this.name = 'SupplierNotFoundError';
+  }
+}
+
+/** La versión enviada del proveedor ya no es la vigente (RF-1, CA-22). */
+export class SupplierConflictError extends InventoryError {
+  readonly current: InventoryConflictInfo;
+
+  constructor(current: InventoryConflictInfo) {
+    super('El proveedor cambió mientras se editaba');
+    this.name = 'SupplierConflictError';
+    this.current = current;
+  }
+}
+
+/** Otro proveedor activo ya usa el nombre (carrera en el alta o la edición, o reactivación). */
+export class SupplierNameTakenError extends InventoryError {
+  constructor() {
+    super('Ya hay un proveedor activo con ese nombre.');
+    this.name = 'SupplierNameTakenError';
+  }
+}

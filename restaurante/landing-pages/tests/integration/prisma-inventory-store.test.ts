@@ -4,9 +4,11 @@ import {
   CategoryInUseError,
   InventoryConflictError,
   InventoryValidationError,
+  ItemLockedError,
   ItemNameTakenError,
   SkuTakenError,
   createInventoryRepository,
+  createSupplierRepository,
   formatDecimal,
   type InventoryAuthor,
 } from '@restaurante/core/inventory';
@@ -184,5 +186,53 @@ describe('lista y ficha en MySQL', () => {
       ['create', ana.id, 'Ana'],
     ]);
     expect(ficha.history[0]?.changes).toEqual([{ field: 'active', before: true, after: false }]);
+  });
+});
+
+describe('proveedores y existencias (REQ-F-051, T3)', () => {
+  it('dos altas de proveedor a la vez con el mismo nombre (otras mayúsculas): una se guarda y la otra da error por campo', async () => {
+    const { prisma, store, ana } = await setup();
+    const suppliers = createSupplierRepository({ store });
+    const results = await Promise.allSettled([suppliers.createSupplier({ name: 'Lácteos del Valle' }, ana), suppliers.createSupplier({ name: 'LÁCTEOS DEL VALLE' }, ana)]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.map(fieldsOf).find((value) => !(value && typeof value === 'object' && 'status' in value))).toEqual({ name: 'Ya hay un proveedor activo con ese nombre.' });
+    expect(await prisma.inventorySupplier.count()).toBe(1);
+    expect(await prisma.inventoryChange.count({ where: { entity: 'supplier' } })).toBe(1);
+  });
+
+  it('el alta crea la existencia en 0 y sin costo (no en un padre), y un artículo sin ella la recibe al bloquearse (DT-T3-2)', async () => {
+    const { prisma, inventory, ana, abarrotes, insumo } = await setup();
+    const sal = await insumo('Sal');
+    const padre = await inventory.createItem({ kind: 'parent', type: 'reventa', categoryId: abarrotes.id, name: 'Refresco 600 ml' }, ana);
+    const stock = await prisma.inventoryStock.findUnique({ where: { itemId: sal.id } });
+    expect(stock && { quantity: stock.quantity.toFixed(3), avgCost: stock.avgCost, lastCost: stock.lastCost, lastSeq: stock.lastSeq }).toEqual({ quantity: '0.000', avgCost: null, lastCost: null, lastSeq: 0 });
+    expect(await prisma.inventoryStock.findUnique({ where: { itemId: padre.id } })).toBeNull();
+
+    // Un artículo creado por una imagen anterior (sin existencia): la edición la crea al bloquear.
+    const at = new Date();
+    const old = await prisma.inventoryItem.create({ data: { kind: 'simple', type: 'insumo', categoryId: abarrotes.id, name: 'Azúcar', nameKey: 'azúcar', activeNameKey: 'azúcar', baseUnit: 'kg', createdAt: at, updatedAt: at } });
+    await expect(inventory.updateItem(old.id, { version: 1, categoryId: abarrotes.id, name: 'Azúcar estándar', baseUnit: 'kg' }, ana)).resolves.toMatchObject({ name: 'Azúcar estándar' });
+    expect(await prisma.inventoryStock.findUnique({ where: { itemId: old.id } })).toMatchObject({ lastSeq: 0, avgCost: null });
+  });
+
+  it('RN-T3-11: con un movimiento registrado (last_seq > 0), la unidad, los empaques y el inventariable quedan bloqueados', async () => {
+    const { prisma, inventory, abarrotes, insumo, ana } = await setup();
+    const masa = await insumo('Masa de maíz', { units: [{ name: 'bulto', factor: '25' }] });
+    await prisma.inventoryStock.update({ where: { itemId: masa.id }, data: { lastSeq: 1 } });
+    await expect(inventory.updateItem(masa.id, { version: 1, categoryId: abarrotes.id, name: 'Masa de maíz', baseUnit: 'kg', units: [{ name: 'bulto', factor: '20' }] }, ana)).rejects.toBeInstanceOf(
+      ItemLockedError,
+    );
+    const rejected = await Promise.allSettled([inventory.updateItem(masa.id, { version: 1, categoryId: abarrotes.id, name: 'Masa de maíz', baseUnit: 'kg', units: [{ name: 'bulto', factor: '25' }], inventoriable: false }, ana)]);
+    expect(fieldsOf(rejected[0] as PromiseSettledResult<unknown>)).toHaveProperty('inventoriable');
+    expect((await inventory.getItem(masa.id)).locked).toBe(true);
+  });
+
+  it('la búsqueda de la lista ignora mayúsculas y acentos y distingue la ñ (OBS-12 b)', async () => {
+    const { inventory, insumo } = await setup();
+    await insumo('Carne de res');
+    await insumo('Piña');
+    expect((await inventory.listItems({ q: 'cárne' })).items.map((item) => item.name)).toEqual(['Carne de res']);
+    expect((await inventory.listItems({ q: 'PIÑA' })).items.map((item) => item.name)).toEqual(['Piña']);
+    expect((await inventory.listItems({ q: 'pina' })).items).toEqual([]);
   });
 });

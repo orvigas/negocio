@@ -36,32 +36,34 @@ enum Business {
 
 /// Cuenta personal de la administración (D-10). No se elimina: se desactiva (D-6).
 model User {
-  id               Int                      @id @default(autoincrement())
+  id                 Int                      @id @default(autoincrement())
   /// Usuario de acceso tal como se escribió.
-  username         String                   @db.VarChar(60)
+  username           String                   @db.VarChar(60)
   /// Usuario normalizado (NFC y minúsculas): único sin distinguir mayúsculas.
   /// Hasta 120 puntos de código: toLowerCase() convierte «İ» en dos.
-  usernameKey      String                   @unique @map("username_key") @db.VarChar(128)
-  displayName      String                   @map("display_name") @db.VarChar(60)
-  role             Role
-  active           Boolean                  @default(true)
+  usernameKey        String                   @unique @map("username_key") @db.VarChar(128)
+  displayName        String                   @map("display_name") @db.VarChar(60)
+  role               Role
+  active             Boolean                  @default(true)
   /// scrypt$N$r$p$sal$hash (sal ≤ 64 bytes; ver services/admin-auth.ts).
-  passwordHash     String                   @map("password_hash") @db.VarChar(255)
+  passwordHash       String                   @map("password_hash") @db.VarChar(255)
   /// Cambia al desactivar, cambiar rol/negocios o contraseña: invalida las sesiones abiertas (D-8).
-  sessionVersion   Int                      @default(0) @map("session_version")
-  createdAt        DateTime                 @default(now()) @map("created_at")
-  updatedAt        DateTime                 @updatedAt @map("updated_at")
-  lastLoginAt      DateTime?                @map("last_login_at")
-  businesses       UserBusiness[]
-  auditActions     UserAudit[]              @relation("actor")
-  auditEvents      UserAudit[]              @relation("target")
-  productChanges   ProductChange[]
-  botBlocksAdded   BotBlock[]               @relation("blockCreator")
-  botBlocksRemoved BotBlock[]               @relation("blockRemover")
-  botAudits        BotAudit[]
-  botControls      BotControl[]
-  inventoryChanges InventoryChange[]
-  recipeVersions   InventoryRecipeVersion[]
+  sessionVersion     Int                      @default(0) @map("session_version")
+  createdAt          DateTime                 @default(now()) @map("created_at")
+  updatedAt          DateTime                 @updatedAt @map("updated_at")
+  lastLoginAt        DateTime?                @map("last_login_at")
+  businesses         UserBusiness[]
+  auditActions       UserAudit[]              @relation("actor")
+  auditEvents        UserAudit[]              @relation("target")
+  productChanges     ProductChange[]
+  botBlocksAdded     BotBlock[]               @relation("blockCreator")
+  botBlocksRemoved   BotBlock[]               @relation("blockRemover")
+  botAudits          BotAudit[]
+  botControls        BotControl[]
+  inventoryChanges   InventoryChange[]
+  recipeVersions     InventoryRecipeVersion[]
+  inventoryDocuments InventoryDocument[]
+  inventoryMovements InventoryMovement[]
 
   @@map("user")
 }
@@ -452,6 +454,8 @@ model InventoryItem {
   recipeVersions InventoryRecipeVersion[] @relation("recipeVersions")
   currentRecipe  InventoryRecipeVersion?  @relation("currentRecipe")
   usedInLines    InventoryRecipeLine[]
+  stock          InventoryStock?
+  movements      InventoryMovement[]
 
   @@index([active, type])
   @@index([categoryId, active])
@@ -576,4 +580,133 @@ model InventoryLock {
   name String @id @db.VarChar(32)
 
   @@map("inventory_lock")
+}
+
+// --- Inventario: Kardex, existencias y proveedores (REQ-F-051, T3) -------------------------------
+// Documentos y movimientos son inmutables (RN-T3-9, DT-5): solo se insertan. Los tipos, el criterio de
+// costo y los motivos son VARCHAR con la lista cerrada en core (DT-T3-1 y DT-15): una imagen anterior
+// lee un valor que no conoce sin fallar. Cantidades DECIMAL(13,3), costos DECIMAL(15,4) e importes
+// DECIMAL(19,4) exactos (PV-13).
+
+/// Proveedor (RF-1). No se borra: se inactiva. Del proveedor solo se guardan el nombre y un contacto (PV-7).
+model InventorySupplier {
+  id            Int                 @id @default(autoincrement())
+  name          String              @db.VarChar(80)
+  /// Nombre normalizado (NFC y minúsculas).
+  nameKey       String              @map("name_key") @db.VarChar(160)
+  /// = nameKey si está activo; null si no (único entre los activos, sin distinguir mayúsculas).
+  activeNameKey String?             @unique @map("active_name_key") @db.VarChar(160)
+  /// Un teléfono o un correo, nada más (PV-7).
+  contact       String?             @db.VarChar(120)
+  active        Boolean             @default(true)
+  /// Aumenta con cada escritura (control de concurrencia).
+  version       Int                 @default(1)
+  createdAt     DateTime            @map("created_at")
+  updatedAt     DateTime            @map("updated_at")
+  /// Autor de la última escritura (aviso de conflicto). Sin clave foránea, como el artículo.
+  updatedById   Int?                @map("updated_by_id")
+  updatedByName String?             @map("updated_by_name") @db.VarChar(60)
+  documents     InventoryDocument[]
+
+  @@map("inventory_supplier")
+}
+
+/// Existencia de un artículo: proyección mutable del Kardex (DT-T3-2). Una fila por artículo que no es
+/// padre; RN-T3-1 decide cuáles se muestran y cuáles admiten movimientos.
+model InventoryStock {
+  itemId    Int           @id @map("item_id")
+  /// En la unidad base, con signo (PV-2 permite negativos).
+  quantity  Decimal       @default(0) @db.Decimal(13, 3)
+  /// CPP por unidad base; null = sin costo.
+  avgCost   Decimal?      @map("avg_cost") @db.Decimal(15, 4)
+  /// Costo por unidad base de la última compra no revertida (DT-T3-4); null si no hay.
+  lastCost  Decimal?      @map("last_cost") @db.Decimal(15, 4)
+  /// `seq` del último movimiento del artículo (0: sin movimientos).
+  lastSeq   Int           @default(0) @map("last_seq")
+  updatedAt DateTime      @map("updated_at")
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@map("inventory_stock")
+}
+
+/// Documento del Kardex (cabecera, RN-T3-2): saldo inicial, compra, devolución, ajuste o reversión.
+model InventoryDocument {
+  id                 Int                 @id @default(autoincrement())
+  /// Tipo de la lista cerrada de core (DT-T3-1).
+  type               String              @db.VarChar(24)
+  /// Fecha del hecho en BUSINESS_TIMEZONE (RN-T3-3): informativa.
+  occurredOn         DateTime            @map("occurred_on") @db.Date
+  recordedAt         DateTime            @map("recorded_at")
+  supplierId         Int?                @map("supplier_id")
+  /// Folio de la factura o nota.
+  reference          String?             @db.VarChar(40)
+  /// Compras: criterio del costo (PV-6, PV-T3-11), de la lista de core.
+  costBasis          String?             @map("cost_basis") @db.VarChar(16)
+  /// Ajustes: motivo de la lista cerrada de core (DT-15).
+  reason             String?             @db.VarChar(32)
+  /// Nota; en una reversión, el motivo obligatorio (PV-T3-8).
+  note               String?             @db.VarChar(400)
+  totalCost          Decimal             @map("total_cost") @db.Decimal(19, 4)
+  /// Documento que revierte (único: una reversión por documento).
+  reversesDocumentId Int?                @unique @map("reverses_document_id")
+  /// Devolución: la compra de la que sale (RF-6).
+  sourceDocumentId   Int?                @map("source_document_id")
+  /// `<actorId>:<tipo>:<requestId>` (DT-14).
+  idempotencyKey     String?             @unique @map("idempotency_key") @db.VarChar(120)
+  /// sha256 del cuerpo canónico: distingue un reenvío de otra petición con la misma clave.
+  requestHash        String?             @map("request_hash") @db.Char(64)
+  actorId            Int?                @map("actor_id")
+  actorName          String              @map("actor_name") @db.VarChar(60)
+  supplier           InventorySupplier?  @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  reverses           InventoryDocument?  @relation("reversal", fields: [reversesDocumentId], references: [id], onDelete: Restrict)
+  reversedBy         InventoryDocument?  @relation("reversal")
+  source             InventoryDocument?  @relation("returns", fields: [sourceDocumentId], references: [id], onDelete: Restrict)
+  returns            InventoryDocument[] @relation("returns")
+  actor              User?               @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  movements          InventoryMovement[]
+
+  @@index([type, id])
+  @@index([supplierId, id])
+  @@index([sourceDocumentId])
+  @@map("inventory_document")
+}
+
+/// Movimiento del Kardex (RN-8, RN-T3-2): solo altas; `seq` contiguo por artículo.
+model InventoryMovement {
+  id               Int                 @id @default(autoincrement())
+  documentId       Int                 @map("document_id")
+  /// 1..50 dentro del documento.
+  line             Int
+  itemId           Int                 @map("item_id")
+  /// 1, 2, 3… por artículo, sin huecos.
+  seq              Int
+  type             String              @db.VarChar(24)
+  /// En la unidad base, con signo (+ entrada, − salida), distinta de 0.
+  quantity         Decimal             @db.Decimal(13, 3)
+  /// Cantidad y unidad tal como se capturaron.
+  enteredQuantity  Decimal             @map("entered_quantity") @db.Decimal(13, 3)
+  enteredUnit      String              @map("entered_unit") @db.VarChar(30)
+  balanceBefore    Decimal             @map("balance_before") @db.Decimal(13, 3)
+  balanceAfter     Decimal             @map("balance_after") @db.Decimal(13, 3)
+  /// Costo aplicado por unidad base; null: sin costo.
+  unitCost         Decimal?            @map("unit_cost") @db.Decimal(15, 4)
+  /// Compra: importe capturado; resto: |cantidad| × costo.
+  lineTotal        Decimal?            @map("line_total") @db.Decimal(19, 4)
+  avgCostBefore    Decimal?            @map("avg_cost_before") @db.Decimal(15, 4)
+  avgCostAfter     Decimal?            @map("avg_cost_after") @db.Decimal(15, 4)
+  /// Reversión: el movimiento que revierte; devolución: la línea de compra.
+  sourceMovementId Int?                @map("source_movement_id")
+  recordedAt       DateTime            @map("recorded_at")
+  actorId          Int?                @map("actor_id")
+  actorName        String              @map("actor_name") @db.VarChar(60)
+  document         InventoryDocument   @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  item             InventoryItem       @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  source           InventoryMovement?  @relation("movementSource", fields: [sourceMovementId], references: [id], onDelete: Restrict)
+  derived          InventoryMovement[] @relation("movementSource")
+  actor            User?               @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@unique([itemId, seq])
+  @@unique([documentId, line])
+  @@index([sourceMovementId])
+  @@map("inventory_movement")
 }

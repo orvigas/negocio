@@ -1,6 +1,7 @@
 import type { InventoryCategory } from './category-schema.ts';
 import type { InventoryItem, ItemType } from './item-schema.ts';
 import type { NewRecipeVersion, RecipeUsage, RecipeVersion } from './recipe-schema.ts';
+import type { Supplier } from './supplier-schema.ts';
 
 /**
  * Store del catálogo de inventario (REQ-F-049): contrato que implementan Prisma/MySQL
@@ -9,7 +10,7 @@ import type { NewRecipeVersion, RecipeUsage, RecipeVersion } from './recipe-sche
  *
  * El store mantiene las claves únicas: `active_name_key` (= nameKey mientras está activo) de artículos
  * y categorías, y el registro de SKU. Si una escritura choca con ellas (carrera entre dos peticiones),
- * lanza ItemNameTakenError, CategoryNameTakenError o SkuTakenError.
+ * lanza ItemNameTakenError, CategoryNameTakenError, SkuTakenError o SupplierNameTakenError.
  */
 
 export const INVENTORY_ACTIONS = Object.freeze({
@@ -30,9 +31,9 @@ export const RECIPE_ACTIONS = Object.freeze({
 } as const);
 export type RecipeAction = (typeof RECIPE_ACTIONS)[keyof typeof RECIPE_ACTIONS];
 
-export type InventoryEntity = 'item' | 'category' | 'recipe';
+export type InventoryEntity = 'item' | 'category' | 'recipe' | 'supplier';
 /** Entidades cuyo historial se consulta con `history` (el de una receta son sus versiones). */
-export type HistoryEntity = 'item' | 'category';
+export type HistoryEntity = 'item' | 'category' | 'supplier';
 
 export interface FieldChange {
   field: string;
@@ -59,6 +60,7 @@ export interface StoredInventoryChange extends Omit<InventoryChangeEntry, 'entit
 
 export type NewItem = Omit<InventoryItem, 'id'>;
 export type NewCategory = Omit<InventoryCategory, 'id'>;
+export type NewSupplier = Omit<Supplier, 'id'>;
 
 export const ITEM_STATUSES = Object.freeze(['active', 'inactive', 'all'] as const);
 export type ItemStatus = (typeof ITEM_STATUSES)[number];
@@ -95,11 +97,11 @@ export interface InventoryStoreReader {
   /** Últimos `limit` cambios de la entidad, del más reciente al más antiguo. */
   history(entity: HistoryEntity, entityId: number, limit: number): Promise<StoredInventoryChange[]>;
   /**
-   * RN-4: ¿el artículo tiene versiones de receta o aparece en una línea de cualquier versión (REQ-F-050)?
-   * T3 añadirá los movimientos.
+   * RN-4: ¿el artículo tiene versiones de receta, aparece en una línea de cualquier versión (REQ-F-050)
+   * o tiene movimientos (REQ-F-051, RN-T3-11)?
    */
   isInUse(itemId: number): Promise<boolean>;
-  /** ¿El artículo tiene movimientos de existencias? Hasta T3 (REQ-F-051) no hay movimientos: false. */
+  /** ¿El artículo tiene movimientos del Kardex (REQ-F-051, RN-T3-11)? Su existencia tiene `last_seq > 0`. */
   hasMovements(itemId: number): Promise<boolean>;
   /** Artículos con esos ids (los que no existen se omiten). */
   itemsByIds(ids: readonly number[]): Promise<InventoryItem[]>;
@@ -112,11 +114,15 @@ export interface InventoryStoreReader {
   recipeVersion(id: number): Promise<RecipeVersion | null>;
   /** Recetas vigentes con una línea que usa el artículo (RF-8, C-5), por nombre del artículo producido. */
   usedIn(itemId: number): Promise<RecipeUsage[]>;
+  getSupplier(id: number): Promise<Supplier | null>;
+  /** Proveedores con ese estado, por nombre (REQ-F-051, RF-1; son pocos: la búsqueda y la página las hace core). */
+  listSuppliers(status: ItemStatus): Promise<Supplier[]>;
 }
 
 export interface InventoryStoreTx extends InventoryStoreReader {
   /** Id del artículo activo con esa clave de nombre, o null. */
   activeItemIdByNameKey(nameKey: string): Promise<number | null>;
+  /** Inserta el artículo y, si no es padre, su existencia en 0 y sin costo (REQ-F-051, RF-12 y DT-T3-2). */
   insertItem(item: NewItem): Promise<InventoryItem>;
   /** Reemplaza el artículo completo (con sus empaques) si su versión vigente es `expectedVersion`; si no, false. */
   replaceItem(item: InventoryItem, expectedVersion: number): Promise<boolean>;
@@ -128,6 +134,17 @@ export interface InventoryStoreTx extends InventoryStoreReader {
   updateCategory(category: InventoryCategory): Promise<void>;
   countActiveItemsInCategory(categoryId: number): Promise<number>;
   addChange(entry: InventoryChangeEntry): Promise<void>;
+  /** Id del proveedor activo con esa clave de nombre, o null. */
+  activeSupplierIdByNameKey(nameKey: string): Promise<number | null>;
+  insertSupplier(supplier: NewSupplier): Promise<Supplier>;
+  /** Reemplaza el proveedor si su versión vigente es `expectedVersion`; si no, false. */
+  replaceSupplier(supplier: Supplier, expectedVersion: number): Promise<boolean>;
+  /**
+   * Bloquea hasta el fin de la transacción las existencias de esos artículos, en orden ascendente de
+   * id (DT-13), y crea la que falte (DT-T3-2: un artículo creado por una imagen anterior). La primera
+   * escritura del Kardex y el cambio de unidad o de `inventoriable` (RN-T3-11) la toman antes de leer.
+   */
+  lockStock(itemIds: readonly number[]): Promise<void>;
   /**
    * Candado de recetas (REQ-F-050): la primera sentencia de toda escritura de recetas y de las
    * escrituras de artículos que consultan su uso. Serializa esas escrituras hasta el fin de la transacción.

@@ -2,7 +2,9 @@
 
 ## Estado
 
-READY_FOR_MERGE
+T1 `DONE` (PR 0 #180, PR 1 #181, PR 2 #182 y PR 3 #183, mergeados). Este documento sigue vigente como marco de la épica. T2 (REQ-F-050) y su seguimiento REQ-F-054 están `DONE`, y T3 (REQ-F-051) está en curso. Queda pendiente el PR de la épica hacia `main` (ver "PR de la épica hacia `main`"). Estado corregido en el PR 1 de REQ-F-051: antes decía `READY_FOR_MERGE` del PR #183, ya mergeado.
+
+Histórico de estados de T1:
 
 PR 3 de T1: commit `784cada` en `feature/REQ-F-049-pantallas` y PR #183 (https://github.com/orvigas/negocio/pull/183) hacia `epic/inventario` (no se despliega). CI del PR: `calidad`, `docker`, `auditoria` y `pruebas` en pass. Siguiente paso: el usuario revisa y hace merge del PR #183. DEF-003, DEF-004 y DEF-005: corregidos y verificados. `.claude/CLAUDE.md` §8 actualizado (edición autorizada). Con este PR, T1 queda completo: PR 0 #180, PR 1 #181, PR 2 #182 y PR 3 #183. Lo siguiente es T2 (REQ-F-050, recetas), que se refina con el business-analyst; según la hoja de ruta, la épica de ventas va tras T3, y T4 y T5 después.
 
@@ -126,7 +128,7 @@ Con ello el negocio conoce el costo real de cada platillo, el valor de lo que ti
 | Épica | Tickets | Contenido | Cuándo |
 | --- | --- | --- | --- |
 | **E1 — Inventario** | REQ-F-049 a REQ-F-053 | T1, T2, T3 → [E2] → T4, T5 | En curso |
-| **E2 — Ventas** | REQ-F-054 y siguientes | Registro de ventas o POS en el admin (o captura); descuento de insumos por receta al vender, con explosión al vuelo; modificadores fijos, removibles y extras; cancelaciones con reintegro frente a merma; cortesías; formas de pago (efectivo, tarjeta, transferencia y apps de reparto); comisiones de plataformas; rol Cajero; enlace producto del menú ↔ receta o artículo (revisa PV-10). Reportes: corte de caja Zeta con cuadre del fondo de caja, mix de ventas, ventas por horario y día, cancelaciones y cortesías, y comisiones de delivery. | **No se empieza hasta que T1 a T3 estén utilizables.** Se refina con el business-analyst después de T3. |
+| **E2 — Ventas** | Sin rango reservado: cada ticket toma el siguiente número libre al crearse (hoy, REQ-F-055 o mayor). REQ-F-054 se usó para el seguimiento DEF-007/DEF-008 de T2 (PV-T3-13 de REQ-F-051). | Registro de ventas o POS en el admin (o captura); descuento de insumos por receta al vender, con explosión al vuelo; modificadores fijos, removibles y extras; cancelaciones con reintegro frente a merma; cortesías; formas de pago (efectivo, tarjeta, transferencia y apps de reparto); comisiones de plataformas; rol Cajero; enlace producto del menú ↔ receta o artículo (revisa PV-10). Reportes: corte de caja Zeta con cuadre del fondo de caja, mix de ventas, ventas por horario y día, cancelaciones y cortesías, y comisiones de delivery. | **No se empieza hasta que T1 a T3 estén utilizables.** Se refina con el business-analyst después de T3. |
 | **E3 — Costos y rentabilidad** | Por asignar | Escandallos por porción frente al precio de venta, Food Cost, ingeniería de menú e inventario teórico contra físico. | Después de T5 |
 | **E4 — Finanzas y administración** | Por asignar | Gastos operativos, estado de resultados, flujo de efectivo, cuentas por pagar, nómina y costo laboral. Reporte fiscal y de facturación **solo como estructura pendiente**: el negocio aún no está dado de alta ante el SAT; la facturación y los impuestos reales siguen fuera de alcance. | Después de E3 |
 
@@ -143,7 +145,7 @@ Cada épica posterior tiene sus propias decisiones pendientes (rama intermedia, 
 | Sabores y versiones (refrescos, aguas frescas) | E1 | T1 (variantes) |
 | Recetas libres, editables y versionadas | E1 | T2 |
 | Actualizar y dar de baja sin afectar el historial | E1 | T1 (PV-11, RN-2) |
-| Descuento de insumos al vender | E2 | REQ-F-054+ |
+| Descuento de insumos al vender | E2 | Siguiente número libre (REQ-F-055+) |
 | Movimientos históricos de inventario | E1 | T3 (Kardex), T5 (reporte) |
 | Compras y proveedores, variación de precios | E1 | T3, T5 |
 | Cuentas por pagar | E4 | Por asignar |
@@ -151,12 +153,12 @@ Cada épica posterior tiene sus propias decisiones pendientes (rama intermedia, 
 | Consumo de insumos críticos | E1 | T5 |
 | Escandallos (costo por porción) | E1 / E3 | T5 (costo); E3 (frente al precio) |
 | Inventario físico vs. teórico | E3 | Necesita ventas (conteos en T4) |
-| Corte de caja Zeta | E2 | REQ-F-054+ |
-| Mix de ventas | E2 | REQ-F-054+ |
-| Ventas por horario y día | E2 | REQ-F-054+ |
-| Cancelaciones y cortesías | E2 | REQ-F-054+ |
-| Comisiones de delivery | E2 | REQ-F-054+ |
-| Reportes de ventas | E2 | REQ-F-054+ |
+| Corte de caja Zeta | E2 | Siguiente número libre (REQ-F-055+) |
+| Mix de ventas | E2 | Siguiente número libre (REQ-F-055+) |
+| Ventas por horario y día | E2 | Siguiente número libre (REQ-F-055+) |
+| Cancelaciones y cortesías | E2 | Siguiente número libre (REQ-F-055+) |
+| Comisiones de delivery | E2 | Siguiente número libre (REQ-F-055+) |
+| Reportes de ventas | E2 | Siguiente número libre (REQ-F-055+) |
 | Food Cost | E3 | Por asignar |
 | Ingeniería de menú | E3 | Por asignar |
 | Estado de resultados | E4 | Por asignar |
@@ -240,7 +242,7 @@ Ventas, costos y rentabilidad, y finanzas no quedan fuera para siempre: son las 
 | 2 | T2 — REQ-F-050 | `epic/inventario` | Recetas y costo teórico. Sin CPP, el costo se muestra como "sin costo" |
 | 3 | T3 — REQ-F-051 | `epic/inventario` | Existencias valorizadas y CPP |
 | — | Merge `epic/inventario` → `main` | `main` | **Valor mínimo en producción:** costo real de las recetas y existencias valorizadas |
-| — | **E2 — Ventas** (REQ-F-054+) | Por decidir al refinarla | Ventas con descuento de insumos por receta |
+| — | **E2 — Ventas** (siguiente número libre, REQ-F-055+) | Por decidir al refinarla | Ventas con descuento de insumos por receta |
 | 4 | T4 — REQ-F-052 | `main` (PV-12) | Producción, mermas, conteos y alertas |
 | 5 | T5 — REQ-F-053 | `main` (PV-12) | Reportes de inventario, incluidos mermas, insumos críticos y escandallos |
 
@@ -1920,6 +1922,16 @@ Revalidación tras la corrección de DEF-003, DEF-004 y DEF-005 por senior-fulls
 
 Resultado final de la ronda 2: QA_APPROVED
 
+## PR de la épica hacia `main` (P-1 de REQ-F-051)
+
+Se registra aquí, en el marco y dueño de D-4 (P-1 de REQ-F-051).
+
+- **Estado:** pendiente. Se abre cuando T3 (REQ-F-051) esté `DONE`, con sus PR mergeados en `epic/inventario`.
+- **PR:** por registrar (URL, número y fecha).
+- **CI:** por registrar. Corre completo: `calidad`, `docker`, `auditoria` y `pruebas` en `pass`, más las pruebas de humo de despliegue y de respaldos.
+- **Merge:** por registrar. Después aplican PV-12 (T4 y T5 van directo a `main` y la rama se borra) y la limpieza de `on.pull_request` en `.github/workflows/ci.yml` (`.claude/rules/git.md`).
+- **Tras el merge (DT-T3-6 A de REQ-F-051):** reinstalar `ops/backup` en el VPS (`restaurante/docs/despliegue.md` §11.5).
+
 ## Plan técnico de T2 a T5 (aprobado 2026-11-19)
 
 Copia íntegra del plan técnico completo de T2 a T5 de senior-fullstack, aprobado por el usuario ("apruebo las recomedaciones").
@@ -2315,6 +2327,8 @@ Preguntas abiertas imprescindibles (con recomendación):
 > • Reporte fiscal y de facturación: Resume las facturas emitidas a clientes, facturas recibidas de proveedores y el cálculo de impuestos (IVA, ISR). (Solo crea la estructura, queda pendiente, aun no estamos dados de alta ante el SAT México)
 
 ## Historial de cambios
+
+- 2026-11-25, senior-fullstack (PR 1 de REQ-F-051, autorizado por PV-T3-13, P-1 y DT-T3-9): la numeración de E2 queda sin rango reservado (siguiente número libre, hoy REQ-F-055+), porque REQ-F-054 se usó para el seguimiento DEF-007/DEF-008. Nueva sección "PR de la épica hacia `main`". El estado se corrige: T1 `DONE`.
 
 - 2026-11-19, senior-fullstack (T4, PR 3): PR #183 hacia `epic/inventario` con el CI en pass. Estado `READY_FOR_MERGE`.
 - 2026-11-19, senior-fullstack (T4, PR 3): `.claude/CLAUDE.md` §8 actualizado (inventario en `api` e `inventory-manager`, `core` con `inventory`, roles del admin). Commit del PR 3 en `feature/REQ-F-049-pantallas` hacia `epic/inventario`. T1 queda completo con este PR.

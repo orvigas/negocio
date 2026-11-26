@@ -2,9 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
-PR 1b: commit `8f8c128` en `feature/REQ-F-051-kardex-dominio` y PR #196 (https://github.com/orvigas/negocio/pull/196) hacia `epic/inventario`, abierto en borrador; el CI está pendiente.
+PR 1b: commit `8f8c128` en `feature/REQ-F-051-kardex-dominio` y PR #196 (https://github.com/orvigas/negocio/pull/196) hacia `epic/inventario` (no se despliega). El CI de `7249efc`, con el PR listo (ejecución 45784137262), pasó `calidad`, `docker`, `auditoria` y `pruebas` (1/2 y 2/2). Siguiente paso: el usuario revisa y hace merge del PR #196. Después viene el PR 2 (API, semilla, DEF-001 y OBS-6 a OBS-8).
 
 QA del PR 1b aprobado por senior-qa el 2026-11-26 (ver "QA Report — PR 1b", ronda 1). El usuario había aprobado el plan de QA con "Si", en respuesta a "¿Aprueba el plan de QA del PR 1b con esas cuatro respuestas?". Hay 2 defectos sin bloqueo: DEF-001 (`MINOR`) y DEF-002 (`TRIVIAL`). Siguiente paso: senior-fullstack hace el commit y abre el PR hacia `epic/inventario` (T4), y decide con el usuario si DEF-001 y DEF-002 se corrigen en este PR o en uno posterior.
 
@@ -2252,3 +2252,4 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 ### Commit y PR (T4, PR 1b)
 
 - 2026-11-26, senior-fullstack: DEF-002 corregido en `arquitectura.md`. DEF-001 y OBS-5 a OBS-12 quedan anotados en "Pendientes del PR 1b para los PR 2 y 3". Commit `8f8c128` y PR #196 en borrador hacia `epic/inventario`.
+- 2026-11-26, senior-fullstack: el PR #196 pasa a listo. Su CI (ejecución 45784137262) dejó `calidad`, `docker`, `auditoria` y `pruebas` en `pass`. Estado: `READY_FOR_MERGE`.

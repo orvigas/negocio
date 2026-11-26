@@ -2,9 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
-PR 1a: commit `1fb5a02` en `feature/REQ-F-051-kardex-modelo` y PR #195 (https://github.com/orvigas/negocio/pull/195) hacia `epic/inventario`, abierto en borrador; el CI está pendiente.
+PR 1a: commit `1fb5a02` en `feature/REQ-F-051-kardex-modelo` y PR #195 (https://github.com/orvigas/negocio/pull/195) hacia `epic/inventario` (no se despliega). El CI de `d8e7461`, con el PR listo (ejecución 45736787294), pasó `calidad`, `docker`, `auditoria` y `pruebas` (1/2 y 2/2). Siguiente paso: el usuario revisa y hace merge del PR #195. Después, el PR 1b sale de la punta de la épica.
 
 QA del PR 1a aprobado por senior-qa el 2026-11-25 (ver "QA Report — PR 1a", ronda 1). El usuario aprobó el plan de QA: "Sí, apruebo el plan de QA con las tres respuestas". No hay defectos; quedan 4 observaciones. Siguiente paso: senior-fullstack hace el commit y abre el PR en borrador hacia `epic/inventario` (T4).
 
@@ -1553,3 +1553,4 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 ### Commit y PR (T4, PR 1a)
 
 - 2026-11-25, senior-fullstack: commit `1fb5a02` y PR #195 en borrador hacia `epic/inventario`. Observaciones OBS-1 a OBS-4 del QA registradas como pendientes del 1b, el 2 y el 3.
+- 2026-11-25, senior-fullstack: el PR #195 pasa a listo. Su CI (ejecución 45736787294) dejó `calidad`, `docker`, `auditoria` y `pruebas` en `pass`. Estado: `READY_FOR_MERGE`.

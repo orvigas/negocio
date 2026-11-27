@@ -2,6 +2,7 @@ import { INVENTORY_ROLES, type AdminProduct, type AdminUser, type ProductFormFie
 import type { Renderer, SafeHtml } from '@restaurante/web';
 
 import { BOT_PATH, createBotViews } from './bot.ts';
+import { createDocumentViews } from './inventory-documents.ts';
 import { DOCUMENTS_PATH, STOCK_PATH, SUPPLIERS_PATH, createKardexViews } from './inventory-kardex.ts';
 import { RECIPES_PATH, createRecipeViews } from './inventory-recipes.ts';
 import { CATEGORIES_PATH, ITEMS_PATH, createInventoryViews } from './inventory.ts';
@@ -211,6 +212,7 @@ export function createViews(renderer: Renderer) {
     ...createInventoryViews({ render, join, attrs, page, notice, errorSummary, fieldId, displayDate }),
     ...createRecipeViews({ render, join, attrs, page, notice, errorSummary, fieldId, displayDate }),
     ...createKardexViews({ render, join, attrs, page, notice, errorSummary, fieldId, displayDate }),
+    ...createDocumentViews({ render, join, attrs, page, errorSummary, fieldId }),
 
     login({ next, problem }: { next: string; problem?: 'invalid' | 'locked' | 'expired' | 'unavailable' | 'closed' | undefined }): SafeHtml {
       const notices: Record<string, NoticeOptions> = {

@@ -1,0 +1,20 @@
+<p><a class="font-semibold text-maiz underline underline-offset-4" href="/inventario/documentos">Volver a documentos</a></p>
+      <h1 class="mt-4 font-headline text-3xl font-black tracking-tight break-words uppercase">{{ title }}</h1>
+      {{{ notices }}}
+      <form id="inventory-document-form" class="kardex-form mt-6 space-y-6" method="post" action="{{ action }}" novalidate data-submit-guard>
+        <input type="hidden" name="_csrf" value="{{ csrfToken }}" />{{{ hidden }}}
+        <fieldset class="user-form__section rounded-2xl border border-rim bg-surface p-4 md:p-6">
+          <legend class="px-2 font-headline text-lg font-bold">Datos del documento</legend>
+          <div class="user-form__grid grid gap-4 md:grid-cols-2">{{{ header }}}
+          </div>
+        </fieldset>
+        <fieldset class="kardex-form__lines rounded-2xl border border-rim bg-surface p-4 md:p-6" id="f-lines" tabindex="-1">
+          <legend class="px-2 font-headline text-lg font-bold">Líneas</legend>
+          <p class="product-form__intro mb-4 text-sm text-masa">{{ linesIntro }}</p>{{{ linesError }}}
+          <div class="kardex-form__rows space-y-4 lg:space-y-2">{{{ lines }}}
+          </div>{{{ datalists }}}
+        </fieldset>
+        <div class="kardex-form__actions flex flex-wrap items-center gap-3">{{{ buttons }}}
+          <a class="button button--ghost inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg px-3 py-2 font-label text-sm font-bold tracking-wider text-maiz uppercase hover:bg-surface-high" href="/inventario/documentos">Cancelar</a>
+        </div>
+      </form>

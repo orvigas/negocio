@@ -3,6 +3,7 @@ import Router from '@koa/router';
 import type { AccountController } from './controllers/account.ts';
 import type { AdminController } from './controllers/admin.ts';
 import type { BotController } from './controllers/bot.ts';
+import type { DocumentController } from './controllers/inventory-documents.ts';
 import type { KardexController } from './controllers/inventory-kardex.ts';
 import type { RecipeController } from './controllers/inventory-recipes.ts';
 import type { InventoryController } from './controllers/inventory.ts';
@@ -75,6 +76,7 @@ export function createRouter({
   inventory,
   recipes,
   kardex,
+  documents,
 }: {
   admin: AdminController;
   users: UsersController;
@@ -85,6 +87,7 @@ export function createRouter({
   inventory: InventoryController;
   recipes: RecipeController;
   kardex: KardexController;
+  documents: DocumentController;
 }): Router {
   const router = new Router();
   router.get('/salud', (ctx) => {
@@ -137,6 +140,11 @@ export function createRouter({
   router.post('/inventario/proveedores/:id/desactivar', kardex.deactivateSupplier);
   router.post('/inventario/proveedores/:id/reactivar', kardex.reactivateSupplier);
   router.get('/inventario/documentos', kardex.documents);
+  // REQ-F-051 (PR 3b): formularios con líneas; antes que /documentos/:id.
+  router.get('/inventario/documentos/nuevo/:tipo', documents.newDocument);
+  router.post('/inventario/documentos/nuevo/:tipo', documents.createDocument);
+  router.get('/inventario/documentos/:id/devolver', documents.returnPage);
+  router.post('/inventario/documentos/:id/devolver', documents.createReturn);
   router.get('/inventario/documentos/:id', kardex.document);
   router.get('/inventario/documentos/:id/revertir', kardex.reversalPage);
   router.post('/inventario/documentos/:id/revertir', kardex.reverse);

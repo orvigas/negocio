@@ -2,7 +2,19 @@
 
 ## Estado
 
-READY_FOR_MERGE
+QA_APPROVED
+
+QA del PR 3b aprobado por senior-qa el 2026-11-27 (ver "QA Report — PR 3b", ronda 2). El usuario aprobó la implementación de la ronda 2 con "Si". DEF-007, DEF-008 y DEF-009 quedan corregidos y verificados en el navegador y contra MySQL. La regresión del parcial `field-input` es neutra en 17 pantallas (los mismos estilos que en `d83f9ee` y axe en 0). Siguiente paso: senior-fullstack hace el commit y abre el PR hacia `epic/inventario` (T4).
+
+PR 3b, ronda 2: corregidos DEF-007 (decisión del usuario, opción A), DEF-008 y DEF-009, y atendida OBS-30. Sin commit (ver "Implementation Result — PR 3b", "Ronda 2").
+
+QA del PR 3b rechazado por senior-qa el 2026-11-27 (ver "QA Report — PR 3b", ronda 1). El usuario aprobó el plan con "si" (R-1 opción A). Hay tres defectos `MINOR`: DEF-007 (R-1: el segundo saldo inicial no sugiere un ajuste, CA-5), DEF-008 (el campo de fecha tiene dos atributos `type` y el navegador lo trata como texto) y DEF-009 (la devolución con la sesión de la API caída pierde las cantidades). Lo demás pasa, incluidos los valores contables exactos en MySQL y `inventory:verify` en 0. Siguiente paso: senior-fullstack corrige DEF-007 a DEF-009 y QA revalida (ronda 2).
+
+QA Action Plan del PR 3b redactado por senior-qa el 2026-11-26 (ver "QA Action Plan — PR 3b"), sin ejecutar ninguna prueba. El usuario aprobó la implementación del 3b con "Si". Quedan 2 decisiones para la aprobación del plan.
+
+PR 3b de T3, el último: formularios con líneas (saldo inicial, compra, ajuste y devolución a proveedor). Implementado en `feature/REQ-F-051-kardex-formularios`, desde `origin/epic/inventario` (`d83f9ee`, con el PR 3a mergeado en #198), sin commit (ver "Implementation Result — PR 3b"). Añade 972 líneas, por debajo de las ~1 500 del plan.
+
+PR 3a mergeado en `epic/inventario` (#198, merge `d83f9ee`). Historial del PR 3a:
 
 PR 3a: commit `ce9c53c` en `feature/REQ-F-051-kardex-pantallas` y PR #198 (https://github.com/orvigas/negocio/pull/198) hacia `epic/inventario` (no se despliega). El CI del PR listo (ejecución 45923740625) pasó `calidad`, `docker`, `auditoria` y `pruebas` (1/2 y 2/2). Siguiente paso: el usuario revisa y hace merge del PR #198. Después viene el PR 3b (formularios con líneas).
 
@@ -3560,6 +3572,632 @@ El usuario aprobó corregir OBS-27 con "si". Solo cambian pruebas, no código de
 - `npm run typecheck` y `npm run lint` terminan con 0, y `npm test` pasa entero: `api` 1281, `landing-pages` 918 e `inventory-manager` 305.
 - **OBS-28** (el camino "la lectura cae tras un 422 o un 409 de la escritura" sin prueba permanente) queda anotada, sin cambios.
 
+## Implementation Result — PR 3b
+
+### Rama
+
+`feature/REQ-F-051-kardex-formularios` (worktree `.claude/worktrees/req-f-051-pr3b`), creada desde `origin/epic/inventario` (`d83f9ee`) y sin upstream. Destino: `epic/inventario`. Sin commit.
+
+### Cambios realizados
+
+- **Diseño.** `_stich_source_/` no tiene diseños del admin. Sin Stitch (PV-8 y PV-T3-10): se reutilizan el patrón del editor de recetas de T2 (bloques de filas con `fieldset` por línea, `<input list>` con un único `<datalist>`, «Añadir 10 filas» sin JavaScript) y los parciales de T1 y del 3a.
+- **Formularios** (`inventory-manager`, SSR, sin JavaScript obligatorio):
+  - `GET|POST /inventario/documentos/nuevo/{saldo-inicial|compra|ajuste}`;
+  - `GET|POST /inventario/documentos/:id/devolver`.
+  - **Cabecera común:** fecha del hecho (`type="date"`, por defecto «hoy» de `BUSINESS_TIMEZONE`, con `min` = hoy − 31 y `max` = hoy) y nota.
+  - **Cabecera de la compra:** proveedor («Sin proveedor» o un activo), folio y el criterio «Con IVA» en solo lectura (PV-T3-11).
+  - **Cabecera del ajuste:** motivo (`error_captura` u `otro`).
+  - **Líneas:** bloques de 10 hasta 50 (PV-T3-4). «Añadir 10 filas» conserva lo escrito y pone `autofocus` en el artículo de la primera fila nueva. En móvil, un `fieldset` por línea («Línea N»); en escritorio, una fila de 4 o 5 columnas (clases literales para que Tailwind las genere).
+  - **Partes de cada línea:**
+    - saldo inicial: artículo, cantidad, unidad y costo unitario. El costo se precarga con el costo de referencia (PV-T3-7) al añadir filas o al repintar;
+    - compra: artículo, cantidad, unidad e importe pagado;
+    - ajuste: artículo, dirección, cantidad, unidad y costo unitario opcional.
+  - **Datalist de artículos:** solo los de RN-T3-1 activos (en el saldo inicial, solo los que lo admiten), con su tipo, unidad y CPP o referencia con 4 decimales (decisión A).
+  - **Devolución:** una fila por cada línea de la compra. Cada fila muestra lo comprado (al costo de esa compra, con 4 decimales), lo que queda por devolver y la cantidad a devolver en unidad base (RN-T3-14).
+  - **Acciones:** "Nueva compra", "Saldo inicial" y "Ajuste" en Documentos, y "Devolver" en el detalle de una compra no revertida.
+- **Envío y errores** (`controllers/inventory-documents.ts`):
+  - **OBS-16:** cada envío lleva `Idempotency-Key`, el `requestId` del formulario, que se conserva al repintar.
+  - El nombre del artículo se resuelve con `GET kardex/opciones`. Las filas vacías no se envían.
+  - **422:** los errores de la API (lista compacta) vuelven a la fila del formulario. Un nombre desconocido se explica en su `lines.N.item` (OBS-15). En la devolución, `lines.N.item` o `lines.N.sourceMovement` se muestran en la cantidad de su fila.
+  - **409:**
+    - `INITIAL_BALANCE_NOT_ALLOWED` marca en su línea cada artículo con movimientos;
+    - el resto, con su aviso.
+  - **503 (DEF-005):**
+    - con la API caída (sesión, opciones o escritura) u ocupada, el formulario vuelve con lo escrito y la misma clave;
+    - ocupada (`INVENTORY_BUSY`) muestra su propio mensaje;
+    - el reenvío no duplica.
+  - Tras registrar, 303 al documento con «Documento registrado».
+- **API y core (pequeño):** `kardex/opciones` devuelve `today` («hoy» en `BUSINESS_TIMEZONE`), calculado por `formOptions` de core. El admin no conoce la zona horaria.
+- **OBS-23:** `despliegue.md` §5 remite a «Documentos → Saldo inicial» y «Nueva compra», que ahora existen con esos nombres. No hizo falta cambiar el texto.
+- **Pruebas** (funcionales):
+  - `inventory-manager/tests/integration/inventory-kardex-forms.test.ts`, nuevo, 7 pruebas:
+    - compra con 10 filas y datalist restringido, bloques hasta 50 con foco y lo escrito conservado, y registro con clave y cuerpo exacto (filas vacías fuera, proveedor y artículo resueltos);
+    - errores en su fila con filas vacías intermedias, y resumen con enlaces;
+    - 503 con la API caída (`down` y `writes-down`) y ocupada, con lo escrito y la clave; el reenvío registra una sola vez;
+    - saldo inicial con precarga del costo de referencia y 409 marcado en su línea;
+    - ajuste con dirección, motivo y costo;
+    - devolución con lo pendiente, el exceso marcado en su fila y el registro con clave;
+    - acciones de la lista, tipo desconocido 404 y Editor 403.
+  - `tests/support/api-double-kardex.ts`: opciones, escrituras de documentos (422, 409 de saldo, 503 ocupado y reenvío por clave) y devolución.
+  - `admin-inventory-kardex-api.test.ts` (se modifica): `today` en las opciones.
+
+### Criterios de aceptación (alcance del 3b)
+
+| CA | Estado | Evidencia |
+|---|---|---|
+| CA-1 a CA-4 (pantalla) | PASS (admin) | Compra por empaque e importe. El cálculo lo prueban core y la API |
+| CA-5 (pantalla) | PASS | Saldo inicial; el 409 se marca en la línea |
+| CA-9 y CA-10 (pantalla) | PASS | Error en la línea; artículo desconocido explicado |
+| CA-11 (pantalla) | PASS | Fecha con «hoy» de la API, `min` y `max`; la API rechaza fuera de rango |
+| CA-12 y CA-14 (pantalla) | PASS | Clave de envío conservada; 503 caída u ocupada con lo escrito; reenvío sin duplicar |
+| CA-29 y CA-30 (pantalla) | PASS | Ajuste y devolución |
+| CA-25 (formularios) | Pendiente de QA | Mobile-first (`fieldset` por línea), teclado, foco con `autofocus`, errores con texto; 360 px y axe como sondas |
+| CA-26 | PASS en la suite | `npm test` en verde en las tres apps; regresión manual a cargo de QA |
+
+### Validaciones ejecutadas
+
+Todo desde `restaurante/` en el worktree.
+
+- `npm run build:css`: 0; genera `lg:grid-cols-3`, `lg:grid-cols-4` y `lg:grid-cols-5`.
+- `npm run typecheck`: 0.
+- `npm run lint`: 0, con `check-private-data`.
+- `npm test`: `api` 1281, `landing-pages` 918 e `inventory-manager` 312, todas en verde.
+- Limpieza: sin bases `restaurante_test*`, sin procesos de Vitest y sin guiones temporales. El worktree se conserva.
+
+### Archivos afectados
+
+- **Nuevos** (en `restaurante/inventory-manager/`):
+  - `src/controllers/inventory-documents.ts`
+  - `src/views/inventory-documents.ts`
+  - `src/views/pages/inventory-document-form.html`
+  - `src/views/partials/kardex-line.html`
+  - `tests/integration/inventory-kardex-forms.test.ts`
+- **Modificados:**
+  - en `restaurante/inventory-manager/`: `src/{app,routes}.ts`, `src/controllers/inventory-kardex.ts`, `src/views/{index,inventory-kardex}.ts` y `tests/support/api-double-kardex.ts`
+  - `restaurante/packages/contracts/inventory-kardex.ts`
+  - `restaurante/packages/core/inventory/kardex-repository.ts`
+  - `restaurante/api/src/admin/inventory-kardex-routes.ts`
+  - `restaurante/api/tests/integration/admin-inventory-kardex-api.test.ts`
+  - este ticket.
+
+### Observaciones declaradas (no caben de forma natural en el 3b)
+
+- **OBS-13** (un solo error de filtro a la vez): sin cambios. Es el comportamiento de T1 y T2, y el ticket no lo pide.
+- **OBS-17** (`estado` en español en Existencias y con valores de core en proveedores): sin cambios. Unificarlo cambia contratos ya mergeados; queda como seguimiento.
+- **OBS-18** (semilla no atómica): sin cambios. Solo afecta al desarrollo y se resuelve con una base nueva.
+- **OBS-24** (la prueba de humo pasa con un Kardex vacío): sin cambios. Añadir filas del Kardex en `ops/backup/ci/smoke.sh` solo se puede validar en Linux (CI hacia `main`), y un fallo allí bloquearía el PR de la épica. Se propone hacerlo en ese PR o en un seguimiento de operación.
+- **OBS-25** (bloque BEM `recipe-table` reutilizado): sin cambios. Los formularios usan bloques propios (`kardex-line` y `kardex-form`).
+- **OBS-28** (lectura caída tras un 422 o un 409 de la reversión, sin prueba permanente): sin cambios. El doble no permite encadenar esos dos fallos sin complicarlo.
+- **Recetas de T2 con 2 decimales:** sigue como seguimiento (decisión de la ronda 2 del 3a).
+
+### Riesgos o pendientes
+
+- **Precarga del costo en el saldo inicial (PV-T3-7):** el servidor no sabe el artículo hasta que se envía el formulario, así que la precarga ocurre al añadir filas o al repintar, no al elegirlo. Para precargarlo antes haría falta JavaScript, que no se usa.
+- **Cierre de T3:** se propondrá editar `.claude/CLAUDE.md` §8 y la sección "Persistencia y API" de `senior-fullstack.md`. No están autorizados. Después viene el PR de la épica hacia `main`, que se registra en REQ-F-049.
+
+### Ronda 2 (correcciones del QA del PR 3b)
+
+**Defectos corregidos.**
+- **DEF-007 (CA-5; el usuario eligió la opción A, corregirlo en este PR).**
+  - En el saldo inicial, el controlador (`inventory-documents.ts`) resuelve todos los artículos que admiten movimientos.
+  - Si una fila tiene un artículo con movimientos, responde 409 sin enviar nada a la API. La fila lleva «El artículo ya tiene movimientos: corrige su existencia con un ajuste.», el mismo texto que el 409 `INITIAL_BALANCE_NOT_ALLOWED`, con lo escrito conservado.
+  - El datalist sigue ofreciendo solo los artículos sin movimientos.
+  - El 409 de la carrera (opciones obsoletas) sigue marcando su línea igual.
+- **DEF-008.** El parcial `field-input.html` ya no fija `type="text"`. Un `<input>` sin `type` es de texto, y el que lo necesita lo pasa una sola vez (`date` en la fecha del hecho, `search` en los filtros).
+  - La misma causa duplicaba `type` en los buscadores de artículos, recetas, existencias y proveedores (T1, T2 y 3a), y queda corregida en todos sin cambiar su comportamiento.
+  - El CSS generado mantiene el estilo de `@tailwindcss/forms` para los campos sin `type` (`input:where(:not([type]))`).
+  - La fecha conserva `min` y `max` también con la API caída: los cuatro formularios devuelven «hoy» en un campo oculto (`today`).
+- **DEF-009.** Con la API caída al comprobar la sesión, la devolución ya no pierde nada.
+  - Cada fila lleva ocultos su id de compra y su etiqueta (artículo y unidad), así que el 503 vuelve a pintar las filas con las cantidades escritas, sin leer la compra.
+  - La fecha mantiene `min` y `max`, y la clave de envío se conserva.
+
+**OBS-30:** prueba del filtro del datalist del saldo inicial: un artículo con movimientos no se ofrece.
+
+**Pruebas** (en el archivo existente `inventory-kardex-forms.test.ts`, que pasa de 7 a 8 casos):
+- un solo `type="date"` en la fecha de los cuatro formularios (DEF-008);
+- saldo inicial con datalist filtrado y artículo con movimientos explicado en su fila, sin escritura en la API (DEF-007 y OBS-30);
+- devolución con la API caída al comprobar la sesión: filas, cantidad, `min`, `max` y clave conservados (DEF-009).
+- **Mutaciones descartables:** sin la comprobación de DEF-007 o sin las filas de respaldo de DEF-009, su prueba falla.
+
+**Sin tocar:** OBS-29 (errores de conversión por etapas de core) y OBS-31 (`datalist` en un teléfono real), como se pidió.
+
+**Validaciones (ronda 2), desde `restaurante/`:**
+- `npm run build:css`: 0.
+- `npm run typecheck`: 0.
+- `npm run lint`: 0, con `check-private-data`.
+- `npm test`: `api` 1281, `landing-pages` 918 e `inventory-manager` 313, todas en verde.
+- Limpieza: sin bases `restaurante_test*`, sin procesos de Vitest y sin guiones temporales.
+
+**Archivos de la ronda 2:**
+- `restaurante/inventory-manager/src/controllers/inventory-documents.ts`
+- `restaurante/inventory-manager/src/views/inventory-documents.ts`
+- `restaurante/inventory-manager/src/views/partials/field-input.html`
+- `restaurante/inventory-manager/tests/integration/inventory-kardex-forms.test.ts`
+- este ticket.
+
+## QA Action Plan — PR 3b
+
+### Objetivo
+
+Validar con evidencia que el PR 3b (rama `feature/REQ-F-051-kardex-formularios`, sin commit, sobre `d83f9ee`), el último de T3, cumple lo siguiente:
+
+- Los cuatro formularios con líneas (saldo inicial, compra, ajuste y devolución) registran documentos con los valores contables exactos en MySQL.
+- Respetan PV-T3-4 (bloques de 10 hasta 50, con foco), PV-T3-7 (precarga del costo), RN-T3-3 (fecha) y RN-T3-14 (devolución en unidad base).
+- Conservan lo escrito ante cualquier error (422, 409 y 503).
+- Nunca duplican un documento.
+- Se usan a 360 px, con teclado y sin JavaScript.
+- No rompen T1, T2, el 3a ni el resto del monorepo.
+
+Fuentes: el ticket (RF-2, RF-3, RF-5, RF-6, RF-11, RF-16, CA-1 a CA-5, CA-9 a CA-12, CA-14, CA-21, CA-25, CA-26, CA-29 y CA-30, el Technical Action Plan §"Frontend (PR 3)" y la decisión A de REQUIREMENT_AMBIGUITY-1), el diff del worktree y las reglas del proyecto. `_stich_source_/` no tiene diseños del admin (PV-8 y PV-T3-10). CodeGraph solo indexa `main`: en Q1 se usaron lecturas dirigidas del worktree. NotebookLM no está disponible en esta sesión.
+
+### Requisito bajo prueba
+
+- **En el 3b:**
+  - RF-2, RF-3, RF-5 y RF-6 en pantalla, RF-11 (idempotencia y "inténtalo de nuevo") y RF-16 (usabilidad de los formularios);
+  - CA-1 a CA-5, CA-9 a CA-12, CA-14, CA-29 y CA-30 en pantalla;
+  - CA-21 en las rutas nuevas, CA-25 (las dos viñetas) y CA-26;
+  - OBS-15 y `today` en `kardex/opciones`;
+  - la regla de decimales A (costos con 4 y montos con 2).
+- **Fuera del 3b, sin tratarlo como defecto:** lo cerrado en el 3a, las observaciones declaradas que no se tocan (OBS-13, OBS-17, OBS-18, OBS-24, OBS-25 y OBS-28) y los decimales de las recetas de T2 (seguimiento aceptado).
+
+### Valores esperados (calculados a mano)
+
+| Escenario | Operaciones en pantalla | Esperado en MySQL |
+|---|---|---|
+| CA-1 | "Masa QA" en kg con empaque `bulto` = 25, existencia 0: compra de 2 `bulto` por 1000.00 | `unit_cost` 20.0000, existencia 50.000, CPP 20.0000, `last_cost` 20.0000 y `line_total` 1000.0000 |
+| CA-2 | + compra de 25 kg por 600.00 | `unit_cost` 24.0000, existencia 75.000, CPP 21.3333 y `last_cost` 24.0000 |
+| CA-3 | Artículo con −2.000 y CPP 21.3333 (ajuste de salida previo) + compra de 10 kg por 250.00 | existencia 8.000 y CPP 25.0000 |
+| CA-4 | Compra de 3 pza por 10.00 y de 3 pza por 20.00 (artículos distintos) | 3.3333 y 6.6667. "1,5" o "1.505" en el importe → error en el campo |
+| CA-5 | Saldo de 12.5 kg a 18.5 | existencia 12.500 y CPP 18.5000; un segundo saldo del mismo artículo se rechaza |
+| CA-29 | 10 kg con CPP 20 + ajuste de salida de 2 kg, `error_captura` | existencia 8.000; la salida sale a 20.0000 |
+| CA-30 | Sobre CA-2: devolución de 5 kg de la línea de 25 kg | sale a 24.0000; CPP (75·21.3333 − 5·24) / 70 = 21.1428 |
+| Combinado | Una compra de 3 líneas, con una fila vacía intermedia, de 2 artículos (uno repetido en dos líneas) | movimientos en el orden de las filas escritas, `seq` contiguo por artículo y total = suma |
+
+Tras cada escenario: `npm run inventory:verify` sobre la base de QA → código 0.
+
+### Riesgos identificados
+
+- **R-1. El mensaje del segundo saldo inicial (CA-5).** `itemsByName` del saldo inicial solo incluye los artículos con `initialBalanceAllowed`. Si se escribe un artículo que ya tiene movimientos, se envía `itemId: 0` y la fila dice "No hay un artículo que admita este documento con ese nombre". CA-5 pide que el rechazo traiga "un mensaje que sugiere un ajuste". El 409 `INITIAL_BALANCE_NOT_ALLOWED`, que sí lo sugiere, solo se vería en una carrera (F5).
+- **R-2. Correspondencia entre filas y líneas.** La API recibe una lista compacta (sin las filas vacías) y sus errores se trasladan a las filas con `slots`. Un error mal trasladado marcaría otra fila. Hay que probarlo con huecos, con artículos repetidos y con 50 filas (F2).
+- **R-3. Nombres de artículo.** Se resuelven por nombre exacto (sin mayúsculas, NFC). Hay que probar espacios, mayúsculas y "maiz" sin acento (este debe dar el error explicado), y que no se resuelva a un artículo de otro tipo, inactivo o padre (F3).
+- **R-4. Devolución.**
+  - Un envío sin ninguna cantidad, las claves `lines.N.sourceMovement` y `lines.N.item` en su fila, y un `source` manipulado (de otra compra o no numérico → 400).
+  - Una compra revertida o una reversión → 303 al documento.
+  - Si las opciones no responden, `today` queda vacío y la fecha sin `min` ni `max`.
+- **R-5. Precarga (PV-T3-7).** Solo ocurre al repintar. Hay que comprobar que no pisa un costo escrito, incluido "0", y anotar qué pasa si el usuario lo borra a propósito.
+- **R-6. Límites del formulario cerrado.** 50 filas y 128 KiB. Una fila 51 inyectada → 400 sin escribir. "Añadir 10 filas" desaparece a las 50.
+- **R-7. Fecha (CA-11).** `min` y `max` vienen de `today` de la API. Con la `api` en otra zona y el reloj cerca de la medianoche del negocio, la API decide. Se prueba con la `api` en `TZ=Asia/Tokyo`.
+- **R-8. `api/.env` y los `.env` del worktree.** Arranques con `env -i`, procesos detenidos por puerto y bases `restaurante_test_qa051e_*`.
+
+### Entorno
+
+Mecanismos ya autorizados en el 3a, sin nada nuevo:
+
+- MySQL 8.4 local, base `restaurante_test_qa051e_ui` con la semilla de desarrollo y datos de QA por la API;
+- la `api` del worktree (`TZ=Asia/Tokyo`, `BUSINESS_TIMEZONE=America/Mexico_City`) y el `inventory-manager` del worktree, con `env -i`;
+- un proxy local entre los dos para cortar la sesión, las opciones o la escritura;
+- una sesión `mysql` con el usuario administrador de pruebas para el bloqueo `FOR UPDATE` (CA-14);
+- Chrome sin interfaz por CDP con axe-core 4.10.2 en el scratchpad;
+- Claude in Chrome para el teclado y el foco;
+- una copia del árbol para las mutaciones.
+
+### Criterios de aceptación
+
+| CA | Pruebas |
+|---|---|
+| CA-1 a CA-4 (compra, CPP, existencia ≤ 0, redondeo y formato) | F1, V1 |
+| CA-5 y CA-8 (saldo inicial) | F4, F5, V1 |
+| CA-9 y CA-10 (artículos no admitidos y conversión) | F3 |
+| CA-11 (fecha) | F6 |
+| CA-12 (doble envío) | I1, I2 |
+| CA-14 (ocupado) | I3 |
+| CA-21 (rutas nuevas) | P1 |
+| CA-25 (360 px, teclado, sin JS, foco al añadir filas) | F2, B1 a B5 |
+| CA-26 | S1 a S4, R1, R2 |
+| CA-29 (ajuste) | F7, V1 |
+| CA-30 (devolución) | F8, V1 |
+| OBS-15, `today` y decimales A | F2, F6, D1 |
+
+### Pruebas funcionales (HTTP contra el admin y la `api` reales)
+
+- **F1. Compra (RF-3, CA-1 a CA-4):** los escenarios de la tabla.
+  - La cabecera lleva proveedor ("Sin proveedor" o un activo; los inactivos no se ofrecen), folio, nota y "Con IVA" en solo lectura.
+  - El datalist tiene solo los artículos de RN-T3-1 activos, con su CPP o referencia con 4 decimales.
+  - Tras registrar: 303 al documento con "Documento registrado", y el detalle coincide con la base.
+  - Importe 0 → "Sin cargo".
+- **F2. Filas (PV-T3-4, OBS-15, R-2, R-6):**
+  - "Añadir 10 filas" de 10 → 20 → … → 50 conserva lo escrito y pone `autofocus` en el artículo de la primera fila nueva. A 50 ya no está el botón. Un aviso de error con `autofocus` tiene prioridad.
+  - Una compra de 50 líneas se registra.
+  - Con errores en las filas 3, 17 y 49 (con huecos y un artículo repetido), cada error aparece en su fila, con un resumen enlazado y lo demás conservado.
+  - Una fila 51 inyectada → 400 sin escribir.
+- **F3. Artículos (CA-9, CA-10, R-3):**
+  - El nombre con mayúsculas y espacios se resuelve.
+  - "masa de maiz" sin acento, un Compuesto, un padre, un no inventariable y un inactivo → el error explicado en su fila, sin escribir nada.
+  - Una unidad sin factor o una cantidad que redondea a 0 → error en su fila.
+- **F4. Saldo inicial (RF-2, CA-5, PV-T3-7):**
+  - Precarga del costo de referencia al añadir filas o al repintar; un costo escrito (también "0") no se pisa.
+  - CA-5 exacto.
+  - El datalist excluye los artículos con movimientos vigentes.
+  - CA-8: tras revertir el saldo desde la pantalla del 3a, el artículo vuelve a admitirlo.
+- **F5. Segundo saldo inicial (R-1):**
+  - Se escribe el nombre de un artículo con movimientos y se registra el mensaje que aparece en su fila.
+  - Se fuerza el 409 `INITIAL_BALANCE_NOT_ALLOWED` con una carrera: el formulario abierto con el artículo disponible y una compra hecha por la API antes de enviar. La línea queda marcada y el aviso sugiere el ajuste.
+- **F6. Fecha (RF-2, RF-3, CA-11, `today`):**
+  - `kardex/opciones` trae `today`, igual a la fecha de `America/Mexico_City` aunque la `api` corra en `Asia/Tokyo`.
+  - El campo tiene `value` = `today`, `min` = hoy − 31 y `max` = hoy.
+  - Por envío directo (sin el navegador), mañana y hoy − 32 → error en la fecha conservando lo escrito; hoy − 31 → se registra.
+- **F7. Ajuste (RF-5, CA-29):**
+  - Dirección y motivo.
+  - `otro` sin nota → error.
+  - Entrada sin CPP ni costo → error en la fila.
+  - Entrada con costo → entra a ese costo. Salida → sale al CPP.
+- **F8. Devolución (RF-6, CA-30, RN-T3-14, R-4):**
+  - "Devolver" aparece solo en una compra vigente.
+  - Una fila por línea, con lo comprado (costo con 4 decimales), lo que queda por devolver y la cantidad en unidad base.
+  - Exceso → error en su fila. Sin cantidades → error general visible.
+  - Dos devoluciones parciales consecutivas actualizan lo que queda.
+  - Un `source` de otra compra → error en su fila (o 400 si no es numérico).
+  - Una compra revertida y una reversión → 303 al documento.
+- **P1. Acciones y permisos (CA-21):**
+  - "Nueva compra", "Saldo inicial" y "Ajuste" en Documentos, y "Devolver" en el detalle.
+  - El Editor recibe 403 en los 4 GET y los 4 POST, y no ve las acciones.
+  - Sin sesión: los GET redirigen al acceso y vuelven a la misma URL tras iniciar sesión; los POST no escriben.
+  - Un CSRF falso → 403.
+  - Un tipo desconocido → 404.
+- **O1. Escape:** una nota o un folio con `<script>` o comillas, y un artículo con `&`, salen escapados en el formulario repintado y en el detalle.
+
+### Idempotencia, API caída y ocupada (RF-11, CA-12, CA-14)
+
+- **I1. Doble envío:** el mismo formulario enviado dos y tres veces seguidas (mismo `requestId`) → un documento; los reenvíos dan 303 al mismo documento. Igual en la devolución.
+- **I2. API caída** (proxy): en la sesión, en las opciones y en la escritura, para la compra y la devolución, y en "Añadir 10 filas".
+  - Esperado: 503 con lo escrito y el mismo `requestId`, y 0 documentos.
+  - Al volver la `api`, el reenvío crea un solo documento.
+- **I3. Ocupada (CA-14):** una sesión `mysql` mantiene `FOR UPDATE` sobre la existencia de un artículo unos 8 s.
+  - Esperado: la compra responde 503 con el mensaje "inténtalo de nuevo", lo escrito y el mismo `requestId`, sin escribir nada.
+  - Al soltar, el reenvío registra una vez.
+
+### Valores contables y cuadre (V1)
+
+Tras cada escenario de F1, F4, F5, F7 y F8 se comparan con los esperados de la tabla, por SQL:
+
+- `inventory_stock` (cantidad, `avg_cost`, `last_cost` y `last_seq`);
+- `inventory_movement` (`unit_cost`, `line_total`, `balance_before` y `balance_after`, `avg_cost_after`, `entered_quantity` y `entered_unit`);
+- `inventory_document` (tipo, `total_cost`, `supplier_id`, `reference`, `note`, `reason`, `occurred_on` e `idempotency_key`).
+
+También se comprueba que lo que muestran Existencias y la ficha coincide con la base. Al final, `npm run inventory:verify` sobre la base de QA → código 0, y con una fila alterada a mano → código 1.
+
+### Decimales (D1)
+
+- **Costos unitarios con 4 decimales:**
+  - en el datalist (CPP o referencia);
+  - en la devolución (costo de la compra);
+  - en el detalle tras registrar;
+  - en el aviso del costo precargado.
+- **Montos con 2:** importes y totales.
+- **Campos:** aceptan hasta 4 decimales en el costo y 2 en el importe. Lo demás se rechaza con un mensaje en el campo.
+
+### Navegador
+
+- **B1. 360 px y escritorio** (CDP, 360×800 móvil y 1280×900):
+  - los 4 formularios vacíos;
+  - con 50 filas;
+  - con errores;
+  - en 503;
+  - la devolución.
+
+  Esperado: `scrollWidth` ≤ ancho; un `fieldset` con "Línea N" por línea en móvil y una fila de columnas en escritorio.
+- **B2. axe-core 4.10.2:** 0 violaciones en los mismos estados, a 360 y 1280 px.
+- **B3. Teclado (Claude in Chrome):**
+  - una compra de 2 líneas completa solo con teclado, eligiendo el artículo del datalist;
+  - "Añadir 10 filas" con Enter, con el foco en la primera fila nueva y visible;
+  - el resumen de errores con enlaces que llevan el foco al campo.
+- **B4. Sin JavaScript:** todo F se hace con formularios planos por HTTP. Además, se comprueba que `data-submit-guard` no impide reenviar tras un 503.
+- **B5.** Consola sin errores de la app y ninguna petición nueva a terceros.
+
+### Pruebas de regresión
+
+- **S1.** `npm run build:css` (genera `lg:grid-cols-3`, `-4` y `-5`) y `npm run typecheck`: código 0.
+- **S2.** `npm run lint` con `check-private-data`: código 0.
+- **S3.** `npm test` frente al Implementation Result: `api` 1281, `landing-pages` 918 e `inventory-manager` 312, con el número de archivos (`inventory-manager` 19 → 20).
+- **S4.** `inventory-kardex-forms.test.ts` y `inventory-kardex-views.test.ts` por debajo de 20 s; los de MySQL de inventario 3 veces seguidas sin intermitencias.
+- **S5.** `git diff d83f9ee`: sin migraciones, `deploy/`, `ops/`, `package-lock.json`, `.env.example` ni `_stich_source_/`.
+- **R1.** Las pantallas del 3a (existencias, ficha, proveedores, documentos y reversión) y las de T1 y T2: 200 y sin cambios de comportamiento (lista de documentos con las acciones nuevas). El resto del admin: 200. 0 errores en los logs.
+- **R2.** Las landings `/`, `/birria` y `/molotes`: 200.
+
+### Revisión de las pruebas permanentes (`testing.md`)
+
+- **T1.** Las 7 pruebas de `inventory-kardex-forms.test.ts` y el cambio de `admin-inventory-kardex-api.test.ts` (`today`) protegen comportamientos de la app.
+- **T2.** El doble `api-double-kardex.ts` no recalcula reglas de core.
+- **T3.** No se borran ni debilitan pruebas, ni se añaden `retry`, `testTimeout` ni esperas fijas. Datos ficticios.
+- **T4.** En el árbol final no queda ninguna sonda.
+
+### Mutaciones (descartables, en una copia del árbol)
+
+- **X1.** `lineErrorsToSlots` sin traducir (índice compacto = fila).
+- **X2.** "Añadir 10 filas" sin `focusSlot`.
+- **X3.** Sin `Idempotency-Key` en la compra y en la devolución.
+- **X4.** Sin `onUnavailable` (503 genérico) en `createDocument` y en `createReturn`.
+- **X5.** Sin la precarga del costo.
+- **X6.** El datalist con todos los artículos (sin el filtro de RN-T3-1 ni el del saldo).
+- **X7.** `today` en `formOptions` con la zona del servidor: debe fallar la prueba de la API.
+- **X8.** El Editor entra a un formulario.
+- **X9.** 409 `INITIAL_BALANCE_NOT_ALLOWED` sin marcar la línea.
+- Un mutante que sobrevive se registra como observación.
+
+### Evidencia requerida
+
+- La salida y el código de cada comando.
+- Por sonda: el estado HTTP, los fragmentos de HTML (filas, errores, `autofocus`, `min` y `max`) y las filas SQL antes y después.
+- La salida de `inventory:verify`.
+- El resultado de axe y `scrollWidth` por estado y ancho, y las capturas de teclado.
+- El resultado de cada mutación.
+
+### Criterios de aprobación
+
+- Los CA del 3b en PASS con evidencia, con los valores de la tabla exactos en MySQL y `inventory:verify` en 0.
+- S1 a S3 en verde; S4 sin intermitencias.
+- axe con 0 violaciones y sin desbordamiento a 360 px.
+- Sin defectos `BLOCKER` ni `CRITICAL`. Los `MAJOR` necesitan una decisión del usuario.
+
+### Limpieza
+
+- Bases `restaurante_test_qa051e_*`.
+- La `api`, el admin, el proxy, Chrome sin interfaz, las sesiones `mysql` y Vitest, con sus puertos.
+- Las pestañas de Claude in Chrome.
+- Del scratchpad: axe-core, las sondas, la copia de mutaciones y los logs.
+- No se construyen imágenes Docker.
+- Comprobación con `lsof`, `ps`, `docker ps -a`, `SHOW DATABASES LIKE 'restaurante\_test%'` y `git status`.
+
+### Decisiones para la aprobación
+
+1. **R-1 (mensaje del segundo saldo inicial).** Si F5 confirma que escribir un artículo con movimientos en el saldo inicial da "No hay un artículo que admita este documento con ese nombre", sin sugerir un ajuste, ¿cómo se clasifica?
+   - **A (recomendada):** defecto `MINOR`, a corregir en el 3b: el mensaje de esa fila debe sugerir un ajuste, como pide CA-5.
+   - **B:** se acepta. El datalist ya no ofrece esos artículos, y el 409 con la sugerencia solo aparece en una carrera.
+2. **Mecanismos.** ¿Confirma que reutilizo, sin nada nuevo, todo lo autorizado en el 3a? Es decir, sondas, la base `restaurante_test_qa051e_ui`, los arranques con `env -i`, el proxy, la sesión `mysql` de CA-14, axe-core por CDP, Claude in Chrome y las mutaciones en una copia. No hace falta construir imágenes ni repetir la prueba de humo de respaldos, porque el 3b no toca `ops/` ni `deploy/`.
+
+
+## QA Report — PR 3b
+
+### Ronda
+
+1. Rama `feature/REQ-F-051-kardex-formularios`, sin commit, sobre `d83f9ee`. El usuario aprobó el plan con "si":
+
+- R-1: si se confirma, es un defecto `MINOR` que se corrige en el 3b;
+- mecanismos: los del 3a, sin cambios.
+
+Entorno:
+
+- MySQL 8.4 local, con la base `restaurante_test_qa051e_ui`, la semilla y 60 artículos de QA (incluidas 50 "Fila NN QA").
+- La `api` (`TZ=Asia/Tokyo`, `BUSINESS_TIMEZONE=America/Mexico_City`), el admin (detrás del proxy de caídas, puerto 3206) y la `landing-pages` del worktree, todos con `env -i`.
+
+Ninguna sonda se escribió en el repositorio.
+
+### Pruebas ejecutadas
+
+| ID | Acción | Resultado |
+|---|---|---|
+| S1–S2 | `build:css` (genera `lg:grid-cols-3/4/5`), `typecheck` y `lint` | Código 0, 0 y 0; `check-private-data`: 912 archivos. PASS |
+| S3 | `npm test` | `api` 57/1281, `landing-pages` 65/918 e `inventory-manager` 20/312, todo en verde. PASS |
+| S4 | Duración | `inventory-kardex-forms` + `inventory-kardex-views`: 15/15 en 1.59 s. `prisma-inventory-kardex`, 3 veces: 11/11 en 4.6 a 4.9 s. PASS |
+| S5 | `git diff d83f9ee` | Sin migraciones, `deploy/`, `ops/`, `package-lock.json`, `.env.example` ni `_stich_source_/`. PASS |
+| F1/V1 | Compra (CA-1 a CA-4) | **CA-1:** 303 `?ok=created` con «Documento registrado»; movimiento `50.000 / 2.000 bulto / 20.0000 / 1000.0000 / 0→50 / CPP 20.0000 / seq 1`; existencia `50.000|20.0000|20.0000`. El documento guarda el proveedor, el folio, la nota, `con_iva`, `1000.0000` y la clave. **CA-2** ("  MASA QA " con mayúsculas y espacios): `75.000|21.3333|24.0000`. **CA-3:** `8.000|25.0000`. **CA-4:** 3.3333 y 6.6667; "1,50" y "1.505" → error en el importe de su fila, sin escribir. **Compra combinada** (filas 0, 3 y 7, un artículo repetido): 3 líneas en orden, `seq` contiguo y total 21.0000. Importe 0 → "Sin cargo". Proveedor inactivo manipulado → 422 en el proveedor. El selector solo ofrece proveedores activos y muestra "Con IVA" en solo lectura. El datalist no trae Compuestos, padres, no inventariables ni inactivos. El folio y la nota salen escapados en el detalle. PASS |
+| F2 | Filas (PV-T3-4, OBS-15) | 10 → 20 → 30 → 40 → 50, con `autofocus` en `f-lines-10/20/30/40-item`; lo escrito, la nota y el `requestId` se conservan; a 50 desaparece "Añadir 10 filas". Una compra de 50 líneas da 303, 50 movimientos, total 150.0000 y la existencia `2.000|1.5000` de la línea 50. Con errores en las filas 3, 17 y 49 (y huecos), aparecen exactamente esos 3, el resumen enlaza a esos campos, se conserva todo y el foco va al aviso. La fila 51 inyectada → 400 sin escribir. `rows=70` manipulado → 20. PASS |
+| F3 | Artículos no admitidos (CA-9, CA-10) | "masa de maiz" sin acento, Compuesto, no inventariable e inactivo → "No hay un artículo que admita este documento con ese nombre…" en su fila. Cantidad que redondea a 0 → "Máximo 3 decimales" en su fila. pza sin factor → "No hay factor para convertir pza a kg…" en su fila, **pero solo cuando no hay otros errores de artículo o formato** (OBS-29). Nada escrito. PASS |
+| F4 | Saldo inicial (RF-2, CA-5, CA-8, PV-T3-7) | El datalist excluye los artículos con movimientos. Al añadir filas, precarga 17.25 en la fila sin costo y respeta un "0" escrito. CA-5: `12.500|18.5000|null`. CA-8: tras revertir el saldo desde la pantalla del 3a, el artículo se vuelve a ofrecer. PASS |
+| F5 | Segundo saldo (R-1) | **DEF-007.** "Masa QA", con movimientos, → 422 con "No hay un artículo que admita este documento con ese nombre: elige uno de la lista.", sin sugerir un ajuste. En la carrera (artículo disponible al abrir y una compra por la API antes de enviar) da el mismo mensaje: las opciones se leen al enviar. El 409 que marca la línea queda solo para una carrera mucho más estrecha. FAIL |
+| F6 | Fecha (CA-11, `today`) | `kardex/opciones` trae `today` = fecha de México con la `api` en `Asia/Tokyo`. El campo tiene `value` = hoy, `min` = hoy − 31 y `max` = hoy. El servidor rechaza mañana y hoy − 32 (error en la fecha, lo escrito conservado) y acepta hoy − 31. **DEF-008:** el `input` tiene dos atributos `type` (`type="text" … type="date"`), así que el navegador usa el primero: `#f-occurredOn.type === "text"` en Chrome (CDP y Claude in Chrome), sin selector de fecha y con `min`/`max` sin efecto. Igual en la devolución. FAIL |
+| F7 | Ajuste (CA-29) | Salida de 2 kg (`error_captura`) a 20.0000; existencia 8.000. `otro` sin nota → error en la nota. Entrada sin CPP ni costo → error en su fila. Entrada a 7.1234 → CPP 7.1234. Costo con 5 decimales → error en el campo. PASS |
+| F8 | Devolución (CA-30, RN-T3-14) | "Devolver" en el detalle de una compra vigente. Muestra "Comprado 25 kg a $24.0000 / kg" y "Queda por devolver 25 kg". 25.001 → error en su fila, conservando lo escrito. Sin cantidades → "Añade al menos una línea.", sin escribir. 5 kg → sale a 24.0000, existencia `70.000|21.1428`; la siguiente muestra 20 kg. Un `source` de otra compra → 422 sin escribir; uno no numérico → 400. Una compra revertida y una reversión → 303 al documento, sin "Devolver". PASS |
+| D1 | Decimales (decisión A) | Datalist "CPP $21.1428" y "CPP $18.5000". Devolución "$24.0000 / kg". Detalle "$20.0000", "$6.0000" y "$1,000.00". Costo de 5 decimales e importe de 3 → error. PASS |
+| I1 | Doble envío (CA-12) | 3 envíos seguidos con el mismo `requestId` → 1 documento y los 3 con 303 al mismo. 4 simultáneos con la misma clave → 1 documento. PASS |
+| I2 | API caída (proxy) | Compra con la caída en `session`, `options`, `write` y `all`: 503 con las filas, el importe, la nota y la misma clave, sin escribir; al volver, dos reenvíos → 1 documento. "Añadir 10 filas" con la API caída → 503 con lo escrito. Devolución con la escritura caída → 503 con la cantidad, la nota y la clave; al volver, 1 devolución. **DEF-009:** devolución con la sesión caída → 503 con la nota y la clave, pero **sin las filas: la cantidad escrita se pierde**, y la fecha queda sin `min`/`max`. Al volver, el reenvío del navegador (sin cantidades) no puede rehacerla. FAIL |
+| I3 | Ocupada (CA-14): `FOR UPDATE` externo de 8 s | 503 con "inténtalo de nuevo" a los 5 s, conservando lo escrito y la clave, sin escribir. Al soltar, el reenvío registra una vez. PASS |
+| P1 | Acciones y permisos (CA-21) | "Nueva compra", "Saldo inicial" y "Ajuste" en Documentos. El Editor → 403 en los 4 GET y los 4 POST. Sin sesión, un GET → acceso con `next` a la misma URL, y un POST no escribe. CSRF falso → 403. Un tipo desconocido (`venta`) → 404. PASS |
+| V1 | Cuadre | `inventory:verify` al final: `artículos=80 movimientos=88 documentos=34`, código 0. Con una existencia alterada a mano: `existencia_distinta`, código 1. PASS |
+| B1 | 360×800 móvil y 1280×900 (CDP) | `scrollWidth` ≤ ancho en 11 estados: la lista, los 4 formularios, la devolución, tras añadir filas, con errores (compra, saldo, ajuste y devolución) y el 503 de la compra. Móvil: un `fieldset` "Línea N" por línea en una columna. Escritorio: 4 columnas (compra y saldo), 5 (ajuste) y 3 (devolución). PASS |
+| B2 | axe-core 4.10.2 por CDP | 0 violaciones en los 11 estados × 2 anchos. PASS |
+| B3 | Teclado (Claude in Chrome) | Compra completa con Tab y escritura, con foco visible (2 px) en cada campo. "Añadir 10 filas" con Enter → 20 filas, foco visible en `f-lines-10-item` y lo escrito conservado. "Registrar compra" con Enter → "Compra #37", «Documento registrado». En automatización no se desplegó la lista del `datalist`; escribir el nombre completo funciona. Enter en un campo envía "Registrar", como cualquier formulario. PASS |
+| B4 | Sin JavaScript | Todas las F, I y P se hicieron con formularios planos por HTTP. PASS |
+| R1 | Regresión | Inicio, productos y página, usuarios, cuenta, bot, cotizador, las 6 secciones de inventario, detalle, reversión y ficha: 200. Las landings: 200. 0 errores en los logs de las tres apps. En los logs no hay nombres, cantidades ni costos (`inventory_document_form_saved {documentId, type, replayed}`). PASS |
+| X1–X9 | Mutaciones | Ver la tabla |
+
+**Mutaciones**
+
+| ID | Mutante | Lo detectan las pruebas permanentes |
+|---|---|---|
+| X1 | `lineErrorsToSlots` sin traducir | Sí |
+| X2 | Sin `focusSlot` | Sí |
+| X3a / X3b | Compra o devolución sin `Idempotency-Key` | Sí / Sí |
+| X4a | Sin `onUnavailable` en `createDocument` | Sí |
+| X4b | Sin `onUnavailable` en `createReturn` | **No** (y es el camino de DEF-009) |
+| X5 | Sin la precarga del costo | Sí |
+| X6 | El datalist del saldo sin el filtro de `initialBalanceAllowed` | **No** (OBS-30) |
+| X7 | `today` con la zona del servidor (`TZ=UTC`) | Sí (CA-11 de core) |
+| X8 | El Editor entra | Sí |
+| X9 | 409 de saldo sin marcar la línea | Sí |
+
+### Criterios de aceptación
+
+| CA | Resultado | Evidencia |
+|---|---|---|
+| CA-1 a CA-4 (pantalla) | PASS | F1, V1, D1 |
+| CA-5 | **FAIL** | F4 pasa; F5: el rechazo no sugiere un ajuste (DEF-007) |
+| CA-8 | PASS | F4 |
+| CA-9 y CA-10 | PASS | F3 (con OBS-29) |
+| CA-11 | PASS (servidor) | F6; el control de fecha del navegador falla (DEF-008) |
+| CA-12 | PASS | I1, I2 |
+| CA-14 | PASS | I3 |
+| CA-21 | PASS | P1, X8 |
+| CA-25 | **FAIL** (parcial) | 360 px, axe, teclado y foco al añadir filas pasan (B1 a B4). El campo de fecha no es un control de fecha (DEF-008) |
+| CA-26 | PASS | S1 a S5, R1 |
+| CA-29 | PASS | F7, V1 |
+| CA-30 | PASS | F8, V1 |
+| Caso límite "la `api` caída sin perder lo escrito" | **FAIL** | I2: la devolución con la sesión caída pierde las cantidades (DEF-009). La compra, el saldo, el ajuste y "Añadir 10 filas" pasan |
+| OBS-15, `today` y decimales A | PASS | F2, F6, D1 |
+| Cuadre contable | PASS | V1: `inventory:verify` en 0 tras 34 documentos |
+
+### Defectos encontrados
+
+#### DEF-007
+
+- **Severidad:** `MINOR`. El usuario lo decidió de antemano en la pregunta 1 del plan (opción A): se corrige en el 3b.
+- **Criterio afectado:** CA-5, "Un segundo saldo inicial se rechaza con un mensaje que sugiere un ajuste".
+- **Descripción:** en el saldo inicial, `itemsByName` (`inventory-manager/src/controllers/inventory-documents.ts`) solo resuelve los artículos con `initialBalanceAllowed`. Un artículo con movimientos vigentes se envía con `itemId: 0`, y su fila recibe el mensaje genérico `UNKNOWN_ITEM`. El 409 `INITIAL_BALANCE_NOT_ALLOWED`, que sí sugiere un ajuste, solo llega si el artículo gana movimientos entre la lectura de opciones y la escritura del mismo envío.
+- **Pasos para reproducir:** "Documentos → Saldo inicial", escribir un artículo que ya tiene una compra, cantidad y costo, y "Registrar".
+- **Resultado esperado:** el rechazo, en su fila, dice que el artículo ya tiene movimientos y sugiere un ajuste.
+- **Resultado actual:** 422 con "No hay un artículo que admita este documento con ese nombre: elige uno de la lista.".
+- **Evidencia:** sonda F5; también en la carrera de F5.
+- **Impacto:** el usuario no sabe por qué se rechaza ni qué hacer.
+- **Recomendación:** distinguir en la fila un artículo que existe pero ya tiene movimientos (con la sugerencia del ajuste) de un nombre desconocido.
+
+#### DEF-008
+
+- **Severidad:** `MINOR`.
+- **Criterio afectado:** CA-25 y RF-16 (usabilidad en móvil y escritorio) y el Implementation Result ("fecha del hecho `type="date"` con `min` y `max`"); HTML válido (`.claude/rules/html.md`).
+- **Descripción:** el campo "Fecha del hecho" de los formularios del 3b (también en la devolución) se renderiza con dos atributos `type`: `<input id="f-occurredOn" name="occurredOn" type="text" value="…" type="date" … max="…" min="…">`. Según HTML, un atributo duplicado se ignora: el navegador usa `type="text"`.
+- **Pasos para reproducir:** abrir `/inventario/documentos/nuevo/compra` y evaluar `document.querySelector('#f-occurredOn').type`.
+- **Resultado esperado:** `"date"`, con el selector de fecha y los límites `min`/`max` activos.
+- **Resultado actual:** `"text"` en Chrome (CDP a 360 y 1280 px, y Claude in Chrome). No hay selector de fecha y `min`/`max` no tienen efecto. axe no lo detecta.
+- **Impacto:** en el teléfono hay que escribir la fecha con el formato `AAAA-MM-DD`. El servidor sigue validando el rango (CA-11 pasa).
+- **Recomendación:** que el parcial de campo admita el tipo sin duplicar el atributo, y comprobar el resto de campos que reciban un tipo distinto de `text`.
+
+#### DEF-009
+
+- **Severidad:** `MINOR`.
+- **Criterio afectado:** caso límite del ticket "la `api` caída sin perder lo escrito"; Implementation Result ("con la API caída (sesión, opciones o escritura) u ocupada, el formulario vuelve con lo escrito y la misma clave").
+- **Descripción:** en `createReturn`, cuando la API no responde al comprobar la sesión, el 503 pinta `inventoryReturnForm` con `purchase: null`, así que no hay filas. Se conservan la nota y el `requestId`, pero no las cantidades escritas, aunque el aviso dice que lo escrito sigue en el formulario. También queda `today: ''`, sin `min` ni `max`. Si la API cae en la escritura, sí se conserva todo, porque luego se lee la compra.
+- **Pasos para reproducir:**
+  1. Abrir "Devolver" de una compra y escribir 1 en una línea.
+  2. Detener la `api`.
+  3. Pulsar "Registrar devolución".
+- **Resultado esperado:** 503 con la cantidad de cada línea (o al menos en campos ocultos para reenviar), la nota y la clave, como la compra en I2.
+- **Resultado actual:** 503 sin líneas (`lines.0.quantity` y `lines.0.source` ausentes). Al reenviar ese formulario ya no hay cantidades.
+- **Evidencia:** sonda I2 (`session`) y el HTML del 503. Ninguna prueba permanente cubre este camino (mutante X4b).
+- **Impacto:** hay que volver a escribir las cantidades. No se escribe nada ni se duplica.
+- **Recomendación:** conservar las cantidades escritas (y su `source`) en el 503 aunque no se pueda leer la compra, y cubrirlo con una prueba.
+
+### Observaciones (no bloquean)
+
+- **OBS-29.** Los errores de conversión (unidad sin factor) solo aparecen cuando no hay errores de artículo o de formato en otras líneas: core valida por etapas. El usuario corrige en dos vueltas. Es el comportamiento de core desde el PR 1b, y el ticket no lo pide.
+- **OBS-30.** Ninguna prueba permanente detecta que el datalist del saldo inicial ofrezca artículos con movimientos (mutante X6). Lo cubre la sonda F4.
+- **OBS-31.** En la automatización con Claude in Chrome no se desplegó la lista del `datalist` con las flechas (Enter envió el formulario). Escribir el nombre completo funciona y axe no marca nada. Conviene revisar a mano en un teléfono que el `datalist` se ofrezca.
+
+### Revisión de las pruebas permanentes (`testing.md`)
+
+- **T1.** Las 7 pruebas de `inventory-kardex-forms.test.ts` y la de `today` en la API protegen comportamientos de la app: filas, errores, idempotencia, 503, saldo, ajuste, devolución y permisos. PASS
+- **T2.** El doble `api-double-kardex.ts` devuelve respuestas fijas y no recalcula CPP ni existencias. PASS
+- **T3.** No se borran ni debilitan pruebas, ni se añaden `retry`, `testTimeout` ni esperas fijas. Datos ficticios. PASS
+- **T4.** En el árbol final no queda ninguna sonda (16 entradas en `git status`, las del Implementation Result). PASS
+
+### Regresión
+
+Suite completa en verde (S3). Las pantallas del 3a, de T1 y T2, el resto del admin y las landings responden 200, sin errores (R1).
+
+### Responsive, Accesibilidad, UX/UI, SEO
+
+- **Responsive:** sin desbordamiento a 360 px.
+- **Accesibilidad:** axe con 0 violaciones; teclado y foco correctos; el campo de fecha no es de fecha (DEF-008).
+- **UX/UI:** sistema visual del admin (sin diseño en `_stich_source_/`).
+- **SEO:** no aplica.
+
+### Performance
+
+Sin hallazgos. 50 líneas se registran en un solo envío y no hay JS obligatorio.
+
+### Pendientes de revisión manual
+
+OBS-31: el `datalist` en un teléfono real. No bloquea.
+
+### Limpieza
+
+- **Base:** se borró `restaurante_test_qa051e_ui`. `SHOW DATABASES LIKE 'restaurante\_test%'` devuelve 0.
+- **Procesos:** se detuvieron la `api` (3201/3204), el admin (3203), la `landing-pages` (3200), el proxy (3206) y Chrome sin interfaz (9335); la sesión `mysql` de I3 terminó sola. Ningún puerto 3200 a 3209 ni 9330 a 9339 queda ocupado, y no queda ningún proceso de servidor, proxy, Vitest ni Chrome.
+- **Navegador:** se cerró la pestaña de Claude in Chrome (el grupo quedó vacío y se eliminó).
+- **Archivos:** se borró `scratchpad/q3c`, con las sondas, axe-core, la copia de mutaciones, los logs y el HTML del 503. Quedan `src050` y `t3`, que no son de este QA.
+- **Docker:** no se construyó nada; solo queda `restaurante-mysql-dev-1`, encendido y sin tocar su base de desarrollo.
+- **Repositorio:** `git status` sin sondas.
+
+### Resultado final
+
+QA_REJECTED
+
+
+### Ronda 2
+
+El usuario aprobó la implementación de la ronda 2 con "Si". Se revalida lo que cambió en la ronda 2:
+
+- `inventory-documents.ts` (controlador y vista);
+- `partials/field-input.html`, compartido por todo el admin;
+- la prueba `inventory-kardex-forms.test.ts`.
+
+Entorno:
+
+- base `restaurante_test_qa051e_r2` con la semilla y datos propios;
+- la `api` (`TZ=Asia/Tokyo`) y el admin del worktree detrás del proxy, que ahora tiene además un modo que retrasa 2.5 s las escrituras, para provocar la carrera;
+- el admin de `d83f9ee` (copia con `git archive`, puerto 3205), para comparar estilos.
+
+#### Pruebas ejecutadas (ronda 2)
+
+| ID | Acción | Resultado |
+|---|---|---|
+| S1–S3 | `build:css` (el CSS tiene `input:where(:not([type]))`), `typecheck`, `lint` y `npm test` | 0, 0 y 0. `api` 1281, `landing-pages` 918 e `inventory-manager` 20/313, en verde. PASS |
+| D7-1 | DEF-007: saldo con "Libre QA" en la fila 0 y "usado qa" (con movimientos) en la fila 3 | 409. La fila 3 dice "El artículo ya tiene movimientos: corrige su existencia con un ajuste."; la fila 0 no tiene error. El resumen dice "Línea 4, artículo: …". **Ninguna escritura llega a la API** (el log del proxy no tiene ningún `POST`) y no se escribe nada en la base. Se conservan las filas, la nota y el `requestId`. El datalist sigue ofreciendo "Libre QA" y no "Usado QA" (OBS-30). PASS |
+| D7-2 | DEF-007, carrera: el artículo está libre al enviar, y una compra por la API llega mientras el proxy retrasa la escritura | 409 `INITIAL_BALANCE_NOT_ALLOWED` marcado en su fila, con la sugerencia del ajuste. No se escribe ningún saldo. Un saldo válido después → 303. PASS |
+| D8-1 | DEF-008 en el HTML | Un solo `type="date"`, con `value`, `min` (hoy − 31) y `max` (hoy), en la compra, el saldo, el ajuste y la devolución. Los buscadores de artículos, recetas, existencias y proveedores tienen un solo `type="search"`. En 15 pantallas del admin (usuarios, cuenta, bot, cotizador, productos, página, artículos, categorías, proveedores y documentos) ningún `<input>` repite `type`. PASS |
+| D8-2 | DEF-008 en el navegador (Chrome sin interfaz por CDP, 360 y 1280 px) | `#f-occurredOn.type === "date"` en los 4 formularios, con `min`/`max`. La validez del navegador funciona: 2099-01-01 da `rangeOverflow`, 2000-01-01 da `rangeUnderflow`, `max` es válido, un texto "31/12/2026" no se acepta y `showPicker` existe. En Claude in Chrome se ve el control de fecha nativo (dd/mm/aaaa con el icono del calendario), con el valor de hoy. PASS |
+| D8-3 | Regresión de DEF-008: estilos frente a `d83f9ee` (17 pantallas × 2 anchos) | Las mismas propiedades calculadas en cada campo de las pantallas comunes: alto, rellenos, borde, color de borde, fondo, color de texto, tamaño de letra, radio y ancho. El único cambio es `type` `text` → `search` en los 4 buscadores, con las mismas medidas y colores. Las pantallas de los formularios del 3b no existían en `d83f9ee`. axe: 0 violaciones en las 17 pantallas, a 360 y 1280 px. Sin desbordamiento. Los buscadores con `q` responden 200. PASS |
+| D9 | DEF-009: devolución con la sesión de la API caída | 503 con las 2 filas (artículo y unidad de la etiqueta oculta), la cantidad escrita, el `source` de cada fila, la nota, la clave y la fecha con `min`/`max`; nada escrito. El formulario del 503, reenviado como lo haría el navegador, registra **una** devolución con la cantidad escrita, y otro reenvío da el mismo documento. El ajuste con la sesión caída conserva también `min`/`max` (el `today` oculto). PASS |
+| OC | Campos ocultos manipulados | `today=2099-01-01` con la fecha de mañana, `today=2099-01-01` con `2098-12-31` y `today=1990-01-01` con hoy − 40 → los tres 422 en la fecha, porque la API valida con su propio "hoy". `today="><script>…` → escapado, sin `<script>`. `lines.0.label` con `<img src=x onerror=…>` → escapado (`&lt;img`) en el 503. Nada escrito. PASS |
+| R | Regresión | Compra y ajuste → 303. El resto del admin (inicio, productos, página, usuarios, cuenta, bot, cotizador, artículos, recetas, existencias, proveedores y documentos) → 200. `inventory:verify` → 0 (`artículos=24 movimientos=17 documentos=14`). 0 errores en los logs. PASS |
+
+**Mutaciones de las pruebas nuevas** (copia del árbol)
+
+| Mutante | Lo detectan las pruebas permanentes |
+|---|---|
+| DEF-007: sin la comprobación previa del saldo | Sí |
+| DEF-008: `type="text"` duplicado de vuelta en `field-input.html` | Sí (3 pruebas) |
+| DEF-009: sin las filas de respaldo | Sí |
+| OBS-30: datalist del saldo sin el filtro | Sí |
+
+#### Lo que no se repitió y por qué
+
+- **F1 a F8, V1, I1, I3 y P1 de la ronda 1:** la ronda 2 no cambia la API, core ni el envío de compra, ajuste y devolución, salvo lo revalidado arriba. La regresión R (compra, ajuste y saldo válidos con 303, y `verify` en 0) y la suite cubren el resto.
+- **Teclado completo con Claude in Chrome:** el orden y el foco de los formularios no cambian. Solo cambia el tipo del campo de fecha, que se comprobó en el navegador.
+
+#### Criterios de aceptación (ronda 2)
+
+| CA | Resultado | Evidencia |
+|---|---|---|
+| CA-5 (DEF-007) | PASS | D7-1, D7-2 |
+| CA-25 (DEF-008) | PASS | D8-1 a D8-3 |
+| Caso límite "la `api` caída sin perder lo escrito" (DEF-009) | PASS | D9 |
+| CA-11 con los campos ocultos manipulados | PASS | OC |
+| CA-26 (regresión de `field-input`) | PASS | D8-3, R |
+| El resto del 3b | PASS (ronda 1) | Ver la ronda 1 |
+
+#### Defectos
+
+DEF-007, DEF-008 y DEF-009 quedan corregidos y verificados. Sin defectos nuevos.
+
+#### Observaciones nuevas (no bloquean)
+
+- **OBS-32.** La ayuda de la fecha dice "desde el 2026-10-27" (formato ISO), mientras el control de fecha de Chrome en español muestra "27/11/2026". Es coherente con el valor que se envía, pero el formato no coincide con lo que se ve.
+- **OBS-33.** Los buscadores ahora son `type="search"`: Chrome muestra el botón "×" para borrar cuando tienen texto. Es el comportamiento nativo de ese tipo, con las mismas medidas y colores (D8-3).
+- Siguen OBS-29 y OBS-31 de la ronda 1, sin cambios, como se pidió.
+
+#### Limpieza (ronda 2)
+
+- **Base:** se borró `restaurante_test_qa051e_r2`. `SHOW DATABASES LIKE 'restaurante\_test%'` devuelve 0.
+- **Procesos:** se detuvieron la `api` (3201/3204), el admin (3203), el admin de `d83f9ee` (3205), el proxy (3206) y Chrome sin interfaz (9336). Ningún puerto queda ocupado y no queda ningún proceso de QA.
+- **Navegador:** se cerró la pestaña de Claude in Chrome (el grupo quedó vacío).
+- **Archivos:** se borró `scratchpad/q3d`, con las sondas, axe-core, la copia de `d83f9ee`, la copia de mutaciones y los logs. Quedan `src050` y `t3`, que no son de este QA.
+- **Docker:** solo queda `restaurante-mysql-dev-1`, sin tocar su base de desarrollo.
+- **Repositorio:** `git status` muestra las 17 entradas de la implementación y ninguna sonda.
+
+#### Resultado final (ronda 2)
+
+QA_APPROVED
+
 ## Historial de cambios
 
 ### Versión 1
@@ -3652,3 +4290,20 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 
 - 2026-11-26, senior-fullstack: OBS-27 corregida en las pruebas (aprobada con "si"). Commit `ce9c53c` y PR #198 en borrador hacia `epic/inventario`. Pendientes anotadas: OBS-13, OBS-17, OBS-18, OBS-23, OBS-24, OBS-25 y OBS-28.
 - 2026-11-26, senior-fullstack: el PR #198 pasa a listo. Su CI (ejecución 45923740625) dejó `calidad`, `docker`, `auditoria` y `pruebas` en `pass`. Estado: `READY_FOR_MERGE`.
+
+### Implementación del PR 3b (T2)
+
+- 2026-11-26, senior-fullstack: PR 3b implementado en `feature/REQ-F-051-kardex-formularios`, desde `d83f9ee`. Incluye los formularios de saldo inicial, compra, ajuste y devolución con bloques de filas, `Idempotency-Key`, errores por fila, 503 con lo escrito y las acciones en Documentos. Validado (`build:css`, `typecheck`, `lint` y `test` en verde), sin commit. Añade 972 líneas. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA (Q1, PR 3b)
+
+- 2026-11-26, senior-qa: el usuario aprobó la implementación del PR 3b ("Si"). QA Action Plan del 3b redactado a partir del ticket, del diff del worktree (sin commit, sobre `d83f9ee`) y de las reglas del proyecto, sin ejecutar ninguna prueba. Incluye los valores contables esperados (CA-1 a CA-5, CA-29 y CA-30) y su cuadre con `inventory:verify`. Señala un riesgo visto en el código: R-1, el mensaje del segundo saldo inicial frente a CA-5. Reutiliza los mecanismos autorizados en el 3a. Dos decisiones para la aprobación. Estado: `NEEDS_QA_PLAN_APPROVAL`.
+
+### QA (Q2, PR 3b, ronda 1)
+
+- 2026-11-27, senior-qa: el usuario aprobó el plan con "si" (R-1 opción A y los mecanismos del 3a). Ejecutado completo: S1 a S5, F1 a F8, V1, D1, I1 a I3, P1, B1 a B4, R1, X1 a X9 y T1 a T4. Los valores contables de CA-1 a CA-5, CA-29 y CA-30 son exactos en MySQL, y `inventory:verify` da 0. Defectos `MINOR`: DEF-007 (R-1 confirmado), DEF-008 y DEF-009. Observaciones: OBS-29 a OBS-31. Limpieza comprobada. Estado: `QA_REJECTED`.
+- 2026-11-27, senior-fullstack (ronda 2 del PR 3b): DEF-007 (opción A), DEF-008 (un solo `type` en el parcial de campo, que también corrige los buscadores) y DEF-009 corregidos, y OBS-30 atendida, con sus pruebas en el archivo existente. Validado. Estado: `NEEDS_IMPLEMENTATION_APPROVAL`.
+
+### QA (Q2, PR 3b, ronda 2)
+
+- 2026-11-27, senior-qa: el usuario aprobó la ronda 2 ("Si"). Revalidación selectiva: S1 a S3, DEF-007 (también la carrera, con un proxy que retrasa la escritura), DEF-008 en el HTML y en el navegador (comparando los estilos de 17 pantallas con `d83f9ee`, con axe), DEF-009, los campos ocultos manipulados, la regresión y 4 mutaciones. Lo no repetido está justificado. Sin defectos nuevos; OBS-32 y OBS-33. Limpieza comprobada. Estado: `QA_APPROVED`.

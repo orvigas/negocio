@@ -233,7 +233,7 @@ export function createInventoryKardexRoutes({ access, kardex, timeZone, logger }
     async options(ctx) {
       await access.inventory(ctx, { write: false });
       await run(ctx, async () => {
-        const { items, suppliers } = await kardex.formOptions();
+        const { items, suppliers, today } = await kardex.formOptions();
         send(ctx, kardexOptionsResponseSchema, {
           items: items.map(({ item, avgCost, initialBalanceAllowed }) => ({
             ...stockItem(item),
@@ -243,6 +243,7 @@ export function createInventoryKardexRoutes({ access, kardex, timeZone, logger }
             initialBalanceAllowed,
           })),
           suppliers: suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name })),
+          today,
         });
       });
     },

@@ -198,7 +198,8 @@ export interface KardexRepository {
   listDocuments(filter?: DocumentListFilterInput): Promise<DocumentPage>;
   listStock(filter?: StockListFilterInput): Promise<StockPage>;
   itemKardex(itemId: number, page?: unknown): Promise<ItemKardex>;
-  formOptions(): Promise<{ items: FormOption[]; suppliers: Supplier[] }>;
+  /** Opciones de los formularios y «hoy» en BUSINESS_TIMEZONE (fecha del hecho por defecto). */
+  formOptions(): Promise<{ items: FormOption[]; suppliers: Supplier[]; today: string }>;
 }
 
 const QUERY_MAX = 80;
@@ -909,7 +910,7 @@ export function createKardexRepository({ store, timeZone, now = () => new Date()
         const items = (await reader.itemsByIds(stock.map((row) => row.itemId)))
           .filter((item) => stockItemProblem(item, false) === null)
           .sort((a, b) => a.name.localeCompare(b.name, 'es') || a.id - b.id);
-        return { items: items.map((item) => ({ item, avgCost: costs.get(item.id) ?? null, initialBalanceAllowed: !active.has(item.id) })), suppliers };
+        return { items: items.map((item) => ({ item, avgCost: costs.get(item.id) ?? null, initialBalanceAllowed: !active.has(item.id) })), suppliers, today: today() };
       });
     },
   });

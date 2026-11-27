@@ -52,6 +52,7 @@ const SUCCESS: Readonly<Record<string, string>> = Object.freeze({
   supplier_deactivated: 'Proveedor inactivado: ya no se ofrece en compras nuevas.',
   supplier_reactivated: 'Proveedor reactivado.',
   reversed: 'Documento revertido: se registraron los movimientos contrarios.',
+  created: 'Documento registrado: sus movimientos ya están en el Kardex.',
 });
 
 const requestIdOf = (raw: string | undefined): string => (raw && IDEMPOTENCY_KEY_PATTERN.test(raw) ? raw : newRequestId());

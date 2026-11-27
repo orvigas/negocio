@@ -2,9 +2,21 @@
 
 ## Estado
 
-QA_APPROVED
+DONE — T3 completo en `epic/inventario` (2026-11-27). El usuario confirmó el merge del PR 3b ("Mergeado"). Pull Requests de T3, todos mergeados en `epic/inventario`:
 
-PR 3b: commit `f82c803` en `feature/REQ-F-051-kardex-formularios` y PR #199 (https://github.com/orvigas/negocio/pull/199) hacia `epic/inventario` (no se despliega), abierto en borrador; se marca como listo cuando termine la ejecución del último push. Con este PR, T3 queda completo en la épica.
+- PR 1a (modelo y migración del Kardex): #195 (https://github.com/orvigas/negocio/pull/195), merge `27c7a25`.
+- PR 1b (Kardex, CPP, correcciones, existencias, costo real e `inventory:verify`): #196 (https://github.com/orvigas/negocio/pull/196), merge `851ec79`.
+- PR 2 (API del Kardex y de proveedores, contratos, cliente y semilla): #197 (https://github.com/orvigas/negocio/pull/197), merge `c4c2ad6`.
+- PR 3a (pantallas de consulta, proveedores, reversión, respaldos y despliegue): #198 (https://github.com/orvigas/negocio/pull/198), merge `d83f9ee`.
+- PR 3b (formularios con líneas: saldo inicial, compra, ajuste y devolución): #199 (https://github.com/orvigas/negocio/pull/199), commits `f82c803` y `2dcc186`, merge `97254b4`.
+
+CI de #199 con el PR listo (ejecución 46027064388, sobre `2dcc186`): `calidad`, `docker`, `auditoria`, `pruebas (1/2)`, `pruebas (2/2)`, `verificacion` y `cambios` en `pass`; `deploy`, `publish`, `vigente` y `validado` omitidos (*skipped*) por ir a `epic/inventario`, que no publica ni despliega. El commit que registraba este CI y el estado `READY_FOR_MERGE` (`4f692ac`) llegó a la rama después del merge y no entró en la épica; su contenido queda recogido aquí.
+
+Seguimientos fuera de T3: ver "Seguimientos tras el cierre de T3".
+
+Histórico de estados de T3:
+
+PR 3b: commit `f82c803` en `feature/REQ-F-051-kardex-formularios` y PR #199 (https://github.com/orvigas/negocio/pull/199) hacia `epic/inventario` (no se despliega), abierto en borrador y marcado como listo tras la ejecución del último push.
 
 QA del PR 3b aprobado por senior-qa el 2026-11-27 (ver "QA Report — PR 3b", ronda 2). El usuario aprobó la implementación de la ronda 2 con "Si". DEF-007, DEF-008 y DEF-009 quedan corregidos y verificados en el navegador y contra MySQL. La regresión del parcial `field-input` es neutra en 17 pantallas (los mismos estilos que en `d83f9ee` y axe en 0). Siguiente paso: senior-fullstack hace el commit y abre el PR hacia `epic/inventario` (T4).
 
@@ -4200,6 +4212,41 @@ DEF-007, DEF-008 y DEF-009 quedan corregidos y verificados. Sin defectos nuevos.
 
 QA_APPROVED
 
+## Seguimientos tras el cierre de T3
+
+Quedan fuera de T3 y no bloquean su cierre:
+
+1. **PR de la épica hacia `main` (P-1).**
+   - Se registra en REQ-F-049, dueño de D-4.
+   - Con T1 a T3 en `DONE`, la épica ya es utilizable.
+   - Ese PR corre el CI completo, incluidas las pruebas de humo de despliegue y de respaldos con las migraciones nuevas.
+   - No se abre sin que el usuario lo pida.
+2. **Reinstalación manual de `ops/backup` en el VPS (DT-T3-6, opción A).**
+   - Tras desplegar la épica, se vuelve a instalar a mano el `ops/backup` del repositorio en el servidor, porque `ops/` no se despliega con la imagen.
+   - El procedimiento está en `restaurante/docs/despliegue.md`.
+3. **Importación de los datos reales (PT-5).**
+   - Orden de arranque en producción: desplegar, importar el JSON real (A5), capturar el saldo inicial en pantalla y registrar las compras.
+   - Los datos reales nunca entran en el repositorio.
+4. **Simulacro de restauración** (`verify-backup.sh --drill`): lo ejecuta el usuario después de desplegar la épica.
+5. **Decimales de las recetas de T2.**
+   - Los costos de las recetas siguen con 2 decimales.
+   - T3 muestra los costos unitarios con 4 (decisión A de la ronda 2 del 3a).
+   - Queda como seguimiento, con el motivo anotado en el Implementation Result del 3a.
+6. **OBS-24.**
+   - La prueba de humo del respaldo pasa con un Kardex vacío.
+   - Se propone añadir filas del Kardex en `ops/backup/ci/smoke.sh` en el PR de la épica hacia `main`, porque solo se valida en Linux, o en un seguimiento de operación.
+7. **Observaciones anotadas, sin cambios:**
+   - OBS-13: con dos filtros inválidos, el 422 informa solo uno, como en T1 y T2.
+   - OBS-17: el filtro de Existencias usa valores en español; el de proveedores, los de core.
+   - OBS-18: `seedKardexDev` no es atómica; solo afecta al desarrollo.
+   - OBS-25: las tablas nuevas reutilizan el bloque BEM `recipe-table`.
+   - OBS-28: la lectura del documento que falla tras un 422 o un 409 no tiene prueba permanente; se validó con una sonda.
+   - OBS-29: core valida por etapas, así que los errores de conversión aparecen solo sin errores de artículo o de formato.
+   - OBS-31: no se comprobó que el datalist se despliegue con las flechas en la automatización del navegador.
+   - OBS-32: la ayuda de la fecha usa el formato ISO; el control de fecha muestra dd/mm/aaaa.
+   - OBS-33: los buscadores `type="search"` muestran el botón nativo «×».
+8. **Revisión manual del datalist en un teléfono real** (OBS-31): comprobar que el datalist de artículos se ofrece al escribir en los formularios del Kardex.
+
 ## Historial de cambios
 
 ### Versión 1
@@ -4310,3 +4357,5 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 
 - 2026-11-27, senior-qa: el usuario aprobó la ronda 2 ("Si"). Revalidación selectiva: S1 a S3, DEF-007 (también la carrera, con un proxy que retrasa la escritura), DEF-008 en el HTML y en el navegador (comparando los estilos de 17 pantallas con `d83f9ee`, con axe), DEF-009, los campos ocultos manipulados, la regresión y 4 mutaciones. Lo no repetido está justificado. Sin defectos nuevos; OBS-32 y OBS-33. Limpieza comprobada. Estado: `QA_APPROVED`.
 - 2026-11-27, senior-fullstack (T4 del PR 3b): commit `f82c803` y PR #199 en borrador hacia `epic/inventario`, con DEF-007, DEF-008 (incluida la corrección del parcial de campo, que también arregla los buscadores de T1, T2 y 3a), DEF-009, OBS-30, las observaciones pendientes (OBS-13, 17, 18, 24, 25, 28, 29, 31, 32 y 33) y el seguimiento de los decimales de las recetas de T2.
+- 2026-11-27, senior-fullstack (T4 del PR 3b): PR #199 marcado como listo tras la ejecución del último push. El CI de `2dcc186` (ejecución 46027064388) pasó `calidad`, `docker`, `auditoria`, `verificacion` y `pruebas`. El commit que lo registraba (`4f692ac`) llegó después del merge y no entró en la épica; se recoge en el cierre.
+- 2026-11-27, senior-fullstack (T5): el usuario confirmó el merge del PR 3b ("Mergeado"; #199, merge `97254b4`). Ticket movido a `done/` con estado `DONE` y la trazabilidad de los PR #195 a #199. Seguimientos fuera de T3 reunidos en "Seguimientos tras el cierre de T3". T3 queda completo en `epic/inventario`.

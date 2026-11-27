@@ -4,6 +4,8 @@
 
 QA_APPROVED
 
+PR 3b: commit `f82c803` en `feature/REQ-F-051-kardex-formularios` y PR #199 (https://github.com/orvigas/negocio/pull/199) hacia `epic/inventario` (no se despliega), abierto en borrador; se marca como listo cuando termine la ejecución del último push. Con este PR, T3 queda completo en la épica.
+
 QA del PR 3b aprobado por senior-qa el 2026-11-27 (ver "QA Report — PR 3b", ronda 2). El usuario aprobó la implementación de la ronda 2 con "Si". DEF-007, DEF-008 y DEF-009 quedan corregidos y verificados en el navegador y contra MySQL. La regresión del parcial `field-input` es neutra en 17 pantallas (los mismos estilos que en `d83f9ee` y axe en 0). Siguiente paso: senior-fullstack hace el commit y abre el PR hacia `epic/inventario` (T4).
 
 PR 3b, ronda 2: corregidos DEF-007 (decisión del usuario, opción A), DEF-008 y DEF-009, y atendida OBS-30. Sin commit (ver "Implementation Result — PR 3b", "Ronda 2").
@@ -4307,3 +4309,4 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 ### QA (Q2, PR 3b, ronda 2)
 
 - 2026-11-27, senior-qa: el usuario aprobó la ronda 2 ("Si"). Revalidación selectiva: S1 a S3, DEF-007 (también la carrera, con un proxy que retrasa la escritura), DEF-008 en el HTML y en el navegador (comparando los estilos de 17 pantallas con `d83f9ee`, con axe), DEF-009, los campos ocultos manipulados, la regresión y 4 mutaciones. Lo no repetido está justificado. Sin defectos nuevos; OBS-32 y OBS-33. Limpieza comprobada. Estado: `QA_APPROVED`.
+- 2026-11-27, senior-fullstack (T4 del PR 3b): commit `f82c803` y PR #199 en borrador hacia `epic/inventario`, con DEF-007, DEF-008 (incluida la corrección del parcial de campo, que también arregla los buscadores de T1, T2 y 3a), DEF-009, OBS-30, las observaciones pendientes (OBS-13, 17, 18, 24, 25, 28, 29, 31, 32 y 33) y el seguimiento de los decimales de las recetas de T2.

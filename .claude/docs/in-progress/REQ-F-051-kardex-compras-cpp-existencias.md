@@ -2,9 +2,9 @@
 
 ## Estado
 
-QA_APPROVED
+READY_FOR_MERGE
 
-PR 3a: commit `ce9c53c` en `feature/REQ-F-051-kardex-pantallas` y PR #198 (https://github.com/orvigas/negocio/pull/198) hacia `epic/inventario`, abierto en borrador; el CI está pendiente.
+PR 3a: commit `ce9c53c` en `feature/REQ-F-051-kardex-pantallas` y PR #198 (https://github.com/orvigas/negocio/pull/198) hacia `epic/inventario` (no se despliega). El CI del PR listo (ejecución 45923740625) pasó `calidad`, `docker`, `auditoria` y `pruebas` (1/2 y 2/2). Siguiente paso: el usuario revisa y hace merge del PR #198. Después viene el PR 3b (formularios con líneas).
 
 QA del PR 3a aprobado por senior-qa el 2026-11-26 (ver "QA Report — PR 3a", ronda 2). El usuario aprobó la implementación de la ronda 2 con "Si" y eligió la opción A en REQUIREMENT_AMBIGUITY-1. DEF-005 y DEF-006 quedan corregidos y verificados, y los costos unitarios se muestran con 4 decimales. Quedan dos observaciones nuevas de cobertura (OBS-27 y OBS-28) y el seguimiento de los decimales de las recetas de T2. Siguiente paso: senior-fullstack hace el commit y abre el PR hacia `epic/inventario` (T4).
 
@@ -3651,3 +3651,4 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 ### Commit y PR (T4, PR 3a)
 
 - 2026-11-26, senior-fullstack: OBS-27 corregida en las pruebas (aprobada con "si"). Commit `ce9c53c` y PR #198 en borrador hacia `epic/inventario`. Pendientes anotadas: OBS-13, OBS-17, OBS-18, OBS-23, OBS-24, OBS-25 y OBS-28.
+- 2026-11-26, senior-fullstack: el PR #198 pasa a listo. Su CI (ejecución 45923740625) dejó `calidad`, `docker`, `auditoria` y `pruebas` en `pass`. Estado: `READY_FOR_MERGE`.

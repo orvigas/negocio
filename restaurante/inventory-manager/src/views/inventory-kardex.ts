@@ -453,7 +453,13 @@ export function createKardexViews({ render, join, attrs, page, notice, errorSumm
       return inventoryPage('Documentos', context, 'inventory-documents', render('pages/inventory-list', {
         title: 'Documentos',
         intro: 'Saldos iniciales, compras, devoluciones, ajustes y reversiones. Un documento no se edita ni se borra: un error se corrige revirtiéndolo.',
-        actions: join([actionLink(STOCK_PATH, 'Existencias')]),
+        // REQ-F-051 (PR 3b): los formularios con líneas.
+        actions: join([
+          actionLink(`${DOCUMENTS_PATH}/nuevo/compra`, 'Nueva compra'),
+          actionLink(`${DOCUMENTS_PATH}/nuevo/saldo-inicial`, 'Saldo inicial'),
+          actionLink(`${DOCUMENTS_PATH}/nuevo/ajuste`, 'Ajuste'),
+          actionLink(STOCK_PATH, 'Existencias'),
+        ]),
         notices: join([...notices, ...filterNotice(errors)]),
         action: DOCUMENTS_PATH,
         filterLabel: 'Filtrar documentos',
@@ -511,6 +517,7 @@ export function createKardexViews({ render, join, attrs, page, notice, errorSumm
         subtitle: document.reversedById !== null ? `Revertido por #${document.reversedById}` : document.reversesDocumentId !== null ? `Reversión de #${document.reversesDocumentId}` : 'Vigente',
         // OBS-22: «Revertido por #N» y «Reversión de #N» enlazan al otro documento.
         actions: join([
+          ...(document.type === 'compra' && document.reversedById === null ? [actionLink(`${documentPath(document.id)}/devolver`, 'Devolver')] : []),
           ...(reversible ? [actionLink(reversalPath(document.id), 'Revertir')] : []),
           ...(document.reversedById !== null ? [actionLink(documentPath(document.reversedById), `Ver la reversión #${document.reversedById}`)] : []),
           ...(document.reversesDocumentId !== null ? [actionLink(documentPath(document.reversesDocumentId), `Ver el documento revertido #${document.reversesDocumentId}`)] : []),

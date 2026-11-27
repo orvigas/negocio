@@ -273,5 +273,7 @@ export type ItemKardexResponse = z.infer<typeof itemKardexResponseSchema>;
 export const kardexOptionsResponseSchema = z.object({
   items: z.array(stockItemSchema.extend({ units: z.array(packagingUnitSchema), referenceCost: costText.nullable(), avgCost: costText.nullable(), initialBalanceAllowed: z.boolean() })),
   suppliers: z.array(z.object({ id, name: z.string() })),
+  /** «Hoy» en BUSINESS_TIMEZONE (`AAAA-MM-DD`): fecha del hecho por defecto y límite de los formularios (RN-T3-3). */
+  today: businessDay,
 });
 export type KardexOptionsResponse = z.infer<typeof kardexOptionsResponseSchema>;

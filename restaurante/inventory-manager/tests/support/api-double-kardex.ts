@@ -31,6 +31,16 @@ export interface KardexDouble {
   blockedByReturns: Map<number, number[]>;
   /** `Idempotency-Key` recibidas en las escrituras. */
   keys: string[];
+  /** Cuerpos de los documentos registrados (REQ-F-051, PR 3b), en orden. */
+  writes: { path: string; body: Record<string, unknown> }[];
+  /** Artículos que ya tienen movimientos: no se ofrecen para el saldo inicial y su saldo responde 409. */
+  takenItems: Set<number>;
+  /** Artículos con movimientos que las opciones todavía no reflejan (carrera): solo el saldo responde 409. */
+  conflictItems: Set<number>;
+  /** La próxima escritura de un documento responde 503 `INVENTORY_BUSY`. */
+  busyNext: boolean;
+  /** «Hoy» de las opciones de los formularios. */
+  today: string;
   /** Cambia un proveedor "desde otra sesión" (para el 409). */
   touchSupplier(id: number, by: string): void;
 }
@@ -47,6 +57,11 @@ export function createKardexDouble(): KardexDouble {
     kardex: new Map(),
     blockedByReturns: new Map(),
     keys: [],
+    writes: [],
+    takenItems: new Set(),
+    conflictItems: new Set(),
+    busyNext: false,
+    today: '2026-11-26',
     touchSupplier(id, by) {
       const found = double.suppliers.find((supplier) => supplier.id === id);
       if (found) Object.assign(found, { version: found.version + 1, updatedBy: by });
@@ -71,6 +86,81 @@ export const isKardexPath = (path: string): boolean => /^\/(existencias|proveedo
 export function handleKardex(ctx: Context, double: KardexDouble, items: readonly InventoryItem[], user: AdminUser, path: string, record: Record<string, unknown>): void {
   const key = ctx.get(IDEMPOTENCY_HEADER);
   if (ctx.method !== 'GET' && key !== '') double.keys.push(key);
+
+  if (path === '/kardex/opciones' && ctx.method === 'GET') {
+    const stockTypes = ['insumo', 'intermedio', 'reventa'];
+    ctx.body = {
+      items: items
+        .filter((item) => item.active && item.kind !== 'parent' && item.inventoriable && stockTypes.includes(item.type))
+        .map((item) => ({ id: item.id, name: item.name, kind: item.kind, type: item.type, baseUnit: item.baseUnit, active: item.active, units: item.units, referenceCost: item.referenceCost, avgCost: null, initialBalanceAllowed: !double.takenItems.has(item.id) })),
+      suppliers: double.suppliers.filter((supplier) => supplier.active).map(({ id, name }) => ({ id, name })),
+      today: double.today,
+    };
+    return;
+  }
+
+  const writeMatch = /^\/documentos\/(saldo-inicial|compras|ajustes)$/.exec(path) ?? /^\/documentos\/(\d+)\/devoluciones$/.exec(path);
+  if (writeMatch && ctx.method === 'POST') {
+    const replayed = key !== '' ? replays.get(`documento:${key}`) : undefined;
+    const previous = replayed === undefined ? undefined : double.documents.get(replayed);
+    if (previous) {
+      ctx.status = 200;
+      ctx.body = { document: previous.document, replayed: true };
+      return;
+    }
+    if (double.busyNext) {
+      double.busyNext = false;
+      return fail(ctx, 503, 'INVENTORY_BUSY', 'El inventario está ocupado con otra escritura: inténtalo de nuevo en unos segundos. No se guardó nada.');
+    }
+    const fields: Record<string, string> = {};
+    if (typeof record.occurredOn !== 'string' || record.occurredOn === '' || record.occurredOn > double.today) fields.occurredOn = 'La fecha no puede ser futura.';
+    const lines = Array.isArray(record.lines) ? (record.lines as Record<string, unknown>[]) : [];
+    if (lines.length === 0) fields.lines = 'Añade al menos una línea.';
+    const purchase = /^\d+$/.test(writeMatch[1] ?? '') ? double.documents.get(Number(writeMatch[1])) : undefined;
+    lines.forEach((line, index) => {
+      if (purchase) {
+        const source = purchase.lines.find((entry) => entry.id === line.sourceMovementId);
+        if (!source) fields[`lines.${index}.item`] = 'La línea no pertenece a esta compra.';
+        else if (Number(line.quantity) > Number(source.returnable ?? '0')) fields[`lines.${index}.quantity`] = 'Es más de lo que queda por devolver de esta línea.';
+        return;
+      }
+      if (line.itemId === 0) fields[`lines.${index}.item`] = 'Elige un artículo.';
+      if (typeof line.quantity !== 'string' || !/^\d+(\.\d{1,3})?$/.test(line.quantity)) fields[`lines.${index}.quantity`] = 'Escribe un número sin signo, con punto decimal (p. ej. 24 o 0.355).';
+      if (typeof line.amount === 'string' && !/^\d+(\.\d{1,2})?$/.test(line.amount)) fields[`lines.${index}.amount`] = 'Máximo 2 decimales.';
+    });
+    if (Object.keys(fields).length > 0) return invalid(ctx, fields);
+    const taken = writeMatch[1] === 'saldo-inicial' ? lines.filter((line) => double.takenItems.has(Number(line.itemId)) || double.conflictItems.has(Number(line.itemId))) : [];
+    if (taken.length > 0) {
+      return fail(ctx, 409, 'INITIAL_BALANCE_NOT_ALLOWED', 'El artículo ya tiene movimientos: corrige su existencia con un ajuste.', {
+        items: taken.map((line) => ({ itemId: Number(line.itemId), name: items.find((item) => item.id === Number(line.itemId))?.name ?? '' })),
+      });
+    }
+    const type = purchase ? 'devolucion_proveedor' : writeMatch[1] === 'compras' ? 'compra' : writeMatch[1] === 'ajustes' ? 'ajuste' : 'saldo_inicial';
+    const labels: Record<string, string> = { compra: 'Compra', ajuste: 'Ajuste', saldo_inicial: 'Saldo inicial', devolucion_proveedor: 'Devolución a proveedor' };
+    const document: KardexDocument = {
+      id: ++sequence,
+      type,
+      typeLabel: labels[type] ?? type,
+      occurredOn: String(record.occurredOn),
+      recordedAt: AT,
+      supplier: null,
+      reference: null,
+      costBasis: type === 'compra' ? 'con_iva' : null,
+      reason: typeof record.reason === 'string' ? record.reason : null,
+      note: typeof record.note === 'string' ? record.note : null,
+      totalCost: '0.0000',
+      reversesDocumentId: null,
+      reversedById: null,
+      sourceDocumentId: purchase ? purchase.document.id : null,
+      author: user.name,
+    };
+    double.documents.set(document.id, { document, lines: [], returns: [] });
+    double.writes.push({ path, body: record });
+    if (key !== '') replays.set(`documento:${key}`, document.id);
+    ctx.status = 201;
+    ctx.body = { document, replayed: false };
+    return;
+  }
 
   if (path === '/existencias' && ctx.method === 'GET') {
     const estado = ctx.query.estado;

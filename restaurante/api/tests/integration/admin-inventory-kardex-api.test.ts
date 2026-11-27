@@ -266,5 +266,7 @@ describe('lecturas (RF-7, RF-8, RF-9)', () => {
 
     const options = kardexOptionsResponseSchema.parse(await (await call(h.url, `${I}/kardex/opciones`, gema)).json());
     expect(options.items.map((i) => [i.name, i.avgCost, i.initialBalanceAllowed])).toEqual([['Masa ficticia', '20.0000', false]]);
+    // «Hoy» en BUSINESS_TIMEZONE para la fecha del hecho de los formularios (RN-T3-3).
+    expect(options.today).toBe(TODAY);
   });
 });

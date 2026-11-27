@@ -1,0 +1,14 @@
+<p><a class="font-semibold text-maiz underline underline-offset-4" href="{{ backHref }}">{{ backLabel }}</a></p>
+      <div class="inventory-item__head mt-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div class="min-w-0">
+          <p class="font-label text-xs font-bold tracking-widest text-masa uppercase">{{ eyebrow }}</p>
+          <h1 class="font-headline text-3xl font-black tracking-tight break-words uppercase">{{ title }}</h1>
+          <p class="mt-1 text-masa">{{ subtitle }}</p>
+        </div>
+        <div class="inventory-item__actions flex flex-wrap items-center gap-2">
+          <ul class="flex flex-wrap gap-2">{{{ actions }}}
+          </ul>{{{ buttons }}}
+        </div>
+      </div>
+      {{{ notices }}}
+      {{{ sections }}}

@@ -109,6 +109,7 @@ type KardexReader = Pick<
   | 'allStock'
   | 'documentById'
   | 'documentByIdempotencyKey'
+  | 'documentsByIds'
   | 'documentMovements'
   | 'returnsOf'
   | 'listDocuments'
@@ -139,6 +140,11 @@ export function kardexReaderOn(client: Tx): KardexReader {
     async documentByIdempotencyKey(key) {
       const row = await client.inventoryDocument.findUnique({ where: { idempotencyKey: key }, include: DOCUMENT_INCLUDE });
       return row ? toDocument(row) : null;
+    },
+
+    async documentsByIds(ids) {
+      if (ids.length === 0) return [];
+      return (await client.inventoryDocument.findMany({ where: { id: { in: [...ids] } }, include: DOCUMENT_INCLUDE })).map(toDocument);
     },
 
     async documentMovements(documentId) {

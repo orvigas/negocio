@@ -146,6 +146,22 @@ describe('persistencia', () => {
     }
   });
 
+  it('OBS-21: el Kardex del artículo da la fecha del hecho de cada documento (documentsByIds), no la de registro', async () => {
+    const { store, kardex, insumo, ana, today } = await setup();
+    const masa = await insumo('Masa de maíz');
+    // OBS-27: tres días antes de hoy, nunca el día de registro (dentro de la ventana de 31 días).
+    const day = new Date(Date.parse(`${today}T12:00:00Z`) - 3 * 86_400_000).toISOString().slice(0, 10);
+    const first = await kardex.createPurchase({ occurredOn: day, lines: [{ itemId: masa.id, quantity: '1', unit: 'kg', amount: '20.00' }] }, ana);
+    const second = await kardex.createPurchase({ occurredOn: today, lines: [{ itemId: masa.id, quantity: '1', unit: 'kg', amount: '20.00' }] }, ana);
+    const view = await kardex.itemKardex(masa.id);
+    expect(view.movements.map((movement) => view.occurredOn.get(movement.documentId))).toEqual([today, day]);
+    const found = await store.read((reader) => reader.documentsByIds([second.document.id, first.document.id, 999_999]));
+    expect(found.map((document) => [document.id, document.occurredOn]).sort((a, b) => Number(a[0]) - Number(b[0]))).toEqual([
+      [first.document.id, day],
+      [second.document.id, today],
+    ]);
+  });
+
   it('CA-15: inventory:verify da 0 con la cadena intacta y detecta una fila alterada a mano, sin valores', async () => {
     const { prisma, insumo, purchase, verify } = await setup();
     const masa = await insumo('Masa de maíz');

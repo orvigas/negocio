@@ -72,7 +72,7 @@ describe('acceso por rol (RF-9, CA-10 y CA-11)', () => {
     const list = await (await browser.get('/inventario/articulos')).text();
     expect(navLabels(list)).toEqual(['Inventario']);
     expect(dom(list).querySelector('.admin-header__nav a[aria-current="page"]')?.textContent).toBe('Inventario');
-    expect([...dom(list).querySelectorAll('.admin-header__subnav a')].map((link) => link.textContent)).toEqual(['Artículos', 'Categorías', 'Recetas']);
+    expect([...dom(list).querySelectorAll('.admin-header__subnav a')].map((link) => link.textContent)).toEqual(['Artículos', 'Categorías', 'Recetas', 'Existencias', 'Documentos', 'Proveedores']);
     for (const path of ['/usuarios', '/bot', '/birria/cotizador', '/molotes/productos', '/birria/pagina']) expect((await browser.get(path)).status, path).toBe(403);
   });
 });

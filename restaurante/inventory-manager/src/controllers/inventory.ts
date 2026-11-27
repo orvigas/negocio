@@ -10,6 +10,7 @@ import type { Logger, SafeHtml } from '@restaurante/web';
 
 import type { InventoryConfig } from '../config.ts';
 import { displayDate, type Views } from '../views/index.ts';
+import { KARDEX_PAGE_PARAM } from '../views/inventory-kardex.ts';
 import {
   CATEGORIES_PATH,
   EMPTY_ITEM_FORM,
@@ -193,10 +194,33 @@ export function createInventoryController({ config, api, views, logger }: { conf
     return result.ok ? result.data.recipes : null;
   }
 
+  /** Kardex de la ficha (REQ-F-051, RF-8): página `?kardex=N`; null si la API no respondió. */
+  async function itemKardex(ctx: Ctx, auth: Session, id: number) {
+    const raw = queryText(ctx.query[KARDEX_PAGE_PARAM]);
+    const page = /^[1-9]\d{0,5}$/.test(raw) ? raw : undefined;
+    const result = await api.getItemKardex(credentials(auth), id, page);
+    return result.ok ? result.data : null;
+  }
+
   async function detailPage(ctx: Ctx, auth: Session, id: number, status: number, notices: SafeHtml[], conversion?: ConversionView): Promise<void> {
-    const [found, categories, recipes] = await Promise.all([api.getInventoryItem(credentials(auth), id), categoryOptions(auth), usedIn(auth, id)]);
+    const [found, categories, recipes, kardex] = await Promise.all([api.getInventoryItem(credentials(auth), id), categoryOptions(auth), usedIn(auth, id), itemKardex(ctx, auth, id)]);
     if (!found.ok) return apiFailure(ctx, found, auth, itemPath(id));
-    send(ctx, status, views.inventoryItem({ context: auth, item: found.data.item, history: found.data.history, categories: categories ?? [], usedIn: recipes, conversion, notices }));
+    const { item } = found.data;
+    send(
+      ctx,
+      status,
+      views.inventoryItem({
+        context: auth,
+        item,
+        history: found.data.history,
+        categories: categories ?? [],
+        usedIn: recipes,
+        conversion,
+        stockRows: item.kind === 'parent' ? [] : views.itemStockRows(item.stock, item.baseUnit),
+        kardex: item.kind === 'parent' ? undefined : views.itemKardexSection(kardex),
+        notices,
+      }),
+    );
   }
 
   async function categoriesPage(ctx: Ctx, auth: Session, status: number, extra: { name?: string; requestId?: string; errors?: Record<string, string>; notices?: SafeHtml[] } = {}): Promise<void> {

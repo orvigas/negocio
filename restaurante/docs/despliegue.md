@@ -640,6 +640,29 @@ copia al contenedor (la `api` lo lee por la entrada estándar).
 - En local (base de `api/.env`, solo `127.0.0.1`, `localhost`, `::1` o `mysql-dev`):
   `npm run inventory:import -- --archivo <ruta>` (ensayo) y con `--escribir`.
 
+### Arranque del inventario en producción (REQ-F-051, T3)
+
+Cuando la épica de inventario llegue a `main`, en este orden:
+
+1. **Desplegar.** El merge a `main` despliega solo. La migración `inventario_kardex` es aditiva: crea
+   las tablas del Kardex y la existencia en 0 de cada artículo que ya exista (en producción, ninguno).
+2. **Reinstalar los scripts de respaldo** ([11.5](#115-instalar-en-el-vps)). El manifiesto lleva la
+   imagen de la `api` (`api_image`) desde REQ-F-051, y el simulacro la usa para `inventory:verify`.
+3. **Importación única** de los datos maestros ([arriba](#importación-única-del-inventario-req-f-050-a5)).
+4. **Saldo inicial en pantalla**, en "Inventario → Documentos → Saldo inicial", con las existencias
+   y costos reales (P-2: no se carga desde la hoja). Un artículo con movimientos ya no admite otro
+   saldo: se corrige con un ajuste o revirtiendo el saldo.
+5. **Compras** desde ese momento, en "Inventario → Documentos → Nueva compra".
+
+Verificación de la cadena del Kardex (solo lectura; sale con 0 si todo cuadra, con 1 si hay
+descuadres y con 2 si no pudo verificar; solo imprime ids y conteos):
+
+```sh
+$C exec -T api node scripts/inventory-verify.ts
+```
+
+En local: `npm run inventory:verify`.
+
 ## 6. Volver a una versión anterior a mano
 
 La vuelta atrás automática solo cubre una versión nueva que no arranca. Para volver por otro
@@ -678,6 +701,10 @@ motivo:
 
   5. Si también vuelves la `api`, sigue ahora [Arrancar la `api` a mano](#arrancar-la-api-a-mano).
   6. El siguiente despliegue desde `main` deja todo como indica el CI.
+
+La migración `inventario_kardex` (REQ-F-051) no requiere pasos de vuelta atrás. La imagen de `main`
+anterior a la épica no lee el inventario. Los documentos y movimientos registrados se conservan y
+vuelven a usarse al avanzar.
 
 Para volver a escribir en `/admin/bot` basta con la app: una versión anterior a REQ-F-043 vuelve a
 tener los formularios, y una `api` nueva recoge esos cambios en 10 s
@@ -969,9 +996,15 @@ gzip -dc backups/<archivo>.sql.gz | $C exec -T mysql sh -c 'exec mysql -uroot -p
    La página (REQ-F-044) vuelve con el volcado, incluida su marca `page_import`. Desde REQ-F-045
    nada la reimporta: con un volcado anterior a la importación (antes del 2026-11-16), la pantalla
    "Página" queda "no disponible" y las landings muestran la página de la semilla (RN-4 de
-   REQ-F-045; ver [11.7](#117-restaurar-runbook)). El inventario (REQ-F-049: `inventory_category`,
-   `inventory_item`, `inventory_item_unit`, `inventory_sku` e `inventory_change`) también vuelve
-   con el volcado; con uno anterior a la épica, el inventario queda vacío.
+   REQ-F-045; ver [11.7](#117-restaurar-runbook)). El inventario también vuelve con el volcado:
+   - REQ-F-049: `inventory_category`, `inventory_item`, `inventory_item_unit`, `inventory_sku` e
+     `inventory_change`;
+   - las recetas de REQ-F-050;
+   - el Kardex de REQ-F-051: `inventory_supplier`, `inventory_stock`, `inventory_document` e
+     `inventory_movement`.
+
+   Con un volcado anterior a la épica, el inventario queda vacío. Con la `api` arrancada,
+   comprueba el Kardex con `$C exec -T api node scripts/inventory-verify.ts` (debe terminar con 0).
 3. Comprueba `$C ps` (healthy) y el [paso 8](#8-comprobaciones-después-de-cada-despliegue).
 4. Si el siguiente despliegue desde `main` vuelve a fallar en la migración, corrige la migración
    antes de volver a desplegar.
@@ -1029,8 +1062,11 @@ REQ-F-019. Objetivo: perder como mucho 24 h de datos (RPO) y recuperar el servic
   - un `mysqldump` de `restaurante` hecho con el usuario de solo lectura `restaurante_backup` (con
     la página desde REQ-F-044: `page_version`, `page_change` y `page_import`; y el inventario
     desde REQ-F-049: `inventory_category`, `inventory_item`, `inventory_item_unit`, `inventory_sku`
-    e `inventory_change`, sin cambiar los scripts);
-  - un manifiesto con los conteos de `user` y `product`, la última migración, las imágenes y el
+    e `inventory_change`, más las recetas de REQ-F-050 y el Kardex de REQ-F-051
+    (`inventory_supplier`, `inventory_stock`, `inventory_document` e `inventory_movement`), sin cambiar
+    los scripts);
+  - un manifiesto con los conteos de `user` y `product`, la última migración, las imágenes (desde
+    REQ-F-051 también la de la `api`, `api_image`, vacía si `state/release.env` no la tiene) y el
     commit de `state/release.env`, y las sumas sha256.
 - **Formatos:**
   - **2** (desde la limpieza de REQ-F-045, cuyos scripts se instalan justo antes de su merge, con
@@ -1297,7 +1333,9 @@ Después, haz las comprobaciones del [paso 8](#8-comprobaciones-después-de-cada
   ```
 
   Compáralo con la misma consulta en producción antes del incidente si la tienes, o revisa en la
-  sección "Inventario" del admin que la lista y el historial de algunos artículos estén.
+  sección "Inventario" del admin que la lista y el historial de algunos artículos estén. Para el
+  Kardex (REQ-F-051), con la `api` en marcha: `$C exec -T api node scripts/inventory-verify.ts`. Debe
+  terminar con 0; con 1, lista los artículos y las comprobaciones que no cuadran (solo ids).
 - **VPS nuevo:**
   1. Prepara el VPS con los pasos 1.1 a 1.6, instala `deploy/` y la sección 11.5 sin activar el
      timer.
@@ -1349,6 +1387,12 @@ restaurante/ops/backup/verify-backup.sh --drill
 6. Con `--drill`, arranca además la imagen de la app del respaldo y espera a que responda. Con un
    respaldo de formato 1 le da también esa base y ese `app-data`, que la app de entonces
    necesitaba; desde REQ-F-045 la app no usa ninguno de los dos.
+7. Con `--drill` y una base con Kardex (REQ-F-051), ejecuta `inventory:verify` con la imagen de la
+   `api` del manifiesto (`api_image`) contra la base restaurada:
+   - con 0, lo anota ("inventory:verify da 0");
+   - con otro código, el simulacro falla;
+   - un respaldo sin `api_image` (anterior a REQ-F-051, o hecho tras una restauración) solo deja un
+     aviso.
 
 Al terminar:
 

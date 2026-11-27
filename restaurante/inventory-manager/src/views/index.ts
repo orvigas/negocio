@@ -2,6 +2,7 @@ import { INVENTORY_ROLES, type AdminProduct, type AdminUser, type ProductFormFie
 import type { Renderer, SafeHtml } from '@restaurante/web';
 
 import { BOT_PATH, createBotViews } from './bot.ts';
+import { DOCUMENTS_PATH, STOCK_PATH, SUPPLIERS_PATH, createKardexViews } from './inventory-kardex.ts';
 import { RECIPES_PATH, createRecipeViews } from './inventory-recipes.ts';
 import { CATEGORIES_PATH, ITEMS_PATH, createInventoryViews } from './inventory.ts';
 import { createPageViews, pagePath } from './page.ts';
@@ -57,9 +58,20 @@ export interface NoticeOptions {
  * "Cotizador" (REQ-F-046) son de un negocio. "Inventario" (REQ-F-049): artículos, categorías o
  * recetas (REQ-F-050).
  */
-export type HeaderSection = 'users' | 'bot' | 'account' | 'page' | 'quote' | 'inventory' | 'inventory-categories' | 'inventory-recipes';
+export type HeaderSection =
+  | 'users'
+  | 'bot'
+  | 'account'
+  | 'page'
+  | 'quote'
+  | 'inventory'
+  | 'inventory-categories'
+  | 'inventory-recipes'
+  | 'inventory-stock'
+  | 'inventory-documents'
+  | 'inventory-suppliers';
 
-const isInventorySection = (section: HeaderSection | undefined): boolean => section === 'inventory' || section === 'inventory-categories' || section === 'inventory-recipes';
+const isInventorySection = (section: HeaderSection | undefined): boolean => section !== undefined && section.startsWith('inventory');
 
 export interface PageOptions {
   title: string;
@@ -138,12 +150,19 @@ export function createViews(renderer: Renderer) {
     });
   }
 
-  /** Secciones del inventario (REQ-F-049): artículos, categorías y recetas (REQ-F-050). */
+  /** Secciones del inventario (REQ-F-049): artículos, categorías, recetas (REQ-F-050), existencias, documentos y proveedores (REQ-F-051). */
   function inventoryNav(section: HeaderSection | undefined): SafeHtml {
     const link = (href: string, label: string, active: boolean) => render('partials/subnav-link', { href, label, current: active ? render('partials/aria-current', { value: 'true' }) : join([]) });
     return render('partials/business-nav', {
       businessName: 'Inventario',
-      links: join([link(ITEMS_PATH, 'Artículos', section === 'inventory'), link(CATEGORIES_PATH, 'Categorías', section === 'inventory-categories'), link(RECIPES_PATH, 'Recetas', section === 'inventory-recipes')]),
+      links: join([
+        link(ITEMS_PATH, 'Artículos', section === 'inventory'),
+        link(CATEGORIES_PATH, 'Categorías', section === 'inventory-categories'),
+        link(RECIPES_PATH, 'Recetas', section === 'inventory-recipes'),
+        link(STOCK_PATH, 'Existencias', section === 'inventory-stock'),
+        link(DOCUMENTS_PATH, 'Documentos', section === 'inventory-documents'),
+        link(SUPPLIERS_PATH, 'Proveedores', section === 'inventory-suppliers'),
+      ]),
     });
   }
 
@@ -191,6 +210,7 @@ export function createViews(renderer: Renderer) {
     ...createQuoteViews({ render, join, attrs, page, notice, businessNames: BUSINESS_NAMES }),
     ...createInventoryViews({ render, join, attrs, page, notice, errorSummary, fieldId, displayDate }),
     ...createRecipeViews({ render, join, attrs, page, notice, errorSummary, fieldId, displayDate }),
+    ...createKardexViews({ render, join, attrs, page, notice, errorSummary, fieldId, displayDate }),
 
     login({ next, problem }: { next: string; problem?: 'invalid' | 'locked' | 'expired' | 'unavailable' | 'closed' | undefined }): SafeHtml {
       const notices: Record<string, NoticeOptions> = {

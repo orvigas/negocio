@@ -3,6 +3,7 @@ import Router from '@koa/router';
 import type { AccountController } from './controllers/account.ts';
 import type { AdminController } from './controllers/admin.ts';
 import type { BotController } from './controllers/bot.ts';
+import type { KardexController } from './controllers/inventory-kardex.ts';
 import type { RecipeController } from './controllers/inventory-recipes.ts';
 import type { InventoryController } from './controllers/inventory.ts';
 import type { PageController } from './controllers/page.ts';
@@ -73,6 +74,7 @@ export function createRouter({
   quote,
   inventory,
   recipes,
+  kardex,
 }: {
   admin: AdminController;
   users: UsersController;
@@ -82,6 +84,7 @@ export function createRouter({
   quote: QuoteController;
   inventory: InventoryController;
   recipes: RecipeController;
+  kardex: KardexController;
 }): Router {
   const router = new Router();
   router.get('/salud', (ctx) => {
@@ -124,6 +127,19 @@ export function createRouter({
   router.post('/inventario/articulos/:id/receta/cerrar', recipes.close);
   router.get('/inventario/recetas', recipes.list);
   router.get('/inventario/recetas/versiones/:id', recipes.version);
+  // REQ-F-051: existencias, proveedores, documentos y reversión. Ninguna pantalla edita ni borra documentos.
+  router.get('/inventario/existencias', kardex.stock);
+  router.get('/inventario/proveedores', kardex.suppliers);
+  router.post('/inventario/proveedores', kardex.createSupplier);
+  router.get('/inventario/proveedores/nuevo', kardex.newSupplier);
+  router.get('/inventario/proveedores/:id/editar', kardex.editSupplier);
+  router.post('/inventario/proveedores/:id', kardex.updateSupplier);
+  router.post('/inventario/proveedores/:id/desactivar', kardex.deactivateSupplier);
+  router.post('/inventario/proveedores/:id/reactivar', kardex.reactivateSupplier);
+  router.get('/inventario/documentos', kardex.documents);
+  router.get('/inventario/documentos/:id', kardex.document);
+  router.get('/inventario/documentos/:id/revertir', kardex.reversalPage);
+  router.post('/inventario/documentos/:id/revertir', kardex.reverse);
   router.get('/inventario/categorias', inventory.categories);
   router.post('/inventario/categorias', inventory.createCategory);
   router.get('/inventario/categorias/:id/editar', inventory.editCategory);

@@ -339,7 +339,7 @@ export function createInventoryKardexRoutes({ access, kardex, timeZone, logger }
           send(ctx, itemKardexResponseSchema, {
             item: stockItem(view.item),
             stock: view.stock && holdsStock(view.item) ? { quantity: quantity(view.stock.quantity), avgCost: cost(view.stock.avgCost), lastCost: cost(view.stock.lastCost) } : null,
-            movements: view.movements.map(movementDto),
+            movements: view.movements.map((movement) => ({ ...movementDto(movement), occurredOn: view.occurredOn.get(movement.documentId) ?? movement.recordedAt.toISOString().slice(0, 10) })),
             page: view.page,
           });
         },

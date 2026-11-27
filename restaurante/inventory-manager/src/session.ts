@@ -53,6 +53,10 @@ const RETURN_PATTERNS: readonly RegExp[] = [
   // Cotizador de taquizas (REQ-F-046): ruta fija con la query de un cálculo (la de URLSearchParams).
   // Solo caracteres de una query codificada: sin redirección abierta.
   /^\/birria\/cotizador(?:\?[A-Za-z0-9._~*%&=+,-]*)?$/,
+  // Inventario (REQ-F-051, OBS-12 a de REQ-F-050): cualquier pantalla de /inventario con su query. Solo
+  // segmentos de minúsculas, dígitos y guiones (sin «//» ni otro origen) y caracteres de una query
+  // codificada: sin redirección abierta.
+  /^\/inventario(?:\/[a-z0-9-]+)*(?:\?[A-Za-z0-9._~*%&=+,-]*)?$/,
 ];
 
 /**

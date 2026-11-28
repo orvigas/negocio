@@ -4232,9 +4232,19 @@ Quedan fuera de T3 y no bloquean su cierre:
    - Los costos de las recetas siguen con 2 decimales.
    - T3 muestra los costos unitarios con 4 (decisión A de la ronda 2 del 3a).
    - Queda como seguimiento, con el motivo anotado en el Implementation Result del 3a.
-6. **OBS-24.**
-   - La prueba de humo del respaldo pasa con un Kardex vacío.
-   - Se propone añadir filas del Kardex en `ops/backup/ci/smoke.sh` en el PR de la épica hacia `main`, porque solo se valida en Linux, o en un seguimiento de operación.
+6. **OBS-24 (resuelta el 2026-11-28, antes del PR de la épica hacia `main`; el usuario lo aprobó con un "si").**
+   - La prueba de humo del respaldo pasaba con un Kardex vacío. Ahora `ops/backup/ci/smoke.sh`, cuando recibe la imagen `api`, siembra un Kardex ficticio antes del respaldo, con el usuario de la app (solo DML). Es la semilla de desarrollo: saldo inicial, compras con CPP, un ajuste que deja un negativo y una reversión, que dan 7 documentos y 9 movimientos.
+     - No usa `inventory:seed-dev`: ese guion no va en la imagen y rechaza `NODE_ENV=production` y el host `mysql`.
+     - En su lugar, un módulo temporal se monta en la imagen `api` y llama a `seedInventoryDev` y `seedKardexDev`.
+   - Comprobaciones nuevas:
+     - hay documentos y movimientos antes del respaldo;
+     - el `inventory:verify` del simulacro recorre exactamente los movimientos sembrados (`inventory_verify_ok … movimientos=9`).
+   - Validación en local, en el runner `ubuntu:24.04` (socket de Docker, `--network host` y `SMOKE_WORKDIR` montado en la misma ruta), con las imágenes construidas desde la rama:
+     - con las 3 imágenes: 80 `ok` y 0 `FALLO`;
+     - sin la imagen `api`: 77 `ok`, igual que antes;
+     - sonda descartable (`UPDATE inventory_stock` de una existencia antes del respaldo): el simulacro falla con `inventory_verify_mismatch itemId=1 check=existencia_distinta` y la prueba termina con 1.
+   - `shellcheck -x` de `ops/backup` y `actionlint`: 0.
+   - Sigue corriendo solo en el CI hacia `main`.
 7. **Observaciones anotadas, sin cambios:**
    - OBS-13: con dos filtros inválidos, el 422 informa solo uno, como en T1 y T2.
    - OBS-17: el filtro de Existencias usa valores en español; el de proveedores, los de core.
@@ -4359,3 +4369,4 @@ Descripción inicial (2026-11-25), refinada por business-analyst a partir del ma
 - 2026-11-27, senior-fullstack (T4 del PR 3b): commit `f82c803` y PR #199 en borrador hacia `epic/inventario`, con DEF-007, DEF-008 (incluida la corrección del parcial de campo, que también arregla los buscadores de T1, T2 y 3a), DEF-009, OBS-30, las observaciones pendientes (OBS-13, 17, 18, 24, 25, 28, 29, 31, 32 y 33) y el seguimiento de los decimales de las recetas de T2.
 - 2026-11-27, senior-fullstack (T4 del PR 3b): PR #199 marcado como listo tras la ejecución del último push. El CI de `2dcc186` (ejecución 46027064388) pasó `calidad`, `docker`, `auditoria`, `verificacion` y `pruebas`. El commit que lo registraba (`4f692ac`) llegó después del merge y no entró en la épica; se recoge en el cierre.
 - 2026-11-27, senior-fullstack (T5): el usuario confirmó el merge del PR 3b ("Mergeado"; #199, merge `97254b4`). Ticket movido a `done/` con estado `DONE` y la trazabilidad de los PR #195 a #199. Seguimientos fuera de T3 reunidos en "Seguimientos tras el cierre de T3". T3 queda completo en `epic/inventario`.
+- 2026-11-28, senior-fullstack (OBS-24, cambio pequeño sin ticket, aprobado por el usuario con "si"): `ops/backup/ci/smoke.sh` siembra un Kardex ficticio antes del respaldo y comprueba que el `inventory:verify` del simulacro recorre sus movimientos. Validado en el runner `ubuntu:24.04` (80 `ok`; sin `api`, 77; con el Kardex descuadrado, falla), con `shellcheck` y `actionlint` en 0. PR en borrador hacia `epic/inventario`.

@@ -173,6 +173,44 @@ mysql_root "INSERT INTO product (business, category, slug, name, position, updat
 USERS=$(mysql_root 'SELECT COUNT(*) FROM user')
 PRODUCTS=$(mysql_root 'SELECT COUNT(*) FROM product')
 check "hay datos de prueba (usuarios $USERS, productos $PRODUCTS)" test "$USERS" -ge 1 -a "$PRODUCTS" -ge 1
+# OBS-24 (REQ-F-051): con la imagen api, un Kardex con movimientos antes del respaldo, para que el
+# inventory:verify del simulacro compruebe una cadena real y no una vacía. Es la semilla ficticia de
+# desarrollo (saldo inicial, compras con CPP, un ajuste que deja un negativo y una reversión), escrita
+# con los repositorios de core y el usuario de la app (solo DML). No usa inventory:seed-dev porque ese
+# guion no va en la imagen y rechaza NODE_ENV=production y el host `mysql`.
+KARDEX_MOVEMENTS=0
+if [[ -n "$API_SRC" ]]; then
+  cat >"$WORK/kardex-seed.ts" <<'EOF'
+import { businessDate, createInventoryRepository, createKardexRepository, createRecipeRepository, createSupplierRepository } from '@restaurante/core/inventory';
+import { createPrismaClient } from '@restaurante/db/client';
+import { createPrismaInventoryStore } from '@restaurante/db/prisma-inventory-store';
+
+import { API_DEFAULTS, loadDatabaseConfig } from '../src/config.ts';
+import { seedInventoryDev, seedKardexDev } from './support/inventory-dev-seed.ts';
+
+const prisma = createPrismaClient(loadDatabaseConfig());
+try {
+  const store = createPrismaInventoryStore({ prisma });
+  const inventory = createInventoryRepository({ store });
+  const { created } = await seedInventoryDev({ inventory, recipes: createRecipeRepository({ store }) });
+  const timeZone = API_DEFAULTS.BUSINESS_TIMEZONE;
+  const kardex = createKardexRepository({ store, timeZone });
+  const { documents } = await seedKardexDev({ inventory, suppliers: createSupplierRepository({ store }), kardex }, businessDate(new Date(), timeZone));
+  process.stdout.write(`kardex_seed artículos=${created} documentos=${documents}\n`);
+} finally {
+  await prisma.$disconnect();
+}
+EOF
+  APP_DB_PASSWORD=$(sed -n 's/^RESTAURANTE_DB_APP_PASSWORD=//p' "$BASE/.env")
+  check 'se siembra el Kardex ficticio con la imagen api' run kardex-seed \
+    DATABASE_URL="mysql://restaurante_app:$APP_DB_PASSWORD@mysql:3306/restaurante" \
+    docker run --rm --network "${COMPOSE_PROJECT_NAME}_db" -e NODE_ENV=production -e DATABASE_URL \
+    -v "$WORK/kardex-seed.ts:/app/api/scripts/bksmoke-kardex-seed.ts:ro" --read-only --tmpfs /tmp \
+    --entrypoint node "$API_SRC" scripts/bksmoke-kardex-seed.ts
+  KARDEX_MOVEMENTS=$(mysql_root 'SELECT COUNT(*) FROM inventory_movement')
+  KARDEX_DOCUMENTS=$(mysql_root 'SELECT COUNT(*) FROM inventory_document')
+  check "el Kardex tiene movimientos antes del respaldo (documentos $KARDEX_DOCUMENTS, movimientos $KARDEX_MOVEMENTS)" test "$KARDEX_MOVEMENTS" -ge 1 -a "$KARDEX_DOCUMENTS" -ge 1
+fi
 printf 'RESTAURANTE_APP_IMAGE=%s\nRESTAURANTE_MIGRATE_IMAGE=%s\nRESTAURANTE_COMMIT=%s\n' "$APP_SRC" "$MIGRATE_SRC" "$(printf '1%.0s' {1..40})" >"$BASE/state/release.env"
 if [[ -n "$API_SRC" ]]; then printf 'RESTAURANTE_API_IMAGE=%s\n' "$API_SRC" >>"$BASE/state/release.env"; fi
 APP_VOLUME="${COMPOSE_PROJECT_NAME}_app-data"
@@ -374,6 +412,8 @@ check 'verify-backup.sh --drill termina con 0' run verify RESTAURANTE_BACKUP_CON
 check 'el resultado queda registrado' grep -q 'resultado=ok' "$WORK/pruebas.log"
 if [[ -n "$API_SRC" ]]; then
   check 'el simulacro ejecuta inventory:verify y da 0 (REQ-F-051)' grep -q 'inventory:verify da 0' "$WORK/logs/verify.log"
+  # OBS-24: sobre el Kardex sembrado, con todos sus movimientos (no uno vacío).
+  check "inventory:verify recorre los $KARDEX_MOVEMENTS movimientos sembrados" grep -Eq "inventory_verify_ok artículos=[1-9][0-9]* movimientos=$KARDEX_MOVEMENTS documentos=" "$WORK/logs/verify.log"
 else
   check 'sin imagen api, el simulacro lo anota y no falla' grep -q 'no trae la imagen de la api' "$WORK/logs/verify.log"
 fi

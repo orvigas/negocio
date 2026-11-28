@@ -2,7 +2,7 @@
 
 ## Estado
 
-T1 `DONE` (PR 0 #180, PR 1 #181, PR 2 #182 y PR 3 #183, mergeados). Este documento sigue vigente como marco de la épica. T2 (REQ-F-050) y su seguimiento REQ-F-054 están `DONE`, y T3 (REQ-F-051) está en curso. Queda pendiente el PR de la épica hacia `main` (ver "PR de la épica hacia `main`"). Estado corregido en el PR 1 de REQ-F-051: antes decía `READY_FOR_MERGE` del PR #183, ya mergeado.
+T1 `DONE` (PR 0 #180, PR 1 #181, PR 2 #182 y PR 3 #183, mergeados). Este documento sigue vigente como marco de la épica. T2 (REQ-F-050) y su seguimiento REQ-F-054 están `DONE`, y T3 (REQ-F-051) está `DONE` (PR #195, #196, #197, #198 y #199, mergeados en `epic/inventario`; último merge `97254b4`, 2026-11-27). Con T1 a T3 completos, la épica es utilizable (D-4). Queda pendiente el PR de la épica hacia `main` (ver "PR de la épica hacia `main`"). Estado corregido en el PR 1 de REQ-F-051: antes decía `READY_FOR_MERGE` del PR #183, ya mergeado.
 
 Histórico de estados de T1:
 
@@ -110,7 +110,7 @@ Con ello el negocio conoce el costo real de cada platillo, el valor de lo que ti
 
 - **T1 (REQ-F-049, este ticket):** catálogo de artículos (cuatro tipos), categorías, variantes o sabores, unidades y conversiones, estado, historial de cambios y rol Gerente.
 - **T2 (REQ-F-050, por crear):** recetas multinivel con validación de ciclos, merma y rendimiento por ingrediente, versiones con vigencia y costo teórico.
-- **T3 (REQ-F-051, por crear):** Kardex, saldo inicial, proveedores, compras con CPP y último costo, consulta del Kardex, y respaldo y restauración de las tablas nuevas.
+- **T3 (REQ-F-051, `DONE`):** Kardex, saldo inicial, proveedores, compras con CPP y último costo, consulta del Kardex, y respaldo y restauración de las tablas nuevas.
 - **T4 (REQ-F-052, por crear; se hace después de E2):** producción por lotes, mermas, consumo interno, conteos físicos con ajuste justificado, stock mínimo y punto de reorden con alertas, y rol Cocina/Producción.
 - **T5 (REQ-F-053, por crear; después de T4):** reportes de inventario que no dependen de ventas:
   - Kardex filtrable;
@@ -2394,3 +2394,4 @@ Descripción inicial (2026-11-18):
 
 - marco de la épica de inventario, con las decisiones D-1 a D-4 y PV-1 a PV-14 validadas por el usuario;
 - detalle de T1 con su Action Plan.
+- 2026-11-27, senior-fullstack (cierre de REQ-F-051): T3 en `DONE` (PR #195 a #199 mergeados en `epic/inventario`, último merge `97254b4`). Con T1 a T3 completos, el siguiente paso de la épica es su PR hacia `main` (P-1, D-4), que se abre cuando lo pida el usuario. Los seguimientos de T3 están en REQ-F-051, "Seguimientos tras el cierre de T3".

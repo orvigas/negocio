@@ -42,9 +42,9 @@ estrategia y los pasos siguientes están en [Arquitectura](docs/arquitectura.md)
 | --- | --- |
 | `landing-pages/` | La app Koa descrita en este README: las landings, que leen los productos y la página de `api/` (REQ-F-038 y REQ-F-044), sin base de datos. Su `/admin` se retiró en REQ-F-045: lleva al admin nuevo |
 | `api/` | API propia (REQ-F-038, REQ-F-039, REQ-F-040 y REQ-F-044): `GET /api/v1/public/{molotes,birria}/productos` y `/pagina` para las landings y `/api/v1/admin` para el admin nuevo, la única que escribe los productos y la página, y la única vía para gestionar usuarios y controlar el bot. Solo en la red interna; ver [API propia](#api-propia-api). También ejecuta el [bot de WhatsApp](#bot-de-whatsapp) (REQ-F-042), con su webhook en un puerto propio, lo único de `api` que se alcanza desde internet |
-| `inventory-manager/` | Admin nuevo (REQ-F-039, REQ-F-040 y REQ-F-043): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos, los usuarios, "Mi cuenta", el control del bot y la página, y ofrece el cotizador de taquizas (REQ-F-046), con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
+| `inventory-manager/` | Admin nuevo (REQ-F-039, REQ-F-040 y REQ-F-043): Koa con SSR, Tailwind y Vanilla JS que mejora la experiencia, en `admin.birriaelmuneco.com`. Gestiona los productos, los usuarios, "Mi cuenta", el control del bot, la página y el inventario (REQ-F-049, administradores y gerentes), y ofrece el cotizador de taquizas (REQ-F-046), con `/api/v1/admin`; solo importa `contracts` y `web`. Ver [Admin nuevo](#admin-nuevo-inventory-manager) |
 | `packages/web/` (`@restaurante/web`) | Utilidades HTTP y SSR sin dominio que comparten las apps Koa (REQ-F-039): plantillas, lectura de formularios y JSON, mismo origen y logger JSON |
-| `packages/core/` (`@restaurante/core`) | Dominio en TypeScript puro, sin Koa ni Prisma: módulos `catalog`, `schedule`, `identity`, `bot-control`, `cotizador` (REQ-F-046) y `shared`. Cada módulo se importa solo por su `index.ts` (`@restaurante/core/catalog`) |
+| `packages/core/` (`@restaurante/core`) | Dominio en TypeScript puro, sin Koa ni Prisma: módulos `catalog`, `schedule`, `identity`, `bot-control`, `cotizador` (REQ-F-046), `inventory` (REQ-F-049) y `shared`. Cada módulo se importa solo por su `index.ts` (`@restaurante/core/catalog`) |
 | `packages/db/` (`@restaurante/db`) | Persistencia: `prisma/` (schema y migraciones), `prisma.config.ts`, el cliente de Prisma generado (`src/generated/prisma`), la conexión, la verificación al arrancar y las implementaciones Prisma de los repositorios de `core` |
 | `packages/contracts/` (`@restaurante/contracts`) | Contratos de la API con Zod (`zod` 4.6.7, solo aquí): los esquemas de `/api/v1/public` y `/api/v1/admin`, los clientes HTTP tipados de las landings y del admin nuevo, y el formulario de producto guiado por el descriptor |
 
@@ -160,6 +160,9 @@ apruebe con `npm install-scripts approve <paquete>`.
 | `npm run watch:css`  | Compilación de CSS en modo observación                      |
 | `npm run admin:hash-password` | Pide la contraseña de administración (sin mostrarla) e imprime el valor de `ADMIN_PASSWORD_HASH`; delega en el workspace `api` |
 | `npm run admin:recover -- --usuario <nombre>` | Recupera el acceso de administración por consola con el `DATABASE_URL` de `api/.env`; delega en el workspace `api` (ver [Recuperar el acceso](#recuperar-el-acceso)) |
+| `npm run inventory:seed-dev` | Carga el inventario ficticio de desarrollo (REQ-F-049, RF-10: insumos, intermedios, compuestos y reventa con variantes; REQ-F-050, RF-12: costos de referencia, una mano de obra no inventariable en `hr`, un insumo sin costo y tres recetas ficticias, una de 2 niveles y una carne con merma de cocción; REQ-F-051, RF-15: tres proveedores, uno inactivo, y siete documentos del Kardex con CPP, un negativo y una compra revertida) en la base de `api/.env`. Se niega a correr con `NODE_ENV=production` o si el host de `DATABASE_URL` no es local (`127.0.0.1`, `localhost`, `::1` o `mysql-dev`); idempotente (con artículos o categorías ya guardados no carga el catálogo, y con proveedores o documentos ya guardados no carga el Kardex; así se puede ampliar una base ya sembrada con T2). La `api` nunca siembra el inventario al arrancar: producción queda vacía |
+| `npm run inventory:import -- --archivo <ruta\|-> [--escribir]` | Importación única de datos maestros del inventario (REQ-F-050, A5: categorías, artículos, variantes, costos de referencia, inventariable y recetas) desde un JSON generado **fuera del repositorio** (guárdalo en `/datos-privados/` en la raíz del repositorio, que git ignora; `npm run lint` rechaza un JSON de importación versionado que no sea el ficticio de `api/tests/fixtures/inventory-import/`). Sin `--escribir` es un ensayo: valida y dice qué crearía, qué ya existe igual y qué choca, sin escribir; con `--escribir`, todo o nada en una transacción. Un error o un conflicto (dato existente distinto) no escribe nada; repetir con los mismos datos no crea nada. La salida solo lleva conteos y, por problema, la fila del origen, el campo y el mensaje. Fuera de producción solo contra una base local; con `NODE_ENV=production` exige `--produccion` (ver `docs/despliegue.md` §5) |
+| `npm run inventory:verify` | Verifica el Kardex del inventario (REQ-F-051, RF-13) en la base de `api/.env`, solo leyendo. Por cada artículo comprueba que la cadena de movimientos sea contigua, que cuadren las existencias anterior y nueva y el CPP recalculado, y que la existencia, el CPP y el último movimiento guardados coincidan con la cadena. Sale con 0 si todo cuadra, con 1 si hay descuadres y con 2 si no pudo verificar (configuración o base). Solo imprime conteos, ids y el nombre de cada comprobación, nunca costos, cantidades ni nombres. En el contenedor `api`: `node scripts/inventory-verify.ts` |
 | `npm run bot:chat [-- --ahora AAAA-MM-DDTHH:MM]` | Conversación con el bot de WhatsApp en la terminal contra el simulador de la Cloud API, sin Meta; delega en el workspace `api` (ver [Probar el bot en local](#probar-el-bot-en-local)) |
 | `npm run db:generate` | Genera el cliente de Prisma en `packages/db/src/generated/prisma` (necesario antes de `typecheck`, `lint`, `test` y `dev`) |
 | `npm run db:up` / `npm run db:down` | Levanta / detiene el MySQL 8.4 local de `compose.yaml` (solo en `127.0.0.1:3307`; datos en el volumen `mysql-dev-data`) |
@@ -376,6 +379,32 @@ La API propia (REQ-F-038 y REQ-F-039; pasos 3 y 4 de [Arquitectura](docs/arquite
     `VALIDATION_FAILED` con `fields` por clave (`n` para las personas) y 503 `QUOTE_UNAVAILABLE` si
     el JSON no es válido. Los logs solo llevan cuántos campos fallaron (`quote_validation_failed`),
     nunca los ajustes. Ver [Cotizador de taquizas](#cotizador-de-taquizas);
+  - inventario (REQ-F-049, T1; en la rama `epic/inventario`), solo para administradores y gerentes
+    (403 `FORBIDDEN_ROLE` al resto): `GET|POST /inventario/articulos` (filtros `estado`, `tipo`,
+    `categoria`, `q` y `pagina`; alta con `Idempotency-Key`), `GET|PUT /inventario/articulos/<id>`
+    (ficha con historial; edición con `version`: 409 `VERSION_CONFLICT` con `current`, y
+    `overwrite`), `GET …/<id>/conversion?cantidad=&unidad=`, `POST …/<id>/desactivar` (un padre con
+    variantes activas exige `variants: "deactivate"`) y `…/reactivar`, y
+    `GET|POST /inventario/categorias`, `PUT /inventario/categorias/<id>` y
+    `POST …/<id>/desactivar|reactivar` (409 `CATEGORY_IN_USE` con el número de artículos). Las
+    cantidades y los factores viajan como texto decimal (`"24.000"`); el contrato está en
+    `packages/contracts/inventory.ts`. Desde REQ-F-050 el artículo lleva `referenceCost` (texto con
+    4 decimales, por unidad base, en MXN con IVA, o `null`) e `inventoriable` (solo un Insumo puede
+    ser `false`), la unidad `hr`, y `POST …/<id>/desactivar` responde 409 `ITEM_IN_ACTIVE_RECIPES`
+    con `recipes` si el artículo se usa en recetas vigentes, hasta confirmar con `recipes: "keep"`;
+    una espera agotada del candado del inventario responde 503 `INVENTORY_BUSY`;
+  - recetas (REQ-F-050, T2; en la rama `epic/inventario`), mismos roles: `GET /inventario/recetas`
+    (filtros `tipo`, `q` y `pagina`; costo por unidad o `null` con `missingCount`),
+    `GET /inventario/recetas/ingredientes`, `GET /inventario/recetas/versiones/<id>` (historial, sin
+    costo), `GET|POST /inventario/articulos/<id>/recetas` (vigente con su costo teórico por línea y
+    su origen, los ingredientes sin costo e historial; guardar con `baseVersionId` e
+    `Idempotency-Key`: 201 con la versión nueva, 200 si no hubo cambios, 409
+    `RECIPE_VERSION_CONFLICT` con `current`, 422 `RECIPE_CYCLE` con `path` y `RECIPE_TOO_DEEP` con
+    `path` y `usedBy`, la cadena más larga, 409
+    `RECIPE_NOT_ALLOWED` y `RECIPE_ITEM_INACTIVE`), `POST …/<id>/recetas/cerrar` y
+    `GET …/<id>/usado-en`. Cantidades con 3 decimales, merma con 2 y costos con 4, siempre como
+    texto; un costo que falta es `null`, nunca 0. El contrato está en
+    `packages/contracts/inventory-recipes.ts`;
   - los cuerpos tienen una lista cerrada de campos (otro campo: 422);
   - las escrituras exigen el token CSRF de la sesión en `X-CSRF-Token`; el límite de intentos cuenta
     el último valor de `X-Forwarded-For`, que escribe el admin.
@@ -445,7 +474,20 @@ El admin nuevo de REQ-F-039, REQ-F-040 y REQ-F-043 (paso 4 de [Arquitectura](doc
   "Último cambio", conflicto y "Restaurar versión anterior" con confirmación. Si la API responde
   `PAGE_UNAVAILABLE`, muestra un aviso neutro sin formulario. Desde REQ-F-046, también «Cotizador»
   (`/birria/cotizador`, solo administradores y solo Birria): ver
-  [Cotizador de taquizas](#cotizador-de-taquizas). Todo funciona sin JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el
+  [Cotizador de taquizas](#cotizador-de-taquizas). Desde REQ-F-049 (rama `epic/inventario`), también
+  «Inventario» (solo administradores y gerentes): «Artículos» (`/inventario/articulos`, lista con
+  filtros por tipo, categoría, estado y búsqueda; alta, también con variantes; ficha con datos,
+  empaques, equivalencias, conversión, variantes e historial; edición con conflicto; inactivar con
+  confirmación y reactivar) y «Categorías» (`/inventario/categorias`: alta, renombrar, inactivar y
+  reactivar). Desde REQ-F-050, la ficha muestra el costo de referencia, el inventariable (solo
+  Insumo) y «Usado en», el formulario los admite (y la unidad `hr`), e inactivar un artículo usado en
+  recetas vigentes lista esas recetas y pide confirmarlo; además, «Recetas» (`/inventario/recetas`:
+  lista de vigentes con su costo por unidad, filtro por tipo y búsqueda; receta del artículo en
+  `/inventario/articulos/<id>/receta`, con el costo y el origen de cada línea, los ingredientes sin
+  costo y los inactivos, «Nueva versión», «Cerrar receta» con confirmación e historial en solo
+  lectura; editor de versión con 10 filas por bloque hasta 40, «Añadir 10 filas» sin guardar y con el
+  foco en la primera fila nueva, un único `datalist` de ingredientes, errores por línea (también el
+  ciclo y el exceso de niveles, en su línea cuando se puede identificar) y conflicto 409 que conserva lo escrito). Un gerente entra directo a «Inventario». Todo funciona sin JavaScript (POST/redirect/GET); el JS (`public/js`) solo evita el
   doble envío y reordena sin recargar.
 - **Cambio de la propia contraseña:** la API devuelve una sesión nueva y el admin reescribe su cookie;
   las demás sesiones del usuario se cierran. Si un administrador
@@ -1582,6 +1624,9 @@ Cada persona entra con su **cuenta personal** (REQ-F-007), guardada en la base d
   `ADMIN_PASSWORD_HASH` (variables de la `api`; REQ-F-045). Después esas variables se ignoran (aviso
   `admin_bootstrap_ignored`, sin valores) y los usuarios se gestionan en «Usuarios» del admin nuevo.
   Sin usuarios ni esas variables, el admin nuevo no deja entrar hasta usar `admin:recover`.
+- **Roles:** administrador (todo, incluidos los usuarios), editor (solo sus negocios asignados) y,
+  desde REQ-F-049 (rama `epic/inventario`), gerente: gestiona el inventario y no accede a productos,
+  página, usuarios, bot ni cotizador. Los negocios solo se guardan para el editor.
 - **Siempre hay al menos un administrador activo:** no se puede desactivar ni pasar a editor al
   último, tampoco a uno mismo.
 - **Sesiones:** desactivar a un usuario, cambiarle el rol o los negocios, o restablecer su
@@ -1682,6 +1727,26 @@ cambiar.
   `DATABASE_ALLOW_NEWER_SCHEMA=true`: por eso **cada migración debe ser compatible con el código
   anterior** (añadir antes de quitar). Respaldos cifrados fuera del VPS, restauración y prueba
   mensual (REQ-F-019; scripts en `ops/backup/`): [docs/despliegue.md](docs/despliegue.md#11-respaldos-fuera-del-vps).
+- **Inventario (REQ-F-049, rama `epic/inventario`):** tablas `inventory_category`,
+  `inventory_item`, `inventory_item_unit`, `inventory_sku` (todo SKU asignado alguna vez: no se
+  reutiliza) e `inventory_change` (historial), y el valor `gerente` en `user.role` (migraciones
+  `inventario_catalogo` y `rol_gerente`). Desde REQ-F-050, `inventory_recipe_version`,
+  `inventory_recipe_line` e `inventory_lock`, la unidad `hr` al final del ENUM de
+  `inventory_item.base_unit` y las columnas `reference_cost` e `inventoriable` (migración
+  `inventario_recetas`). Entran en el volcado y la restauración sin cambiar los scripts.
+- **Alternar en local entre la épica y `main`:** una base de desarrollo migrada con
+  `epic/inventario` tiene migraciones que `main` no conoce, y la `api` de `main` no arranca sobre
+  ella (`DATABASE_NEWER_THAN_CODE`). Mientras trabajes en `main`, pon
+  `DATABASE_ALLOW_NEWER_SCHEMA=true` en tu `api/.env` local (nunca en producción) y quítalo al
+  volver a la épica. Las migraciones de la épica son aditivas, así que `main` funciona sobre esa
+  base; si creaste gerentes, `main` no los reconoce (la lista de usuarios da 503).
+- **Alternar en local entre T1 y T2 de la épica (REQ-F-050, C-2):** una imagen o un commit de T1 no
+  conoce la unidad `hr`: con un artículo en `hr` guardado, la lista y la ficha del inventario dan 503.
+  Para volver a T1, cambia la unidad de esos artículos o bórralos; si un artículo en `hr` ya se usa
+  en una receta, la app no deja cambiar su unidad base (RN-4): corrígelo por SQL en tu base local
+  (por ejemplo, `UPDATE inventory_item SET base_unit = 'pza' WHERE base_unit = 'hr';`) o recrea la
+  base local (`npm run db:down`, borra el volumen `mysql-dev-data` del proyecto de Compose, `npm run db:up` y
+  `npm run db:migrate`). Producción no se ve afectada: nunca corre la imagen de T1.
 
 ## Estructura
 

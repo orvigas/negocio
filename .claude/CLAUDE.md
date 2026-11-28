@@ -176,11 +176,13 @@ No hardcodear repetidamente información de negocio dentro de HTML o JavaScript.
 `restaurante/` es un monorepo de npm workspaces con tres apps Koa y paquetes compartidos:
 
 - **`landing-pages`**: las landings de Molotes y Birria (SSR), que reciben de la `api` los productos y los datos de página (hero, texto destacado y promociones).
-- **`api`**: la API JSON propia (productos y datos de página públicos, y la administración de productos, datos de página, usuarios, control del bot y el cálculo del cotizador de taquizas), solo en la red interna, y el bot de WhatsApp, con su webhook en un puerto propio: lo único de `api` que se alcanza desde internet.
-- **`inventory-manager`**: el admin nuevo (SSR) de productos, datos de página (sección "Página"), usuarios, cuenta propia, control del bot y el cotizador de taquizas de Birria (solo administradores; REQ-F-046), que solo habla con la `api`.
-- **Paquetes**: `core` (dominio), `db` (MySQL con Prisma), `contracts` (contratos de la API) y `web` (utilidades HTTP y SSR).
+- **`api`**: la API JSON propia (productos y datos de página públicos, y la administración de productos, datos de página, usuarios, control del bot y el cálculo del cotizador de taquizas, y el catálogo de inventario: artículos, unidades, variantes y categorías; REQ-F-049), solo en la red interna, y el bot de WhatsApp, con su webhook en un puerto propio: lo único de `api` que se alcanza desde internet.
+- **`inventory-manager`**: el admin nuevo (SSR) de productos, datos de página (sección "Página"), usuarios, cuenta propia, control del bot y el cotizador de taquizas de Birria (solo administradores; REQ-F-046) y el inventario (sección "Inventario", solo administradores y gerentes; REQ-F-049), que solo habla con la `api`.
+- **Paquetes**: `core` (dominio, incluido `inventory`), `db` (MySQL con Prisma), `contracts` (contratos de la API) y `web` (utilidades HTTP y SSR).
 
 La regla de dependencias entre paquetes y apps la impone `npm run lint` (`restaurante/eslint.config.ts`), no la convención. La referencia completa (capas, regla de dependencias, contratos y plan de migración) está en [`restaurante/docs/arquitectura.md`](../restaurante/docs/arquitectura.md).
+
+Roles del admin: administrador, editor (solo los negocios que tiene asignados) y gerente (solo el inventario).
 
 ## 9. Frontend
 

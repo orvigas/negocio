@@ -3,6 +3,10 @@ import Router from '@koa/router';
 import type { AccountController } from './controllers/account.ts';
 import type { AdminController } from './controllers/admin.ts';
 import type { BotController } from './controllers/bot.ts';
+import type { DocumentController } from './controllers/inventory-documents.ts';
+import type { KardexController } from './controllers/inventory-kardex.ts';
+import type { RecipeController } from './controllers/inventory-recipes.ts';
+import type { InventoryController } from './controllers/inventory.ts';
 import type { PageController } from './controllers/page.ts';
 import type { QuoteController } from './controllers/quote.ts';
 import type { UsersController } from './controllers/users.ts';
@@ -41,6 +45,26 @@ import type { UsersController } from './controllers/users.ts';
  * POST /bot/bloqueos                           -> alta manual
  * POST /bot/bloqueos/:id/quitar                -> baja
  * POST /bot/topes/:token/bloquear              -> bloquear desde "alcanzaron un tope hoy"
+ *
+ * Inventario (REQ-F-049, T1; solo administradores y gerentes):
+ * GET  /inventario                             -> 303 a /inventario/articulos
+ * GET  /inventario/articulos                   -> lista con filtros (GET) y páginas
+ * GET  /inventario/articulos/nuevo[?clase=padre|?padre=<id>] | POST /inventario/articulos -> alta
+ * GET  /inventario/articulos/:id[?cantidad=&unidad=] -> ficha (y conversión)
+ * GET  /inventario/articulos/:id/editar | POST /inventario/articulos/:id -> edición (409: guardar encima)
+ * GET|POST /inventario/articulos/:id/desactivar -> confirmar e inactivar (con sus variantes)
+ * POST /inventario/articulos/:id/reactivar     -> reactivar
+ * GET  /inventario/categorias | POST /inventario/categorias -> lista y alta
+ * GET  /inventario/categorias/:id/editar | POST /inventario/categorias/:id -> renombrar
+ * POST /inventario/categorias/:id/desactivar | …/reactivar -> estado
+ *
+ * Recetas (REQ-F-050, T2; solo administradores y gerentes):
+ * GET  /inventario/recetas[?tipo=&q=&pagina=]   -> lista de vigentes con su costo teórico
+ * GET  /inventario/articulos/:id/receta         -> vigente con su costo, faltantes e historial
+ * GET  /inventario/articulos/:id/receta/nueva | POST /inventario/articulos/:id/receta -> editor de versión
+ *      (`action=rows`: 10 filas más sin guardar; 409: guardar sobre la vigente)
+ * GET|POST /inventario/articulos/:id/receta/cerrar -> confirmar y cerrar la receta
+ * GET  /inventario/recetas/versiones/:id        -> versión del historial (solo lectura, sin costo)
  */
 export function createRouter({
   admin: controller,
@@ -49,6 +73,10 @@ export function createRouter({
   bot,
   page,
   quote,
+  inventory,
+  recipes,
+  kardex,
+  documents,
 }: {
   admin: AdminController;
   users: UsersController;
@@ -56,6 +84,10 @@ export function createRouter({
   bot: BotController;
   page: PageController;
   quote: QuoteController;
+  inventory: InventoryController;
+  recipes: RecipeController;
+  kardex: KardexController;
+  documents: DocumentController;
 }): Router {
   const router = new Router();
   router.get('/salud', (ctx) => {
@@ -81,6 +113,47 @@ export function createRouter({
   router.post('/bot/bloqueos', bot.block);
   router.post('/bot/bloqueos/:id/quitar', bot.unblock);
   router.post('/bot/topes/:token/bloquear', bot.blockReached);
+  router.get('/inventario', inventory.root);
+  router.get('/inventario/articulos', inventory.items);
+  router.post('/inventario/articulos', inventory.createItem);
+  router.get('/inventario/articulos/nuevo', inventory.newItem);
+  router.get('/inventario/articulos/:id', inventory.item);
+  router.post('/inventario/articulos/:id', inventory.updateItem);
+  router.get('/inventario/articulos/:id/editar', inventory.editItem);
+  router.get('/inventario/articulos/:id/desactivar', inventory.deactivatePage);
+  router.post('/inventario/articulos/:id/desactivar', inventory.deactivateItem);
+  router.post('/inventario/articulos/:id/reactivar', inventory.reactivateItem);
+  router.get('/inventario/articulos/:id/receta', recipes.recipe);
+  router.post('/inventario/articulos/:id/receta', recipes.save);
+  router.get('/inventario/articulos/:id/receta/nueva', recipes.editor);
+  router.get('/inventario/articulos/:id/receta/cerrar', recipes.closePage);
+  router.post('/inventario/articulos/:id/receta/cerrar', recipes.close);
+  router.get('/inventario/recetas', recipes.list);
+  router.get('/inventario/recetas/versiones/:id', recipes.version);
+  // REQ-F-051: existencias, proveedores, documentos y reversión. Ninguna pantalla edita ni borra documentos.
+  router.get('/inventario/existencias', kardex.stock);
+  router.get('/inventario/proveedores', kardex.suppliers);
+  router.post('/inventario/proveedores', kardex.createSupplier);
+  router.get('/inventario/proveedores/nuevo', kardex.newSupplier);
+  router.get('/inventario/proveedores/:id/editar', kardex.editSupplier);
+  router.post('/inventario/proveedores/:id', kardex.updateSupplier);
+  router.post('/inventario/proveedores/:id/desactivar', kardex.deactivateSupplier);
+  router.post('/inventario/proveedores/:id/reactivar', kardex.reactivateSupplier);
+  router.get('/inventario/documentos', kardex.documents);
+  // REQ-F-051 (PR 3b): formularios con líneas; antes que /documentos/:id.
+  router.get('/inventario/documentos/nuevo/:tipo', documents.newDocument);
+  router.post('/inventario/documentos/nuevo/:tipo', documents.createDocument);
+  router.get('/inventario/documentos/:id/devolver', documents.returnPage);
+  router.post('/inventario/documentos/:id/devolver', documents.createReturn);
+  router.get('/inventario/documentos/:id', kardex.document);
+  router.get('/inventario/documentos/:id/revertir', kardex.reversalPage);
+  router.post('/inventario/documentos/:id/revertir', kardex.reverse);
+  router.get('/inventario/categorias', inventory.categories);
+  router.post('/inventario/categorias', inventory.createCategory);
+  router.get('/inventario/categorias/:id/editar', inventory.editCategory);
+  router.post('/inventario/categorias/:id', inventory.renameCategory);
+  router.post('/inventario/categorias/:id/desactivar', inventory.deactivateCategory);
+  router.post('/inventario/categorias/:id/reactivar', inventory.reactivateCategory);
   router.get('/cuenta', account.page);
   router.post('/cuenta', account.changePassword);
   router.get('/:business/productos', controller.products);

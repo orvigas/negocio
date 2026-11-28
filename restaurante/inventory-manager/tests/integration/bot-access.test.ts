@@ -21,7 +21,7 @@ describe('administradores y editores (RF-1, CA-1)', () => {
     const { browser } = await signedIn();
     const page = dom(await (await browser.get('/bot')).text());
     const links = [...page.querySelectorAll('.admin-header__nav a')].map((link) => link.textContent);
-    expect(links).toEqual(['Molotes', 'Birria El Muñeco', 'Usuarios', 'Bot']);
+    expect(links).toEqual(['Molotes', 'Birria El Muñeco', 'Inventario', 'Usuarios', 'Bot']);
     expect(page.querySelector('.admin-header__nav a[aria-current="page"]')?.textContent).toBe('Bot');
 
     const editor = await signedIn(ELI);

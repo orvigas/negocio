@@ -15,6 +15,9 @@
     "bot:chat": "node scripts/bot-chat.ts",
     "admin:hash-password": "node scripts/hash-password.ts",
     "admin:recover": "node --env-file-if-exists=.env scripts/admin-recover.ts",
+    "inventory:seed-dev": "node --env-file-if-exists=.env scripts/inventory-seed-dev.ts",
+    "inventory:import": "node --env-file-if-exists=.env scripts/inventory-import.ts",
+    "inventory:verify": "node --env-file-if-exists=.env scripts/inventory-verify.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

@@ -4,6 +4,10 @@ import { ADMIN_API_PREFIX } from '@restaurante/contracts';
 
 import type { AccountRoutes } from './account-routes.ts';
 import type { BotRoutes } from './bot-routes.ts';
+import type { InventoryKardexRoutes } from './inventory-kardex-routes.ts';
+import type { InventoryRecipeRoutes } from './inventory-recipe-routes.ts';
+import type { InventoryRoutes } from './inventory-routes.ts';
+import type { InventorySupplierRoutes } from './inventory-supplier-routes.ts';
 import type { PageRoutes } from './page-routes.ts';
 import type { ProductRoutes } from './product-routes.ts';
 import type { QuoteRoutes } from './quote-routes.ts';
@@ -11,7 +15,7 @@ import type { SessionRoutes } from './session-routes.ts';
 import type { UserRoutes } from './user-routes.ts';
 
 /**
- * Rutas de `/api/v1/admin` (REQ-F-039; usuarios y cuenta propia, REQ-F-040; control del bot, REQ-F-043; datos de página, REQ-F-044; cotizador, REQ-F-046). Una ruta conocida con otro método responde 405 con `Allow`
+ * Rutas de `/api/v1/admin` (REQ-F-039; usuarios y cuenta propia, REQ-F-040; control del bot, REQ-F-043; datos de página, REQ-F-044; cotizador, REQ-F-046; inventario, REQ-F-049; recetas, REQ-F-050). Una ruta conocida con otro método responde 405 con `Allow`
  * (`allowedMethods`; el cuerpo lo pone el manejador central); una ruta desconocida, 404.
  */
 export function createAdminRouter({
@@ -22,6 +26,10 @@ export function createAdminRouter({
   account,
   bot,
   quotes,
+  inventory,
+  recipes,
+  suppliers,
+  kardex,
 }: {
   session: SessionRoutes;
   products: ProductRoutes;
@@ -30,6 +38,10 @@ export function createAdminRouter({
   account: AccountRoutes;
   bot: BotRoutes;
   quotes: QuoteRoutes;
+  inventory: InventoryRoutes;
+  recipes: InventoryRecipeRoutes;
+  suppliers: InventorySupplierRoutes;
+  kardex: InventoryKardexRoutes;
 }): Router {
   const router = new Router({ prefix: ADMIN_API_PREFIX });
 
@@ -54,6 +66,46 @@ export function createAdminRouter({
   router.post('/bot/bloqueos', bot.block);
   router.post('/bot/bloqueos/:id/quitar', bot.unblock);
   router.post('/bot/topes/:token/bloquear', bot.blockReached);
+
+  // Inventario (REQ-F-049) antes de las rutas `/:business/...`.
+  router.get('/inventario/articulos', inventory.listItems);
+  router.post('/inventario/articulos', inventory.createItem);
+  router.get('/inventario/articulos/:id', inventory.getItem);
+  router.get('/inventario/articulos/:id/conversion', inventory.convert);
+  router.put('/inventario/articulos/:id', inventory.updateItem);
+  router.post('/inventario/articulos/:id/desactivar', inventory.deactivateItem);
+  router.post('/inventario/articulos/:id/reactivar', inventory.reactivateItem);
+  // Recetas (REQ-F-050): rutas fijas de /recetas antes de /recetas/versiones/:id.
+  router.get('/inventario/articulos/:id/recetas', recipes.get);
+  router.post('/inventario/articulos/:id/recetas', recipes.save);
+  router.post('/inventario/articulos/:id/recetas/cerrar', recipes.close);
+  router.get('/inventario/articulos/:id/usado-en', recipes.usedIn);
+  router.get('/inventario/articulos/:id/kardex', kardex.itemKardex);
+  router.get('/inventario/recetas', recipes.list);
+  router.get('/inventario/recetas/ingredientes', recipes.ingredients);
+  router.get('/inventario/recetas/versiones/:id', recipes.version);
+  // REQ-F-051: proveedores, documentos del Kardex y existencias. Ninguna ruta edita ni borra documentos.
+  router.get('/inventario/proveedores', suppliers.list);
+  router.post('/inventario/proveedores', suppliers.create);
+  router.get('/inventario/proveedores/:id', suppliers.get);
+  router.put('/inventario/proveedores/:id', suppliers.update);
+  router.post('/inventario/proveedores/:id/desactivar', suppliers.deactivate);
+  router.post('/inventario/proveedores/:id/reactivar', suppliers.reactivate);
+  router.get('/inventario/kardex/opciones', kardex.options);
+  router.get('/inventario/existencias', kardex.stock);
+  router.get('/inventario/documentos', kardex.listDocuments);
+  router.post('/inventario/documentos/saldo-inicial', kardex.initialBalance);
+  router.post('/inventario/documentos/compras', kardex.purchase);
+  router.post('/inventario/documentos/ajustes', kardex.adjustment);
+  router.get('/inventario/documentos/:id', kardex.getDocument);
+  router.post('/inventario/documentos/:id/devoluciones', kardex.supplierReturn);
+  router.get('/inventario/documentos/:id/reversion', kardex.reversalPreview);
+  router.post('/inventario/documentos/:id/reversion', kardex.reverse);
+  router.get('/inventario/categorias', inventory.listCategories);
+  router.post('/inventario/categorias', inventory.createCategory);
+  router.put('/inventario/categorias/:id', inventory.renameCategory);
+  router.post('/inventario/categorias/:id/desactivar', inventory.deactivateCategory);
+  router.post('/inventario/categorias/:id/reactivar', inventory.reactivateCategory);
 
   router.get('/:business/cotizador', quotes.defaults);
   router.post('/:business/cotizador/calculos', quotes.calculate);

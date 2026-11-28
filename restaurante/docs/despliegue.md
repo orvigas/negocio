@@ -591,6 +591,78 @@ Corre `calidad`, `docker` y `auditoria`, y con las tres en verde, `publish` y
 Sobre otra rama se rechaza (`cambios` falla y no corre nada más). Si mientras tanto llega otro
 commit a `main`, no se despliega: lo hará el del commit nuevo.
 
+### Importación única del inventario (REQ-F-050, A5)
+
+Carga una sola vez los datos maestros del inventario (categorías, artículos, variantes, costos de
+referencia, inventariable y recetas) desde el JSON revisado por el usuario. Solo cuando la épica de
+inventario esté en `main`, después de T3 (PT-5): antes, la base de producción no tiene las tablas.
+El JSON tiene datos reales del negocio: se genera y se guarda **fuera del repositorio** y nunca se
+copia al contenedor (la `api` lo lee por la entrada estándar).
+
+1. En tu Mac, copia el JSON a tu carpeta del VPS (no a `/opt/restaurante`):
+   `scp <ruta-local>/inventario.json <tu-usuario>@<vps>:~/inventario.json`.
+2. En el VPS, con tu usuario de administración:
+
+   ```sh
+   chmod 600 ~/inventario.json
+   cd /opt/restaurante
+   C="sudo docker compose -f deploy/compose.prod.yaml --env-file .env --env-file state/release.env"
+   sudo systemctl start restaurante-backup.service      # recomendado: un respaldo justo antes
+   # Ensayo: valida y cuenta sin escribir nada.
+   $C exec -T api node scripts/inventory-import.ts --archivo - --produccion < ~/inventario.json
+   ```
+
+   Termina con código 0 y "Ensayo sin problemas" si se puede importar. Con errores o conflictos
+   termina con 1 y los lista por fila del origen, campo y mensaje (sin valores): corrige el JSON en
+   tu Mac y repite desde el paso 1.
+3. Escritura (todo o nada en una transacción):
+
+   ```sh
+   $C exec -T api node scripts/inventory-import.ts --archivo - --produccion --escribir < ~/inventario.json
+   ```
+
+   Debe decir "escrita" con los conteos esperados. Repetirla con el mismo archivo no crea nada
+   ("Creados: … 0"); un dato que ya existe distinto es un conflicto y no se sobrescribe.
+4. Borra el archivo y comprueba que no quedó copia:
+
+   ```sh
+   shred -u ~/inventario.json
+   ls ~/inventario.json      # debe responder que no existe
+   ```
+
+- El comando se niega sin `--produccion` (el contenedor `api` siempre es `NODE_ENV=production`) y
+  con el archivo ficticio de las pruebas (`"ficticio": true`).
+- Usa el `DATABASE_URL` de la `api` (usuario solo DML) y no migra: si la base no está lista, termina
+  con 1 sin escribir nada.
+- Las recetas entran como versión 1, vigentes desde la importación, y todo queda en el historial con
+  el autor "Importación". No hace falta otro respaldo que el del paso 2: si algo falla, no se escribe
+  nada.
+- En local (base de `api/.env`, solo `127.0.0.1`, `localhost`, `::1` o `mysql-dev`):
+  `npm run inventory:import -- --archivo <ruta>` (ensayo) y con `--escribir`.
+
+### Arranque del inventario en producción (REQ-F-051, T3)
+
+Cuando la épica de inventario llegue a `main`, en este orden:
+
+1. **Desplegar.** El merge a `main` despliega solo. La migración `inventario_kardex` es aditiva: crea
+   las tablas del Kardex y la existencia en 0 de cada artículo que ya exista (en producción, ninguno).
+2. **Reinstalar los scripts de respaldo** ([11.5](#115-instalar-en-el-vps)). El manifiesto lleva la
+   imagen de la `api` (`api_image`) desde REQ-F-051, y el simulacro la usa para `inventory:verify`.
+3. **Importación única** de los datos maestros ([arriba](#importación-única-del-inventario-req-f-050-a5)).
+4. **Saldo inicial en pantalla**, en "Inventario → Documentos → Saldo inicial", con las existencias
+   y costos reales (P-2: no se carga desde la hoja). Un artículo con movimientos ya no admite otro
+   saldo: se corrige con un ajuste o revirtiendo el saldo.
+5. **Compras** desde ese momento, en "Inventario → Documentos → Nueva compra".
+
+Verificación de la cadena del Kardex (solo lectura; sale con 0 si todo cuadra, con 1 si hay
+descuadres y con 2 si no pudo verificar; solo imprime ids y conteos):
+
+```sh
+$C exec -T api node scripts/inventory-verify.ts
+```
+
+En local: `npm run inventory:verify`.
+
 ## 6. Volver a una versión anterior a mano
 
 La vuelta atrás automática solo cubre una versión nueva que no arranca. Para volver por otro
@@ -630,6 +702,10 @@ motivo:
   5. Si también vuelves la `api`, sigue ahora [Arrancar la `api` a mano](#arrancar-la-api-a-mano).
   6. El siguiente despliegue desde `main` deja todo como indica el CI.
 
+La migración `inventario_kardex` (REQ-F-051) no requiere pasos de vuelta atrás. La imagen de `main`
+anterior a la épica no lee el inventario. Los documentos y movimientos registrados se conservan y
+vuelven a usarse al avanzar.
+
 Para volver a escribir en `/admin/bot` basta con la app: una versión anterior a REQ-F-043 vuelve a
 tener los formularios, y una `api` nueva recoge esos cambios en 10 s
 (`BOT_CONTROL_REFRESH_SECONDS`).
@@ -661,6 +737,47 @@ los cambia desde REQ-F-044): la app anterior encuentra las marcas de `page_impor
 nada. Por eso el volumen **no se borra**. En un VPS nuevo, restaurado desde un respaldo de formato 2
 (sin `app-data`), no vuelvas a una versión anterior a REQ-F-045: restaura antes un respaldo de
 formato 1 ([11.7](#117-restaurar-runbook)).
+
+### Volver a una versión anterior a la épica de inventario (REQ-F-049) con gerentes
+
+La épica de inventario añade el rol **Gerente** (migración `rol_gerente`). Una `api` anterior a la
+épica no conoce ese valor: al leer un gerente responde 503 (la lista de usuarios falla para el
+administrador y el gerente no puede entrar), y un `inventory-manager` anterior rechaza la lista
+entera. Las landings, el bot, los productos, la página y el acceso de administradores y editores
+siguen funcionando. La vuelta atrás automática del despliegue que trae la épica no lo sufre (todavía
+no hay gerentes), y las de despliegues posteriores van a imágenes que ya conocen el rol. **Solo una
+vuelta atrás a mano a una `api` anterior a la épica, con gerentes ya creados, necesita este paso
+previo** (decisión DT-2 de REQ-F-049):
+
+1. Anota quiénes son los gerentes, para devolverles el rol al volver a avanzar:
+
+   ```sh
+   cd /opt/restaurante
+   C="sudo docker compose -f deploy/compose.prod.yaml --env-file .env --env-file state/release.env"
+   $C exec -T mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" restaurante' <<'SQL' | tee "gerentes-$(date -u +%Y%m%dT%H%M%SZ).txt"
+   SELECT id, username FROM user WHERE role = 'gerente';
+   SQL
+   ```
+
+2. Degrádalos a editor sin negocios (sin acceso a nada) y cierra sus sesiones:
+
+   ```sh
+   $C exec -T mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" restaurante' <<'SQL'
+   DELETE ub FROM user_business ub JOIN user u ON u.id = ub.user_id WHERE u.role = 'gerente';
+   UPDATE user SET role = 'editor', session_version = session_version + 1 WHERE role = 'gerente';
+   SELECT COUNT(*) AS gerentes_restantes FROM user WHERE role = 'gerente';
+   SQL
+   ```
+
+   Debe quedar `gerentes_restantes` en 0.
+
+3. Sigue los pasos de [arriba](#6-volver-a-una-versión-anterior-a-mano), con
+   `DATABASE_ALLOW_NEWER_SCHEMA=true` para la `api` (la base tiene las migraciones de la épica).
+4. Al volver a desplegar la épica (o una versión posterior), un administrador devuelve el rol
+   Gerente a cada usuario anotado desde "Usuarios" del admin.
+
+El inventario (tablas `inventory_*`) se queda en la base: la versión anterior no lo lee ni lo
+toca.
 
 ### Vuelta atrás tras el corte de la página (REQ-F-044)
 
@@ -879,7 +996,15 @@ gzip -dc backups/<archivo>.sql.gz | $C exec -T mysql sh -c 'exec mysql -uroot -p
    La página (REQ-F-044) vuelve con el volcado, incluida su marca `page_import`. Desde REQ-F-045
    nada la reimporta: con un volcado anterior a la importación (antes del 2026-11-16), la pantalla
    "Página" queda "no disponible" y las landings muestran la página de la semilla (RN-4 de
-   REQ-F-045; ver [11.7](#117-restaurar-runbook)).
+   REQ-F-045; ver [11.7](#117-restaurar-runbook)). El inventario también vuelve con el volcado:
+   - REQ-F-049: `inventory_category`, `inventory_item`, `inventory_item_unit`, `inventory_sku` e
+     `inventory_change`;
+   - las recetas de REQ-F-050;
+   - el Kardex de REQ-F-051: `inventory_supplier`, `inventory_stock`, `inventory_document` e
+     `inventory_movement`.
+
+   Con un volcado anterior a la épica, el inventario queda vacío. Con la `api` arrancada,
+   comprueba el Kardex con `$C exec -T api node scripts/inventory-verify.ts` (debe terminar con 0).
 3. Comprueba `$C ps` (healthy) y el [paso 8](#8-comprobaciones-después-de-cada-despliegue).
 4. Si el siguiente despliegue desde `main` vuelve a fallar en la migración, corrige la migración
    antes de volver a desplegar.
@@ -935,8 +1060,13 @@ REQ-F-019. Objetivo: perder como mucho 24 h de datos (RPO) y recuperar el servic
   está en UTC). Si el VPS estaba apagado a esa hora, se ejecuta al arrancar.
 - **Qué guarda:**
   - un `mysqldump` de `restaurante` hecho con el usuario de solo lectura `restaurante_backup` (con
-    la página desde REQ-F-044: `page_version`, `page_change` y `page_import`);
-  - un manifiesto con los conteos de `user` y `product`, la última migración, las imágenes y el
+    la página desde REQ-F-044: `page_version`, `page_change` y `page_import`; y el inventario
+    desde REQ-F-049: `inventory_category`, `inventory_item`, `inventory_item_unit`, `inventory_sku`
+    e `inventory_change`, más las recetas de REQ-F-050 y el Kardex de REQ-F-051
+    (`inventory_supplier`, `inventory_stock`, `inventory_document` e `inventory_movement`), sin cambiar
+    los scripts);
+  - un manifiesto con los conteos de `user` y `product`, la última migración, las imágenes (desde
+    REQ-F-051 también la de la `api`, `api_image`, vacía si `state/release.env` no la tiene) y el
     commit de `state/release.env`, y las sumas sha256.
 - **Formatos:**
   - **2** (desde la limpieza de REQ-F-045, cuyos scripts se instalan justo antes de su merge, con
@@ -1195,6 +1325,17 @@ Después, haz las comprobaciones del [paso 8](#8-comprobaciones-después-de-cada
   ejemplo si se arrancó a mano una imagen anterior. Arranca la imagen del respaldo (la que imprime
   `restore.sh`, también en `state/release.env`). `DATABASE_ALLOW_NEWER_SCHEMA=true` solo se usa
   como en la vuelta atrás de `deploy.sh`, nunca en el `.env`.
+- **Inventario (REQ-F-049):** vuelve completo con el volcado (artículos, unidades, categorías e
+  historial). El manifiesto no cuenta sus filas; para comprobarlo tras restaurar:
+
+  ```sh
+  $C exec -T mysql sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" restaurante -e "SELECT (SELECT COUNT(*) FROM inventory_item) AS articulos, (SELECT COUNT(*) FROM inventory_category) AS categorias, (SELECT COUNT(*) FROM inventory_change) AS cambios"'
+  ```
+
+  Compáralo con la misma consulta en producción antes del incidente si la tienes, o revisa en la
+  sección "Inventario" del admin que la lista y el historial de algunos artículos estén. Para el
+  Kardex (REQ-F-051), con la `api` en marcha: `$C exec -T api node scripts/inventory-verify.ts`. Debe
+  terminar con 0; con 1, lista los artículos y las comprobaciones que no cuadran (solo ids).
 - **VPS nuevo:**
   1. Prepara el VPS con los pasos 1.1 a 1.6, instala `deploy/` y la sección 11.5 sin activar el
      timer.
@@ -1246,6 +1387,12 @@ restaurante/ops/backup/verify-backup.sh --drill
 6. Con `--drill`, arranca además la imagen de la app del respaldo y espera a que responda. Con un
    respaldo de formato 1 le da también esa base y ese `app-data`, que la app de entonces
    necesitaba; desde REQ-F-045 la app no usa ninguno de los dos.
+7. Con `--drill` y una base con Kardex (REQ-F-051), ejecuta `inventory:verify` con la imagen de la
+   `api` del manifiesto (`api_image`) contra la base restaurada:
+   - con 0, lo anota ("inventory:verify da 0");
+   - con otro código, el simulacro falla;
+   - un respaldo sin `api_image` (anterior a REQ-F-051, o hecho tras una restauración) solo deja un
+     aviso.
 
 Al terminar:
 

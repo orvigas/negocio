@@ -82,7 +82,8 @@ const LANDING_APP_PATTERNS = [...RELATIVE_JS_IMPORT_PATTERNS, ...PACKAGE_INTERNA
 
 // Código de landing-pages (REQ-F-038, RF-8; REQ-F-044, RF-5; REQ-F-045, RF-7): src/ y scripts/ obtienen
 // los productos y la página solo de la API (cliente de contracts). Nunca la base de datos, Prisma, la
-// identidad ni el control del bot: la administración vive en api e inventory-manager. De core/catalog,
+// identidad, el control del bot ni el inventario (REQ-F-049): la administración vive en api e
+// inventory-manager. De core/catalog,
 // solo las funciones puras que se listan (lista de permitidos: una exportación nueva queda prohibida
 // hasta que se añada aquí); de core, también shared y schedule, hasta que el aviso y los horarios sean
 // endpoints (desviación registrada en restaurante/docs/arquitectura.md §4). Las pruebas quedan fuera:
@@ -90,11 +91,11 @@ const LANDING_APP_PATTERNS = [...RELATIVE_JS_IMPORT_PATTERNS, ...PACKAGE_INTERNA
 const LANDING_CODE_FILES = ['landing-pages/src/**/*.ts', 'landing-pages/scripts/**/*.ts'];
 const LANDING_CODE_HINT = `landing-pages solo obtiene los productos y la página del cliente de la API (@restaurante/contracts; REQ-F-038, REQ-F-044 y REQ-F-045). ${DEPENDENCY_HINT}`;
 const LANDING_DB_PATTERN = String.raw`^@restaurante/db(?:/|$)|^(?:prisma|mariadb)(?:/|$)|^@prisma/`;
-const LANDING_ADMIN_PATTERN = String.raw`^@restaurante/core/(?:identity|bot-control)(?:/|$)`;
+const LANDING_ADMIN_PATTERN = String.raw`^@restaurante/core/(?:identity|bot-control|inventory)(?:/|$)`;
 const LANDING_CODE_PATTERNS = [
   ...LANDING_APP_PATTERNS,
   { regex: LANDING_DB_PATTERN, message: `Las landings no leen la base de datos. ${LANDING_CODE_HINT}` },
-  { regex: LANDING_ADMIN_PATTERN, message: `Las landings no usan la identidad ni el control del bot: la administración vive en api e inventory-manager. ${LANDING_CODE_HINT}` },
+  { regex: LANDING_ADMIN_PATTERN, message: `Las landings no usan la identidad, el control del bot ni el inventario: la administración vive en api e inventory-manager. ${LANDING_CODE_HINT}` },
 ];
 const LANDING_CODE_PATHS = [
   {
@@ -150,7 +151,7 @@ const LANDING_DYNAMIC_IMPORTS = [
 ];
 const LANDING_CODE_DYNAMIC_IMPORTS = [
   dynamicImport(LANDING_DB_PATTERN.replaceAll('/', String.raw`\/`), `Las landings no leen la base de datos. ${LANDING_CODE_HINT}`),
-  dynamicImport(LANDING_ADMIN_PATTERN.replaceAll('/', String.raw`\/`), `Las landings no usan la identidad ni el control del bot. ${LANDING_CODE_HINT}`),
+  dynamicImport(LANDING_ADMIN_PATTERN.replaceAll('/', String.raw`\/`), `Las landings no usan la identidad, el control del bot ni el inventario. ${LANDING_CODE_HINT}`),
 ];
 const API_DYNAMIC_IMPORTS = [
   dynamicImport(String.raw`(^|\/)landing-pages(\/|$)`, `Una app nunca importa otra app. ${DEPENDENCY_HINT}`),
@@ -194,6 +195,20 @@ const TEST_HTTP_RESTRICTED_SYNTAX = [
   },
 ];
 
+// Inmutabilidad del Kardex (REQ-F-051, DT-5): documentos y movimientos solo se insertan y las
+// existencias no se borran. Ningún código los edita ni borra con Prisma; `inventory:verify` detecta una
+// fila alterada a mano. Va en todos los bloques que configuran no-restricted-syntax.
+const KARDEX_IMMUTABLE = [
+  {
+    selector: String.raw`MemberExpression[object.property.name=/^inventory(Document|Movement)$/][property.name=/^(update|updateMany|updateManyAndReturn|upsert|delete|deleteMany)$/]`,
+    message: 'El Kardex es inmutable (REQ-F-051, DT-5): un error se corrige con una reversión, nunca editando ni borrando documentos o movimientos.',
+  },
+  {
+    selector: String.raw`MemberExpression[object.property.name='inventoryStock'][property.name=/^(delete|deleteMany)$/]`,
+    message: 'La existencia de un artículo no se borra (REQ-F-051, DT-T3-2): es la proyección del Kardex.',
+  },
+];
+
 export default defineConfig([
   // CSS generado por Tailwind, datos editables, cobertura y código generado (p. ej. un cliente de BD).
   // ESLint ya ignora node_modules/ y no lee .gitignore.
@@ -225,7 +240,7 @@ export default defineConfig([
       // `tsc` (allowImportingTsExtensions) y Vitest resuelven ./x.js hacia x.ts, pero Node no.
       // Se permiten solo los módulos del frontend (public/js), que sí son .js.
       'no-restricted-imports': ['error', { patterns: RELATIVE_JS_IMPORT_PATTERNS }],
-      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...KARDEX_IMMUTABLE],
       // Excepción E-1 (REQ-F-005): el `async` sin `await` es intencional en este proyecto. Cumple
       // contratos asíncronos (repositorio, `next` de Koa, dobles de prueba) y convierte un throw
       // síncrono en promesa rechazada; quitarlo cambiaría el comportamiento. Los riesgos reales con
@@ -254,7 +269,7 @@ export default defineConfig([
     files: ['landing-pages/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', { patterns: LANDING_APP_PATTERNS }],
-      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...LANDING_DYNAMIC_IMPORTS],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...KARDEX_IMMUTABLE, ...LANDING_DYNAMIC_IMPORTS],
     },
   },
 
@@ -263,7 +278,7 @@ export default defineConfig([
     files: ['landing-pages/tests/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', { paths: TEST_HTTP_RESTRICTED_IMPORTS, patterns: LANDING_APP_PATTERNS }],
-      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...LANDING_DYNAMIC_IMPORTS, ...TEST_HTTP_RESTRICTED_SYNTAX],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...KARDEX_IMMUTABLE, ...LANDING_DYNAMIC_IMPORTS, ...TEST_HTTP_RESTRICTED_SYNTAX],
     },
   },
   // Única excepción: el módulo que crea los clientes de supertest.
@@ -280,28 +295,28 @@ export default defineConfig([
     files: ['packages/core/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', { patterns: CORE_RESTRICTED_PATTERNS }],
-      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, PACKAGE_DYNAMIC_IMPORT],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...KARDEX_IMMUTABLE, PACKAGE_DYNAMIC_IMPORT],
     },
   },
   {
     files: ['packages/contracts/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', { patterns: CONTRACTS_RESTRICTED_PATTERNS }],
-      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, PACKAGE_DYNAMIC_IMPORT],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...KARDEX_IMMUTABLE, PACKAGE_DYNAMIC_IMPORT],
     },
   },
   {
     files: ['packages/web/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', { patterns: WEB_RESTRICTED_PATTERNS }],
-      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, PACKAGE_DYNAMIC_IMPORT],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...KARDEX_IMMUTABLE, PACKAGE_DYNAMIC_IMPORT],
     },
   },
   {
     files: ['packages/db/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', { patterns: DB_RESTRICTED_PATTERNS }],
-      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, PACKAGE_DYNAMIC_IMPORT],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...KARDEX_IMMUTABLE, PACKAGE_DYNAMIC_IMPORT],
     },
   },
   // Código de landing-pages (REQ-F-038, RF-8; REQ-F-045, RF-7): sin base de datos, Prisma, identidad,
@@ -310,7 +325,7 @@ export default defineConfig([
     files: LANDING_CODE_FILES,
     rules: {
       'no-restricted-imports': ['error', { paths: LANDING_CODE_PATHS, patterns: LANDING_CODE_PATTERNS }],
-      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...LANDING_DYNAMIC_IMPORTS, ...LANDING_CODE_DYNAMIC_IMPORTS],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...KARDEX_IMMUTABLE, ...LANDING_DYNAMIC_IMPORTS, ...LANDING_CODE_DYNAMIC_IMPORTS],
     },
   },
   // api (REQ-F-038): nunca importa una app ni archivos internos de los paquetes.
@@ -318,7 +333,7 @@ export default defineConfig([
     files: ['api/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', { patterns: API_RESTRICTED_PATTERNS }],
-      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...API_DYNAMIC_IMPORTS],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...KARDEX_IMMUTABLE, ...API_DYNAMIC_IMPORTS],
     },
   },
   // inventory-manager (REQ-F-039, CA-17): solo contracts y web.
@@ -326,21 +341,21 @@ export default defineConfig([
     files: ['inventory-manager/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', { patterns: INVENTORY_RESTRICTED_PATTERNS }],
-      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...INVENTORY_DYNAMIC_IMPORTS],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...KARDEX_IMMUTABLE, ...INVENTORY_DYNAMIC_IMPORTS],
     },
   },
   // Servidores de prueba del admin nuevo: solo en 127.0.0.1 (REQ-F-011).
   {
     files: ['inventory-manager/tests/**/*.ts'],
     rules: {
-      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...INVENTORY_DYNAMIC_IMPORTS, ...TEST_HTTP_RESTRICTED_SYNTAX],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...KARDEX_IMMUTABLE, ...INVENTORY_DYNAMIC_IMPORTS, ...TEST_HTTP_RESTRICTED_SYNTAX],
     },
   },
   // Servidores de prueba de la API: solo en 127.0.0.1 (REQ-F-011), como los de landing-pages.
   {
     files: ['api/tests/**/*.ts'],
     rules: {
-      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...API_DYNAMIC_IMPORTS, ...TEST_HTTP_RESTRICTED_SYNTAX],
+      'no-restricted-syntax': ['error', RELATIVE_JS_DYNAMIC_IMPORT, ...KARDEX_IMMUTABLE, ...API_DYNAMIC_IMPORTS, ...TEST_HTTP_RESTRICTED_SYNTAX],
     },
   },
   // El bot de WhatsApp vive en api (REQ-F-042, RF-12 y CA-10): un archivo del bot en landing-pages

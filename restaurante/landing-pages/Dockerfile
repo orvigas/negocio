@@ -156,9 +156,12 @@ COPY --parents packages/*/package.json /app/
 RUN cd /app && npm ci --omit=dev --omit=optional --strict-allow-scripts --no-audit --no-fund && npm cache clean --force
 COPY --from=build /app/api/src ./src
 # Comandos de consola (REQ-F-045; antes en la imagen production): admin:recover y admin:hash-password y
-# su soporte. El simulador del bot de WhatsApp (scripts/bot-chat.ts, REQ-F-042) y scripts/dev-server.ts
-# son solo de desarrollo: no van en ninguna imagen.
-COPY --from=build /app/api/scripts/admin-recover.ts /app/api/scripts/hash-password.ts ./scripts/
+# su soporte, y la importación única del inventario (REQ-F-050, A5: lee el JSON por la entrada
+# estándar, sin copiarlo al contenedor) y la verificación del Kardex (REQ-F-051, inventory:verify, solo
+# lectura). El simulador del bot de WhatsApp (scripts/bot-chat.ts,
+# REQ-F-042), scripts/dev-server.ts y la semilla de desarrollo son solo de desarrollo: sus comandos no
+# van en ninguna imagen.
+COPY --from=build /app/api/scripts/admin-recover.ts /app/api/scripts/hash-password.ts /app/api/scripts/inventory-import.ts /app/api/scripts/inventory-verify.ts ./scripts/
 COPY --from=build /app/api/scripts/support ./scripts/support
 COPY --from=build /app/packages/core /app/packages/core
 COPY --from=build /app/packages/contracts /app/packages/contracts

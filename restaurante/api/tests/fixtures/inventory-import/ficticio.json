@@ -1,0 +1,74 @@
+{
+  "formato": "inventario-importacion",
+  "version": 1,
+  "ficticio": true,
+  "correcciones": [{ "original": "Tortiya ficticia", "corregido": "Tortilla ficticia", "motivo": "ortografía" }],
+  "categorias": [
+    { "nombre": "Abarrotes ficticios", "fila": "Ing!2" },
+    { "nombre": "Carnes ficticias", "fila": "Ing!3" },
+    { "nombre": "Producción ficticia", "fila": "Ing!4" },
+    { "nombre": "Platillos ficticios", "fila": "Prod!2" },
+    { "nombre": "Bebidas ficticias", "fila": "Prod!3" }
+  ],
+  "articulos": [
+    { "nombre": "Harina ficticia", "tipo": "insumo", "categoria": "Abarrotes ficticios", "unidadBase": "gr", "empaques": [{ "nombre": "bulto", "factor": "25000" }], "costoReferencia": "0.0200", "inventariable": true, "sku": null, "fila": "Ing!5" },
+    { "nombre": "Aceite ficticio", "tipo": "insumo", "categoria": "Abarrotes ficticios", "unidadBase": "lt", "costoReferencia": "40.0000", "fila": "Ing!6" },
+    { "nombre": "Carne cruda ficticia", "tipo": "insumo", "categoria": "Carnes ficticias", "unidadBase": "kg", "costoReferencia": "150.0000", "fila": "Ing!7" },
+    { "nombre": "Cebolla ficticia", "tipo": "insumo", "categoria": "Abarrotes ficticios", "unidadBase": "kg", "costoReferencia": null, "fila": "Ing!8" },
+    { "nombre": "Gas ficticio", "tipo": "insumo", "categoria": "Producción ficticia", "unidadBase": "hr", "costoReferencia": "25.0000", "inventariable": false, "fila": "Ing!9" },
+    { "nombre": "Sal ficticia", "tipo": "insumo", "categoria": "Abarrotes ficticios", "unidadBase": "kg", "costoReferencia": "10.0000", "sku": "SAL-FIC-1", "fila": "Ing!10" },
+    { "nombre": "Comino ficticio", "tipo": "insumo", "categoria": "Abarrotes ficticios", "unidadBase": "gr", "costoReferencia": "0.5000", "fila": "Ing!11" },
+    { "nombre": "  Tortiya ficticia ", "tipo": "intermedio", "categoria": "Producción ficticia", "unidadBase": "pza", "costoReferencia": "1.5000", "fila": "Ing!12" },
+    { "nombre": "Salsa ficticia", "tipo": "intermedio", "categoria": "Producción ficticia", "unidadBase": "lt", "fila": "Ing!13" },
+    { "nombre": "Carne cocida ficticia", "tipo": "intermedio", "categoria": "Producción ficticia", "unidadBase": "kg", "fila": "Ing!14" },
+    { "nombre": "Taco ficticio", "tipo": "compuesto", "categoria": "Platillos ficticios", "unidadBase": "pza", "fila": "Prod!4" },
+    { "nombre": "Agua embotellada ficticia", "tipo": "reventa", "categoria": "Bebidas ficticias", "unidadBase": "pza", "costoReferencia": "8.0000", "fila": "Prod!5" }
+  ],
+  "padres": [
+    {
+      "nombre": "Refresco ficticio",
+      "tipo": "reventa",
+      "categoria": "Bebidas ficticias",
+      "fila": "Prod!6",
+      "variantes": [
+        { "nombre": "Refresco Marca Uno Cola 600 ml", "unidadBase": "pza", "empaques": [{ "nombre": "caja", "factor": "24" }], "costoReferencia": "15.0000", "fila": "Prod!7" },
+        { "nombre": "Refresco Marca Uno Naranja 600 ml", "unidadBase": "pza", "costoReferencia": "15.0000", "fila": "Prod!8" },
+        { "nombre": "Refresco Marca Dos Cola 600 ml", "unidadBase": "pza", "costoReferencia": "14.0000", "fila": "Prod!9" }
+      ]
+    }
+  ],
+  "recetas": [
+    {
+      "articulo": "Salsa ficticia",
+      "rendimiento": "2.000",
+      "nota": null,
+      "fila": "Rec!2",
+      "lineas": [
+        { "ingrediente": "Harina ficticia", "cantidad": "500", "unidad": "gr", "merma": "0.00", "nota": null, "fila": "Rec!3" },
+        { "ingrediente": "Aceite ficticio", "cantidad": "0.100", "unidad": "lt", "merma": "0.00", "fila": "Rec!4" },
+        { "ingrediente": "Sal ficticia", "cantidad": "20", "unidad": "gr", "fila": "Rec!5" }
+      ]
+    },
+    {
+      "articulo": "Carne cocida ficticia",
+      "rendimiento": "6.000",
+      "nota": "Merma de cocción en la línea de la carne (RN-T2-1).",
+      "fila": "Rec!6",
+      "lineas": [
+        { "ingrediente": "Carne cruda ficticia", "cantidad": "6.000", "unidad": "kg", "merma": "40.00", "nota": "Neta cocida.", "fila": "Rec!7" },
+        { "ingrediente": "Gas ficticio", "cantidad": "2", "unidad": "hr", "merma": "0.00", "fila": "Rec!8" }
+      ]
+    },
+    {
+      "articulo": "Taco ficticio",
+      "rendimiento": "1",
+      "fila": "Rec!9",
+      "lineas": [
+        { "ingrediente": "Carne cocida ficticia", "cantidad": "80", "unidad": "gr", "fila": "Rec!10" },
+        { "ingrediente": "Salsa ficticia", "cantidad": "30", "unidad": "ml", "fila": "Rec!11" },
+        { "ingrediente": "Tortiya ficticia", "cantidad": "2", "unidad": "pza", "fila": "Rec!12" },
+        { "ingrediente": "Cebolla ficticia", "cantidad": "10", "unidad": "gr", "fila": "Rec!13" }
+      ]
+    }
+  ]
+}

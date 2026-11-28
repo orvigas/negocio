@@ -1,0 +1,25 @@
+<div class="inventory-page__head flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p class="font-label text-xs font-bold tracking-widest text-masa uppercase">Inventario</p>
+          <h1 class="font-headline text-3xl font-black tracking-tight uppercase">{{ title }}</h1>
+          <p class="mt-2 max-w-3xl text-masa">{{ intro }}</p>
+        </div>
+        <ul class="inventory-page__actions flex flex-wrap gap-2">{{{ actions }}}
+        </ul>
+      </div>
+      {{{ notices }}}
+      <form class="inventory-filters mt-6 rounded-2xl border border-rim bg-surface p-4 md:p-6" method="get" action="{{ action }}" role="search" aria-label="{{ filterLabel }}">
+        <div class="inventory-filters__grid grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{{{ filters }}}
+        </div>
+        <div class="inventory-filters__actions mt-4 flex flex-wrap items-center gap-3">
+          <button class="button button--secondary inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border-[1.5px] border-adobo px-4 py-2 font-label text-sm font-bold tracking-wider text-crema uppercase hover:bg-adobo/15" type="submit">Filtrar</button>
+          <a class="button button--ghost inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg px-3 py-2 font-label text-sm font-bold tracking-wider text-maiz uppercase hover:bg-surface-high" href="{{ action }}">Quitar filtros</a>
+        </div>
+      </form>
+      {{{ extra }}}
+      <section class="inventory-list mt-6" aria-labelledby="inventory-list-title">
+        <h2 id="inventory-list-title" class="font-headline text-xl font-extrabold tracking-tight uppercase">Resultados</h2>
+        <p class="inventory-list__summary mt-1 text-sm text-masa">{{ summary }}</p>
+        {{{ results }}}
+        {{{ pagination }}}
+      </section>

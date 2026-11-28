@@ -48,7 +48,7 @@ type UserRow = Prisma.UserGetPayload<{ include: typeof USER_INCLUDE }>;
 type Tx = Prisma.TransactionClient;
 
 function toRecord(row: UserRow): UserRecord {
-  // La columna `role` es un enum de Prisma ('admin' | 'editor'); se comprueba por si se editó a mano.
+  // La columna `role` es un enum de Prisma ('admin' | 'editor' | 'gerente'); se comprueba por si se editó a mano.
   if (!isRole(row.role)) throw new Error('Rol desconocido en la base de datos');
   const assigned = new Set(row.businesses.map((entry) => entry.business));
   return {
@@ -80,7 +80,8 @@ function diffUser(before: UserRecord, after: UserData): Changes {
   compare('username', before.username, after.username);
   compare('displayName', before.displayName, after.displayName);
   compare('role', before.role, after.role);
-  compare('businesses', before.businesses, after.role === 'admin' ? [] : after.businesses);
+  // Solo el editor guarda negocios (REQ-F-049: el gerente tampoco).
+  compare('businesses', before.businesses, after.role === 'editor' ? after.businesses : []);
   return changes;
 }
 
@@ -158,7 +159,7 @@ export function createUserRepository({ prisma, now = () => new Date() }: { prism
         passwordHash: data.passwordHash,
         updatedAt: now(),
         createdAt: now(),
-        businesses: { create: data.role === 'admin' ? [] : data.businesses.map((business) => ({ business })) },
+        businesses: { create: data.role === 'editor' ? data.businesses.map((business) => ({ business })) : [] },
       },
       include: USER_INCLUDE,
     });

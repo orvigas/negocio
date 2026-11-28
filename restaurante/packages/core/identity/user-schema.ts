@@ -5,10 +5,11 @@ import { BUSINESS_IDS, type BusinessId } from '../shared/index.ts';
  * por los formularios, el arranque (ADMIN_USER) y el comando de recuperación.
  */
 
-export const ROLES = Object.freeze(['admin', 'editor'] as const);
+/** `gerente` (REQ-F-049, RF-9): solo el inventario; sin negocios. Va al final, como en el ENUM de MySQL. */
+export const ROLES = Object.freeze(['admin', 'editor', 'gerente'] as const);
 export type Role = (typeof ROLES)[number];
 
-export const ROLE_LABELS: Readonly<Record<Role, string>> = Object.freeze({ admin: 'Administrador', editor: 'Editor' });
+export const ROLE_LABELS: Readonly<Record<Role, string>> = Object.freeze({ admin: 'Administrador', editor: 'Editor', gerente: 'Gerente' });
 
 export const USERNAME_MAX_LENGTH = 60;
 export const DISPLAY_NAME_MAX_LENGTH = 60;
@@ -87,7 +88,7 @@ export interface UserData {
   username: string;
   displayName: string;
   role: Role;
-  /** Negocios del editor; vacío para el administrador (los tiene todos de forma implícita). */
+  /** Negocios del editor; vacío para el administrador (los tiene todos de forma implícita) y el gerente. */
   businesses: BusinessId[];
 }
 
@@ -117,6 +118,7 @@ export function validateUserData(values: UserFormValues): { data: UserData | nul
   else if (values.role === 'editor' && values.businesses.length === 0) errors.businesses = 'Asigna al menos un negocio al editor.';
 
   if (Object.keys(errors).length > 0 || !isRole(values.role)) return { data: null, errors };
-  const businesses = values.role === 'admin' ? [] : BUSINESS_IDS.filter((businessId) => values.businesses.includes(businessId));
+  // Solo el editor tiene negocios: el administrador los tiene todos y el gerente ninguno (REQ-F-049).
+  const businesses = values.role === 'editor' ? BUSINESS_IDS.filter((businessId) => values.businesses.includes(businessId)) : [];
   return { data: { username, displayName, role: values.role, businesses }, errors };
 }

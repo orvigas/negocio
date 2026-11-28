@@ -1,7 +1,11 @@
-import type { AdminProduct, AdminUser, ProductFormField, PublicBusinessId } from '@restaurante/contracts';
+import { INVENTORY_ROLES, type AdminProduct, type AdminUser, type ProductFormField, type PublicBusinessId } from '@restaurante/contracts';
 import type { Renderer, SafeHtml } from '@restaurante/web';
 
 import { BOT_PATH, createBotViews } from './bot.ts';
+import { createDocumentViews } from './inventory-documents.ts';
+import { DOCUMENTS_PATH, STOCK_PATH, SUPPLIERS_PATH, createKardexViews } from './inventory-kardex.ts';
+import { RECIPES_PATH, createRecipeViews } from './inventory-recipes.ts';
+import { CATEGORIES_PATH, ITEMS_PATH, createInventoryViews } from './inventory.ts';
 import { createPageViews, pagePath } from './page.ts';
 import { QUOTE_BUSINESS, QUOTE_PATH, createQuoteViews } from './quote.ts';
 import { ACCOUNT_PATH, USERS_PATH, createUserViews } from './users.ts';
@@ -52,9 +56,23 @@ export interface NoticeOptions {
 
 /**
  * Sección de la cabecera (REQ-F-040 y REQ-F-043): usuarios, bot o "Mi cuenta"; "Página" (REQ-F-044) y
- * "Cotizador" (REQ-F-046) son de un negocio.
+ * "Cotizador" (REQ-F-046) son de un negocio. "Inventario" (REQ-F-049): artículos, categorías o
+ * recetas (REQ-F-050).
  */
-export type HeaderSection = 'users' | 'bot' | 'account' | 'page' | 'quote';
+export type HeaderSection =
+  | 'users'
+  | 'bot'
+  | 'account'
+  | 'page'
+  | 'quote'
+  | 'inventory'
+  | 'inventory-categories'
+  | 'inventory-recipes'
+  | 'inventory-stock'
+  | 'inventory-documents'
+  | 'inventory-suppliers';
+
+const isInventorySection = (section: HeaderSection | undefined): boolean => section !== undefined && section.startsWith('inventory');
 
 export interface PageOptions {
   title: string;
@@ -99,11 +117,13 @@ export function createViews(renderer: Renderer) {
       userName: context.user.name,
       csrfToken: context.csrfToken,
       accountCurrent: ariaCurrent(section === 'account'),
-      businessNav: current ? businessNav(current, section, context.user.role === 'admin') : join([]),
+      businessNav: current ? businessNav(current, section, context.user.role === 'admin') : isInventorySection(section) ? inventoryNav(section) : join([]),
       links: join([
         ...context.user.businesses.map((business) =>
           render('partials/nav-link', { href: productsPath(business), label: BUSINESS_NAMES[business], current: ariaCurrent(business === current) }),
         ),
+        // "Inventario" para administradores y gerentes (REQ-F-049, RF-9); la API sigue siendo la autoridad.
+        ...(INVENTORY_ROLES.includes(context.user.role) ? [render('partials/nav-link', { href: ITEMS_PATH, label: 'Inventario', current: ariaCurrent(isInventorySection(section)) })] : []),
         // "Usuarios" y "Bot" solo para administradores (REQ-F-040 y REQ-F-043, RF-1).
         ...(context.user.role === 'admin'
           ? [
@@ -131,14 +151,35 @@ export function createViews(renderer: Renderer) {
     });
   }
 
-  /** Resumen de errores (RF-16): enlaces a cada campo con error y, sin campo, el texto. */
-  function errorSummary(errors: Record<string, string>, fields: readonly { name: string; label: string }[]): SafeHtml | null {
+  /** Secciones del inventario (REQ-F-049): artículos, categorías, recetas (REQ-F-050), existencias, documentos y proveedores (REQ-F-051). */
+  function inventoryNav(section: HeaderSection | undefined): SafeHtml {
+    const link = (href: string, label: string, active: boolean) => render('partials/subnav-link', { href, label, current: active ? render('partials/aria-current', { value: 'true' }) : join([]) });
+    return render('partials/business-nav', {
+      businessName: 'Inventario',
+      links: join([
+        link(ITEMS_PATH, 'Artículos', section === 'inventory'),
+        link(CATEGORIES_PATH, 'Categorías', section === 'inventory-categories'),
+        link(RECIPES_PATH, 'Recetas', section === 'inventory-recipes'),
+        link(STOCK_PATH, 'Existencias', section === 'inventory-stock'),
+        link(DOCUMENTS_PATH, 'Documentos', section === 'inventory-documents'),
+        link(SUPPLIERS_PATH, 'Proveedores', section === 'inventory-suppliers'),
+      ]),
+    });
+  }
+
+  /**
+   * Resumen de errores (RF-16): enlaces a cada campo con error y, sin campo, el texto. `heading` cambia el
+   * título y añade párrafos cuando el rechazo tiene su propia explicación (ciclo o profundidad de una
+   * receta; REQ-F-054, RF-1 d): así hay una sola alerta con el foco.
+   */
+  function errorSummary(errors: Record<string, string>, fields: readonly { name: string; label: string }[], heading?: { title: string; paragraphs?: string[] }): SafeHtml | null {
     const entries = Object.entries(errors);
     if (entries.length === 0) return null;
     const labelOf = new Map(fields.map((field) => [field.name, field.label]));
     return notice({
       tone: 'error',
-      title: 'No se guardó nada: revisa los campos marcados.',
+      title: heading?.title ?? 'No se guardó nada: revisa los campos marcados.',
+      paragraphs: heading?.paragraphs ?? [],
       extra: render('partials/error-summary', {
         items: join(
           entries.map(([name, message]) => {
@@ -168,6 +209,10 @@ export function createViews(renderer: Renderer) {
     ...createBotViews({ render, join, attrs, page, notice, displayDate }),
     ...createPageViews({ render, join, page, notice, renderField, errorSummary, fieldId, displayDate, businessNames: BUSINESS_NAMES }),
     ...createQuoteViews({ render, join, attrs, page, notice, businessNames: BUSINESS_NAMES }),
+    ...createInventoryViews({ render, join, attrs, page, notice, errorSummary, fieldId, displayDate }),
+    ...createRecipeViews({ render, join, attrs, page, notice, errorSummary, fieldId, displayDate }),
+    ...createKardexViews({ render, join, attrs, page, notice, errorSummary, fieldId, displayDate }),
+    ...createDocumentViews({ render, join, attrs, page, errorSummary, fieldId }),
 
     login({ next, problem }: { next: string; problem?: 'invalid' | 'locked' | 'expired' | 'unavailable' | 'closed' | undefined }): SafeHtml {
       const notices: Record<string, NoticeOptions> = {

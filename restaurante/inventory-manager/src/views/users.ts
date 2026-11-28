@@ -19,7 +19,7 @@ export const userEditPath = (id: number): string => `${userPath(id)}/editar`;
 export const userPasswordPath = (id: number): string => `${userPath(id)}/contrasena`;
 export const userStatusPath = (id: number, active: boolean): string => `${userPath(id)}/${active ? 'desactivar' : 'reactivar'}`;
 
-export const ROLE_LABELS: Readonly<Record<AdminUser['role'], string>> = Object.freeze({ admin: 'Administrador', editor: 'Editor' });
+export const ROLE_LABELS: Readonly<Record<AdminUser['role'], string>> = Object.freeze({ admin: 'Administrador', editor: 'Editor', gerente: 'Gerente' });
 const BUSINESS_LABELS: Readonly<Record<PublicBusinessId, string>> = Object.freeze({ molotes: 'Molotes', birria: 'Birria El Muñeco' });
 const BUSINESS_ORDER: readonly PublicBusinessId[] = ['molotes', 'birria'];
 
@@ -49,7 +49,7 @@ export function readUserForm(fields: Map<string, string>): UserFormValues {
 export const userFormValues = (user: ManagedUser): UserFormValues => ({ username: user.username, displayName: user.displayName, role: user.role, businesses: [...user.businesses] });
 
 const businessesText = (role: string, businesses: readonly PublicBusinessId[]): string =>
-  role === 'admin' ? 'Todos' : businesses.length > 0 ? businesses.map((business) => BUSINESS_LABELS[business]).join(', ') : 'Ninguno';
+  role === 'admin' ? 'Todos' : role === 'gerente' ? 'No aplica' : businesses.length > 0 ? businesses.map((business) => BUSINESS_LABELS[business]).join(', ') : 'Ninguno';
 
 const FIELD_LABELS: Readonly<Record<string, string>> = Object.freeze({
   username: 'Usuario de acceso',
@@ -161,7 +161,11 @@ export function createUserViews({ render, join, attrs, page, notice, displayDate
   }
 
   function dataSection(values: UserFormValues, errors: Record<string, string>): SafeHtml {
-    const role = describe('role', 'El administrador tiene todos los negocios y gestiona los usuarios.', errors.role);
+    const role = describe(
+      'role',
+      'El administrador tiene todos los negocios y gestiona los usuarios. El gerente gestiona el inventario; no accede a productos, página, usuarios, bot ni cotizador.',
+      errors.role,
+    );
     const roleSelect = render('partials/field-select', {
       ...role,
       name: 'role',
@@ -169,7 +173,7 @@ export function createUserViews({ render, join, attrs, page, notice, displayDate
       span: '',
       attrs: attrs(role.aria),
       options: join(
-        (['editor', 'admin'] as const).map((value) =>
+        (['editor', 'gerente', 'admin'] as const).map((value) =>
           render('partials/option', { value, label: ROLE_LABELS[value], selected: values.role === value ? render('partials/selected') : join([]) }),
         ),
       ),

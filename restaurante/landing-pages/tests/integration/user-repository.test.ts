@@ -64,6 +64,28 @@ describe('creación y búsqueda', () => {
     expect(allowedBusinesses(ana)).toEqual(['birria']);
   });
 
+  it('gerente (REQ-F-049): el ENUM lo acepta, se guarda sin negocios y pasar un editor a gerente le quita los suyos y cierra sus sesiones', async () => {
+    await users.create(admin('jefa'), SYSTEM);
+    const gema = await users.create({ ...editor('gema', ['molotes']), role: 'gerente' }, SYSTEM);
+    expect(gema).toMatchObject({ role: 'gerente', businesses: [] });
+    expect(await users.findById(gema.id)).toMatchObject({ role: 'gerente', businesses: [] });
+    expect(allowedBusinesses(gema)).toEqual([]);
+    const ana = await users.create(editor('ana', ['birria']), SYSTEM);
+    const promoted = await users.update(ana.id, { username: 'ana', displayName: 'ana', role: 'gerente', businesses: ['birria'] }, SYSTEM);
+    expect(promoted).toMatchObject({ role: 'gerente', businesses: [], sessionVersion: ana.sessionVersion + 1 });
+    expect(await prisma.userBusiness.count({ where: { userId: ana.id } })).toBe(0);
+  });
+
+  it('gerente (REQ-F-049): cambiar solo el rol, sin negocios de por medio, cierra las sesiones (gerente -> admin -> gerente)', async () => {
+    await users.create(admin('jefa'), SYSTEM);
+    const gema = await users.create({ ...editor('gema', []), role: 'gerente' }, SYSTEM);
+    const toAdmin = await users.update(gema.id, { username: 'gema', displayName: 'gema', role: 'admin', businesses: [] }, SYSTEM);
+    expect(toAdmin).toMatchObject({ role: 'admin', businesses: [], sessionVersion: gema.sessionVersion + 1 });
+    const back = await users.update(gema.id, { username: 'gema', displayName: 'gema', role: 'gerente', businesses: [] }, SYSTEM);
+    expect(back).toMatchObject({ role: 'gerente', businesses: [], sessionVersion: gema.sessionVersion + 2 });
+    expect((await users.findById(gema.id))?.sessionVersion).not.toBe(gema.sessionVersion);
+  });
+
   it('la auditoría registra la creación sin contraseñas ni hashes (D-12)', async () => {
     const actor = await users.create(admin('jefa'), SYSTEM);
     await users.create(editor('ana'), { kind: 'user', id: actor.id });

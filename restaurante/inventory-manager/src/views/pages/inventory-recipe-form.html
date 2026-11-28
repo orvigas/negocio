@@ -1,0 +1,25 @@
+<p><a class="font-semibold text-maiz underline underline-offset-4" href="{{ backHref }}">Volver a la receta</a></p>
+      <h1 class="mt-4 font-headline text-3xl font-black tracking-tight break-words uppercase">{{ title }}</h1>
+      {{{ notices }}}
+      <aside class="recipe-help mt-6 rounded-2xl border border-rim border-l-4 border-l-maiz bg-surface p-4 md:p-6" aria-labelledby="recipe-help-title">
+        <h2 id="recipe-help-title" class="font-headline text-base font-bold">Cantidad neta y merma</h2>
+        <p id="{{ helpId }}" class="mt-1 text-masa">Neta = cantidad aprovechable tras la merma. Si pesaste en crudo, escribe la cocida o deja la merma en 0. Ejemplo: 6 kg netos con merma del 40 % son 10 kg brutos.</p>
+        <p class="mt-1 text-sm text-masa">La bruta y el costo de cada línea se calculan al guardar y se ven en la receta.</p>
+      </aside>
+      <form id="inventory-recipe-form" class="recipe-form mt-6 space-y-6" method="post" action="{{ action }}" novalidate data-submit-guard>
+        <input type="hidden" name="_csrf" value="{{ csrfToken }}" />{{{ hidden }}}
+        <fieldset class="user-form__section rounded-2xl border border-rim bg-surface p-4 md:p-6">
+          <legend class="px-2 font-headline text-lg font-bold">Rendimiento</legend>
+          <div class="user-form__grid grid gap-4 md:grid-cols-2">{{{ header }}}{{{ note }}}
+          </div>
+        </fieldset>
+        <fieldset class="recipe-form__lines rounded-2xl border border-rim bg-surface p-4 md:p-6" id="f-lines" tabindex="-1">
+          <legend class="px-2 font-headline text-lg font-bold">Ingredientes</legend>
+          <p class="product-form__intro mb-4 text-sm text-masa">{{ linesIntro }}</p>{{{ linesError }}}
+          <div class="recipe-form__rows space-y-4 lg:space-y-2">{{{ lines }}}
+          </div>{{{ datalists }}}
+        </fieldset>
+        <div class="recipe-form__actions flex flex-wrap items-center gap-3">{{{ buttons }}}
+          <a class="button button--ghost inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg px-3 py-2 font-label text-sm font-bold tracking-wider text-maiz uppercase hover:bg-surface-high" href="{{ backHref }}">Cancelar</a>
+        </div>
+      </form>

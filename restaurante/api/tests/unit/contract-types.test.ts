@@ -7,6 +7,16 @@ import {
   BOT_PROVIDER_IDS,
   BOT_REASON_MAX,
   BOT_USAGE_COUNTERS,
+  INVENTORY_ADJUSTMENT_REASONS,
+  INVENTORY_COST_SOURCES,
+  INVENTORY_HISTORY_ACTIONS,
+  INVENTORY_ITEM_KINDS,
+  INVENTORY_ITEM_STATUSES,
+  INVENTORY_ITEM_TYPES,
+  INVENTORY_MOVEMENT_TYPES,
+  INVENTORY_RECIPE_ITEM_TYPES,
+  INVENTORY_STOCK_ITEM_TYPES,
+  INVENTORY_UNITS as CONTRACT_INVENTORY_UNITS,
   PUBLIC_BUSINESS_IDS,
   USER_LIMITS,
   USER_ROLES,
@@ -43,6 +53,18 @@ import {
   type UserRecord,
 } from '@restaurante/core/identity';
 import type { PageDataByBusiness, PublishedProducts } from '@restaurante/core/catalog';
+import {
+  ADJUSTMENT_REASONS,
+  COST_SOURCES,
+  INVENTORY_ACTIONS,
+  INVENTORY_UNITS,
+  ITEM_KINDS,
+  ITEM_STATUSES,
+  ITEM_TYPES,
+  MOVEMENT_TYPES,
+  RECIPE_ITEM_TYPES,
+  STOCK_ITEM_TYPES,
+} from '@restaurante/core/inventory';
 import { BUSINESS_IDS, silentLogger, type BusinessId } from '@restaurante/core/shared';
 
 /**
@@ -105,6 +127,19 @@ describe('contrato del bot ↔ core (REQ-F-043)', () => {
     const control = createBotControl({ store: createMemoryBotControlStore(), keys: null, limits: DEFAULT_BOT_LIMITS, timeZone: 'America/Mexico_City', staff: [], logger: silentLogger });
     await control.init();
     expect((await control.snapshot()).usage.statuses.map(({ id }) => id)).toEqual([...BOT_USAGE_COUNTERS]);
+    // Inventario (REQ-F-049).
+    expect([...INVENTORY_ITEM_TYPES]).toEqual([...ITEM_TYPES]);
+    expect([...INVENTORY_ITEM_KINDS]).toEqual([...ITEM_KINDS]);
+    expect([...CONTRACT_INVENTORY_UNITS]).toEqual([...INVENTORY_UNITS]);
+    expect([...INVENTORY_ITEM_STATUSES]).toEqual([...ITEM_STATUSES]);
+    expect([...INVENTORY_HISTORY_ACTIONS].sort()).toEqual(Object.values(INVENTORY_ACTIONS).sort());
+    // Recetas (REQ-F-050).
+    expect([...INVENTORY_COST_SOURCES]).toEqual([...COST_SOURCES]);
+    expect([...INVENTORY_RECIPE_ITEM_TYPES]).toEqual([...RECIPE_ITEM_TYPES]);
+    // Kardex (REQ-F-051).
+    expect([...INVENTORY_MOVEMENT_TYPES]).toEqual([...MOVEMENT_TYPES]);
+    expect([...INVENTORY_STOCK_ITEM_TYPES]).toEqual([...STOCK_ITEM_TYPES]);
+    expect([...INVENTORY_ADJUSTMENT_REASONS]).toEqual([...ADJUSTMENT_REASONS]);
   });
 
   it('el estado del bot no expone el seudónimo, la clave ni los dígitos sueltos', () => {

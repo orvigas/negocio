@@ -580,7 +580,7 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends age
       - name: prueba de humo de respaldos
         if: github.event_name != 'pull_request' || github.base_ref == 'main'
-        run: bash restaurante/ops/backup/ci/smoke.sh restaurante:production restaurante:migrate
+        run: bash restaurante/ops/backup/ci/smoke.sh restaurante:production restaurante:migrate restaurante:api
 
   # Publicación en GHCR (REQ-F-016, RF-3): en main (push o ejecución manual) con cambios de código,
   # y solo si el árbol ya estaba validado (`validado`, solo en push) o las tres validaciones de

@@ -251,6 +251,36 @@ if [[ "$DRILL" == true ]]; then
     fail 'la app del respaldo no respondió'
   fi
   log "simulacro: la app $APP_IMAGE responde"
+
+  # --- 5. Simulacro: la cadena del Kardex (REQ-F-051, RF-13 y DT-T3-6 A) -------------------------
+  # `inventory:verify` de la imagen api del respaldo, contra la base restaurada y con el usuario de la
+  # app (solo lectura). Un respaldo sin tablas del Kardex, o sin `api_image` en el manifiesto
+  # (anterior a REQ-F-051, o hecho tras una restauración), solo se anota.
+  KARDEX=$(mysql_root -N -B -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'restaurante' AND TABLE_NAME = 'inventory_movement'") ||
+    fail 'no se pudo comprobar si la base tiene Kardex'
+  API_IMAGE=$(manifest_value "$MANIFEST" api_image)
+  if [[ "$KARDEX" != 1 ]]; then
+    log 'simulacro: el respaldo no tiene Kardex; inventory:verify no aplica'
+  elif [[ -z "$API_IMAGE" ]]; then
+    log 'aviso: el manifiesto no trae la imagen de la api; el Kardex no se verificó'
+  else
+    [[ "$API_IMAGE" =~ ^[A-Za-z0-9./:@_-]+$ ]] || fail 'el manifiesto no tiene una imagen de la api válida'
+    if ! docker image inspect "$API_IMAGE" >/dev/null 2>&1; then
+      log "descargando $API_IMAGE"
+      docker pull --quiet "$API_IMAGE" >/dev/null || fail 'no se pudo descargar la imagen de la api (docker login ghcr.io)'
+    fi
+    DATABASE_URL="mysql://restaurante_app:$RESTAURANTE_DB_APP_PASSWORD@mysql:3306/restaurante"
+    export DATABASE_URL
+    # La salida solo lleva conteos, ids y nombres de comprobación (nunca costos, cantidades ni nombres).
+    if VERIFY_OUT=$(docker run --rm --network "$ID" -e NODE_ENV=production -e DATABASE_URL \
+      --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
+      --entrypoint node "$API_IMAGE" scripts/inventory-verify.ts 2>&1); then
+      log "simulacro: inventory:verify da 0 ($(printf '%s' "$VERIFY_OUT" | tail -n 1))"
+    else
+      printf '%s\n' "$VERIFY_OUT" | tail -n 20 | sed 's/^/  inventory:verify: /' >&2
+      fail 'el Kardex restaurado no cuadra (inventory:verify distinto de 0)'
+    fi
+  fi
 fi
 
 record ok
